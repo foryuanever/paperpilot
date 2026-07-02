@@ -112,7 +112,7 @@ public class MeetingReportService {
     @Value("${paperpilot.ppt-master.codex:/Applications/Codex.app/Contents/Resources/codex}")
     private String pptMasterCodex;
 
-    @Value("${paperpilot.ppt-master.agent-timeout-minutes:30}")
+    @Value("${paperpilot.ppt-master.agent-timeout-minutes:120}")
     private int pptMasterAgentTimeoutMinutes;
 
     public MeetingReportService(
@@ -1763,8 +1763,8 @@ public class MeetingReportService {
         process.getOutputStream().close();
 
         long startedAt = System.currentTimeMillis();
-        long timeoutMillis = TimeUnit.MINUTES.toMillis(Math.max(10, pptMasterAgentTimeoutMinutes));
-        int[] progressPoints = {42, 50, 58, 66, 74, 82, 90, 94};
+        long timeoutMillis = TimeUnit.MINUTES.toMillis(Math.max(30, pptMasterAgentTimeoutMinutes));
+        int[] progressPoints = {40, 48, 56, 64, 72, 80, 88, 92};
         String[] messages = {
             "Agent 正在精读 PDF 并提取论文主线",
             "Agent 正在生成叙事策略与页面设计规范",
@@ -1787,7 +1787,7 @@ public class MeetingReportService {
             }
             if (elapsed > timeoutMillis) {
                 process.destroyForcibly();
-                throw new IllegalStateException("PPT Master Agent 超时，日志：" + compactLog(readTail(logPath, 1200)));
+                throw new IllegalStateException(buildAgentTimeoutMessage(outputDir, logPath, timeoutMillis));
             }
         }
         if (process.isAlive()) process.waitFor(5, TimeUnit.SECONDS);
@@ -1911,6 +1911,55 @@ public class MeetingReportService {
                 }))
                 .orElse(null);
         }
+    }
+
+    private String buildAgentTimeoutMessage(Path outputDir, Path logPath, long timeoutMillis) {
+        long minutes = Math.max(1, TimeUnit.MILLISECONDS.toMinutes(timeoutMillis));
+        String pageHint = generatedSvgPageHint(outputDir);
+        String logHint = meaningfulAgentLogTail(logPath);
+        StringBuilder message = new StringBuilder("PPT Master Agent 已运行超过 ")
+            .append(minutes)
+            .append(" 分钟，已停止本次任务以避免后台无限占用");
+        if (StringUtils.hasText(pageHint)) {
+            message.append("；当前进度：").append(pageHint);
+        }
+        if (StringUtils.hasText(logHint)) {
+            message.append("；最后状态：").append(logHint);
+        }
+        message.append("。请重新点击生成，或把 PPT_MASTER_AGENT_TIMEOUT_MINUTES 调大后再试。");
+        return message.toString();
+    }
+
+    private String generatedSvgPageHint(Path outputDir) {
+        try (Stream<Path> paths = Files.walk(outputDir)) {
+            long count = paths
+                .filter(path -> path.getParent() != null && path.getParent().getFileName().toString().equals("svg_output"))
+                .filter(path -> path.getFileName().toString().toLowerCase().endsWith(".svg"))
+                .count();
+            return count > 0 ? "已写出 " + count + " 页 SVG" : "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String meaningfulAgentLogTail(Path logPath) {
+        String tail = readTail(logPath, 4000);
+        if (!StringUtils.hasText(tail)) return "";
+        List<String> lines = Arrays.stream(tail.split("\\R"))
+            .map(String::trim)
+            .filter(line -> !line.isBlank())
+            .filter(line -> !line.startsWith("+"))
+            .filter(line -> !line.startsWith("-"))
+            .filter(line -> !line.startsWith("@@"))
+            .filter(line -> !line.startsWith("diff --git"))
+            .filter(line -> !line.startsWith("index "))
+            .filter(line -> !line.startsWith("new file mode"))
+            .filter(line -> !line.startsWith("--- "))
+            .filter(line -> !line.startsWith("+++ "))
+            .toList();
+        if (lines.isEmpty()) return "";
+        String last = lines.get(lines.size() - 1).replaceAll("\\s+", " ").trim();
+        return shorten(last, 180);
     }
 
     private String readTail(Path path, int maxChars) {
