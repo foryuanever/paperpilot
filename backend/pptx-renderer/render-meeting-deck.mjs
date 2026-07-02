@@ -583,6 +583,7 @@ function findPptMasterSkillDir() {
     path.resolve(process.cwd(), "../ppt-master-runtime"),
     path.resolve(process.cwd(), "../ppt-master/skills/ppt-master"),
     path.resolve(process.cwd(), "ppt-master/skills/ppt-master"),
+    "/Users/yuan/.codex/skills/ppt-master",
     "/tmp/ppt-master-inspect/skills/ppt-master",
   ].filter(Boolean);
   return candidates.find((candidate) => fs.existsSync(path.join(candidate, "scripts/svg_to_pptx.py")));

@@ -41,6 +41,7 @@ backend/mineru-inputs/
 backend/translations/
 backend/pptxgen-jobs/
 backend/pptagent-jobs/
+backend/ppt-master-jobs/
 backend/generated-pptx/
 backend/uploads/
 backend/logs/

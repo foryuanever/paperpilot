@@ -292,7 +292,7 @@
                   <input v-model="pptSettings.visualReview" type="checkbox" />
                   <strong>生成后进行逐页视觉自检</strong>
                 </span>
-                <small>对应 academic-ppt-master 的 visual check / post-process 阶段，会优先修复重叠、溢出和图表错位。</small>
+                <small>对应 PPT Master skill 的 visual check / post-process 阶段，会优先修复重叠、溢出和图表错位。</small>
               </div>
             </label>
             <label class="field-wide">
@@ -428,7 +428,7 @@ const pptSettings = reactive({
   visualReview: true,
   includeComparisonAppendix: false,
   sections: ["Cover", "Background", "Methodology", "Experiment", "Results", "Conclusion", "Outlook"],
-  extraInstructions: "按 academic-ppt-master 工作流：保留论文公式、图、表线索；按 Background / Methodology / Experiment / Results / Conclusion / Outlook 重构；避免编造实验数值。",
+  extraInstructions: "按 PPT Master skill 工作流：保留论文公式、图、表线索；按 Background / Methodology / Experiment / Results / Conclusion / Outlook 重构；避免编造实验数值。",
 });
 
 const selectedTemplate = computed(() => templates.find((item) => item.id === selectedTemplateId.value) || templates[0]);
@@ -574,7 +574,7 @@ async function generateDeck() {
       slideCount: pptSettings.slideCount,
       audience: pptSettings.audience,
       focus: pptSettings.focus,
-      engine: "ppt-master-compatible",
+      engine: "ppt-master-skill",
     };
     payload.pptSettings.includeComparisonAppendix = Boolean(pptSettings.includeComparisonAppendix);
     const formData = new FormData();

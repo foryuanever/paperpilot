@@ -54,6 +54,8 @@ public class MeetingReportService {
         "oc/mimo-v2.5-free"
     );
     private static final List<String> DECK_AGENT_STRONG_MODELS = List.of(
+        "gpt-5.5",
+        "openai/gpt-5.5",
         "gpt-5",
         "openai/gpt-5",
         "gpt-4.1",
@@ -92,33 +94,16 @@ public class MeetingReportService {
     private final ExecutorService reportExecutor = Executors.newFixedThreadPool(2);
     private final ExecutorService deckExecutor = Executors.newFixedThreadPool(2);
     private final ExecutorService sectionAiExecutor = Executors.newCachedThreadPool();
-    private volatile long presentonCircuitOpenUntil = 0L;
-    private volatile String presentonLastFailure = "";
     private final HttpClient httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(12))
         .followRedirects(HttpClient.Redirect.ALWAYS)
         .build();
 
-    @Value("${paperpilot.presenton.enabled:true}")
-    private boolean presentonEnabled;
+    @Value("${paperpilot.ppt-master.skill-dir:/Users/yuan/.codex/skills/ppt-master}")
+    private String pptMasterSkillDir;
 
-    @Value("${paperpilot.presenton.base-url:http://127.0.0.1:5001}")
-    private String presentonBaseUrl;
-
-    @Value("${paperpilot.presenton.username:admin}")
-    private String presentonUsername;
-
-    @Value("${paperpilot.presenton.password:changeme123}")
-    private String presentonPassword;
-
-    @Value("${paperpilot.presenton.template:general}")
-    private String presentonTemplate;
-
-    @Value("${paperpilot.presenton.timeout-seconds:180}")
-    private int presentonTimeoutSeconds;
-
-    @Value("${paperpilot.presenton.cooldown-seconds:600}")
-    private int presentonCooldownSeconds;
+    @Value("${paperpilot.ppt-master.python:}")
+    private String pptMasterPython;
 
     public MeetingReportService(
         PaperRepository paperRepository,
@@ -517,7 +502,7 @@ public class MeetingReportService {
         List<String> dimensions = readDeckDimensionLabels(body.get("dimensions"));
 
         String jobId = job.jobId();
-        Path outputDir = Path.of(System.getProperty("user.dir"), "pptxgen-jobs", jobId);
+        Path outputDir = Path.of(System.getProperty("user.dir"), "ppt-master-jobs", jobId);
         Path materialPath = outputDir.resolve("meeting-report-input.md");
         Path pptxPath = outputDir.resolve("meeting-report.pptx");
         Path reportPaperPath = null;
@@ -541,7 +526,7 @@ public class MeetingReportService {
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("jobId", jobId);
-        response.put("engine", "ppt-master-compatible");
+        response.put("engine", "ppt-master-skill");
         response.put("paperCount", papers.size());
         response.put("template", templateName);
         response.put("slideCount", slideCount);
@@ -569,14 +554,11 @@ public class MeetingReportService {
                 objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(deckPayload)
             );
             response.put("structurePath", structurePath.toAbsolutePath().toString());
-            job.progress(58, "多轮 Agent 内容完成，正在进入 PPT Master 逐页 SVG 设计流程");
-            Map<String, Object> renderResult = executePresentonFirst(deckPayload, structurePath, pptxPath, outputDir);
+            job.progress(58, "多轮 Agent 内容完成，正在调用已安装的 PPT Master skill 生成 SVG/PPTX");
+            Map<String, Object> renderResult = executePptMasterSkill(structurePath, pptxPath, outputDir);
             response.putAll(renderResult);
             if (Boolean.TRUE.equals(response.get("generated"))) {
-                String renderer = Objects.toString(response.getOrDefault("renderer", "ppt-master-compatible"), "ppt-master-compatible");
-                response.put("message", "presenton".equals(renderer)
-                    ? "Presenton 已生成更高设计感的可编辑科研 PPTX"
-                    : "PPT Master 已完成逐页 SVG、质检、预览与导出");
+                response.put("message", "PPT Master skill 已完成逐页 SVG、质检、预览与导出");
                 job.complete(response);
                 return;
             }
@@ -596,7 +578,7 @@ public class MeetingReportService {
         if (!cleanJobId.matches("meeting-deck-[A-Za-z0-9_-]+")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PPT 任务编号无效");
         }
-        Path root = Path.of(System.getProperty("user.dir"), "pptxgen-jobs").toAbsolutePath().normalize();
+        Path root = Path.of(System.getProperty("user.dir"), "ppt-master-jobs").toAbsolutePath().normalize();
         Path pptx = root.resolve(cleanJobId).resolve("meeting-report.pptx").normalize();
         if (!pptx.startsWith(root) || !Files.isRegularFile(pptx)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "PPT 文件不存在或尚未生成");
@@ -737,8 +719,8 @@ public class MeetingReportService {
         Map<String, Object> primaryReportPaper = buildPrimaryReportPaper(reportPaperPath, reportPaperText);
         boolean includeComparisonAppendix = includeComparisonAppendix(pptMasterSettings);
         String systemPrompt = """
-            你是资深博士后级别的学术 PPT agent，不是普通 PPT 大纲助手。你的任务是按 academic-ppt-master 的范式：先读懂上传主论文的学术精髓，再组织为 Background、Methodology、Experiment/Results、Conclusion、Outlook 五段式学术汇报。
-            参考 academic-ppt-master 的工作方式：保留论文中的公式、图、表、方法流程和实验结论；先做研究理解和叙事策略，再做逐页内容规划；不要输出机械栏目填空。
+            你是资深博士后级别的学术 PPT agent，不是普通 PPT 大纲助手。你的任务是按 PPT Master skill 的范式：先读懂上传主论文的学术精髓，再组织为 Background、Methodology、Experiment/Results、Conclusion、Outlook 五段式学术汇报。
+            参考 PPT Master skill 的工作方式：保留论文中的公式、图、表、方法流程和实验结论；先做研究理解和叙事策略，再做逐页内容规划；不要输出机械栏目填空。
             用户上传的 reportPaperText 是“汇报主论文”，上方选择的 papers 是“对比文献库”，二者必须分层处理。
             PPT 主线必须只围绕汇报主论文展开：研究背景、研究问题、核心方法、实验与证据、主要结论、贡献局限、组会问题。
             默认不要生成“对比文献”“横向对比”“对比矩阵”“多论文比较”等独立章节。只有 includeComparisonAppendix 为 true 时，才允许在最后追加一个对比附录。
@@ -827,7 +809,7 @@ public class MeetingReportService {
         payload.put("slideCount", slideCount);
         payload.put("pptMasterSettings", pptMasterSettings);
         payload.put("includeComparisonAppendix", includeComparisonAppendix);
-        payload.put("renderEngine", "ppt-master-compatible-pptxgenjs");
+        payload.put("renderEngine", "ppt-master-skill");
         payload.put("generatedAt", java.time.LocalDateTime.now().toString().replace('T', ' '));
         return sanitizeDeckPayload(payload, includeComparisonAppendix);
     }
@@ -844,7 +826,7 @@ public class MeetingReportService {
         Map<String, Object> essenceRound = runDeckAgentRound(
             "paper_understanding",
             """
-                你是 academic-ppt-master 的论文理解 agent。只做第一步：从主论文材料中提炼学术精髓和可视化资产。不要设计 PPT，不要写目录。
+                你是 PPT Master skill 的论文理解 agent。只做第一步：从主论文材料中提炼学术精髓和可视化资产。不要设计 PPT，不要写目录。
                 必须基于 reportPaperText，不得把 comparisonPapers 当成主论文。
                 返回 JSON：
                 {"researchEssence":{
@@ -880,7 +862,7 @@ public class MeetingReportService {
             planRound = runDeckAgentRound(
                 "narrative_strategy",
                 """
-                    你是 academic-ppt-master 的学术叙事 agent。只做第二步：根据 researchEssence 规划五段式学术 PPT 页序。
+                    你是 PPT Master skill 的学术叙事 agent。只做第二步：根据 researchEssence 规划五段式学术 PPT 页序。
                     必须覆盖 Background、Methodology、Experiment/Results、Conclusion、Outlook。不要写泛泛栏目名；每一页都必须对应一个论证动作，并标明是否需要保留公式/图/表/截图。
                     返回 JSON：
                     {"title":"...","subtitle":"...","takeaways":["..."],"agenda":["..."],
@@ -914,7 +896,7 @@ public class MeetingReportService {
             slideRound = runDeckAgentRound(
                 "slide_designer",
                 """
-                    你是 academic-ppt-master 的逐页设计 agent。只做第三步：把 slidePlan 写成可渲染的逐页内容。
+                    你是 PPT Master skill 的逐页设计 agent。只做第三步：把 slidePlan 写成可渲染的逐页内容。
                     每页必须包含：section、visualType、具体论文判断 bullets、正文证据 evidence、assetCue、keyMessage、speakerNotes。
                     bullets 不要超过 4 条；evidence 用短句，必须来自主论文材料或写“待核对：……”。speakerNotes 90-140 字。
                     返回 JSON：
@@ -1370,215 +1352,20 @@ public class MeetingReportService {
         return fallback;
     }
 
-    private Map<String, Object> executePresentonFirst(
-        Map<String, Object> deckPayload,
-        Path structurePath,
-        Path pptxPath,
-        Path outputDir
-    ) {
-        Map<String, Object> presentonResult = executePresenton(deckPayload, pptxPath);
-        if (Boolean.TRUE.equals(presentonResult.get("generated"))) return presentonResult;
-        Map<String, Object> fallback = executePptxGen(structurePath, pptxPath, outputDir);
-        fallback.putIfAbsent("renderer", "ppt-master-svg");
-        fallback.put("presentonStatus", presentonResult.get("status"));
-        fallback.put("presentonMessage", presentonResult.get("message"));
-        return fallback;
-    }
-
-    private Map<String, Object> executePresenton(Map<String, Object> deckPayload, Path pptxPath) {
-        Map<String, Object> response = new LinkedHashMap<>();
-        if (!presentonEnabled) {
-            response.put("status", "presenton_disabled");
-            response.put("generated", false);
-            response.put("message", "Presenton 未启用");
-            return response;
-        }
-        long now = System.currentTimeMillis();
-        if (presentonCircuitOpenUntil > now) {
-            response.put("status", "presenton_cooldown");
-            response.put("generated", false);
-            response.put("message", "Presenton 最近失败，暂时熔断：" + presentonLastFailure);
-            return response;
-        }
-        String baseUrl = trimTrailingSlash(presentonBaseUrl);
-        try {
-            Map<String, Object> requestBody = new LinkedHashMap<>();
-            requestBody.put("content", buildPresentonContent(deckPayload));
-            requestBody.put("instructions", buildPresentonInstructions(deckPayload));
-            requestBody.put("tone", "professional");
-            requestBody.put("verbosity", presentonVerbosity(deckPayload));
-            requestBody.put("web_search", false);
-            requestBody.put("n_slides", parseSlideCount(Objects.toString(deckPayload.get("slideCount"), "8")));
-            requestBody.put("language", "Chinese");
-            requestBody.put("template", presentonTemplateName(deckPayload));
-            requestBody.put("include_table_of_contents", true);
-            requestBody.put("include_title_slide", true);
-            requestBody.put("export_as", "pptx");
-            HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/api/v1/ppt/presentation/generate"))
-                .timeout(Duration.ofSeconds(Math.max(30, presentonTimeoutSeconds)))
-                .header("Content-Type", "application/json")
-                .header("Authorization", "Basic " + Base64.getEncoder().encodeToString((presentonUsername + ":" + presentonPassword).getBytes(StandardCharsets.UTF_8)))
-                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody)))
-                .build();
-            HttpResponse<String> result = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            response.put("renderer", "presenton");
-            response.put("presentonStatusCode", result.statusCode());
-            if (result.statusCode() < 200 || result.statusCode() >= 300) {
-                response.put("status", "presenton_failed");
-                response.put("generated", false);
-                response.put("message", "Presenton 返回 HTTP " + result.statusCode() + "：" + compactLog(result.body()));
-                openPresentonCircuit(String.valueOf(response.get("message")));
-                return response;
-            }
-            Map<String, Object> parsed = objectMapper.readValue(result.body(), new TypeReference<>() {});
-            response.put("presentonResponse", parsed);
-            Optional<String> path = Optional.ofNullable(parsed.get("path")).map(Object::toString).filter(text -> !text.isBlank());
-            if (path.isEmpty()) {
-                response.put("status", "presenton_missing_path");
-                response.put("generated", false);
-                response.put("message", "Presenton 已响应，但没有返回 PPTX 路径。");
-                openPresentonCircuit(String.valueOf(response.get("message")));
-                return response;
-            }
-            downloadPresentonFile(baseUrl, path.get(), pptxPath);
-            if (!Files.isRegularFile(pptxPath)) {
-                response.put("status", "presenton_missing_output");
-                response.put("generated", false);
-                response.put("message", "Presenton 文件下载后未找到 PPTX。");
-                openPresentonCircuit(String.valueOf(response.get("message")));
-                return response;
-            }
-            response.put("status", "generated");
-            response.put("generated", true);
-            response.put("pptxPath", pptxPath.toAbsolutePath().toString());
-            return response;
-        } catch (Exception error) {
-            response.put("status", "presenton_unavailable");
-            response.put("generated", false);
-            response.put("message", "Presenton 不可用：" + readableError(error));
-            openPresentonCircuit(String.valueOf(response.get("message")));
-            return response;
-        }
-    }
-
-    private void openPresentonCircuit(String message) {
-        presentonLastFailure = compactLog(message);
-        presentonCircuitOpenUntil = System.currentTimeMillis() + Math.max(60, presentonCooldownSeconds) * 1000L;
-    }
-
-    private void downloadPresentonFile(String baseUrl, String rawPath, Path pptxPath) throws Exception {
-        URI uri = rawPath.startsWith("http://") || rawPath.startsWith("https://")
-            ? URI.create(rawPath)
-            : URI.create(baseUrl + (rawPath.startsWith("/") ? rawPath : "/" + rawPath));
-        HttpRequest request = HttpRequest.newBuilder(uri)
-            .timeout(Duration.ofMinutes(2))
-            .header("Authorization", "Basic " + Base64.getEncoder().encodeToString((presentonUsername + ":" + presentonPassword).getBytes(StandardCharsets.UTF_8)))
-            .GET()
-            .build();
-        HttpResponse<byte[]> file = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-        if (file.statusCode() < 200 || file.statusCode() >= 300 || file.body() == null || file.body().length < 1000) {
-            throw new IllegalStateException("Presenton PPTX 下载失败 HTTP " + file.statusCode());
-        }
-        Files.write(pptxPath, file.body());
-    }
-
-    private String buildPresentonContent(Map<String, Object> deckPayload) {
-        StringBuilder builder = new StringBuilder();
-        builder.append("# ").append(Objects.toString(deckPayload.getOrDefault("title", "组会论文汇报"), "组会论文汇报")).append("\n\n");
-        builder.append("## 汇报设置\n");
-        builder.append("- 汇报对象：").append(Objects.toString(deckPayload.getOrDefault("audience", "导师与课题组"), "导师与课题组")).append("\n");
-        builder.append("- 模板：").append(Objects.toString(deckPayload.getOrDefault("template", "科研汇报"), "科研汇报")).append("\n");
-        builder.append("- 生成参数：").append(Objects.toString(deckPayload.getOrDefault("pptMasterSettings", Map.of()), "")).append("\n\n");
-        builder.append("## 汇报主线\n");
-        appendList(builder, deckPayload.get("takeaways"));
-        builder.append("\n## 汇报结构\n");
-        appendList(builder, deckPayload.get("agenda"));
-        builder.append("\n## 幻灯片内容\n");
-        Object slides = deckPayload.get("slides");
-        if (slides instanceof List<?> list) {
-            for (Object item : list) {
-                if (item instanceof Map<?, ?> slide) {
-                    builder.append("\n### ").append(Objects.toString(slide.get("title"), "内容页")).append("\n");
-                    builder.append(Objects.toString(slide.get("subtitle"), "")).append("\n");
-                    appendList(builder, slide.get("bullets"));
-                    String keyMessage = Objects.toString(slide.get("keyMessage"), "").trim();
-                    if (!keyMessage.isBlank()) builder.append("- 可讲给组会听的一句话：").append(keyMessage).append("\n");
-                }
-            }
-        }
-        if (Boolean.TRUE.equals(deckPayload.get("includeComparisonAppendix"))) {
-            builder.append("\n## 对比文献附录\n");
-            try {
-                builder.append(objectMapper.writeValueAsString(Map.of(
-                    "papers", deckPayload.getOrDefault("papers", List.of()),
-                    "dimensions", deckPayload.getOrDefault("dimensions", List.of()),
-                    "matrix", deckPayload.getOrDefault("matrix", Map.of())
-                )));
-            } catch (Exception ignored) {
-            }
-        }
-        builder.append("\n\n## 组会讨论点\n");
-        appendList(builder, deckPayload.get("discussionQuestions"));
-        return builder.toString();
-    }
-
-    private void appendList(StringBuilder builder, Object value) {
-        if (value instanceof List<?> list) {
-            for (Object item : list) {
-                String text = Objects.toString(item, "").trim();
-                if (!text.isBlank()) builder.append("- ").append(text).append("\n");
-            }
-        }
-    }
-
-    private String buildPresentonInstructions(Map<String, Object> deckPayload) {
-        Map<?, ?> settings = deckPayload.get("pptMasterSettings") instanceof Map<?, ?> map ? map : Map.of();
-        return """
-            生成中文科研组会汇报 PPT。风格要比普通工程模板更有设计感，但保持学术、克制、可编辑。
-            默认只围绕上传主论文展开，强调研究问题、方法框架、证据强度、核心结论、局限与讨论问题。
-            只有 includeComparisonAppendix 为 true 时，才允许在最后追加对比文献附录。
-            不要编造实验数值。信息不足处写“待补充”。
-            使用清晰标题、分区、少量重点高亮。避免满屏小字。
-            用户参数：%s
-            """.formatted(settings);
-    }
-
-    private String presentonVerbosity(Map<String, Object> deckPayload) {
-        Map<?, ?> settings = deckPayload.get("pptMasterSettings") instanceof Map<?, ?> map ? map : Map.of();
-        String density = Objects.toString(settings.get("density"), "中等密度");
-        if (density.contains("少字") || density.toLowerCase(Locale.ROOT).contains("concise")) return "concise";
-        if (density.contains("高密度") || density.toLowerCase(Locale.ROOT).contains("heavy")) return "text-heavy";
-        return "standard";
-    }
-
-    private String presentonTemplateName(Map<String, Object> deckPayload) {
-        Map<?, ?> settings = deckPayload.get("pptMasterSettings") instanceof Map<?, ?> map ? map : Map.of();
-        String visual = Objects.toString(settings.get("visualStyle"), "").toLowerCase(Locale.ROOT);
-        if (visual.contains("journal") || visual.contains("minimal")) return "general";
-        if (visual.contains("dark")) return "general";
-        return StringUtils.hasText(presentonTemplate) ? presentonTemplate : "general";
-    }
-
-    private int parseSlideCount(String value) {
-        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\d+").matcher(Objects.toString(value, "8"));
-        if (!matcher.find()) return 8;
-        int count = Integer.parseInt(matcher.group());
-        return Math.max(4, Math.min(18, count));
-    }
-
-    private String trimTrailingSlash(String value) {
-        String text = Objects.toString(value, "").trim();
-        while (text.endsWith("/")) text = text.substring(0, text.length() - 1);
-        return text.isBlank() ? "http://127.0.0.1:5001" : text;
-    }
-
-    private Map<String, Object> executePptxGen(Path structurePath, Path pptxPath, Path outputDir) {
+    private Map<String, Object> executePptMasterSkill(Path structurePath, Path pptxPath, Path outputDir) {
         Map<String, Object> response = new LinkedHashMap<>();
         Optional<String> nodePath = resolveCommand("node");
         if (nodePath.isEmpty()) {
             response.put("status", "missing_runtime");
             response.put("generated", false);
             response.put("message", "未检测到 Node.js，无法执行 PPT Master SVG 渲染器。");
+            return response;
+        }
+        Path skillDir = Path.of(Objects.toString(pptMasterSkillDir, "")).toAbsolutePath().normalize();
+        if (!Files.isRegularFile(skillDir.resolve("scripts/svg_to_pptx.py"))) {
+            response.put("status", "missing_ppt_master_skill");
+            response.put("generated", false);
+            response.put("message", "未找到已安装的 PPT Master skill，请检查 paperpilot.ppt-master.skill-dir：" + skillDir);
             return response;
         }
         Path renderer = Path.of(System.getProperty("user.dir"), "pptx-renderer", "render-meeting-deck.mjs");
@@ -1597,16 +1384,20 @@ public class MeetingReportService {
         response.put("command", command);
         response.put("commandText", shellJoin(command));
         try {
-            Process process = new ProcessBuilder(command)
+            ProcessBuilder processBuilder = new ProcessBuilder(command)
                 .directory(outputDir.toFile())
-                .redirectErrorStream(true)
-                .start();
+                .redirectErrorStream(true);
+            processBuilder.environment().put("PPT_MASTER_SKILL_DIR", skillDir.toString());
+            if (StringUtils.hasText(pptMasterPython)) {
+                processBuilder.environment().put("PPT_MASTER_PYTHON", pptMasterPython.trim());
+            }
+            Process process = processBuilder.start();
             boolean finished = process.waitFor(PPTXGEN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
                 response.put("status", "timeout");
                 response.put("generated", false);
-                response.put("message", "PPT Master SVG 渲染超过 2 分钟，已保留结构化 JSON。");
+                response.put("message", "PPT Master skill 渲染超过 2 分钟，已保留结构化 JSON。");
                 return response;
             }
             String output = new String(process.getInputStream().readAllBytes());
@@ -1614,24 +1405,26 @@ public class MeetingReportService {
             if (process.exitValue() != 0) {
                 response.put("status", "failed");
                 response.put("generated", false);
-                response.put("message", "PPT Master SVG 渲染失败：" + compactLog(output));
+                response.put("message", "PPT Master skill 渲染失败：" + compactLog(output));
                 return response;
             }
             if (!Files.isRegularFile(pptxPath)) {
                 response.put("status", "missing_output");
                 response.put("generated", false);
-                response.put("message", "PPT Master SVG 已执行，但没有找到生成的 PPTX 文件。");
+                response.put("message", "PPT Master skill 已执行，但没有找到生成的 PPTX 文件。");
                 return response;
             }
             mergeRendererMetadata(response, output);
             response.put("status", "generated");
             response.put("generated", true);
+            response.put("renderer", "ppt-master-skill");
+            response.put("pptMasterSkillDir", skillDir.toString());
             response.put("pptxPath", pptxPath.toAbsolutePath().toString());
             return response;
         } catch (Exception error) {
             response.put("status", "failed");
             response.put("generated", false);
-            response.put("message", "PPT Master SVG 渲染失败：" + readableError(error));
+            response.put("message", "PPT Master skill 渲染失败：" + readableError(error));
             return response;
         }
     }
@@ -1910,12 +1703,13 @@ public class MeetingReportService {
             builder.append("- 摘要：").append(cleanMarkdown(Optional.ofNullable(paper.getAbstractText()).orElse("摘要待补全"))).append("\n");
             builder.append("- 阅读笔记：").append(cleanMarkdown(Optional.ofNullable(paper.getNote()).orElse("暂无笔记"))).append("\n\n");
         }
-        builder.append("## PptxGenJS 固定科研模板生成要求\n\n");
-        builder.append("1. 使用中文生成可编辑 PPT。\n");
-        builder.append("2. 首页说明汇报主题、论文数量和汇报对象。\n");
-        builder.append("3. 中间页面用表格或分栏结构比较所选维度。\n");
-        builder.append("4. 结尾给出组会讨论问题和下一步研究建议。\n");
-        builder.append("5. 不要编造论文中没有的实验结果；信息不足处标注“待补充”。\n");
+        builder.append("## PPT Master skill 生成要求\n\n");
+        builder.append("1. 使用中文生成可编辑科研 PPT。\n");
+        builder.append("2. 首页说明汇报主论文、汇报对象和研究主线。\n");
+        builder.append("3. 主体按 Background / Methodology / Experiment / Results / Conclusion / Outlook 组织。\n");
+        builder.append("4. 优先保留主论文的公式、图、表、方法流程与核心证据。\n");
+        builder.append("5. 结尾给出组会讨论问题和下一步研究建议。\n");
+        builder.append("6. 不要编造论文中没有的实验结果；信息不足处标注“待核对”。\n");
         return builder.toString();
     }
 

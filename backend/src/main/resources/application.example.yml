@@ -40,9 +40,6 @@ paperpilot:
   mineru:
     binary: ${MINERU_BINARY:../.mineru-venv/bin/mineru}
     model-source: ${MINERU_MODEL_SOURCE:modelscope}
-  presenton:
-    enabled: ${PRESENTON_ENABLED:false}
-    base-url: ${PRESENTON_BASE_URL:http://127.0.0.1:5001}
-    username: ${PRESENTON_USERNAME:admin}
-    password: ${PRESENTON_PASSWORD:change-me}
-    template: ${PRESENTON_TEMPLATE:general}
+  ppt-master:
+    skill-dir: ${PPT_MASTER_SKILL_DIR:/Users/yuan/.codex/skills/ppt-master}
+    python: ${PPT_MASTER_PYTHON:}
