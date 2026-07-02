@@ -26,17 +26,25 @@
 
           <div class="meeting-card-head">
             <div class="meeting-date-block">
+              <div class="date-summary">
+                <span>组会时间</span>
+                <strong>{{ formatMeetingDate(meeting.meetingTime) }}</strong>
+              </div>
               <input
                 v-model="meeting.meetingTime"
                 type="datetime-local"
                 aria-label="组会时间"
                 @change="persistMeetings"
               />
-              <strong>{{ formatMeetingDate(meeting.meetingTime) }}</strong>
             </div>
-            <div class="meeting-status" :data-status="meetingStatus(meeting)">
-              <span></span>
-              {{ statusText(meeting) }}
+            <div class="meeting-head-actions">
+              <div class="meeting-status" :data-status="meetingStatus(meeting)">
+                <span></span>
+                {{ statusText(meeting) }}
+              </div>
+              <button type="button" class="delete-meeting-button" title="删除组会" @click="removeMeeting(meeting.id)">
+                删除
+              </button>
             </div>
           </div>
 
@@ -49,34 +57,6 @@
                 @change="persistMeetings"
               />
 
-              <div class="meeting-meta-controls">
-                <label>
-                  汇报类型
-                  <select v-model="meeting.params.reportType" @change="persistMeetings">
-                    <option value="paper">单篇论文精读</option>
-                    <option value="comparison">多文献对比</option>
-                    <option value="proposal">课题进展</option>
-                    <option value="journal">文献周报</option>
-                  </select>
-                </label>
-                <label>
-                  听众
-                  <select v-model="meeting.params.audience" @change="persistMeetings">
-                    <option value="导师与课题组">导师与课题组</option>
-                    <option value="跨方向同学">跨方向同学</option>
-                    <option value="项目评审">项目评审</option>
-                  </select>
-                </label>
-                <label>
-                  PPT 页数
-                  <select v-model="meeting.params.slideCount" @change="persistMeetings">
-                    <option value="8-10">8-10 页</option>
-                    <option value="10-12">10-12 页</option>
-                    <option value="12-16">12-16 页</option>
-                  </select>
-                </label>
-              </div>
-
               <label class="meeting-notes">
                 <span>组会重点内容</span>
                 <textarea
@@ -85,19 +65,6 @@
                   @change="persistMeetings"
                 ></textarea>
               </label>
-
-              <div class="tag-row">
-                <span v-for="tag in meeting.tags" :key="tag" class="tag-pill">
-                  {{ tag }}
-                  <button type="button" aria-label="移除标签" @click="removeTag(meeting, tag)">×</button>
-                </span>
-                <input
-                  v-model="meeting.tagDraft"
-                  placeholder="添加标记后回车"
-                  @keydown.enter.prevent="addTag(meeting)"
-                  @blur="persistMeetings"
-                />
-              </div>
             </section>
 
             <aside class="meeting-side">
@@ -427,6 +394,22 @@ function addMeeting() {
   showToast("已添加一场组会");
 }
 
+function removeMeeting(meetingId) {
+  const meeting = meetings.value.find((item) => item.id === meetingId);
+  if (!meeting) return;
+  if (!window.confirm(`删除「${meeting.title || "组会汇报"}」？`)) return;
+  meetings.value = meetings.value.filter((item) => item.id !== meetingId);
+  delete deckJobs[meetingId];
+  if (deckTimers.has(meetingId)) {
+    window.clearTimeout(deckTimers.get(meetingId));
+    deckTimers.delete(meetingId);
+  }
+  activeMeetingId.value = meetings.value[0]?.id || "";
+  persistMeetings();
+  persistDeckJobs();
+  showToast("已删除组会");
+}
+
 function persistMeetings() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(meetings.value.map(({ tagDraft, ...meeting }) => meeting)));
 }
@@ -454,19 +437,6 @@ function formatMeetingDate(value) {
 function toDatetimeLocal(date) {
   const offset = date.getTimezoneOffset();
   return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
-}
-
-function addTag(meeting) {
-  const tag = meeting.tagDraft.trim();
-  if (!tag) return;
-  if (!meeting.tags.includes(tag)) meeting.tags.push(tag);
-  meeting.tagDraft = "";
-  persistMeetings();
-}
-
-function removeTag(meeting, tag) {
-  meeting.tags = meeting.tags.filter((item) => item !== tag);
-  persistMeetings();
 }
 
 function openPaperPicker(meeting) {
@@ -947,9 +917,9 @@ button:disabled {
 .meeting-card {
   position: relative;
   border-radius: 14px;
-  padding: 22px;
+  padding: 24px;
   background: #fff;
-  box-shadow: 0 8px 18px rgba(21, 32, 51, .08);
+  box-shadow: 0 8px 14px rgba(21, 32, 51, .07);
 }
 
 .meeting-card.tone-0 { background: #fff; }
@@ -978,7 +948,6 @@ button:disabled {
 
 .meeting-card-head,
 .meeting-card-body,
-.meeting-meta-controls,
 .generation-grid,
 .picker-tools {
   display: grid;
@@ -987,23 +956,21 @@ button:disabled {
 
 .meeting-card-head {
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  margin-bottom: 18px;
+  align-items: center;
+  margin-bottom: 16px;
 }
 
 .meeting-date-block {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .meeting-date-block input,
-.meeting-meta-controls select,
 .meeting-title-input,
 .library-search,
-.picker-tools input,
-.tag-row input {
+.picker-tools input {
   border: 1px solid #cfdbea;
   border-radius: 10px;
   background: #fff;
@@ -1011,14 +978,40 @@ button:disabled {
   outline: 0;
 }
 
-.meeting-date-block input {
-  height: 38px;
-  padding: 0 10px;
+.date-summary {
+  min-width: 136px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #eef5ff;
 }
 
-.meeting-date-block strong {
+.date-summary span {
+  display: block;
+  color: #2457b8;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.date-summary strong {
+  display: block;
+  margin-top: 3px;
   color: #111827;
-  font-size: 20px;
+  font-size: 19px;
+  line-height: 1.15;
+}
+
+.meeting-date-block input {
+  height: 38px;
+  max-width: 230px;
+  padding: 0 10px;
+  color: #46576e;
+  background: rgba(255, 255, 255, .82);
+}
+
+.meeting-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
 
 .meeting-status {
@@ -1032,6 +1025,22 @@ button:disabled {
   color: #43546a;
   font-size: 12px;
   font-weight: 850;
+}
+
+.delete-meeting-button {
+  min-height: 34px;
+  border: 1px solid #f0c5c5;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: #fff7f7;
+  color: #b42323;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.delete-meeting-button:hover {
+  background: #fee2e2;
 }
 
 .meeting-status span {
@@ -1070,36 +1079,26 @@ button:disabled {
 
 .meeting-title-input {
   width: 100%;
-  min-height: 48px;
+  min-height: 54px;
   box-sizing: border-box;
-  padding: 0 14px;
+  border-color: transparent;
+  padding: 0 4px;
+  background: transparent;
+  color: #111827;
   font-size: 22px;
   font-weight: 900;
 }
 
-.meeting-meta-controls {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 14px;
-}
-
-.meeting-meta-controls label {
-  display: grid;
-  gap: 7px;
-  color: #526277;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.meeting-meta-controls select {
-  height: 40px;
-  padding: 0 10px;
-  font: inherit;
+.meeting-title-input:focus {
+  border-color: #b9cbed;
+  padding-inline: 12px;
+  background: #fff;
 }
 
 .meeting-notes {
   display: grid;
   gap: 9px;
-  margin-top: 16px;
+  margin-top: 10px;
 }
 
 .meeting-notes span {
@@ -1110,52 +1109,16 @@ button:disabled {
 
 .meeting-notes textarea {
   width: 100%;
-  min-height: 112px;
+  min-height: 134px;
   box-sizing: border-box;
-  border: 1px solid #cfdbea;
+  border: 1px solid #d8e2ee;
   border-radius: 12px;
-  padding: 14px;
+  padding: 16px;
+  background: rgba(255, 255, 255, .74);
   resize: vertical;
   color: #243247;
   outline: 0;
   font: 14px/1.75 inherit;
-}
-
-.tag-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.tag-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  border-radius: 999px;
-  padding: 0 9px;
-  background: #e8f0fb;
-  color: #254061;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.tag-pill button {
-  width: 18px;
-  height: 18px;
-  border: 0;
-  border-radius: 50%;
-  background: rgba(37, 64, 97, .12);
-  color: #254061;
-  cursor: pointer;
-}
-
-.tag-row input {
-  min-width: 160px;
-  height: 32px;
-  padding: 0 10px;
 }
 
 .meeting-side {
@@ -1166,7 +1129,7 @@ button:disabled {
 .paper-box,
 .generation-action {
   border-radius: 12px;
-  background: rgba(255, 255, 255, .72);
+  background: rgba(255, 255, 255, .78);
   padding: 16px;
 }
 
@@ -1512,7 +1475,6 @@ button:disabled {
     width: 100%;
   }
 
-  .meeting-meta-controls,
   .generation-grid,
   .picker-tools,
   .picker-paper-list,
