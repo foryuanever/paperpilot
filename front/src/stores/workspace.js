@@ -113,6 +113,13 @@ const openRouterFreeModels = [
   { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B Instruct Free" },
   { id: "nvidia/nemotron-3-ultra-550b-a55b:free", name: "Nemotron 3 Ultra Free" },
 ];
+
+const deepSeekOfficialModels = [
+  { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash" },
+  { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro" },
+  { id: "deepseek-chat", name: "DeepSeek Chat · legacy" },
+  { id: "deepseek-reasoner", name: "DeepSeek Reasoner · legacy" },
+];
 const nineRouterModelAliases = Object.fromEntries(
   [
     ...nineRouterOpenCodeFreeModels.flatMap((model) => [
@@ -168,6 +175,15 @@ const presetMap = {
     baseUrl: "https://openrouter.ai/api/v1",
     apiKey: "",
     modelName: "nex-agi/nex-n2-pro:free",
+    apiFormat: "openai_chat",
+    authType: "bearer",
+    scene: "analyze",
+  },
+  "deepseek-official": {
+    providerName: "DeepSeek 官方",
+    baseUrl: "https://api.deepseek.com",
+    apiKey: "",
+    modelName: "deepseek-v4-flash",
     apiFormat: "openai_chat",
     authType: "bearer",
     scene: "analyze",
@@ -299,6 +315,8 @@ export const useWorkspaceStore = defineStore("workspace", () => {
           ? [...nineRouterOpenCodeFreeModels]
         : name === "openrouter-free"
           ? [...openRouterFreeModels]
+        : name === "deepseek-official"
+          ? [...deepSeekOfficialModels]
         : [];
     syncState.modelTest = null;
     syncState.modelSaveResult = null;
@@ -549,6 +567,8 @@ export const useWorkspaceStore = defineStore("workspace", () => {
             ? [...nineRouterOpenCodeFreeModels]
           : normalizedProviderName === "OpenRouter Free"
             ? [...openRouterFreeModels]
+          : normalizedProviderName === "DeepSeek 官方" || /api\.deepseek\.com/i.test(active.baseUrl || "")
+            ? [...deepSeekOfficialModels]
           : [];
       syncState.lastSyncMessage = scene === "meeting_deck" ? "已读取 PPT 生成专用模型配置。" : "已读取通用模型配置。";
     } catch {

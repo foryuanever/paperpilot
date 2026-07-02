@@ -64,7 +64,7 @@ public class ModelConfigService {
             : previous == null ? "" : previous.getApiKey();
         entity.setApiKey(resolvedApiKey);
         entity.setApiKeyMasked(maskApiKey(resolvedApiKey));
-        entity.setModelName(request.getModelName());
+        entity.setModelName(resolveModelName(request));
         entity.setApiFormat(resolveFormat(request));
         entity.setAuthType(normalizeAuthType(request.getAuthType(), request.getApiFormat()));
         entity.setFullUrl(request.isFullUrl());
@@ -386,6 +386,7 @@ public class ModelConfigService {
     private String inferKeyUrl(String providerName, String baseUrl) {
         String source = (Objects.toString(providerName, "") + " " + Objects.toString(baseUrl, "")).toLowerCase();
         if (source.contains("openrouter")) return "https://openrouter.ai/keys";
+        if (source.contains("deepseek")) return "https://platform.deepseek.com/api_keys";
         if (source.contains("groq")) return "https://console.groq.com/keys";
         if (source.contains("cerebras")) return "https://cloud.cerebras.ai/platform";
         if (source.contains("huggingface") || source.contains("hugging face")) return "https://huggingface.co/settings/tokens";
@@ -418,6 +419,17 @@ public class ModelConfigService {
     private List<Map<String, String>> recommendedTemplates() {
         return List.of(
             Map.of(
+                "id", "deepseek-official",
+                "providerName", "DeepSeek 官方",
+                "baseUrl", "https://api.deepseek.com",
+                "modelName", "deepseek-v4-flash",
+                "apiFormat", "openai_chat",
+                "status", "unconfigured",
+                "message", "DeepSeek 官方 OpenAI 兼容协议；需要 DeepSeek API Key，模型名不要填写 gpt-5.5。",
+                "keyUrl", "https://platform.deepseek.com/api_keys",
+                "priority", "79-deepseek"
+            ),
+            Map.of(
                 "id", "groq",
                 "providerName", "GroqCloud",
                 "baseUrl", "https://api.groq.com/openai/v1",
@@ -448,7 +460,7 @@ public class ModelConfigService {
             AiChatService.ChatResult result = aiChatService.test(
                 request.getBaseUrl(),
                 request.getApiKey(),
-                request.getModelName(),
+                resolveModelName(request),
                 resolveFormat(request),
                 normalizeAuthType(request.getAuthType(), request.getApiFormat()),
                 request.isFullUrl(),
@@ -463,7 +475,7 @@ public class ModelConfigService {
         } catch (Exception exception) {
             return Map.of(
                 "success", false,
-                "message", readableMessage(exception)
+                "message", readableRequestMessage(request, exception)
             );
         }
     }
@@ -489,7 +501,7 @@ public class ModelConfigService {
         } catch (Exception exception) {
             return Map.of(
                 "success", false,
-                "message", readableMessage(exception),
+                "message", readableRequestMessage(request, exception),
                 "count", 0,
                 "models", List.of()
             );
@@ -505,7 +517,7 @@ public class ModelConfigService {
             AiChatService.ChatResult result = aiChatService.chat(
                 request.getBaseUrl(),
                 request.getApiKey(),
-                request.getModelName(),
+                resolveModelName(request),
                 resolveFormat(request),
                 normalizeAuthType(request.getAuthType(), request.getApiFormat()),
                 request.isFullUrl(),
@@ -521,7 +533,7 @@ public class ModelConfigService {
         } catch (Exception exception) {
             return Map.of(
                 "success", false,
-                "message", readableMessage(exception)
+                "message", readableRequestMessage(request, exception)
             );
         }
     }
@@ -549,6 +561,15 @@ public class ModelConfigService {
         return normalizeFormat(request.getApiFormat());
     }
 
+    private String resolveModelName(ModelConfigRequest request) {
+        String model = Objects.toString(request.getModelName(), "").trim();
+        String source = (Objects.toString(request.getProviderName(), "") + " " + Objects.toString(request.getBaseUrl(), "")).toLowerCase();
+        if (source.contains("deepseek") && (!StringUtils.hasText(model) || model.toLowerCase().startsWith("gpt-"))) {
+            return "deepseek-v4-flash";
+        }
+        return model;
+    }
+
     private String normalizeAuthType(String value, String format) {
         if (StringUtils.hasText(value)) return value.trim().toLowerCase();
         return "anthropic".equalsIgnoreCase(format) ? "x-api-key" : "bearer";
@@ -572,6 +593,9 @@ public class ModelConfigService {
         if (message.contains("HTTP 530") || message.contains("error code: 1016")) {
             return "9Router 中转隧道当前不可用（HTTP 530 / 1016），不是模型选择错误。请稍后重试，或切换 OpenCode Zen / 自定义稳定中转站。";
         }
+        if ((lower.contains("deepseek") || lower.contains("api.deepseek.com")) && (message.contains("HTTP 401") || lower.contains("invalid"))) {
+            return "DeepSeek 官方 API 鉴权失败：请确认填写的是 DeepSeek Platform 的 API Key，不是网页登录账号/其他中转 Key；模型名请使用 deepseek-v4-flash 或 deepseek-v4-pro。";
+        }
         if (message.contains("HTTP 502") || message.contains("HTTP 503") || message.contains("HTTP 504")) {
             return "中转站临时不可用或上游拥堵，系统已自动重试但仍失败。请稍后重试，或换用更稳定的中转地址。";
         }
@@ -579,5 +603,21 @@ public class ModelConfigService {
             return "模型响应超时。思考模型首次调用可能较慢，请稍后重试或先选择 Flash / Sonnet 等快速模型测试连接";
         }
         return message.length() > 180 ? message.substring(0, 180) : message;
+    }
+
+    private String readableRequestMessage(ModelConfigRequest request, Exception exception) {
+        String message = Objects.toString(exception.getMessage(), "");
+        if (isDeepSeekRequest(request) && (message.contains("HTTP 401") || message.contains("HTTP 403") || message.toLowerCase().contains("invalid"))) {
+            return "DeepSeek 官方 API 鉴权失败：请确认填写的是 DeepSeek Platform 的 API Key，不是网页登录账号/其他中转 Key；模型名请使用 deepseek-v4-flash 或 deepseek-v4-pro。";
+        }
+        if (isDeepSeekRequest(request) && message.contains("gpt-")) {
+            return "DeepSeek 官方 API 不能使用 GPT 模型名；请改用 deepseek-v4-flash 或 deepseek-v4-pro。";
+        }
+        return readableMessage(exception);
+    }
+
+    private boolean isDeepSeekRequest(ModelConfigRequest request) {
+        String source = (Objects.toString(request.getProviderName(), "") + " " + Objects.toString(request.getBaseUrl(), "")).toLowerCase();
+        return source.contains("deepseek") || source.contains("api.deepseek.com");
     }
 }

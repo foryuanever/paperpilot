@@ -40,6 +40,15 @@
       <button
         type="button"
         class="route-option"
+        :class="{ active: isDeepSeek }"
+        @click="$emit('apply-preset', 'deepseek-official')"
+      >
+        <strong>DeepSeek 官方</strong>
+        <span>OpenAI 兼容协议，使用 DeepSeek Key</span>
+      </button>
+      <button
+        type="button"
+        class="route-option"
         :class="{ active: isRelay }"
         @click="$emit('apply-preset', 'relay')"
       >
@@ -69,6 +78,13 @@
       </div>
       <button type="button" class="btn btn-secondary" @click="$emit('apply-preset', 'openrouter-free')">恢复推荐配置</button>
     </div>
+    <div v-else-if="isDeepSeek" class="opencode-notice deepseek-notice">
+      <div>
+        <strong>DeepSeek 官方 API 使用 OpenAI Chat Completions 兼容协议</strong>
+        <span>这里不是 GPT 中转站，模型名应使用 deepseek-v4-flash / deepseek-v4-pro；不要填写 gpt-5.5。</span>
+      </div>
+      <button type="button" class="btn btn-secondary" @click="$emit('apply-preset', 'deepseek-official')">恢复推荐配置</button>
+    </div>
 
     <div class="form-grid compact-grid">
       <div v-if="isRelay" class="form-group">
@@ -85,6 +101,7 @@
         />
         <small v-if="isNineRouter" class="field-help">当前使用 HTTPS 隧道；请填写创建该隧道的 9Router 实例生成的 API Key。</small>
         <small v-else-if="isOpenRouter" class="field-help">OpenRouter 官方 OpenAI 兼容地址；免费模型通常更稳定，但仍需要账号 Key。</small>
+        <small v-else-if="isDeepSeek" class="field-help">DeepSeek 官方地址；系统会优先尝试 `/chat/completions` 与 `/models`。</small>
         <small v-else-if="isRelay" class="field-help">兼容 OpenAI Chat Completions 的中转站均可，系统会自动处理 `/v1` 路径。</small>
       </div>
       <div class="form-group">
@@ -105,13 +122,13 @@
 
       <div class="reader-toolbar full-row">
         <button
-          v-if="isRelay || isNineRouter"
+          v-if="isRelay || isNineRouter || isDeepSeek"
           type="button"
           class="btn btn-secondary"
           :disabled="fetchingModels"
           @click="$emit('fetch-models')"
         >
-          {{ fetchingModels ? "获取中..." : isNineRouter ? "加载免费模型" : "获取中转站模型" }}
+          {{ fetchingModels ? "获取中..." : isNineRouter ? "加载免费模型" : isDeepSeek ? "获取 DeepSeek 模型" : "获取中转站模型" }}
         </button>
         <button type="button" class="btn btn-secondary" :disabled="testing" @click="$emit('test-model')">
           {{ testing ? "测试中..." : "测试连接" }}
@@ -194,23 +211,27 @@ const isNineRouter = computed(() =>
   ["9Router OpenCode Free", "9Router 模型路由", "9Router 免费路由"].includes(props.modelConfig.providerName),
 );
 const isOpenRouter = computed(() => props.modelConfig.providerName === "OpenRouter Free");
-const isRelay = computed(() => !isOpenCode.value && !isNineRouter.value && !isOpenRouter.value);
+const isDeepSeek = computed(() => props.modelConfig.providerName === "DeepSeek 官方");
+const isRelay = computed(() => !isOpenCode.value && !isNineRouter.value && !isOpenRouter.value && !isDeepSeek.value);
 const baseUrlLabel = computed(() => {
   if (isOpenCode.value) return "OpenCode Zen API 地址";
   if (isNineRouter.value) return "9Router Base URL";
   if (isOpenRouter.value) return "OpenRouter Base URL";
+  if (isDeepSeek.value) return "DeepSeek Base URL";
   return "中转站 Base URL";
 });
 const baseUrlPlaceholder = computed(() => {
   if (isOpenCode.value) return "https://opencode.ai/zen/v1";
   if (isNineRouter.value) return "https://rnr5845.abc-tunnel.us/v1";
   if (isOpenRouter.value) return "https://openrouter.ai/api/v1";
+  if (isDeepSeek.value) return "https://api.deepseek.com";
   return "例如：https://api.example.com/v1";
 });
 const keyLabel = computed(() => {
   if (isOpenCode.value) return "OpenCode Zen Key";
   if (isNineRouter.value) return "9Router Key";
   if (isOpenRouter.value) return "OpenRouter Key";
+  if (isDeepSeek.value) return "DeepSeek API Key";
   return "中转站 Key";
 });
 const chatPrompt = ref("");
