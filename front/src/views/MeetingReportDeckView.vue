@@ -207,10 +207,18 @@
 
             <div class="review-point-list">
               <section v-for="section in reviewSections" :key="section.key" class="review-point">
-                <div>
+                <div class="review-point-meta">
                   <strong>{{ section.title }}</strong>
                   <small>{{ section.hint }}</small>
                 </div>
+                <button
+                  type="button"
+                  class="copy-section-button"
+                  :title="`复制${section.title}`"
+                  @click="copyReviewSection(section)"
+                >
+                  复制
+                </button>
                 <textarea
                   v-model="reviewModal.sections[section.key]"
                   :placeholder="section.placeholder"
@@ -239,7 +247,6 @@ const DECK_STORAGE_KEY = "paperpilot-meeting-deck-jobs-v1";
 const REVIEW_STORAGE_KEY = "paperpilot-meeting-review-jobs-v1";
 
 const reviewSections = [
-  { key: "synthesis", title: "一页综述", hint: "3-5 点讲清论文精髓", placeholder: "一句话结论、核心贡献、关键证据、可讨论问题。" },
   { key: "basicInfo", title: "基本信息", hint: "题录、来源与研究对象", placeholder: "作者、年份、期刊/会议、研究对象、数据来源。" },
   { key: "overview", title: "研究问题", hint: "为什么要做", placeholder: "背景痛点、研究缺口、本文要回答的问题。" },
   { key: "background", title: "理论背景", hint: "相关工作与概念框架", placeholder: "关键概念、相关理论、与既有工作的关系。" },
@@ -700,6 +707,33 @@ function resizeAllReviewTextareas() {
   });
 }
 
+async function copyReviewSection(section) {
+  const content = (reviewModal.sections[section.key] || "").trim();
+  if (!content) {
+    showToast("这一段还没有内容");
+    return;
+  }
+  const text = `${section.title}\n${content}`;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
+    showToast(`已复制${section.title}`);
+  } catch {
+    showToast("复制失败，请手动选择文本复制");
+  }
+}
+
 async function makePpt(meeting) {
   const paper = primaryPaper(meeting);
   if (!paper || !hasPdf(paper) || isDeckBusy(meeting)) return;
@@ -1133,12 +1167,13 @@ button:disabled {
 .meeting-notes textarea {
   width: 100%;
   min-height: 134px;
+  max-height: 220px;
   box-sizing: border-box;
   border: 1px solid #d8e2ee;
   border-radius: 12px;
   padding: 16px;
   background: rgba(255, 255, 255, .74);
-  resize: vertical;
+  resize: none;
   color: #243247;
   outline: 0;
   font: 14px/1.75 inherit;
@@ -1211,6 +1246,8 @@ button:disabled {
 
 .generation-grid {
   grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  gap: 10px;
 }
 
 .progress-label {
@@ -1218,7 +1255,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 9px;
 }
 
 .progress-label span {
@@ -1232,10 +1269,43 @@ button:disabled {
   font-size: 16px;
 }
 
+.generation-action {
+  display: grid;
+  align-content: space-between;
+  min-height: 116px;
+  border: 1px solid rgba(203, 216, 231, .72);
+}
+
+.generation-action::after {
+  content: "";
+  display: block;
+  height: 6px;
+  grid-row: 2;
+  align-self: end;
+  margin: 0 0 11px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #225ce0, #7aa2ff);
+  opacity: .22;
+}
+
 .generation-action button,
 .generation-action a {
   width: 100%;
   box-sizing: border-box;
+  grid-row: 3;
+  min-height: 38px;
+  border-radius: 9px;
+}
+
+.generation-action .soft-button {
+  border-color: #c7d8ef;
+  background: #f8fbff;
+  color: #194fbf;
+}
+
+.generation-action .primary-button,
+.generation-action .download-button {
+  box-shadow: none;
 }
 
 .modal-backdrop {
@@ -1407,42 +1477,62 @@ button:disabled {
 }
 
 .review-point {
+  position: relative;
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr);
   gap: 14px;
   border-radius: 12px;
-  padding: 14px;
+  padding: 14px 48px 14px 14px;
   background: #f8fbff;
 }
 
-.review-point:nth-child(4n + 1) { background: #f6faff; }
-.review-point:nth-child(4n + 2) { background: #f8fbf7; }
-.review-point:nth-child(4n + 3) { background: #fffaf3; }
-.review-point:nth-child(4n + 4) { background: #f8f7ff; }
+.review-point:nth-child(4n + 1) { background: #f6faff; color: #17427a; }
+.review-point:nth-child(4n + 2) { background: #f8fbf7; color: #276749; }
+.review-point:nth-child(4n + 3) { background: #fffaf3; color: #8a4b00; }
+.review-point:nth-child(4n + 4) { background: #f8f7ff; color: #4c3b8f; }
 
 .review-point strong {
   display: block;
-  color: #152033;
+  color: currentColor;
   font-size: 15px;
 }
 
 .review-point small {
   display: block;
   margin-top: 6px;
-  color: #64748b;
+  color: color-mix(in srgb, currentColor 64%, #64748b);
   line-height: 1.5;
+}
+
+.copy-section-button {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-height: 28px;
+  border: 1px solid color-mix(in srgb, currentColor 28%, #d5e0eb);
+  border-radius: 999px;
+  padding: 0 9px;
+  background: rgba(255, 255, 255, .72);
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.copy-section-button:hover {
+  background: #fff;
 }
 
 .review-point textarea {
   min-height: 92px;
   height: auto;
   overflow: hidden;
-  border: 1px solid #d5e0eb;
+  border: 1px solid color-mix(in srgb, currentColor 20%, #d5e0eb);
   border-radius: 10px;
   padding: 12px;
   resize: none;
   background: rgba(255, 255, 255, .86);
-  color: #243247;
+  color: currentColor;
   outline: 0;
   font: 14px/1.75 inherit;
 }
