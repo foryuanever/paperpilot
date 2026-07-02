@@ -815,10 +815,26 @@ public class MeetingReportService {
             payload.put("modelName", Objects.toString(agentPayload.getOrDefault("modelName", ""), ""));
             payload.put("contentEngine", "deck-agent-multiround");
         } catch (Exception error) {
-            throw new ResponseStatusException(
-                HttpStatus.BAD_GATEWAY,
-                "强模型多轮 Agent 未完成，已停止生成以避免产出劣质 PPT：" + readableError(error)
+            Map<String, Object> extractedPayload = buildExtractedPdfDeckPayload(
+                primaryReportPaper,
+                reportPaperText,
+                templateName,
+                slideCount,
+                audience,
+                focus,
+                pptMasterSettings,
+                readableError(error)
             );
+            mergeIfPresent(payload, extractedPayload, "title");
+            mergeIfPresent(payload, extractedPayload, "subtitle");
+            mergeIfPresent(payload, extractedPayload, "takeaways");
+            mergeIfPresent(payload, extractedPayload, "agenda");
+            mergeIfPresent(payload, extractedPayload, "researchEssence");
+            mergeIfPresent(payload, extractedPayload, "slides");
+            mergeIfPresent(payload, extractedPayload, "discussionQuestions");
+            payload.put("contentEngine", "pdf-extracted-fallback");
+            payload.put("modelWarning", "强模型结构化 JSON 失败，已改用 PDF 正文提取生成：" + readableError(error));
+            job.progress(48, "强模型结构化失败，已切换为 PDF 正文提取生成");
         }
         payload.put("papers", paperCards);
         payload.put("primaryReportPaper", primaryReportPaper);
@@ -1241,6 +1257,172 @@ public class MeetingReportService {
             "这篇论文对我们的课题有什么可迁移的启发？"
         ));
         return payload;
+    }
+
+    private Map<String, Object> buildExtractedPdfDeckPayload(
+        Map<String, Object> primaryReportPaper,
+        String reportPaperText,
+        String templateName,
+        String slideCount,
+        String audience,
+        String focus,
+        Map<String, Object> pptMasterSettings,
+        String warning
+    ) {
+        String title = Objects.toString(primaryReportPaper.getOrDefault("title", "汇报主论文"), "汇报主论文");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        String abstractText = extractSectionSnippet(reportPaperText, "(?i)^\\s*abstract\\b|^\\s*摘要\\b", "(?i)^\\s*(keywords|index terms|introduction|1\\.?\\s+introduction|关键词)\\b", 720);
+        String introText = extractSectionSnippet(reportPaperText, "(?i)^\\s*(1\\.?\\s+)?introduction\\b|^\\s*引言\\b|^\\s*简介\\b", "(?i)^\\s*(2\\.?\\s+|background|related work|method|methods|methodology)\\b", 900);
+        String methodText = extractSectionSnippet(reportPaperText, "(?i)^\\s*(method|methods|methodology|approach|framework|model)\\b|^\\s*方法\\b", "(?i)^\\s*(experiment|experiments|evaluation|result|results|discussion|case study)\\b", 950);
+        String resultText = extractSectionSnippet(reportPaperText, "(?i)^\\s*(experiment|experiments|evaluation|result|results|findings|case study)\\b|^\\s*(实验|结果|评估)\\b", "(?i)^\\s*(discussion|conclusion|limitations|future work)\\b", 950);
+        String conclusionText = extractSectionSnippet(reportPaperText, "(?i)^\\s*(discussion|conclusion|limitations|future work)\\b|^\\s*(讨论|结论|局限|展望)\\b", "(?i)^\\s*(references|acknowledg)\\b|^\\s*参考文献\\b", 800);
+        if (abstractText.isBlank()) {
+            abstractText = firstUsefulParagraph(reportPaperText, 620);
+        }
+        List<String> abstractBullets = bulletsFromText(abstractText, 3, "摘要段落未能稳定提取，请回到 PDF 核对研究目标、对象和主要结论。");
+        List<String> introBullets = bulletsFromText(introText, 4, "引言信息提取不足，请核对论文的问题背景、研究动机和缺口。");
+        List<String> methodBullets = bulletsFromText(methodText, 4, "方法段落提取不足，请核对模型、框架、变量或流程。");
+        List<String> resultBullets = bulletsFromText(resultText, 4, "结果段落提取不足，请核对实验设置、指标、数据和主要发现。");
+        List<String> conclusionBullets = bulletsFromText(conclusionText, 4, "结论段落提取不足，请核对贡献、边界条件和未来方向。");
+
+        payload.put("title", "组会汇报：" + shortTitle(title));
+        payload.put("subtitle", "基于 PDF 正文提取与 PPT Master 参数确认生成");
+        Map<String, Object> essence = new LinkedHashMap<>();
+        essence.put("oneSentence", firstSentence(abstractText, "本文核心问题需要结合摘要与引言核对。"));
+        essence.put("centralQuestion", firstSentence(introText, "研究问题需从引言部分进一步核对。"));
+        essence.put("coreClaim", firstSentence(conclusionText, firstSentence(abstractText, "核心结论需从全文核对。")));
+        essence.put("argumentChain", List.of("从摘要定位研究主题", "从引言提取问题背景", "从方法段落提取技术路径", "从结果/结论段落提取证据与贡献"));
+        essence.put("methodKernel", firstSentence(methodText, "方法核心需从正文方法章节核对。"));
+        essence.put("evidenceKernel", firstSentence(resultText, "关键证据需从实验或结果章节核对。"));
+        essence.put("contributionKernel", firstSentence(conclusionText, "贡献需从结论和讨论章节核对。"));
+        essence.put("weaknessKernel", focus == null || focus.isBlank() ? "建议在组会中追问数据、指标、适用边界与可复现性。" : focus);
+        essence.put("formulaCandidates", findPaperAssetCues(reportPaperText, "Equation|公式|\\(\\d+\\)", 3));
+        essence.put("figureCandidates", findPaperAssetCues(reportPaperText, "Fig\\.?|Figure|图\\s*\\d+", 5));
+        essence.put("tableCandidates", findPaperAssetCues(reportPaperText, "Table|表\\s*\\d+", 4));
+        payload.put("researchEssence", essence);
+        payload.put("takeaways", List.of(
+            firstSentence(abstractText, "本文主题和核心问题已从 PDF 摘要/正文中提取。"),
+            firstSentence(methodText, "方法路线需要围绕论文正文中的框架、模型或流程展开。"),
+            firstSentence(resultText, "结果页优先保留论文自己的图、表、指标和结论证据。")
+        ));
+        payload.put("agenda", List.of(
+            "Background：研究背景与问题缺口",
+            "Research Question：论文试图回答的问题",
+            "Methodology：方法框架与实现路径",
+            "Evidence：实验、案例或结果证据",
+            "Contribution：主要贡献、局限与讨论"
+        ));
+        payload.put("slides", List.of(
+            extractedSlide("RESEARCH BACKGROUND", "研究背景与问题缺口", "为什么这篇论文值得在组会讨论", "Background", "academic_background", introBullets, "从引言中提取研究动机与问题背景。"),
+            extractedSlide("CORE QUESTION", "核心研究问题", "把摘要和引言压缩成可讲的一句话", "Background", "formula_focus", abstractBullets, "先让听众明白论文到底要解决什么。"),
+            extractedSlide("METHODOLOGY", "方法框架与技术路径", "从正文方法章节提取模型、流程和关键机制", "Methodology", "method_pipeline", methodBullets, "这一页解释作者如何推进论证。"),
+            extractedSlide("EVIDENCE", "实验、案例与结果证据", "用论文自己的结果支撑结论", "Results", "table_result", resultBullets, "这一页避免泛泛复述摘要，绑定证据和判断。"),
+            extractedSlide("TAKEAWAYS", "贡献、局限与组会讨论", "收束到可追问、可复现、可迁移的问题", "Outlook", "future_outlook", conclusionBullets, "结尾明确论文价值和组会讨论入口。")
+        ));
+        payload.put("discussionQuestions", List.of(
+            "论文的核心问题是否被方法和证据充分支撑？",
+            "哪些图、表、公式最值得在组会中逐页讲解？",
+            "实验设置、数据来源或评价指标有没有明显边界？",
+            "这篇论文的方法或结论能否迁移到我们的课题？",
+            "强模型结构化阶段失败原因：" + warning
+        ));
+        payload.put("template", templateName);
+        payload.put("slideCount", slideCount);
+        payload.put("audience", audience);
+        payload.put("pptMasterSettings", pptMasterSettings);
+        return payload;
+    }
+
+    private Map<String, Object> extractedSlide(
+        String eyebrow,
+        String title,
+        String subtitle,
+        String section,
+        String visualType,
+        List<String> bullets,
+        String speakerNotes
+    ) {
+        return Map.of(
+            "eyebrow", eyebrow,
+            "title", title,
+            "subtitle", subtitle,
+            "section", section,
+            "visualType", visualType,
+            "bullets", bullets,
+            "evidence", bullets,
+            "assetCue", "",
+            "keyMessage", bullets.isEmpty() ? subtitle : bullets.get(0),
+            "speakerNotes", speakerNotes
+        );
+    }
+
+    private String extractSectionSnippet(String text, String startRegex, String endRegex, int maxLength) {
+        String source = Optional.ofNullable(text).orElse("");
+        if (source.isBlank()) return "";
+        java.util.regex.Pattern start = java.util.regex.Pattern.compile(startRegex, java.util.regex.Pattern.MULTILINE);
+        java.util.regex.Matcher matcher = start.matcher(source);
+        if (!matcher.find()) return "";
+        int begin = matcher.end();
+        int end = Math.min(source.length(), begin + Math.max(maxLength * 4, maxLength));
+        java.util.regex.Pattern stop = java.util.regex.Pattern.compile(endRegex, java.util.regex.Pattern.MULTILINE);
+        java.util.regex.Matcher stopMatcher = stop.matcher(source.substring(begin, end));
+        if (stopMatcher.find() && stopMatcher.start() > 120) {
+            end = begin + stopMatcher.start();
+        }
+        return compactAcademicText(source.substring(begin, Math.min(source.length(), end)), maxLength);
+    }
+
+    private String firstUsefulParagraph(String text, int maxLength) {
+        String source = Optional.ofNullable(text).orElse("");
+        for (String paragraph : source.split("\\R{2,}")) {
+            String compact = compactAcademicText(paragraph, maxLength);
+            if (compact.length() > 80 && !compact.toLowerCase(Locale.ROOT).contains("downloaded from")) return compact;
+        }
+        return compactAcademicText(source, maxLength);
+    }
+
+    private List<String> bulletsFromText(String text, int limit, String fallback) {
+        String compact = compactAcademicText(text, 1200);
+        if (compact.isBlank()) return List.of(fallback);
+        List<String> sentences = Arrays.stream(compact.split("(?<=[。！？.!?])\\s+|；|;"))
+            .map(item -> compactAcademicText(item, 150))
+            .filter(item -> item.length() >= 18)
+            .distinct()
+            .limit(limit)
+            .collect(Collectors.toCollection(ArrayList::new));
+        if (sentences.isEmpty()) sentences.add(compactAcademicText(compact, 150));
+        return sentences;
+    }
+
+    private String firstSentence(String text, String fallback) {
+        List<String> bullets = bulletsFromText(text, 1, fallback);
+        return bullets.isEmpty() ? fallback : bullets.get(0);
+    }
+
+    private List<String> findPaperAssetCues(String text, String regex, int limit) {
+        String source = Optional.ofNullable(text).orElse("");
+        if (source.isBlank()) return List.of();
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(regex, java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher matcher = pattern.matcher(source);
+        List<String> cues = new ArrayList<>();
+        while (matcher.find() && cues.size() < limit) {
+            int begin = Math.max(0, matcher.start() - 80);
+            int end = Math.min(source.length(), matcher.end() + 180);
+            String cue = compactAcademicText(source.substring(begin, end), 180);
+            if (!cue.isBlank() && cues.stream().noneMatch(existing -> existing.equalsIgnoreCase(cue))) cues.add(cue);
+        }
+        return cues;
+    }
+
+    private String compactAcademicText(String text, int maxLength) {
+        String compact = Optional.ofNullable(text).orElse("")
+            .replaceAll("https?://\\S+", "")
+            .replaceAll("(?i)Downloaded from .*", "")
+            .replaceAll("\\[[0-9,\\s-]+]", "")
+            .replaceAll("\\s+", " ")
+            .trim();
+        if (compact.length() <= maxLength) return compact;
+        return compact.substring(0, Math.max(0, maxLength - 1)).trim() + "…";
     }
 
     private Map<String, Object> readPptMasterSettings(Map<String, Object> body) {
