@@ -3,8 +3,10 @@ package com.paperpilot.server.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paperpilot.server.entity.MeetingReportEntity;
+import com.paperpilot.server.entity.ModelConfigEntity;
 import com.paperpilot.server.entity.PaperEntity;
 import com.paperpilot.server.repository.MeetingReportRepository;
+import com.paperpilot.server.repository.ModelConfigRepository;
 import com.paperpilot.server.repository.PaperRepository;
 import com.paperpilot.server.vo.SearchPaperVO;
 import org.apache.pdfbox.Loader;
@@ -30,6 +32,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.*;
 import java.util.List;
@@ -83,6 +86,7 @@ public class MeetingReportService {
     );
     private final PaperRepository paperRepository;
     private final MeetingReportRepository reportRepository;
+    private final ModelConfigRepository modelConfigRepository;
     private final CurrentUserService currentUserService;
     private final AiChatService aiChatService;
     private final AiUsageService aiUsageService;
@@ -105,9 +109,16 @@ public class MeetingReportService {
     @Value("${paperpilot.ppt-master.python:}")
     private String pptMasterPython;
 
+    @Value("${paperpilot.ppt-master.codex:/Applications/Codex.app/Contents/Resources/codex}")
+    private String pptMasterCodex;
+
+    @Value("${paperpilot.ppt-master.agent-timeout-minutes:30}")
+    private int pptMasterAgentTimeoutMinutes;
+
     public MeetingReportService(
         PaperRepository paperRepository,
         MeetingReportRepository reportRepository,
+        ModelConfigRepository modelConfigRepository,
         CurrentUserService currentUserService,
         AiChatService aiChatService,
         AiUsageService aiUsageService,
@@ -117,6 +128,7 @@ public class MeetingReportService {
     ) {
         this.paperRepository = paperRepository;
         this.reportRepository = reportRepository;
+        this.modelConfigRepository = modelConfigRepository;
         this.currentUserService = currentUserService;
         this.aiChatService = aiChatService;
         this.aiUsageService = aiUsageService;
@@ -554,9 +566,9 @@ public class MeetingReportService {
                 audience,
                 pptMasterSettings
             );
-            job.awaitingAgent(handoff);
+            executePptMasterAgent(job, outputDir, materialPath, reportPaperPath, pptxPath, handoff);
         } catch (Exception error) {
-            job.fail("PPT Master 项目交接材料生成失败：" + readableError(error));
+            job.fail("PPT Master Agent 执行失败：" + readableError(error));
         }
     }
 
@@ -1667,6 +1679,248 @@ public class MeetingReportService {
         response.put("pptMasterSettings", pptMasterSettings);
         response.put("message", "官方参数已确认，已停止网页老渲染器；请由 Codex/PPT Master agent 接管逐页设计与导出。");
         return response;
+    }
+
+    private void executePptMasterAgent(
+        DeckJob job,
+        Path outputDir,
+        Path materialPath,
+        Path reportPaperPath,
+        Path pptxPath,
+        Map<String, Object> handoff
+    ) throws Exception {
+        ModelConfigEntity modelConfig = modelConfigRepository
+            .findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK)
+            .orElseThrow(() -> new IllegalStateException("管理员模型池未配置“组会汇报/PPT生成”的活动模型"));
+        if (!StringUtils.hasText(modelConfig.getApiKey())) {
+            throw new IllegalStateException("管理员模型池的“组会汇报/PPT生成”模型未配置 Key");
+        }
+        if (!StringUtils.hasText(modelConfig.getBaseUrl())) {
+            throw new IllegalStateException("管理员模型池的“组会汇报/PPT生成”模型未配置中转地址");
+        }
+        String codexExecutable = resolveCodexExecutable();
+        Path skillDir = Path.of(Objects.toString(pptMasterSkillDir, "")).toAbsolutePath().normalize();
+        if (!Files.isRegularFile(skillDir.resolve("SKILL.md"))) {
+            throw new IllegalStateException("未找到 PPT Master skill：" + skillDir.resolve("SKILL.md"));
+        }
+        String pythonPath = resolvePptMasterPython()
+            .orElseThrow(() -> new IllegalStateException("未检测到 Python，无法运行 PPT Master 官方脚本"));
+
+        Path agentProjectDir = outputDir.resolve("ppt-master-agent-project");
+        Path promptPath = outputDir.resolve("ppt-master-agent-prompt.md");
+        Path logPath = outputDir.resolve("ppt-master-agent.log");
+        Path lastMessagePath = outputDir.resolve("ppt-master-agent-final.txt");
+        Files.createDirectories(agentProjectDir);
+        Files.writeString(promptPath, buildPptMasterAgentPrompt(
+            outputDir,
+            agentProjectDir,
+            skillDir,
+            materialPath,
+            reportPaperPath,
+            pptxPath,
+            pythonPath,
+            handoff
+        ), StandardCharsets.UTF_8);
+
+        job.result().put("engine", "ppt-master-skill-agent");
+        job.result().put("agentProjectPath", agentProjectDir.toAbsolutePath().toString());
+        job.result().put("agentPromptPath", promptPath.toAbsolutePath().toString());
+        job.result().put("agentLogPath", logPath.toAbsolutePath().toString());
+        job.result().put("modelProvider", modelConfig.getProviderName());
+        job.result().put("modelName", modelConfig.getModelName());
+        job.progress(36, "正在启动 PPT Master 多轮 Agent，使用管理员组会汇报模型：" + modelConfig.getModelName());
+
+        String providerBaseUrl = cleanCodexProviderBaseUrl(modelConfig.getBaseUrl());
+        List<String> command = new ArrayList<>(List.of(
+            codexExecutable,
+            "exec",
+            "--ignore-user-config",
+            "--ephemeral",
+            "--skip-git-repo-check",
+            "--dangerously-bypass-approvals-and-sandbox",
+            "--color", "never",
+            "-C", agentProjectDir.toAbsolutePath().toString(),
+            "--add-dir", outputDir.toAbsolutePath().toString(),
+            "--add-dir", skillDir.toAbsolutePath().toString(),
+            "-m", modelConfig.getModelName(),
+            "-c", "model_provider=\"paperpilot_relay\"",
+            "-c", "model_providers.paperpilot_relay.name=\"PaperPilot Relay\"",
+            "-c", "model_providers.paperpilot_relay.base_url=" + tomlString(providerBaseUrl),
+            "-c", "model_providers.paperpilot_relay.env_key=\"OPENAI_API_KEY\"",
+            "-c", "model_providers.paperpilot_relay.wire_api=\"responses\"",
+            "-c", "model_providers.paperpilot_relay.requires_openai_auth=true",
+            "-o", lastMessagePath.toAbsolutePath().toString(),
+            Files.readString(promptPath, StandardCharsets.UTF_8)
+        ));
+        ProcessBuilder processBuilder = new ProcessBuilder(command)
+            .directory(agentProjectDir.toFile())
+            .redirectErrorStream(true)
+            .redirectOutput(logPath.toFile());
+        processBuilder.environment().put("OPENAI_API_KEY", modelConfig.getApiKey().trim());
+        processBuilder.environment().put("CODEX_HOME", "/Users/yuan/.codex");
+        processBuilder.environment().put("PPT_MASTER_PYTHON", pythonPath);
+        Process process = processBuilder.start();
+        process.getOutputStream().close();
+
+        long startedAt = System.currentTimeMillis();
+        long timeoutMillis = TimeUnit.MINUTES.toMillis(Math.max(10, pptMasterAgentTimeoutMinutes));
+        int[] progressPoints = {42, 50, 58, 66, 74, 82, 90, 94};
+        String[] messages = {
+            "Agent 正在精读 PDF 并提取论文主线",
+            "Agent 正在生成叙事策略与页面设计规范",
+            "Agent 正在逐页设计 SVG 页面",
+            "Agent 正在补充图表、机制图和视觉层级",
+            "Agent 正在执行页面预览与质量检查",
+            "Agent 正在修复质检问题并整理导出文件",
+            "Agent 正在导出 PPTX",
+            "正在校验生成结果"
+        };
+        int progressIndex = 0;
+        while (true) {
+            if (Files.isRegularFile(pptxPath) && Files.size(pptxPath) > 0) break;
+            if (process.waitFor(8, TimeUnit.SECONDS)) break;
+            long elapsed = System.currentTimeMillis() - startedAt;
+            int expectedIndex = (int) Math.min(progressPoints.length - 1, elapsed / Math.max(1, timeoutMillis / progressPoints.length));
+            while (progressIndex <= expectedIndex && progressIndex < progressPoints.length) {
+                job.progress(progressPoints[progressIndex], messages[progressIndex]);
+                progressIndex++;
+            }
+            if (elapsed > timeoutMillis) {
+                process.destroyForcibly();
+                throw new IllegalStateException("PPT Master Agent 超时，日志：" + compactLog(readTail(logPath, 1200)));
+            }
+        }
+        if (process.isAlive()) process.waitFor(5, TimeUnit.SECONDS);
+        job.progress(96, "PPT Master Agent 已结束，正在定位并校验 PPTX 文件");
+
+        Path generated = locateGeneratedPptx(outputDir, pptxPath);
+        if (generated == null || !Files.isRegularFile(generated) || Files.size(generated) == 0) {
+            String logTail = compactLog(readTail(logPath, 1800));
+            throw new IllegalStateException(StringUtils.hasText(logTail) ? logTail : "Agent 未生成可下载 PPTX");
+        }
+        if (!generated.toAbsolutePath().normalize().equals(pptxPath.toAbsolutePath().normalize())) {
+            Files.copy(generated, pptxPath, StandardCopyOption.REPLACE_EXISTING);
+        }
+        Map<String, Object> response = new LinkedHashMap<>(handoff);
+        response.put("status", "generated");
+        response.put("generated", true);
+        response.put("engine", "ppt-master-skill-agent");
+        response.put("pptxPath", pptxPath.toAbsolutePath().toString());
+        response.put("agentProjectPath", agentProjectDir.toAbsolutePath().toString());
+        response.put("agentPromptPath", promptPath.toAbsolutePath().toString());
+        response.put("agentLogPath", logPath.toAbsolutePath().toString());
+        response.put("agentFinalMessagePath", lastMessagePath.toAbsolutePath().toString());
+        response.put("modelProvider", modelConfig.getProviderName());
+        response.put("modelName", modelConfig.getModelName());
+        response.put("message", "PPT Master 多轮 Agent 已生成 PPTX");
+        job.complete(response);
+    }
+
+    private String buildPptMasterAgentPrompt(
+        Path outputDir,
+        Path agentProjectDir,
+        Path skillDir,
+        Path materialPath,
+        Path reportPaperPath,
+        Path pptxPath,
+        String pythonPath,
+        Map<String, Object> handoff
+    ) throws Exception {
+        String handoffJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(handoff);
+        return """
+            你正在 PaperPilot 网页后端中作为 PPT Master 生成 Agent 执行任务，不是聊天演示。
+
+            必须完成：读取论文 PDF，按官方 `ppt-master` skill 流程生成高质量、可编辑 PPTX，并把最终文件写到：
+            `%s`
+
+            关键路径：
+            - PPT Master skill：`%s`
+            - 工作目录：`%s`
+            - 主论文 PDF：`%s`
+            - 网页整理材料：`%s`
+            - 任务目录：`%s`
+            - Python：`%s`
+
+            强制要求：
+            1. 先完整阅读 `%s/SKILL.md`，并按其中 Source → Project → Confirm UI → Strategist → Executor → Quality check → Export 的流程执行。
+            2. Confirm UI 已在网页端完成，确认结果在 handoff 的 `confirmResultPath`；不要再打开交互网页，不要等待用户输入。
+            3. 严禁调用 PaperPilot 旧渲染器，例如 `backend/pptx-renderer/render-meeting-deck.mjs`。
+            4. 必须真正精读 PDF，提炼论文核心问题、方法、证据、贡献、局限和组会讨论点；不要生成泛泛文字堆叠。
+            5. 页面必须有设计：封面、目录/路线、背景、方法、结果/证据、贡献、局限、讨论、结论应有不同版式；优先使用论文图表/机制图/流程图/表格/时间线/对比矩阵/证据卡等结构。
+            6. Executor 阶段逐页手写 SVG，不允许用简单模板批量堆文字。
+            7. 运行官方质检与导出脚本，至少使用 `svg_quality_checker.py`、`total_md_split.py`、`finalize_svg.py`、`svg_to_pptx.py`；如脚本需要 Python，使用上面的 Python 路径。
+            8. 如果中途某个辅助资源不可用，继续用本地 SVG/PPTX 工具完成，不要回退到旧版简单 PPT。
+            9. 结束前确认 `%s` 存在且大小大于 0。
+
+            Handoff JSON：
+            ```json
+            %s
+            ```
+
+            现在开始执行。最终回复只需要说明 PPTX 是否生成以及关键文件路径。
+            """.formatted(
+            pptxPath.toAbsolutePath(),
+            skillDir.toAbsolutePath(),
+            agentProjectDir.toAbsolutePath(),
+            reportPaperPath == null ? "" : reportPaperPath.toAbsolutePath(),
+            materialPath.toAbsolutePath(),
+            outputDir.toAbsolutePath(),
+            pythonPath,
+            skillDir.toAbsolutePath(),
+            pptxPath.toAbsolutePath(),
+            handoffJson
+        );
+    }
+
+    private String resolveCodexExecutable() {
+        Path configured = Path.of(Objects.toString(pptMasterCodex, "")).toAbsolutePath().normalize();
+        if (Files.isExecutable(configured)) return configured.toString();
+        Path bundled = Path.of("/Applications/Codex.app/Contents/Resources/codex");
+        if (Files.isExecutable(bundled)) return bundled.toString();
+        return "codex";
+    }
+
+    private String cleanCodexProviderBaseUrl(String baseUrl) {
+        String clean = Objects.toString(baseUrl, "").trim();
+        clean = clean.replaceFirst("/(?:v1/)?(?:chat/completions|responses)$", "");
+        return clean.replaceAll("/+$", "");
+    }
+
+    private String tomlString(String value) {
+        return "\"" + Objects.toString(value, "").replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    private Path locateGeneratedPptx(Path outputDir, Path expectedPath) throws Exception {
+        if (Files.isRegularFile(expectedPath) && Files.size(expectedPath) > 0) return expectedPath;
+        try (Stream<Path> paths = Files.walk(outputDir)) {
+            return paths
+                .filter(path -> path.getFileName().toString().toLowerCase().endsWith(".pptx"))
+                .filter(path -> {
+                    try {
+                        return Files.isRegularFile(path) && Files.size(path) > 0;
+                    } catch (Exception ignored) {
+                        return false;
+                    }
+                })
+                .max(Comparator.comparingLong(path -> {
+                    try {
+                        return Files.getLastModifiedTime(path).toMillis();
+                    } catch (Exception ignored) {
+                        return 0L;
+                    }
+                }))
+                .orElse(null);
+        }
+    }
+
+    private String readTail(Path path, int maxChars) {
+        try {
+            if (!Files.isRegularFile(path)) return "";
+            String text = Files.readString(path, StandardCharsets.UTF_8);
+            return text.length() > maxChars ? text.substring(text.length() - maxChars) : text;
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     private Map<String, Object> runPptMasterConfirmUi(
@@ -2861,7 +3115,7 @@ public class MeetingReportService {
         response.put("progress", job.progress());
         response.put("stage", job.stage());
         response.put("message", job.message());
-        response.put("done", "generated".equals(job.status()) || "failed".equals(job.status()) || "awaiting_agent".equals(job.status()));
+        response.put("done", "generated".equals(job.status()) || "failed".equals(job.status()));
         response.put("success", "generated".equals(job.status()));
         if ("generated".equals(job.status())) {
             response.put("downloadUrl", "/api/meeting-reports/deck/jobs/" + job.jobId() + "/download");

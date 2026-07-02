@@ -56,11 +56,11 @@
           >
             打开 PPT Master 官方参数页
           </button>
-          <div v-if="deckJob.status === 'awaiting_agent'" class="agent-handoff">
-            <strong>已停止网页老渲染器</strong>
-            <span>官方参数已确认，项目材料已准备好，需要由 Codex/PPT Master agent 接管逐页 SVG 设计与导出。</span>
-            <small v-if="deckJob.projectPath">项目目录：{{ deckJob.projectPath }}</small>
-            <small v-if="deckJob.handoffPath">交接文件：{{ deckJob.handoffPath }}</small>
+          <div v-if="deckJob.agentProjectPath || deckJob.agentLogPath || deckJob.modelName" class="agent-handoff">
+            <strong>PPT Master Agent 正在网页后端执行</strong>
+            <span v-if="deckJob.modelName">模型：{{ deckJob.modelName }}</span>
+            <small v-if="deckJob.agentProjectPath">项目目录：{{ deckJob.agentProjectPath }}</small>
+            <small v-if="deckJob.agentLogPath">运行日志：{{ deckJob.agentLogPath }}</small>
           </div>
         </div>
       </section>
@@ -92,6 +92,9 @@ const deckJob = reactive({
   confirmUrl: "",
   projectPath: "",
   handoffPath: "",
+  agentProjectPath: "",
+  agentLogPath: "",
+  modelName: "",
 });
 let toastTimer = null;
 let deckPollTimer = null;
@@ -180,6 +183,9 @@ function applyDeckJob(payload = {}) {
   deckJob.confirmUrl = payload.confirmUrl || deckJob.confirmUrl || "";
   deckJob.projectPath = payload.projectPath || deckJob.projectPath || "";
   deckJob.handoffPath = payload.handoffPath || deckJob.handoffPath || "";
+  deckJob.agentProjectPath = payload.agentProjectPath || deckJob.agentProjectPath || "";
+  deckJob.agentLogPath = payload.agentLogPath || deckJob.agentLogPath || "";
+  deckJob.modelName = payload.modelName || deckJob.modelName || "";
   if (deckJob.confirmUrl && confirmOpened.value !== deckJob.confirmUrl) {
     confirmOpened.value = deckJob.confirmUrl;
     window.open(deckJob.confirmUrl, "_blank");
@@ -209,8 +215,6 @@ async function refreshDeckJob(jobId) {
       if (result.success && result.downloadUrl) {
         window.open(absoluteApiUrl(result.downloadUrl), "_blank");
         showToast("PPT 已生成，正在打开下载链接");
-      } else if (result?.status === "awaiting_agent") {
-        showToast("官方参数已确认，等待 Codex/PPT Master agent 接管");
       } else {
         showToast(result?.message || "PPT 生成失败");
       }

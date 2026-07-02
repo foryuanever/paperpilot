@@ -43,3 +43,5 @@ paperpilot:
   ppt-master:
     skill-dir: ${PPT_MASTER_SKILL_DIR:/Users/yuan/.codex/skills/ppt-master}
     python: ${PPT_MASTER_PYTHON:}
+    codex: ${PPT_MASTER_CODEX:/Applications/Codex.app/Contents/Resources/codex}
+    agent-timeout-minutes: ${PPT_MASTER_AGENT_TIMEOUT_MINUTES:30}
