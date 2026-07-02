@@ -1,96 +1,152 @@
 <template>
-  <div class="meeting-workbench">
-    <header class="meeting-header">
-      <div>
-        <p class="meeting-kicker">组会汇报</p>
-        <h1>从文献库挑选论文，生成综述与汇报 PPT</h1>
-        <p>这里罗列你已经添加的论文。每篇论文都可以单独生成规范综述，或直接进入 PPT Master 制作流程。</p>
+  <div class="meeting-page">
+    <header class="meeting-hero">
+      <div class="hero-copy">
+        <span class="eyebrow">Group Meeting Workspace</span>
+        <h1>把一篇论文整理成可以讲、可以问、可以沉淀的组会材料</h1>
+        <p>从已保存论文中选择本次汇报对象，生成规范分点综述并永久保存，再进入 PPT Master 的网页参数流程制作 PPT。</p>
       </div>
-      <label class="upload-trigger" :class="{ busy: uploading }">
+
+      <label class="upload-button" :class="{ busy: uploading }" title="上传 PDF">
         <input type="file" accept="application/pdf,.pdf" :disabled="uploading" @change="uploadPaper" />
-        <span aria-hidden="true">＋</span>
+        <span aria-hidden="true">+</span>
         <strong>{{ uploading ? "上传中" : "上传论文" }}</strong>
       </label>
     </header>
 
-    <main class="meeting-layout">
-      <section class="paper-panel">
-        <div class="paper-toolbar">
-          <div>
-            <strong>{{ filteredPapers.length }} 篇论文</strong>
-            <span>{{ papers.length ? "按最近添加排序" : "上传或从文献库添加后会出现在这里" }}</span>
+    <main class="meeting-workbench">
+      <section class="featured-paper" aria-label="当前汇报论文">
+        <div v-if="selectedPaper" class="paper-cover">
+          <div class="cover-topline">
+            <span>{{ selectedPaper.publishYear || "年份待补" }}</span>
+            <strong>{{ hasPdf(selectedPaper) ? "PDF 已就绪" : "缺少 PDF" }}</strong>
           </div>
-          <input v-model="keyword" type="search" placeholder="搜索标题、作者、年份" />
+          <div class="cover-title">
+            <span>本次汇报主论文</span>
+            <h2>{{ selectedPaper.title || "未命名论文" }}</h2>
+            <p>{{ compactMeta(selectedPaper) }}</p>
+          </div>
+          <div class="cover-bottomline">
+            <span v-for="tag in normalizedTags(selectedPaper)" :key="tag">{{ tag }}</span>
+          </div>
         </div>
 
-        <div v-if="loadingPapers" class="paper-skeleton" aria-live="polite">
-          <span v-for="item in 5" :key="item"></span>
+        <div v-else class="paper-cover empty">
+          <div class="cover-title">
+            <span>本次汇报主论文</span>
+            <h2>选择或上传一篇论文</h2>
+            <p>上传 PDF 后会自动保存到文献库，并出现在下方论文架里。</p>
+          </div>
         </div>
 
-        <div v-else-if="!filteredPapers.length" class="empty-state">
-          <strong>{{ papers.length ? "没有匹配的论文" : "还没有可用于组会汇报的论文" }}</strong>
-          <p>{{ papers.length ? "换一个关键词试试。" : "点击右上角上传 PDF，系统会保存到文献库并补全题录。" }}</p>
-        </div>
-
-        <div v-else class="paper-list">
-          <article v-for="paper in filteredPapers" :key="paper.workspaceId" class="paper-row">
-            <div class="paper-main">
-              <div class="paper-title-line">
-                <h2>{{ paper.title || "未命名论文" }}</h2>
-                <span :class="['pdf-state', hasPdf(paper) ? 'ready' : 'missing']">
-                  {{ hasPdf(paper) ? "PDF 已就绪" : "缺少 PDF" }}
-                </span>
-              </div>
-              <p class="paper-meta">
-                <span>{{ paper.authors || "作者待补全" }}</span>
-                <span>{{ paper.publishYear || "年份未知" }}</span>
-                <span>{{ paper.source || "来源未记录" }}</span>
-              </p>
-              <p class="paper-abstract">{{ paper.abstract || paper.note || "暂无摘要；可先生成综述，系统会优先读取 PDF 正文。" }}</p>
-              <div class="paper-tags">
-                <span v-for="tag in normalizedTags(paper)" :key="tag">{{ tag }}</span>
-              </div>
-            </div>
-            <div class="paper-actions">
-              <button type="button" class="action-secondary" :disabled="isReviewBusy(paper)" @click="openReview(paper)">
-                {{ isReviewBusy(paper) ? reviewProgressLabel(paper) : "论文综述" }}
-              </button>
-              <button type="button" class="action-primary" :disabled="!hasPdf(paper) || isDeckBusy(paper)" @click="makePpt(paper)">
-                {{ isDeckBusy(paper) ? `${Math.round(deckJob.progress || 1)}%` : "PPT 制作" }}
-              </button>
-            </div>
-          </article>
+        <div class="paper-brief">
+          <section>
+            <span>讲述入口</span>
+            <p>{{ selectedPaper?.abstract || selectedPaper?.note || "暂无摘要。生成论文综述时会读取已保存信息和 PDF 正文，整理成组会可讲的结构。" }}</p>
+          </section>
+          <section>
+            <span>综述规范</span>
+            <ul>
+              <li>先用一页综述概括论文精髓。</li>
+              <li>再分点沉淀研究问题、方法路线、证据结果和局限讨论。</li>
+              <li>保存后会绑定到该论文，后续打开仍然保留。</li>
+            </ul>
+          </section>
         </div>
       </section>
 
-      <aside class="status-panel">
-        <div class="status-block">
-          <strong>综述规范</strong>
-          <ol>
-            <li>研究背景与问题</li>
-            <li>方法路线与实验设置</li>
-            <li>核心结果、贡献与局限</li>
-            <li>可用于组会讨论的问题</li>
-          </ol>
-        </div>
-        <div class="status-block deck-status" :data-status="deckJob.status">
-          <strong>PPT 制作状态</strong>
-          <p>{{ deckJob.paperTitle || "选择任意一篇带 PDF 的论文开始制作。" }}</p>
-          <div v-if="deckJob.jobId" class="progress-track">
-            <i :style="{ width: `${Math.max(2, deckJob.progress || 0)}%` }"></i>
-          </div>
-          <small>{{ deckJob.message || "PPT Master 会弹出参数页，并在后台完成逐页设计。" }}</small>
+      <aside class="action-suite" aria-label="论文操作">
+        <section class="suite-card review-card">
+          <span>论文综述</span>
+          <h2>{{ selectedPaper ? "生成规范分点综述" : "等待选择论文" }}</h2>
+          <p>内容按组会汇报习惯拆成基本信息、研究问题、理论背景、方法、结果、数据、贡献局限等模块。</p>
           <button
-            v-if="deckJob.confirmUrl && deckJob.status === 'running'"
             type="button"
-            class="status-link"
-            @click="openConfirmUrl"
+            class="secondary-action"
+            :disabled="!selectedPaper || isReviewBusy(selectedPaper)"
+            @click="selectedPaper && openReview(selectedPaper)"
           >
-            打开参数页
+            {{ selectedPaper && isReviewBusy(selectedPaper) ? reviewProgressLabel(selectedPaper) : "打开论文综述" }}
           </button>
-        </div>
+        </section>
+
+        <section class="suite-card deck-card" :data-status="deckJob.status">
+          <span>PPT Master</span>
+          <h2>{{ deckJob.paperTitle || "制作组会 PPT" }}</h2>
+          <p>{{ deckJob.message || "选择带 PDF 的论文后，会打开 PPT Master 参数页，并在后台执行制作流程。" }}</p>
+          <div v-if="deckJob.jobId" class="progress-line" aria-label="PPT 制作进度">
+            <i :style="{ width: `${Math.max(2, deckJob.progress || 0)}%` }"></i>
+            <strong>{{ Math.round(deckJob.progress || 0) }}%</strong>
+          </div>
+          <div class="deck-actions">
+            <button
+              type="button"
+              class="primary-action"
+              :disabled="!selectedPaper || !hasPdf(selectedPaper) || isDeckBusy(selectedPaper)"
+              @click="selectedPaper && makePpt(selectedPaper)"
+            >
+              {{ selectedPaper && isDeckBusy(selectedPaper) ? "制作中" : "PPT 制作" }}
+            </button>
+            <button v-if="deckJob.confirmUrl && deckJob.status === 'running'" type="button" class="ghost-action" @click="openConfirmUrl">
+              参数页
+            </button>
+          </div>
+        </section>
       </aside>
     </main>
+
+    <section class="paper-library" aria-label="已添加论文">
+      <div class="library-head">
+        <div>
+          <span>Paper Shelf</span>
+          <h2>已添加论文</h2>
+        </div>
+        <div class="library-tools">
+          <strong>{{ filteredPapers.length }} 篇</strong>
+          <input v-model="keyword" type="search" placeholder="搜索标题、作者、年份" />
+        </div>
+      </div>
+
+      <div v-if="loadingPapers" class="paper-skeletons">
+        <span v-for="item in 4" :key="item"></span>
+      </div>
+
+      <div v-else-if="!filteredPapers.length" class="empty-library">
+        <strong>{{ papers.length ? "没有匹配的论文" : "还没有组会论文" }}</strong>
+        <p>{{ papers.length ? "换一个关键词，或清空搜索后查看全部。" : "点击右上角上传 PDF，论文会保存到文献库并进入这里。" }}</p>
+      </div>
+
+      <div v-else class="paper-grid">
+        <article
+          v-for="paper in filteredPapers"
+          :key="paper.workspaceId"
+          class="paper-card"
+          :class="{ active: selectedPaper?.workspaceId === paper.workspaceId }"
+          @click="selectPaper(paper)"
+        >
+          <div class="paper-card-index">{{ paperIndex(paper) }}</div>
+          <div class="paper-card-body">
+            <div class="paper-card-meta">
+              <span :class="['pdf-badge', hasPdf(paper) ? 'ready' : 'missing']">{{ hasPdf(paper) ? "PDF" : "待补 PDF" }}</span>
+              <span>{{ paper.publishYear || "年份未知" }}</span>
+            </div>
+            <h3>{{ paper.title || "未命名论文" }}</h3>
+            <p>{{ compactMeta(paper) }}</p>
+            <div class="paper-tags">
+              <span v-for="tag in normalizedTags(paper)" :key="tag">{{ tag }}</span>
+            </div>
+          </div>
+          <div class="paper-card-actions" @click.stop>
+            <button type="button" :disabled="isReviewBusy(paper)" @click="openReview(paper)">
+              {{ isReviewBusy(paper) ? reviewProgressLabel(paper) : "论文综述" }}
+            </button>
+            <button type="button" class="make-deck" :disabled="!hasPdf(paper) || isDeckBusy(paper)" @click="makePpt(paper)">
+              {{ isDeckBusy(paper) ? `${Math.round(deckJob.progress || 1)}%` : "PPT 制作" }}
+            </button>
+          </div>
+        </article>
+      </div>
+    </section>
 
     <Transition name="drawer-fade">
       <div v-if="reviewDrawer.open" class="review-backdrop" @click.self="closeReview">
@@ -105,17 +161,18 @@
 
           <div v-if="reviewDrawer.loading" class="review-loading">
             <strong>{{ reviewDrawer.message || "正在读取已保存综述" }}</strong>
-            <div class="progress-track">
+            <div class="progress-line">
               <i :style="{ width: `${Math.max(8, reviewDrawer.progress)}%` }"></i>
+              <strong>{{ Math.round(reviewDrawer.progress || 0) }}%</strong>
             </div>
           </div>
 
           <template v-else>
             <div class="review-actions">
-              <button type="button" class="action-primary" :disabled="reviewDrawer.generating" @click="generateReview">
+              <button type="button" class="primary-action" :disabled="reviewDrawer.generating" @click="generateReview">
                 {{ reviewDrawer.generating ? reviewProgressLabel(reviewDrawer.paper) : reviewDrawer.generated ? "重新生成综述" : "生成论文综述" }}
               </button>
-              <button type="button" class="action-secondary" :disabled="reviewDrawer.saving" @click="saveReview">
+              <button type="button" class="secondary-action" :disabled="reviewDrawer.saving" @click="saveReview">
                 {{ reviewDrawer.saving ? "保存中" : "保存编辑" }}
               </button>
             </div>
@@ -141,7 +198,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { paperpilotApi } from "../services/paperpilotApi";
 import { API_BASE_URL } from "../services/apiClient";
 
@@ -157,6 +214,7 @@ const reviewSections = [
 ];
 
 const papers = ref([]);
+const selectedWorkspaceId = ref("");
 const keyword = ref("");
 const loadingPapers = ref(false);
 const uploading = ref(false);
@@ -201,6 +259,16 @@ const filteredPapers = computed(() => {
   ].some((value) => String(value || "").toLowerCase().includes(query)));
 });
 
+const selectedPaper = computed(() =>
+  filteredPapers.value.find((paper) => paper.workspaceId === selectedWorkspaceId.value)
+  || filteredPapers.value[0]
+  || null
+);
+
+watch(selectedPaper, (paper) => {
+  if (paper) selectedWorkspaceId.value = paper.workspaceId;
+});
+
 onMounted(loadPapers);
 onBeforeUnmount(() => {
   if (toastTimer) clearTimeout(toastTimer);
@@ -216,11 +284,27 @@ async function loadPapers() {
   loadingPapers.value = true;
   try {
     papers.value = await paperpilotApi.getLibraryPapers();
+    if (!selectedWorkspaceId.value && papers.value[0]) selectedWorkspaceId.value = papers.value[0].workspaceId;
   } catch (error) {
     showToast(error?.response?.data?.message || "论文列表加载失败");
   } finally {
     loadingPapers.value = false;
   }
+}
+
+function selectPaper(paper) {
+  selectedWorkspaceId.value = paper.workspaceId;
+}
+
+function paperIndex(paper) {
+  const index = filteredPapers.value.findIndex((item) => item.workspaceId === paper.workspaceId);
+  return String(index + 1).padStart(2, "0");
+}
+
+function compactMeta(paper) {
+  return [paper.authors || "作者待补全", paper.publishYear || "年份未知", paper.source || "来源未记录"]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 async function uploadPaper(event) {
@@ -231,6 +315,7 @@ async function uploadPaper(event) {
   try {
     const paper = await paperpilotApi.uploadLibraryPaper(file);
     papers.value = [paper, ...papers.value.filter((item) => item.workspaceId !== paper.workspaceId)];
+    selectedWorkspaceId.value = paper.workspaceId;
     showToast("论文已上传并保存到文献库");
   } catch (error) {
     showToast(error?.response?.data?.message || "论文上传失败");
@@ -434,11 +519,11 @@ function hasPdf(paper) {
 
 function normalizedTags(paper) {
   const tags = Array.isArray(paper?.journalTags) ? paper.journalTags : [];
-  return tags.length ? tags.slice(0, 4) : [paper?.venueType || "待分类"];
+  return tags.length ? tags.slice(0, 3) : [paper?.venueType || "待分类"];
 }
 
 function isReviewBusy(paper) {
-  return Boolean(reviewJobs[paper.workspaceId]);
+  return Boolean(paper?.workspaceId && reviewJobs[paper.workspaceId]);
 }
 
 function reviewProgressLabel(paper) {
@@ -448,7 +533,7 @@ function reviewProgressLabel(paper) {
 }
 
 function isDeckBusy(paper) {
-  return deckJob.status === "running" && deckJob.paperWorkspaceId === paper.workspaceId;
+  return Boolean(paper?.workspaceId && deckJob.status === "running" && deckJob.paperWorkspaceId === paper.workspaceId);
 }
 
 function absoluteApiUrl(url) {
@@ -467,267 +552,547 @@ function showToast(message) {
 </script>
 
 <style scoped>
-.meeting-workbench {
+.meeting-page {
   min-height: 100vh;
-  padding: 28px min(36px, 4vw) 56px;
-  background: #f5f7fb;
-  color: #172033;
+  padding: 30px min(40px, 4vw) 56px;
+  background: linear-gradient(180deg, #eef4fb 0, #f7f9fc 330px, #f8fafc 100%);
+  color: #162033;
   font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 }
 
-.meeting-header {
-  max-width: 1440px;
-  margin: 0 auto 22px;
+.meeting-hero,
+.meeting-workbench,
+.paper-library {
+  width: min(1500px, 100%);
+  margin-inline: auto;
+}
+
+.meeting-hero {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
+  margin-bottom: 22px;
 }
 
-.meeting-kicker {
-  margin: 0 0 8px;
-  color: #2759d8;
-  font-size: 13px;
-  font-weight: 700;
+.hero-copy {
+  max-width: 900px;
 }
 
-.meeting-header h1 {
-  margin: 0;
-  color: #101827;
-  font-size: 28px;
+.eyebrow,
+.library-head span,
+.suite-card > span,
+.cover-title > span,
+.paper-brief span {
+  color: #1556d6;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.hero-copy h1 {
+  margin: 9px 0 0;
+  color: #111827;
+  font-size: clamp(26px, 2.2vw, 38px);
   line-height: 1.22;
   letter-spacing: 0;
-  text-wrap: balance;
 }
 
-.meeting-header p:not(.meeting-kicker) {
+.hero-copy p {
   max-width: 760px;
-  margin: 10px 0 0;
-  color: #536176;
+  margin: 12px 0 0;
+  color: #526277;
   font-size: 14px;
   line-height: 1.75;
 }
 
-.upload-trigger {
+.upload-button {
   flex: 0 0 auto;
-  min-width: 132px;
-  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  border-radius: 12px;
-  border: 1px solid #1f5be3;
-  background: #235fe7;
-  color: white;
+  gap: 9px;
+  min-width: 136px;
+  height: 46px;
+  border: 1px solid #1d5be3;
+  border-radius: 8px;
+  background: #1d5be3;
+  color: #fff;
   cursor: pointer;
-  transition: transform .18s ease, background .18s ease;
 }
 
-.upload-trigger:hover { background: #174bd1; transform: translateY(-1px); }
-.upload-trigger.busy { cursor: wait; opacity: .75; }
-.upload-trigger input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
-.upload-trigger span { font-size: 20px; line-height: 1; }
-.upload-trigger strong { font-size: 14px; }
+.upload-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
 
-.meeting-layout {
-  max-width: 1440px;
-  margin: 0 auto;
+.upload-button span {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.upload-button strong {
+  font-size: 14px;
+}
+
+.upload-button:hover {
+  background: #194fc6;
+}
+
+.upload-button.busy {
+  cursor: wait;
+  opacity: .7;
+}
+
+.meeting-workbench {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 18px;
-  align-items: start;
+  align-items: stretch;
 }
 
-.paper-panel,
-.status-panel,
-.review-drawer {
-  border: 1px solid #dfe6ef;
-  border-radius: 14px;
+.featured-paper,
+.action-suite,
+.paper-library {
+  border: 1px solid #dce5ef;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .92);
+}
+
+.featured-paper {
+  display: grid;
+  grid-template-columns: minmax(360px, .95fr) minmax(300px, .75fr);
+  gap: 18px;
+  min-height: 390px;
+  padding: 18px;
+}
+
+.paper-cover {
+  position: relative;
+  display: grid;
+  align-content: space-between;
+  min-height: 354px;
+  overflow: hidden;
+  border-radius: 8px;
+  padding: 24px;
+  background:
+    linear-gradient(140deg, #12203a 0 62%, #edf5ff 62% 100%);
+  color: #fff;
+}
+
+.paper-cover::before {
+  content: "";
+  position: absolute;
+  right: 46px;
+  top: 32px;
+  width: 156px;
+  height: 156px;
+  border: 1px solid rgba(29, 91, 227, .25);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .22);
+}
+
+.paper-cover.empty {
+  background: linear-gradient(140deg, #1f2a44 0 62%, #eef4fb 62% 100%);
+}
+
+.cover-topline,
+.cover-bottomline {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cover-topline {
+  justify-content: space-between;
+}
+
+.cover-topline span,
+.cover-topline strong,
+.cover-bottomline span {
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(255, 255, 255, .1);
+  color: #eaf2ff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.cover-title {
+  position: relative;
+  z-index: 1;
+  max-width: min(86%, 660px);
+}
+
+.cover-title h2 {
+  margin: 13px 0 0;
+  color: #fff;
+  font-size: clamp(23px, 1.9vw, 31px);
+  line-height: 1.18;
+  letter-spacing: 0;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.cover-title p {
+  margin: 15px 0 0;
+  color: #d8e3f4;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.paper-brief {
+  display: grid;
+  gap: 14px;
+}
+
+.paper-brief section {
+  border: 1px solid #e0e8f1;
+  border-radius: 8px;
+  padding: 18px;
+  background: #fbfdff;
+}
+
+.paper-brief p,
+.paper-brief li {
+  color: #3f5067;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.paper-brief p {
+  margin: 10px 0 0;
+}
+
+.paper-brief ul {
+  margin: 12px 0 0;
+  padding-left: 19px;
+}
+
+.action-suite {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.suite-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 190px;
+  padding: 20px;
   background: #fff;
 }
 
-.paper-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+.suite-card + .suite-card {
+  border-top: 1px solid #e2e9f2;
+}
+
+.suite-card h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 19px;
+  line-height: 1.35;
+}
+
+.suite-card p {
+  margin: 0;
+  color: #55657a;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.primary-action,
+.secondary-action,
+.ghost-action,
+.paper-card-actions button {
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.primary-action {
+  border: 1px solid #1d5be3;
+  background: #1d5be3;
+  color: #fff;
+}
+
+.secondary-action,
+.ghost-action {
+  border: 1px solid #cbd8e7;
+  background: #fff;
+  color: #162033;
+}
+
+.ghost-action {
+  color: #1556d6;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.deck-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.progress-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-line i {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: #1d5be3;
+  transition: width .2s ease;
+}
+
+.progress-line::before {
+  content: "";
+  grid-column: 1;
+  grid-row: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: #e4edf7;
+}
+
+.progress-line i {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.progress-line strong {
+  color: #526277;
+  font-size: 12px;
+}
+
+.deck-card[data-status="failed"] .progress-line i {
+  background: #dc2626;
+}
+
+.deck-card[data-status="generated"] .progress-line i {
+  background: #0f766e;
+}
+
+.paper-library {
+  margin-top: 18px;
+  padding: 18px;
+}
+
+.library-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 16px 18px;
-  border-bottom: 1px solid #e7edf5;
-  border-radius: 14px 14px 0 0;
-  background: rgba(255,255,255,.96);
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
-.paper-toolbar div { display: grid; gap: 4px; }
-.paper-toolbar strong { font-size: 15px; }
-.paper-toolbar span { color: #64748b; font-size: 12px; }
-.paper-toolbar input {
-  width: min(360px, 42vw);
-  height: 38px;
-  box-sizing: border-box;
-  border: 1px solid #d7e0ea;
-  border-radius: 10px;
-  padding: 0 12px;
-  color: #172033;
-  outline: 0;
+.library-head h2 {
+  margin: 4px 0 0;
+  color: #111827;
+  font-size: 22px;
 }
-.paper-toolbar input:focus { border-color: #2f6df6; box-shadow: 0 0 0 3px rgba(47,109,246,.1); }
 
-.paper-list { display: grid; }
-
-.paper-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 18px;
-  padding: 18px;
-  border-bottom: 1px solid #edf1f6;
-}
-.paper-row:last-child { border-bottom: 0; }
-.paper-row:hover { background: #fbfdff; }
-
-.paper-title-line {
+.library-tools {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
   gap: 12px;
 }
-.paper-title-line h2 {
-  margin: 0;
-  color: #111827;
-  font-size: 16px;
+
+.library-tools strong {
+  color: #526277;
+  font-size: 13px;
+}
+
+.library-tools input {
+  width: min(320px, 42vw);
+  height: 40px;
+  border: 1px solid #d5e0eb;
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fff;
+  color: #162033;
+  outline: none;
+}
+
+.library-tools input:focus {
+  border-color: #1d5be3;
+  box-shadow: 0 0 0 3px rgba(29, 91, 227, .1);
+}
+
+.paper-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.paper-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 116px;
+  gap: 14px;
+  align-items: stretch;
+  min-height: 176px;
+  border: 1px solid #dde6ef;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease;
+}
+
+.paper-card:hover,
+.paper-card.active {
+  border-color: #1d5be3;
+  background: #f7fbff;
+}
+
+.paper-card-index {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #edf3fa;
+  color: #4b5f78;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.paper-card.active .paper-card-index {
+  background: #1d5be3;
+  color: #fff;
+}
+
+.paper-card-body {
+  min-width: 0;
+}
+
+.paper-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #718098;
+  font-size: 12px;
+}
+
+.pdf-badge {
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.pdf-badge.ready {
+  color: #047857;
+  background: #e4f6ed;
+}
+
+.pdf-badge.missing {
+  color: #8a4b00;
+  background: #fff1d7;
+}
+
+.paper-card h3 {
+  margin: 11px 0 0;
+  color: #152033;
+  font-size: 17px;
   line-height: 1.45;
   text-wrap: pretty;
 }
 
-.pdf-state {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 700;
-}
-.pdf-state.ready { color: #08745c; background: #e7f7ef; }
-.pdf-state.missing { color: #9a4d00; background: #fff3dd; }
-
-.paper-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  margin: 8px 0 0;
-  color: #526176;
+.paper-card p {
+  margin: 9px 0 0;
+  color: #64748b;
   font-size: 12px;
-}
-.paper-meta span:not(:last-child)::after { content: ""; }
-.paper-abstract {
-  max-width: 92ch;
-  margin: 10px 0 0;
-  color: #334155;
-  font-size: 13px;
-  line-height: 1.7;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  line-height: 1.6;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
 .paper-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 12px;
 }
+
 .paper-tags span {
   border-radius: 999px;
   padding: 4px 8px;
-  background: #eef3fa;
-  color: #40516a;
+  background: #eef4fb;
+  color: #40536b;
   font-size: 11px;
+  font-weight: 700;
 }
 
-.paper-actions {
+.paper-card-actions {
   display: grid;
+  gap: 8px;
   align-content: center;
-  gap: 10px;
 }
-.action-primary,
-.action-secondary,
-.status-link {
-  height: 38px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  padding: 0 14px;
-  font-weight: 700;
-  cursor: pointer;
+
+.paper-card-actions button {
+  border: 1px solid #cbd8e7;
+  background: #fff;
+  color: #162033;
+  font-size: 12px;
 }
-.action-primary {
-  background: #235fe7;
+
+.paper-card-actions .make-deck {
+  border-color: #1d5be3;
+  background: #1d5be3;
   color: #fff;
 }
-.action-primary:hover:not(:disabled) { background: #174bd1; }
-.action-secondary {
-  border-color: #cdd8e6;
-  background: #fff;
-  color: #172033;
-}
-.action-secondary:hover:not(:disabled) { border-color: #9fb3cf; background: #f8fbff; }
-button:disabled { cursor: not-allowed; opacity: .55; }
 
-.status-panel {
-  position: sticky;
-  top: 18px;
+.paper-skeletons {
   display: grid;
-  gap: 0;
-  overflow: hidden;
-}
-.status-block {
-  padding: 18px;
-  border-bottom: 1px solid #e7edf5;
-}
-.status-block:last-child { border-bottom: 0; }
-.status-block strong { display: block; margin-bottom: 10px; font-size: 14px; }
-.status-block ol { margin: 0; padding-left: 18px; color: #46566d; font-size: 13px; line-height: 1.8; }
-.status-block p { margin: 0 0 10px; color: #46566d; font-size: 13px; line-height: 1.65; }
-.status-block small { display: block; color: #64748b; line-height: 1.6; }
-
-.progress-track {
-  height: 8px;
-  margin: 12px 0;
-  border-radius: 999px;
-  background: #e5edf7;
-  overflow: hidden;
-}
-.progress-track i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: #235fe7;
-  transition: width .2s ease;
-}
-.deck-status[data-status="failed"] .progress-track i { background: #dc2626; }
-.deck-status[data-status="generated"] .progress-track i { background: #0f766e; }
-.status-link {
-  width: 100%;
-  margin-top: 12px;
-  border-color: #b8c8df;
-  background: #f8fbff;
-  color: #174bd1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.paper-skeleton { display: grid; gap: 1px; }
-.paper-skeleton span {
-  height: 96px;
-  background: linear-gradient(90deg, #f5f7fb, #eef3f8, #f5f7fb);
+.paper-skeletons span {
+  height: 176px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #f5f7fb, #edf3fa, #f5f7fb);
   background-size: 220% 100%;
   animation: shimmer 1.2s ease-in-out infinite;
 }
-.empty-state {
-  padding: 48px 18px;
+
+.empty-library {
+  display: grid;
+  place-content: center;
+  min-height: 220px;
   text-align: center;
 }
-.empty-state strong { display: block; color: #172033; }
-.empty-state p { margin: 8px auto 0; max-width: 420px; color: #64748b; line-height: 1.7; }
+
+.empty-library strong {
+  color: #172033;
+  font-size: 18px;
+}
+
+.empty-library p {
+  max-width: 360px;
+  margin: 9px auto 0;
+  color: #64748b;
+  line-height: 1.7;
+}
 
 .review-backdrop {
   position: fixed;
@@ -737,14 +1102,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   justify-content: flex-end;
   background: rgba(15, 23, 42, .28);
 }
+
 .review-drawer {
   width: min(760px, 100vw);
   height: 100vh;
   overflow: auto;
-  border-radius: 0;
-  border-block: 0;
-  border-right: 0;
+  border-left: 1px solid #dce5ef;
+  background: #fff;
 }
+
 .review-drawer header {
   position: sticky;
   top: 0;
@@ -756,53 +1122,72 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border-bottom: 1px solid #e6edf5;
   background: #fff;
 }
+
 .review-drawer header span {
   color: #0f766e;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 850;
 }
+
 .review-drawer header h2 {
   margin: 6px 0 0;
+  color: #111827;
   font-size: 18px;
   line-height: 1.45;
 }
+
 .review-drawer header button {
   width: 34px;
   height: 34px;
   border: 1px solid #d7e0ea;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #fff;
   cursor: pointer;
   font-size: 20px;
 }
+
 .review-actions {
   display: flex;
   gap: 10px;
   padding: 16px 22px 0;
 }
-.review-loading { padding: 28px 22px; }
-.review-loading strong { font-size: 14px; }
+
+.review-loading {
+  padding: 28px 22px;
+}
+
 .review-section-list {
   display: grid;
   gap: 14px;
   padding: 18px 22px 28px;
 }
+
 .review-section {
   border: 1px solid #dfe7f1;
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
 }
+
 .review-section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  background: #f8fafc;
   border-bottom: 1px solid #e7edf5;
+  background: #f8fafc;
 }
-.review-section-head strong { font-size: 14px; }
-.review-section-head small { color: #64748b; font-size: 12px; }
+
+.review-section-head strong {
+  color: #162033;
+  font-size: 14px;
+}
+
+.review-section-head small {
+  color: #64748b;
+  font-size: 12px;
+}
+
 .review-section textarea {
   width: 100%;
   min-height: 116px;
@@ -814,7 +1199,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   outline: 0;
   font: 13px/1.75 inherit;
 }
-.review-section textarea::placeholder { color: #697891; }
+
+.review-section textarea::placeholder {
+  color: #697891;
+}
 
 .meeting-toast {
   position: fixed;
@@ -823,7 +1211,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   z-index: 60;
   transform: translateX(-50%);
   max-width: min(620px, calc(100vw - 32px));
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 12px 16px;
   background: #172033;
   color: #fff;
@@ -836,38 +1224,104 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .slide-up-leave-active {
   transition: opacity .18s ease, transform .18s ease;
 }
+
 .drawer-fade-enter-from,
-.drawer-fade-leave-to { opacity: 0; }
+.drawer-fade-leave-to {
+  opacity: 0;
+}
+
 .slide-up-enter-from,
-.slide-up-leave-to { opacity: 0; transform: translate(-50%, 8px); }
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 8px);
+}
 
 @keyframes shimmer {
   from { background-position: 120% 0; }
   to { background-position: -120% 0; }
 }
 
-@media (max-width: 980px) {
-  .meeting-layout { grid-template-columns: 1fr; }
-  .status-panel { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .status-block { border-bottom: 0; border-right: 1px solid #e7edf5; }
-  .status-block:last-child { border-right: 0; }
+@media (max-width: 1180px) {
+  .meeting-workbench,
+  .featured-paper {
+    grid-template-columns: 1fr;
+  }
+
+  .action-suite {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .suite-card + .suite-card {
+    border-top: 0;
+    border-left: 1px solid #e2e9f2;
+  }
 }
 
-@media (max-width: 720px) {
-  .meeting-workbench { padding: 18px 12px 40px; }
-  .meeting-header { flex-direction: column; }
-  .upload-trigger { width: 100%; }
-  .paper-toolbar { align-items: stretch; flex-direction: column; }
-  .paper-toolbar input { width: 100%; }
-  .paper-row { grid-template-columns: 1fr; }
-  .paper-actions { grid-template-columns: 1fr 1fr; }
-  .status-panel { grid-template-columns: 1fr; }
-  .status-block { border-right: 0; border-bottom: 1px solid #e7edf5; }
-  .review-actions { flex-direction: column; }
+@media (max-width: 900px) {
+  .meeting-page {
+    padding: 20px 12px 42px;
+  }
+
+  .meeting-hero,
+  .library-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .upload-button,
+  .library-tools input {
+    width: 100%;
+  }
+
+  .library-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .paper-grid,
+  .paper-skeletons,
+  .action-suite {
+    grid-template-columns: 1fr;
+  }
+
+  .suite-card + .suite-card {
+    border-left: 0;
+    border-top: 1px solid #e2e9f2;
+  }
+}
+
+@media (max-width: 620px) {
+  .paper-cover {
+    min-height: 320px;
+    padding: 20px;
+  }
+
+  .cover-title {
+    max-width: 100%;
+  }
+
+  .cover-title h2 {
+    font-size: 23px;
+  }
+
+  .paper-card {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .paper-card-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .review-actions {
+    flex-direction: column;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     transition-duration: .01ms !important;
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
