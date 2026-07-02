@@ -465,32 +465,32 @@ public class MeetingReportService {
     private void runDeckGenerationJob(DeckJob job, Map<String, Object> body, String reportPaperName, byte[] reportPaperBytes) {
         Long userId = currentUserService.getOrCreateDefaultUserId();
         job.progress(4, "任务已创建，正在校验论文材料");
+        if (reportPaperBytes == null || reportPaperBytes.length == 0) {
+            job.fail("请先上传一篇需要汇报的 PDF 论文");
+            return;
+        }
         Object rawPaperIds = body.get("paperIds");
-        if (!(rawPaperIds instanceof List<?> paperIds)) {
-            job.fail("请选择 3-5 篇论文");
-            return;
-        }
-        List<String> workspaceIds = paperIds.stream()
-            .map(item -> Objects.toString(item, "").trim())
-            .filter(id -> !id.isBlank())
-            .distinct()
-            .toList();
-        if (workspaceIds.size() < 3 || workspaceIds.size() > 5) {
-            job.fail("组会汇报需要选择 3-5 篇论文");
-            return;
-        }
+        List<String> workspaceIds = rawPaperIds instanceof List<?> paperIds
+            ? paperIds.stream()
+                .map(item -> Objects.toString(item, "").trim())
+                .filter(id -> !id.isBlank())
+                .distinct()
+                .toList()
+            : List.of();
 
-        List<PaperEntity> papers;
-        try {
-            papers = workspaceIds.stream()
-                .map(workspaceId -> requireDeckPaper(workspaceId, userId))
-                .toList();
-        } catch (ResponseStatusException error) {
-            job.fail(Optional.ofNullable(error.getReason()).orElse("论文校验失败"));
-            return;
+        List<PaperEntity> papers = new ArrayList<>();
+        if (!workspaceIds.isEmpty()) {
+            try {
+                papers = workspaceIds.stream()
+                    .map(workspaceId -> requireDeckPaper(workspaceId, userId))
+                    .toList();
+            } catch (ResponseStatusException error) {
+                job.fail(Optional.ofNullable(error.getReason()).orElse("论文校验失败"));
+                return;
+            }
         }
-        job.progress(12, "论文材料校验完成，正在读取生成参数");
-        String templateName = "横向对比型";
+        job.progress(12, "PDF 校验完成，正在读取 PPT Master 默认生成参数");
+        String templateName = "PPT Master Skill";
         Object template = body.get("template");
         if (template instanceof Map<?, ?> templateMap) {
             templateName = Objects.toString(templateMap.get("name"), templateName);
@@ -514,7 +514,7 @@ public class MeetingReportService {
                 reportPaperPath = outputDir.resolve("report-paper-" + filename);
                 Files.write(reportPaperPath, reportPaperBytes);
             }
-            job.progress(20, "正在整理主论文与文献材料");
+            job.progress(20, "正在整理主论文材料");
             Files.writeString(
                 materialPath,
                 buildDeckMaterial(papers, dimensions, templateName, slideCount, audience, focus, reportPaperPath)

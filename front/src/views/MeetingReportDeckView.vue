@@ -3,147 +3,40 @@
     <header class="meeting-topbar">
       <div class="title-cluster">
         <span class="section-label">组会汇报</span>
-        <h1>主论文精读，对比文献做参照</h1>
-        <p>上方选择 3-5 篇对比文献，用来生成 AI 对比矩阵；真正要汇报的主论文在 PPT 参数里单独上传。</p>
+        <h1>上传论文，交给 PPT Master 生成组会汇报</h1>
+        <p>只需要上传本次真正要汇报的 PDF。参数选择、设计确认、逐页 SVG、质检和导出交给已安装的 PPT Master skill 流程处理。</p>
       </div>
-      <button type="button" class="primary-action" :disabled="selectedPapers.length >= maxPapers" @click="openLibraryPicker">
-        添加对比文献
-      </button>
     </header>
 
     <main class="meeting-shell">
-      <section class="paper-flow">
-        <div class="flow-head">
+      <section class="single-upload-panel">
+        <div class="upload-copy">
+          <span class="section-label">PDF Source</span>
+          <h2>汇报主论文</h2>
+          <p>上传一篇 PDF 后，系统会使用组会汇报专用模型池里的 GPT5.5 中转进行论文精读，并调用 PPT Master skill 生成 PPTX。</p>
+        </div>
+
+        <label class="pdf-dropzone" :class="{ ready: reportPaperFile }">
+          <input type="file" accept="application/pdf,.pdf" @change="selectReportPaper" />
+          <span class="drop-icon">{{ reportPaperFile ? "PDF" : "+" }}</span>
           <div>
-            <span class="section-label">Paper Set</span>
-            <h2>对比文献</h2>
+            <strong>{{ reportPaperFile?.name || "选择或拖入 PDF 论文" }}</strong>
+            <small>{{ reportPaperFile ? formatFileSize(reportPaperFile.size) : "不再需要选择 3-5 篇对比文献，也不需要手动设置模板参数。" }}</small>
           </div>
-          <div class="flow-count" :data-ready="canGenerate">
-            <strong>{{ selectedPapers.length }}</strong>
-            <span>/ 5</span>
-          </div>
-        </div>
-
-        <div class="paper-lanes" :class="{ empty: !selectedPapers.length }">
-          <article v-for="paper in selectedPapers" :key="paper.id" class="paper-lane">
-            <div class="lane-number">{{ selectedPapers.indexOf(paper) + 1 }}</div>
-            <div class="lane-content">
-              <h3>{{ paper.title }}</h3>
-              <p>{{ compactMeta(paper) }}</p>
-              <div class="tag-row">
-                <span v-for="tag in displayTags(paper)" :key="tag">{{ tag }}</span>
-              </div>
-            </div>
-            <button type="button" class="quiet-button" @click="removePaper(paper.id)">移除</button>
-          </article>
-
-          <button v-if="selectedPapers.length < maxPapers" type="button" class="paper-add-lane" @click="openLibraryPicker">
-            <span>+</span>
-            <strong>{{ selectedPapers.length ? "继续添加" : "从文献库选择对比文献" }}</strong>
-            <small>{{ selectedPapers.length ? "最多 5 篇，不等于主论文" : "不会自动填入演示数据" }}</small>
-          </button>
-        </div>
-      </section>
-
-      <section class="matrix-area">
-        <div class="matrix-toolbar">
-          <div>
-            <span class="section-label">AI Comparison Matrix</span>
-            <h2>内容对比工作表</h2>
-            <p>不是题录表。点击生成后，AI 会从论文内容里提炼每个维度的可汇报结论。</p>
-          </div>
-          <div class="matrix-actions">
-            <button type="button" class="secondary-action" @click="showDimensionPanel = !showDimensionPanel">
-              {{ showDimensionPanel ? "收起维度" : "调整维度" }}
-            </button>
-            <button type="button" class="primary-action" :disabled="!canAnalyze || analyzing" @click="generateAiComparison">
-              {{ analyzing ? "AI 分析中..." : "生成 AI 对比" }}
-            </button>
-          </div>
-        </div>
-
-        <div v-if="showDimensionPanel" class="dimension-strip">
-          <label v-for="dimension in dimensions" :key="dimension.key" :class="{ checked: selectedDimensionKeys.includes(dimension.key) }">
-            <input v-model="selectedDimensionKeys" type="checkbox" :value="dimension.key" />
-            <span>{{ dimension.label }}</span>
-          </label>
-        </div>
-
-        <div class="matrix-frame">
-          <table class="comparison-table">
-            <thead>
-              <tr>
-                <th>分析角度</th>
-                <th v-for="paper in selectedPapers" :key="paper.id">
-                  <span>{{ paper.title }}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!selectedPapers.length">
-                <td colspan="2" class="empty-matrix">
-                  <strong>先添加论文，再生成 AI 对比。</strong>
-                  <span>矩阵不会展示作者、年份这类简单字段，而是用于组会讲解的内容分析。</span>
-                </td>
-              </tr>
-              <tr v-else-if="!analysisReady">
-                <td :colspan="selectedPapers.length + 1" class="empty-matrix">
-                  <strong>{{ canAnalyze ? "论文已就绪，等待 AI 分析。" : "至少选择 3 篇论文后才能生成 AI 对比。" }}</strong>
-                  <span>生成后这里会展示研究问题、方法路线、实验设计、贡献、局限等维度。</span>
-                </td>
-              </tr>
-              <tr v-for="dimension in analysisReady ? selectedDimensions : []" :key="dimension.key">
-                <th>
-                  <strong>{{ dimension.label }}</strong>
-                  <small>{{ dimension.hint }}</small>
-                </th>
-                <td v-for="paper in selectedPapers" :key="`${dimension.key}-${paper.id}`">
-                  <span v-if="analysisCellState(paper, dimension.key) === 'ready'" class="cell-value">
-                    {{ analysisValue(paper, dimension.key) }}
-                  </span>
-                  <span v-else-if="analysisCellState(paper, dimension.key) === 'insufficient'" class="insufficient-value">
-                    {{ dimension.key === firstSelectedDimensionKey ? "材料不足：请补充 PDF、摘要或笔记后重新生成。" : "—" }}
-                  </span>
-                  <span v-else class="missing-value">AI 未返回该项</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        </label>
       </section>
 
       <section class="deck-dock">
-        <div class="dock-status" :class="{ ready: canGenerate }">
-          <span>{{ canGenerate ? "Ready" : "Draft" }}</span>
-          <strong>{{ canGenerate ? "可以生成 PPT" : "还差论文" }}</strong>
-          <small>{{ canGenerate ? "主论文需在详细参数里单独上传" : "至少选择 3 篇对比文献" }}</small>
+        <div class="dock-status" :class="{ ready: canSubmitDeck }">
+          <span>{{ canSubmitDeck ? "Ready" : "Waiting" }}</span>
+          <strong>{{ canSubmitDeck ? "可以生成 PPT" : "等待上传 PDF" }}</strong>
+          <small>PPT Master skill 会接管后续参数确认和设计流程。</small>
         </div>
-
-        <div class="template-row">
-          <button
-            v-for="template in templates"
-            :key="template.id"
-            type="button"
-            class="template-tile"
-            :class="{ active: selectedTemplateId === template.id }"
-            @click="selectedTemplateId = template.id"
-          >
-            <span class="template-cover" :class="template.previewClass">
-              <i></i><i></i><i></i>
-            </span>
-            <span class="template-copy">
-              <strong>{{ template.name }}</strong>
-              <small>{{ template.description }}</small>
-            </span>
-          </button>
-        </div>
-
         <div class="dock-actions">
-          <button type="button" class="secondary-action" @click="settingsOpen = true">详细参数</button>
           <button type="button" class="primary-action" :disabled="!canSubmitDeck || generating" @click="generateDeck">
             {{ generating ? `${Math.round(deckJob.progress || 1)}%` : "生成 PPT" }}
           </button>
-          <small class="upload-hint">{{ reportPaperFile ? `主论文：${reportPaperFile.name}` : "需单独上传一篇汇报主论文" }}</small>
+          <small class="upload-hint">{{ reportPaperFile ? `主论文：${reportPaperFile.name}` : "请选择一篇 PDF" }}</small>
         </div>
 
         <div v-if="generating || deckJob.jobId" class="deck-progress" :data-status="deckJob.status">
@@ -159,201 +52,6 @@
       </section>
     </main>
 
-    <Teleport to="body">
-      <div v-if="settingsOpen" class="settings-backdrop" @click.self="settingsOpen = false">
-        <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-          <header>
-            <div>
-              <span class="section-label">PPT 生成参数</span>
-              <h2 id="settings-title">详细生成设置</h2>
-            </div>
-            <button type="button" aria-label="关闭参数设置" @click="settingsOpen = false">×</button>
-          </header>
-
-          <div class="settings-grid">
-            <label>
-              <span>Academic 流程</span>
-              <select v-model="pptSettings.generationMode">
-                <option value="academic_ppt_master">Academic PPT Master</option>
-                <option value="academic_beautify">论文结构美化</option>
-                <option value="academic_from_scratch">从论文重构汇报</option>
-              </select>
-            </label>
-            <label>
-              <span>画布比例</span>
-              <select v-model="pptSettings.aspectRatio">
-                <option value="16:9">16:9 宽屏</option>
-                <option value="4:3">4:3 标准</option>
-              </select>
-            </label>
-            <label>
-              <span>页数</span>
-              <select v-model="pptSettings.slideCount">
-                <option value="6">6 页</option>
-                <option value="8-10">8-10 页</option>
-                <option value="10-12">10-12 页</option>
-                <option value="12-15">12-15 页</option>
-                <option value="15-18">15-18 页</option>
-              </select>
-            </label>
-            <label>
-              <span>汇报时长</span>
-              <select v-model="pptSettings.duration">
-                <option value="8 分钟">8 分钟</option>
-                <option value="10 分钟">10 分钟</option>
-                <option value="15 分钟">15 分钟</option>
-                <option value="20 分钟">20 分钟</option>
-              </select>
-            </label>
-            <label>
-              <span>汇报对象</span>
-              <select v-model="pptSettings.audience">
-                <option value="导师与课题组">导师与课题组</option>
-                <option value="论文精读小组">论文精读小组</option>
-                <option value="开题预汇报">开题预汇报</option>
-                <option value="项目评审">项目评审</option>
-              </select>
-            </label>
-            <label>
-              <span>叙事模式</span>
-              <select v-model="pptSettings.languageTone">
-                <option value="Background-Method-Results-Outlook">Background → Method → Results → Outlook</option>
-                <option value="problem-method-evidence">Problem → Method → Evidence</option>
-                <option value="defense-style">答辩式：问题-贡献-验证</option>
-                <option value="journal-club">组会精读式</option>
-              </select>
-            </label>
-            <label>
-              <span>视觉风格</span>
-              <select v-model="pptSettings.visualStyle">
-                <option value="academic_editorial">Academic Editorial</option>
-                <option value="journal_minimal">Journal Minimal</option>
-                <option value="conference_blue">Conference Blue</option>
-                <option value="dark_lab">Dark Lab</option>
-              </select>
-            </label>
-            <label>
-              <span>输出内容密度</span>
-              <select v-model="pptSettings.density">
-                <option value="中等密度">中等密度</option>
-                <option value="高密度">高密度</option>
-                <option value="少字讲解">少字讲解</option>
-              </select>
-            </label>
-            <label>
-              <span>图表/公式策略</span>
-              <select v-model="pptSettings.imageMode">
-                <option value="preserve_paper_assets">保留论文公式、图、表线索</option>
-                <option value="redraw_figures">重画方法图/结果图</option>
-                <option value="text_only">只生成文字版</option>
-              </select>
-            </label>
-            <label>
-              <span>演讲备注</span>
-              <select v-model="pptSettings.notesMode">
-                <option value="speaker_notes">写入备注页</option>
-                <option value="brief_notes">简短备注</option>
-                <option value="none">不写备注</option>
-              </select>
-            </label>
-            <label>
-              <span>导出策略</span>
-              <select v-model="pptSettings.animation">
-                <option value="native_editable">原生可编辑 PPTX</option>
-                <option value="native_with_svg_snapshot">原生 PPTX + SVG 预览备份</option>
-                <option value="strict_line_fidelity">严格行布局 fidelity</option>
-              </select>
-            </label>
-            <label class="field-wide">
-              <span>汇报主论文 *</span>
-              <div class="report-upload">
-                <input type="file" accept="application/pdf,.pdf,.doc,.docx" @change="selectReportPaper" />
-                <strong>{{ reportPaperFile?.name || "上传本次真正要讲的论文文件" }}</strong>
-                <small>这篇论文会作为 PPT 主线；上方 3-5 篇只作为对比文献，不会替代主论文。</small>
-              </div>
-            </label>
-            <label class="field-wide">
-              <span>汇报重点</span>
-              <textarea v-model="pptSettings.focus" rows="4" placeholder="例如：重点比较方法差异、数据集、实验指标和对本课题的启发。"></textarea>
-            </label>
-            <label class="field-wide">
-              <span>Academic 章节结构</span>
-              <div class="checkbox-grid">
-                <label v-for="section in pptSections" :key="section">
-                  <input v-model="pptSettings.sections" type="checkbox" :value="section" />
-                  <span>{{ section }}</span>
-                </label>
-              </div>
-            </label>
-            <label class="field-wide">
-              <span>质量检查</span>
-              <div class="report-upload compact">
-                <span class="inline-toggle">
-                  <input v-model="pptSettings.visualReview" type="checkbox" />
-                  <strong>生成后进行逐页视觉自检</strong>
-                </span>
-                <small>对应 PPT Master skill 的 visual check / post-process 阶段，会优先修复重叠、溢出和图表错位。</small>
-              </div>
-            </label>
-            <label class="field-wide">
-              <span>对比文献附录</span>
-              <div class="report-upload compact">
-                <span class="inline-toggle">
-                  <input v-model="pptSettings.includeComparisonAppendix" type="checkbox" />
-                  <strong>在末尾追加 comparison appendix</strong>
-                </span>
-                <small>默认关闭；主线仍按 Background / Methodology / Results / Outlook 汇报主论文。</small>
-              </div>
-            </label>
-            <label class="field-wide">
-              <span>额外要求</span>
-              <textarea v-model="pptSettings.extraInstructions" rows="4" placeholder="例如：每篇论文都要给出一句可在组会上讨论的问题；避免编造实验数值。"></textarea>
-            </label>
-          </div>
-
-          <footer>
-            <button type="button" class="secondary-action" @click="settingsOpen = false">取消</button>
-            <button type="button" class="primary-action" @click="settingsOpen = false">保存参数</button>
-          </footer>
-        </section>
-      </div>
-    </Teleport>
-
-    <Teleport to="body">
-      <div v-if="libraryPickerOpen" class="picker-backdrop" @click.self="libraryPickerOpen = false">
-        <section class="paper-picker" role="dialog" aria-modal="true" aria-labelledby="paper-picker-title">
-          <header>
-            <div>
-              <span class="section-label">Library</span>
-              <h2 id="paper-picker-title">选择组会论文</h2>
-            </div>
-            <button type="button" aria-label="关闭" @click="libraryPickerOpen = false">×</button>
-          </header>
-
-          <div class="picker-toolbar">
-            <input v-model="pickerKeyword" type="search" placeholder="搜索标题、作者、来源" />
-            <span>{{ filteredLibraryPapers.length }} 篇</span>
-          </div>
-
-          <div class="picker-list">
-            <article v-for="paper in filteredLibraryPapers" :key="paper.id" class="picker-row">
-              <div>
-                <h3>{{ paper.title }}</h3>
-                <p>{{ compactMeta(paper) }}</p>
-                <div class="tag-row">
-                  <span v-for="tag in displayTags(paper)" :key="tag">{{ tag }}</span>
-                </div>
-              </div>
-              <button type="button" :disabled="isPaperSelected(paper.id) || selectedPapers.length >= maxPapers" @click="addPaper(paper)">
-                {{ isPaperSelected(paper.id) ? "已添加" : "添加" }}
-              </button>
-            </article>
-            <div v-if="!filteredLibraryPapers.length" class="picker-empty">文献库没有匹配结果。</div>
-          </div>
-        </section>
-      </div>
-    </Teleport>
-
     <Transition name="slide-up">
       <div v-if="toastMessage" class="custom-toast meeting-toast">
         {{ toastMessage }}
@@ -363,24 +61,12 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import { useLibraryStore } from "../stores/library";
+import { computed, onBeforeUnmount, reactive, ref } from "vue";
 import { paperpilotApi } from "../services/paperpilotApi";
 import { API_BASE_URL } from "../services/apiClient";
 
-const libraryStore = useLibraryStore();
-const maxPapers = 5;
-const selectedPaperIds = ref([]);
-const libraryPickerOpen = ref(false);
-const settingsOpen = ref(false);
-const pickerKeyword = ref("");
-const showDimensionPanel = ref(false);
-const selectedTemplateId = ref("journal-club");
 const generating = ref(false);
-const analyzing = ref(false);
 const reportPaperFile = ref(null);
-const analysisMatrix = ref({});
-const analysisReady = ref(false);
 const toastMessage = ref("");
 const deckJob = reactive({
   jobId: "",
@@ -393,165 +79,27 @@ const deckJob = reactive({
 let toastTimer = null;
 let deckPollTimer = null;
 
-const dimensions = [
-  { key: "researchProblem", label: "研究问题", hint: "解决什么问题，为什么重要" },
-  { key: "method", label: "方法路线", hint: "核心模型、框架或技术路径" },
-  { key: "dataExperiment", label: "数据与实验", hint: "数据、任务、指标与实验设置" },
-  { key: "results", label: "结果证据", hint: "主要发现、对比结果与支撑证据" },
-  { key: "contribution", label: "贡献与创新", hint: "相对已有工作的增量" },
-  { key: "limitation", label: "局限与风险", hint: "假设、边界、缺陷和复现风险" },
-  { key: "discussion", label: "组会讨论点", hint: "值得提问或延伸的方向" },
-];
-
-const selectedDimensionKeys = ref(dimensions.map((item) => item.key));
-
-const templates = [
-  { id: "journal-club", name: "主论文精读型", description: "围绕上传主论文展开，适合正式组会汇报。", previewClass: "journal" },
-  { id: "roadmap", name: "研究脉络型", description: "按问题背景、方法路径和结论组织。", previewClass: "roadmap" },
-  { id: "minimal", name: "极简汇报型", description: "8-10 页快速讲清主要贡献和局限。", previewClass: "minimal" },
-];
-
-const pptSections = ["Cover", "Background", "Methodology", "Experiment", "Results", "Conclusion", "Outlook", "Discussion"];
-const pptSettings = reactive({
-  generationMode: "academic_ppt_master",
-  aspectRatio: "16:9",
-  slideCount: "10-12",
-  duration: "10 分钟",
-  audience: "导师与课题组",
-  languageTone: "Background-Method-Results-Outlook",
-  visualStyle: "academic_editorial",
-  density: "中等密度",
-  imageMode: "preserve_paper_assets",
-  notesMode: "speaker_notes",
-  animation: "native_editable",
-  focus: "",
-  visualReview: true,
-  includeComparisonAppendix: false,
-  sections: ["Cover", "Background", "Methodology", "Experiment", "Results", "Conclusion", "Outlook"],
-  extraInstructions: "按 PPT Master skill 工作流：保留论文公式、图、表线索；按 Background / Methodology / Experiment / Results / Conclusion / Outlook 重构；避免编造实验数值。",
-});
-
-const selectedTemplate = computed(() => templates.find((item) => item.id === selectedTemplateId.value) || templates[0]);
-const selectedPapers = computed(() =>
-  selectedPaperIds.value
-    .map((id) => libraryStore.state.documents.find((paper) => paper.id === id))
-    .filter(Boolean),
-);
-const selectedDimensions = computed(() =>
-  dimensions.filter((dimension) => selectedDimensionKeys.value.includes(dimension.key)),
-);
-const firstSelectedDimensionKey = computed(() => selectedDimensions.value[0]?.key || "");
-const filteredLibraryPapers = computed(() => {
-  const keyword = pickerKeyword.value.trim().toLowerCase();
-  return libraryStore.state.documents.filter((paper) => {
-    if (!keyword) return true;
-    return [paper.title, paper.authors, paper.source, paper.importSource, paper.publishYear]
-      .some((field) => String(field || "").toLowerCase().includes(keyword));
-  });
-});
-const canGenerate = computed(() => selectedPapers.value.length >= 3 && selectedPapers.value.length <= 5);
-const canAnalyze = computed(() => canGenerate.value && selectedDimensions.value.length > 0);
-const canSubmitDeck = computed(() => canGenerate.value && Boolean(reportPaperFile.value));
-
-watch(selectedPaperIds, () => {
-  analysisMatrix.value = {};
-  analysisReady.value = false;
-});
-
-onMounted(async () => {
-  try {
-    await libraryStore.hydrateLibrary();
-  } catch (error) {
-    console.warn("Failed to hydrate library", error);
-    showToast("文献库同步失败，已使用本地缓存");
-  }
-});
+const canSubmitDeck = computed(() => Boolean(reportPaperFile.value));
 
 onBeforeUnmount(() => {
   stopDeckPolling();
   if (toastTimer) clearTimeout(toastTimer);
 });
 
-function openLibraryPicker() {
-  if (selectedPapers.value.length >= maxPapers) return;
-  libraryPickerOpen.value = true;
-}
-
-function addPaper(paper) {
-  if (selectedPaperIds.value.includes(paper.id) || selectedPaperIds.value.length >= maxPapers) return;
-  selectedPaperIds.value.push(paper.id);
-  if (selectedPaperIds.value.length >= maxPapers) libraryPickerOpen.value = false;
-}
-
-function removePaper(id) {
-  selectedPaperIds.value = selectedPaperIds.value.filter((paperId) => paperId !== id);
-}
-
-function isPaperSelected(id) {
-  return selectedPaperIds.value.includes(id);
-}
-
 function selectReportPaper(event) {
   reportPaperFile.value = event.target.files?.[0] || null;
 }
 
-function displayTags(paper) {
-  const tags = Array.isArray(paper.journalTags) ? paper.journalTags.filter(Boolean) : [];
-  return (tags.length ? tags : [cleanValue(paper.venueType), cleanValue(paper.importSource) || cleanValue(paper.source)]).filter(Boolean).slice(0, 3);
-}
-
-function compactMeta(paper) {
-  return [cleanValue(paper.authors), cleanValue(paper.source), cleanValue(paper.publishYear)].filter(Boolean).join(" · ") || "元数据待补充";
-}
-
-function analysisValue(paper, key) {
-  return String(analysisMatrix.value?.[paper.id]?.[key] || "").trim();
-}
-
-function analysisCellState(paper, key) {
-  const value = analysisValue(paper, key);
-  if (!value) return "missing";
-  const insufficientPhrases = ["论文材料未明确说明", "材料未明确", "信息不足", "未提供足够信息", "无法判断"];
-  return insufficientPhrases.some((phrase) => value.includes(phrase)) ? "insufficient" : "ready";
-}
-
-function cleanValue(value) {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
-  if (!text) return "";
-  const placeholders = ["尚未添加标注", "摘要待补充", "待补全", "待补充", "元数据待补全"];
-  return placeholders.some((placeholder) => text.includes(placeholder)) ? "" : text;
-}
-
-async function generateAiComparison() {
-  if (!canAnalyze.value) {
-    showToast("请先选择 3-5 篇论文");
-    return;
-  }
-  analyzing.value = true;
-  try {
-    const result = await paperpilotApi.analyzeMeetingDeck({
-      paperIds: selectedPaperIds.value,
-      dimensions: selectedDimensions.value,
-    });
-    analysisMatrix.value = result?.matrix || {};
-    analysisReady.value = true;
-    showToast(result?.message || "AI 对比已生成");
-  } catch (error) {
-    console.warn("AI comparison failed", error);
-    showToast("AI 对比生成失败，请检查模型配置");
-  } finally {
-    analyzing.value = false;
-  }
+function formatFileSize(bytes) {
+  const size = Number(bytes || 0);
+  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+  if (size >= 1024) return `${Math.round(size / 1024)} KB`;
+  return `${size} B`;
 }
 
 async function generateDeck() {
-  if (!canGenerate.value) {
-    showToast("请先选择 3-5 篇论文");
-    return;
-  }
   if (!reportPaperFile.value) {
-    showToast("请先在详细参数里上传一篇汇报论文");
-    settingsOpen.value = true;
+    showToast("请先上传一篇 PDF 论文");
     return;
   }
   generating.value = true;
@@ -566,17 +114,8 @@ async function generateDeck() {
   let startedJob = false;
   try {
     const payload = {
-      paperIds: selectedPaperIds.value,
-      dimensions: selectedDimensions.value,
-      analysisMatrix: analysisMatrix.value,
-      template: selectedTemplate.value,
-      pptSettings: { ...pptSettings },
-      slideCount: pptSettings.slideCount,
-      audience: pptSettings.audience,
-      focus: pptSettings.focus,
       engine: "ppt-master-skill",
     };
-    payload.pptSettings.includeComparisonAppendix = Boolean(pptSettings.includeComparisonAppendix);
     const formData = new FormData();
     formData.append("payload", JSON.stringify(payload));
     formData.append("reportPaper", reportPaperFile.value);
@@ -742,14 +281,92 @@ function showToast(message) {
 
 .paper-flow,
 .matrix-area,
-.deck-dock {
+.deck-dock,
+.single-upload-panel {
   border: 1px solid rgba(20, 32, 51, 0.1);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.96);
 }
 
-.paper-flow {
+.paper-flow,
+.single-upload-panel {
   padding: 18px;
+}
+
+.single-upload-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.7fr) minmax(360px, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.upload-copy h2 {
+  margin: 6px 0 0;
+  color: #142033;
+  font-size: 22px;
+}
+
+.upload-copy p {
+  margin: 10px 0 0;
+  color: #56657a;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.pdf-dropzone {
+  position: relative;
+  display: flex;
+  min-height: 168px;
+  align-items: center;
+  gap: 18px;
+  padding: 24px;
+  border: 1px dashed #9ab5dc;
+  border-radius: 12px;
+  background: #f7fbff;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.pdf-dropzone.ready {
+  border-style: solid;
+  border-color: #2563eb;
+  background: #eef5ff;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.14);
+}
+
+.pdf-dropzone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.drop-icon {
+  display: grid;
+  width: 68px;
+  height: 68px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.pdf-dropzone strong {
+  display: block;
+  color: #142033;
+  font-size: 18px;
+}
+
+.pdf-dropzone small {
+  display: block;
+  max-width: 620px;
+  margin-top: 8px;
+  color: #5b6b80;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .flow-head,
