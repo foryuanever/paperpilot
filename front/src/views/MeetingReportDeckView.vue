@@ -1,189 +1,250 @@
 <template>
-  <div class="meeting-page">
-    <header class="meeting-hero">
-      <div class="hero-copy">
-        <span class="eyebrow">Group Meeting Workspace</span>
-        <h1>把一篇论文整理成可以讲、可以问、可以沉淀的组会材料</h1>
-        <p>从已保存论文中选择本次汇报对象，生成规范分点综述并永久保存，再进入 PPT Master 的网页参数流程制作 PPT。</p>
+  <div class="meeting-timeline-page">
+    <header class="timeline-header">
+      <div>
+        <span>组会汇报</span>
+        <h1>按时间沉淀每一次组会材料</h1>
+        <p>每张卡片是一场组会：选择汇报文献、补充重点内容、生成论文综述，并把 PPT 任务留在后台执行。</p>
       </div>
-
-      <label class="upload-button" :class="{ busy: uploading }" title="上传 PDF">
-        <input type="file" accept="application/pdf,.pdf" :disabled="uploading" @change="uploadPaper" />
+      <button type="button" class="add-meeting-button" @click="addMeeting">
         <span aria-hidden="true">+</span>
-        <strong>{{ uploading ? "上传中" : "上传论文" }}</strong>
-      </label>
+        添加组会
+      </button>
     </header>
 
-    <main class="meeting-workbench">
-      <section class="featured-paper" aria-label="当前汇报论文">
-        <div v-if="selectedPaper" class="paper-cover">
-          <div class="cover-topline">
-            <span>{{ selectedPaper.publishYear || "年份待补" }}</span>
-            <strong>{{ hasPdf(selectedPaper) ? "PDF 已就绪" : "缺少 PDF" }}</strong>
-          </div>
-          <div class="cover-title">
-            <span>本次汇报主论文</span>
-            <h2>{{ selectedPaper.title || "未命名论文" }}</h2>
-            <p>{{ compactMeta(selectedPaper) }}</p>
-          </div>
-          <div class="cover-bottomline">
-            <span v-for="tag in normalizedTags(selectedPaper)" :key="tag">{{ tag }}</span>
-          </div>
-        </div>
-
-        <div v-else class="paper-cover empty">
-          <div class="cover-title">
-            <span>本次汇报主论文</span>
-            <h2>选择或上传一篇论文</h2>
-            <p>上传 PDF 后会自动保存到文献库，并出现在下方论文架里。</p>
-          </div>
-        </div>
-
-        <div class="paper-brief">
-          <section>
-            <span>讲述入口</span>
-            <p>{{ selectedPaper?.abstract || selectedPaper?.note || "暂无摘要。生成论文综述时会读取已保存信息和 PDF 正文，整理成组会可讲的结构。" }}</p>
-          </section>
-          <section>
-            <span>综述规范</span>
-            <ul>
-              <li>先用一页综述概括论文精髓。</li>
-              <li>再分点沉淀研究问题、方法路线、证据结果和局限讨论。</li>
-              <li>保存后会绑定到该论文，后续打开仍然保留。</li>
-            </ul>
-          </section>
-        </div>
-      </section>
-
-      <aside class="action-suite" aria-label="论文操作">
-        <section class="suite-card review-card">
-          <span>论文综述</span>
-          <h2>{{ selectedPaper ? "生成规范分点综述" : "等待选择论文" }}</h2>
-          <p>内容按组会汇报习惯拆成基本信息、研究问题、理论背景、方法、结果、数据、贡献局限等模块。</p>
-          <button
-            type="button"
-            class="secondary-action"
-            :disabled="!selectedPaper || isReviewBusy(selectedPaper)"
-            @click="selectedPaper && openReview(selectedPaper)"
-          >
-            {{ selectedPaper && isReviewBusy(selectedPaper) ? reviewProgressLabel(selectedPaper) : "打开论文综述" }}
-          </button>
-        </section>
-
-        <section class="suite-card deck-card" :data-status="deckJob.status">
-          <span>PPT Master</span>
-          <h2>{{ deckJob.paperTitle || "制作组会 PPT" }}</h2>
-          <p>{{ deckJob.message || "选择带 PDF 的论文后，会打开 PPT Master 参数页，并在后台执行制作流程。" }}</p>
-          <div v-if="deckJob.jobId" class="progress-line" aria-label="PPT 制作进度">
-            <i :style="{ width: `${Math.max(2, deckJob.progress || 0)}%` }"></i>
-            <strong>{{ Math.round(deckJob.progress || 0) }}%</strong>
-          </div>
-          <div class="deck-actions">
-            <button
-              type="button"
-              class="primary-action"
-              :disabled="!selectedPaper || !hasPdf(selectedPaper) || isDeckBusy(selectedPaper)"
-              @click="selectedPaper && makePpt(selectedPaper)"
-            >
-              {{ selectedPaper && isDeckBusy(selectedPaper) ? "制作中" : "PPT 制作" }}
-            </button>
-            <button v-if="deckJob.confirmUrl && deckJob.status === 'running'" type="button" class="ghost-action" @click="openConfirmUrl">
-              参数页
-            </button>
-          </div>
-        </section>
-      </aside>
-    </main>
-
-    <section class="paper-library" aria-label="已添加论文">
-      <div class="library-head">
-        <div>
-          <span>Paper Shelf</span>
-          <h2>已添加论文</h2>
-        </div>
-        <div class="library-tools">
-          <strong>{{ filteredPapers.length }} 篇</strong>
-          <input v-model="keyword" type="search" placeholder="搜索标题、作者、年份" />
-        </div>
-      </div>
-
-      <div v-if="loadingPapers" class="paper-skeletons">
-        <span v-for="item in 4" :key="item"></span>
-      </div>
-
-      <div v-else-if="!filteredPapers.length" class="empty-library">
-        <strong>{{ papers.length ? "没有匹配的论文" : "还没有组会论文" }}</strong>
-        <p>{{ papers.length ? "换一个关键词，或清空搜索后查看全部。" : "点击右上角上传 PDF，论文会保存到文献库并进入这里。" }}</p>
-      </div>
-
-      <div v-else class="paper-grid">
+    <main class="timeline-shell">
+      <section class="timeline-list" aria-label="组会时间轴">
         <article
-          v-for="paper in filteredPapers"
-          :key="paper.workspaceId"
-          class="paper-card"
-          :class="{ active: selectedPaper?.workspaceId === paper.workspaceId }"
-          @click="selectPaper(paper)"
+          v-for="(meeting, index) in sortedMeetings"
+          :key="meeting.id"
+          class="meeting-card"
+          :class="[`tone-${index % 4}`, { active: activeMeetingId === meeting.id }]"
         >
-          <div class="paper-card-index">{{ paperIndex(paper) }}</div>
-          <div class="paper-card-body">
-            <div class="paper-card-meta">
-              <span :class="['pdf-badge', hasPdf(paper) ? 'ready' : 'missing']">{{ hasPdf(paper) ? "PDF" : "待补 PDF" }}</span>
-              <span>{{ paper.publishYear || "年份未知" }}</span>
+          <div class="timeline-pin" aria-hidden="true">
+            <span></span>
+          </div>
+
+          <div class="meeting-card-head">
+            <div class="meeting-date-block">
+              <input
+                v-model="meeting.meetingTime"
+                type="datetime-local"
+                aria-label="组会时间"
+                @change="persistMeetings"
+              />
+              <strong>{{ formatMeetingDate(meeting.meetingTime) }}</strong>
             </div>
-            <h3>{{ paper.title || "未命名论文" }}</h3>
-            <p>{{ compactMeta(paper) }}</p>
-            <div class="paper-tags">
-              <span v-for="tag in normalizedTags(paper)" :key="tag">{{ tag }}</span>
+            <div class="meeting-status" :data-status="meetingStatus(meeting)">
+              <span></span>
+              {{ statusText(meeting) }}
             </div>
           </div>
-          <div class="paper-card-actions" @click.stop>
-            <button type="button" :disabled="isReviewBusy(paper)" @click="openReview(paper)">
-              {{ isReviewBusy(paper) ? reviewProgressLabel(paper) : "论文综述" }}
-            </button>
-            <button type="button" class="make-deck" :disabled="!hasPdf(paper) || isDeckBusy(paper)" @click="makePpt(paper)">
-              {{ isDeckBusy(paper) ? `${Math.round(deckJob.progress || 1)}%` : "PPT 制作" }}
-            </button>
+
+          <div class="meeting-card-body">
+            <section class="meeting-main">
+              <input
+                v-model="meeting.title"
+                class="meeting-title-input"
+                placeholder="例如：欧盟 AI 法案合规自动化组会汇报"
+                @change="persistMeetings"
+              />
+
+              <div class="meeting-meta-controls">
+                <label>
+                  汇报类型
+                  <select v-model="meeting.params.reportType" @change="persistMeetings">
+                    <option value="paper">单篇论文精读</option>
+                    <option value="comparison">多文献对比</option>
+                    <option value="proposal">课题进展</option>
+                    <option value="journal">文献周报</option>
+                  </select>
+                </label>
+                <label>
+                  听众
+                  <select v-model="meeting.params.audience" @change="persistMeetings">
+                    <option value="导师与课题组">导师与课题组</option>
+                    <option value="跨方向同学">跨方向同学</option>
+                    <option value="项目评审">项目评审</option>
+                  </select>
+                </label>
+                <label>
+                  PPT 页数
+                  <select v-model="meeting.params.slideCount" @change="persistMeetings">
+                    <option value="8-10">8-10 页</option>
+                    <option value="10-12">10-12 页</option>
+                    <option value="12-16">12-16 页</option>
+                  </select>
+                </label>
+              </div>
+
+              <label class="meeting-notes">
+                <span>组会重点内容</span>
+                <textarea
+                  v-model="meeting.notes"
+                  placeholder="记录这次要讲清楚的核心问题、导师可能追问的点、需要讨论的实验或方法缺口。"
+                  @change="persistMeetings"
+                ></textarea>
+              </label>
+
+              <div class="tag-row">
+                <span v-for="tag in meeting.tags" :key="tag" class="tag-pill">
+                  {{ tag }}
+                  <button type="button" aria-label="移除标签" @click="removeTag(meeting, tag)">×</button>
+                </span>
+                <input
+                  v-model="meeting.tagDraft"
+                  placeholder="添加标记后回车"
+                  @keydown.enter.prevent="addTag(meeting)"
+                  @blur="persistMeetings"
+                />
+              </div>
+            </section>
+
+            <aside class="meeting-side">
+              <div class="paper-box">
+                <div class="box-title">
+                  <span>组会汇报文献</span>
+                  <button type="button" @click="openPaperPicker(meeting)">点击添加</button>
+                </div>
+                <div v-if="meeting.papers.length" class="selected-papers">
+                  <button
+                    v-for="paperId in meeting.papers"
+                    :key="paperId"
+                    type="button"
+                    class="selected-paper"
+                    @click="setPrimaryPaper(meeting, paperId)"
+                  >
+                    <strong>{{ paperTitle(paperId) }}</strong>
+                    <small>{{ paperMeta(paperId) }}</small>
+                  </button>
+                </div>
+                <p v-else>从已导入论文中选择，也可以直接上传 PDF。</p>
+              </div>
+
+              <div class="generation-grid">
+                <div class="generation-action">
+                  <div class="progress-label">
+                    <span>论文综述</span>
+                    <strong>{{ reviewPercent(meeting) }}%</strong>
+                  </div>
+                  <button
+                    type="button"
+                    class="soft-button"
+                    :disabled="!primaryPaper(meeting) || isReviewBusy(meeting)"
+                    @click="openReview(meeting)"
+                  >
+                    {{ isReviewBusy(meeting) ? "综述生成中" : "查看 / 生成综述" }}
+                  </button>
+                </div>
+
+                <div class="generation-action">
+                  <div class="progress-label">
+                    <span>PPT</span>
+                    <strong>{{ deckPercent(meeting) }}%</strong>
+                  </div>
+                  <a
+                    v-if="deckJobs[meeting.id]?.downloadUrl"
+                    class="download-button"
+                    :href="absoluteApiUrl(deckJobs[meeting.id].downloadUrl)"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    下载 PPT
+                  </a>
+                  <button
+                    v-else
+                    type="button"
+                    class="primary-button"
+                    :disabled="!primaryPaper(meeting) || !hasPdf(primaryPaper(meeting)) || isDeckBusy(meeting)"
+                    @click="makePpt(meeting)"
+                  >
+                    {{ isDeckBusy(meeting) ? "后台生成中" : "生成汇报 PPT" }}
+                  </button>
+                </div>
+              </div>
+            </aside>
           </div>
         </article>
-      </div>
-    </section>
+      </section>
+    </main>
 
-    <Transition name="drawer-fade">
-      <div v-if="reviewDrawer.open" class="review-backdrop" @click.self="closeReview">
-        <section class="review-drawer" aria-label="论文综述">
+    <Transition name="modal-fade">
+      <div v-if="paperPicker.open" class="modal-backdrop" @click.self="closePaperPicker">
+        <section class="paper-picker modal-panel" aria-label="选择组会文献">
           <header>
             <div>
-              <span>{{ reviewDrawer.generated ? "已永久保存" : "待生成" }}</span>
-              <h2>{{ reviewDrawer.paper?.title || "论文综述" }}</h2>
+              <span>添加汇报文献</span>
+              <h2>{{ paperPicker.meeting?.title || "选择论文" }}</h2>
+            </div>
+            <button type="button" aria-label="关闭" @click="closePaperPicker">×</button>
+          </header>
+
+          <div class="picker-tools">
+            <input v-model="keyword" type="search" placeholder="搜索标题、作者或年份" />
+            <label class="upload-inline" :class="{ busy: uploading }">
+              <input type="file" accept="application/pdf,.pdf" :disabled="uploading" @change="uploadPaper" />
+              {{ uploading ? "上传中" : "上传 PDF" }}
+            </label>
+          </div>
+
+          <div v-if="loadingPapers" class="paper-loading">
+            <span v-for="item in 4" :key="item"></span>
+          </div>
+          <div v-else class="picker-paper-list">
+            <button
+              v-for="paper in filteredPapers"
+              :key="paper.workspaceId"
+              type="button"
+              class="picker-paper"
+              :class="{ selected: paperPicker.meeting?.papers.includes(paper.workspaceId) }"
+              @click="toggleMeetingPaper(paperPicker.meeting, paper)"
+            >
+              <span :class="['pdf-badge', hasPdf(paper) ? 'ready' : 'missing']">
+                {{ hasPdf(paper) ? "PDF" : "待补 PDF" }}
+              </span>
+              <strong>{{ paper.title || "未命名论文" }}</strong>
+              <small>{{ compactMeta(paper) }}</small>
+            </button>
+          </div>
+        </section>
+      </div>
+    </Transition>
+
+    <Transition name="modal-fade">
+      <div v-if="reviewModal.open" class="modal-backdrop" @click.self="closeReview">
+        <section class="review-modal modal-panel" aria-label="组会论文综述">
+          <header>
+            <div>
+              <span>{{ reviewModal.generated ? "已永久保存" : "组会汇报综述" }}</span>
+              <h2>{{ reviewModal.paper?.title || "论文综述" }}</h2>
             </div>
             <button type="button" aria-label="关闭" @click="closeReview">×</button>
           </header>
 
-          <div v-if="reviewDrawer.loading" class="review-loading">
-            <strong>{{ reviewDrawer.message || "正在读取已保存综述" }}</strong>
-            <div class="progress-line">
-              <i :style="{ width: `${Math.max(8, reviewDrawer.progress)}%` }"></i>
-              <strong>{{ Math.round(reviewDrawer.progress || 0) }}%</strong>
+          <div v-if="reviewModal.loading" class="review-loading">
+            <strong>{{ reviewModal.message || "正在读取综述" }}</strong>
+            <div class="wide-progress">
+              <i :style="{ width: `${Math.max(8, reviewModal.progress)}%` }"></i>
             </div>
           </div>
 
           <template v-else>
-            <div class="review-actions">
-              <button type="button" class="primary-action" :disabled="reviewDrawer.generating" @click="generateReview">
-                {{ reviewDrawer.generating ? reviewProgressLabel(reviewDrawer.paper) : reviewDrawer.generated ? "重新生成综述" : "生成论文综述" }}
+            <div class="review-modal-actions">
+              <button type="button" class="primary-button" :disabled="reviewModal.generating" @click="generateReview">
+                {{ reviewModal.generating ? `生成中 ${reviewModal.progress}%` : reviewModal.generated ? "重新生成综述" : "生成论文综述" }}
               </button>
-              <button type="button" class="secondary-action" :disabled="reviewDrawer.saving" @click="saveReview">
-                {{ reviewDrawer.saving ? "保存中" : "保存编辑" }}
+              <button type="button" class="soft-button" :disabled="reviewModal.saving" @click="saveReview">
+                {{ reviewModal.saving ? "保存中" : "保存编辑" }}
               </button>
             </div>
 
-            <div class="review-section-list">
-              <section v-for="section in reviewSections" :key="section.key" class="review-section">
-                <div class="review-section-head">
+            <div class="review-point-list">
+              <section v-for="section in reviewSections" :key="section.key" class="review-point">
+                <div>
                   <strong>{{ section.title }}</strong>
                   <small>{{ section.hint }}</small>
                 </div>
-                <textarea v-model="reviewDrawer.sections[section.key]" :placeholder="section.placeholder"></textarea>
+                <textarea v-model="reviewModal.sections[section.key]" :placeholder="section.placeholder"></textarea>
               </section>
             </div>
           </template>
@@ -191,7 +252,7 @@
       </div>
     </Transition>
 
-    <Transition name="slide-up">
+    <Transition name="toast-slide">
       <div v-if="toastMessage" class="meeting-toast">{{ toastMessage }}</div>
     </Transition>
   </div>
@@ -202,26 +263,34 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { paperpilotApi } from "../services/paperpilotApi";
 import { API_BASE_URL } from "../services/apiClient";
 
+const STORAGE_KEY = "paperpilot-meeting-timeline-v1";
+const DECK_STORAGE_KEY = "paperpilot-meeting-deck-jobs-v1";
+const REVIEW_STORAGE_KEY = "paperpilot-meeting-review-jobs-v1";
+
 const reviewSections = [
-  { key: "synthesis", title: "一页综述", hint: "用 3-5 点讲清论文精髓", placeholder: "建议包含：一句话结论、核心贡献、关键证据、可讨论问题。" },
+  { key: "synthesis", title: "一页综述", hint: "3-5 点讲清论文精髓", placeholder: "一句话结论、核心贡献、关键证据、可讨论问题。" },
   { key: "basicInfo", title: "基本信息", hint: "题录、来源与研究对象", placeholder: "作者、年份、期刊/会议、研究对象、数据来源。" },
-  { key: "overview", title: "研究问题", hint: "为什么要做，解决什么问题", placeholder: "背景痛点、研究缺口、本文要回答的问题。" },
+  { key: "overview", title: "研究问题", hint: "为什么要做", placeholder: "背景痛点、研究缺口、本文要回答的问题。" },
   { key: "background", title: "理论背景", hint: "相关工作与概念框架", placeholder: "关键概念、相关理论、与既有工作的关系。" },
   { key: "method", title: "方法路线", hint: "模型、框架或实验路径", placeholder: "输入、方法模块、实验流程、变量/指标设置。" },
   { key: "results", title: "结果证据", hint: "主要发现与支撑证据", placeholder: "核心结果、对比、消融、统计或案例证据。" },
   { key: "datasets", title: "数据与评测", hint: "数据来源、设置和指标", placeholder: "样本、数据集、划分、评价指标、可复现性。" },
-  { key: "conclusion", title: "贡献与局限", hint: "导师最关心的讨论点", placeholder: "贡献、边界、局限、后续研究方向。" },
+  { key: "conclusion", title: "贡献与局限", hint: "组会讨论点", placeholder: "贡献、边界、局限、后续研究方向。" },
 ];
 
+const meetings = ref([]);
 const papers = ref([]);
-const selectedWorkspaceId = ref("");
 const keyword = ref("");
 const loadingPapers = ref(false);
 const uploading = ref(false);
+const activeMeetingId = ref("");
 const toastMessage = ref("");
+const deckJobs = reactive({});
 const reviewJobs = reactive({});
-const reviewDrawer = reactive({
+const paperPicker = reactive({ open: false, meeting: null });
+const reviewModal = reactive({
   open: false,
+  meeting: null,
   paper: null,
   sections: emptySections(),
   generated: false,
@@ -232,20 +301,13 @@ const reviewDrawer = reactive({
   message: "",
   modelName: "",
 });
-const deckJob = reactive({
-  jobId: "",
-  paperWorkspaceId: "",
-  paperTitle: "",
-  status: "idle",
-  progress: 0,
-  message: "",
-  confirmUrl: "",
-  downloadUrl: "",
-});
+
 let toastTimer = null;
-let reviewPollTimer = null;
-let deckPollTimer = null;
+const deckTimers = new Map();
+const reviewTimers = new Map();
 const confirmOpened = ref("");
+
+const sortedMeetings = computed(() => [...meetings.value].sort((a, b) => new Date(b.meetingTime) - new Date(a.meetingTime)));
 
 const filteredPapers = computed(() => {
   const query = keyword.value.trim().toLowerCase();
@@ -259,32 +321,51 @@ const filteredPapers = computed(() => {
   ].some((value) => String(value || "").toLowerCase().includes(query)));
 });
 
-const selectedPaper = computed(() =>
-  filteredPapers.value.find((paper) => paper.workspaceId === selectedWorkspaceId.value)
-  || filteredPapers.value[0]
-  || null
-);
+watch(meetings, persistMeetings, { deep: true });
+watch(() => ({ ...deckJobs }), persistDeckJobs, { deep: true });
+watch(() => ({ ...reviewJobs }), persistReviewJobs, { deep: true });
 
-watch(selectedPaper, (paper) => {
-  if (paper) selectedWorkspaceId.value = paper.workspaceId;
+onMounted(async () => {
+  loadPersistedState();
+  await loadPapers();
+  ensureFirstMeeting();
+  resumeDeckJobs();
+  resumeReviewJobs();
 });
 
-onMounted(loadPapers);
 onBeforeUnmount(() => {
   if (toastTimer) clearTimeout(toastTimer);
-  stopReviewPolling();
-  stopDeckPolling();
+  deckTimers.forEach((timer) => window.clearTimeout(timer));
+  reviewTimers.forEach((timer) => window.clearTimeout(timer));
 });
 
 function emptySections() {
   return Object.fromEntries(reviewSections.map((section) => [section.key, ""]));
 }
 
+function loadPersistedState() {
+  try {
+    const savedMeetings = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    if (Array.isArray(savedMeetings)) meetings.value = savedMeetings.map(normalizeMeeting);
+  } catch {
+    meetings.value = [];
+  }
+  try {
+    Object.assign(deckJobs, JSON.parse(localStorage.getItem(DECK_STORAGE_KEY) || "{}"));
+  } catch {
+    Object.keys(deckJobs).forEach((key) => delete deckJobs[key]);
+  }
+  try {
+    Object.assign(reviewJobs, JSON.parse(localStorage.getItem(REVIEW_STORAGE_KEY) || "{}"));
+  } catch {
+    Object.keys(reviewJobs).forEach((key) => delete reviewJobs[key]);
+  }
+}
+
 async function loadPapers() {
   loadingPapers.value = true;
   try {
     papers.value = await paperpilotApi.getLibraryPapers();
-    if (!selectedWorkspaceId.value && papers.value[0]) selectedWorkspaceId.value = papers.value[0].workspaceId;
   } catch (error) {
     showToast(error?.response?.data?.message || "论文列表加载失败");
   } finally {
@@ -292,19 +373,123 @@ async function loadPapers() {
   }
 }
 
-function selectPaper(paper) {
-  selectedWorkspaceId.value = paper.workspaceId;
+function ensureFirstMeeting() {
+  if (meetings.value.length) return;
+  const firstPaper = papers.value.find(hasPdf) || papers.value[0];
+  meetings.value = [createMeeting(firstPaper ? [firstPaper.workspaceId] : [])];
+  activeMeetingId.value = meetings.value[0].id;
 }
 
-function paperIndex(paper) {
-  const index = filteredPapers.value.findIndex((item) => item.workspaceId === paper.workspaceId);
-  return String(index + 1).padStart(2, "0");
+function createMeeting(paperIds = []) {
+  const now = new Date();
+  now.setMinutes(Math.ceil(now.getMinutes() / 15) * 15, 0, 0);
+  return {
+    id: `meeting-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+    meetingTime: toDatetimeLocal(now),
+    title: "新组会汇报",
+    notes: "本次重点：先讲清研究问题，再讨论方法路线、证据质量和后续可推进方向。",
+    tags: ["待汇报"],
+    tagDraft: "",
+    params: {
+      reportType: "paper",
+      audience: "导师与课题组",
+      slideCount: "10-12",
+    },
+    papers: paperIds,
+    primaryPaperId: paperIds[0] || "",
+  };
 }
 
-function compactMeta(paper) {
-  return [paper.authors || "作者待补全", paper.publishYear || "年份未知", paper.source || "来源未记录"]
-    .filter(Boolean)
-    .join(" · ");
+function normalizeMeeting(meeting = {}) {
+  const paperIds = Array.isArray(meeting.papers) ? meeting.papers.filter(Boolean) : [];
+  return {
+    id: meeting.id || `meeting-${Date.now()}`,
+    meetingTime: meeting.meetingTime || toDatetimeLocal(new Date()),
+    title: meeting.title || "组会汇报",
+    notes: meeting.notes || "",
+    tags: Array.isArray(meeting.tags) ? meeting.tags : [],
+    tagDraft: "",
+    params: {
+      reportType: meeting.params?.reportType || "paper",
+      audience: meeting.params?.audience || "导师与课题组",
+      slideCount: meeting.params?.slideCount || "10-12",
+    },
+    papers: paperIds,
+    primaryPaperId: meeting.primaryPaperId || paperIds[0] || "",
+  };
+}
+
+function addMeeting() {
+  const firstPaper = papers.value.find(hasPdf) || papers.value[0];
+  const meeting = createMeeting(firstPaper ? [firstPaper.workspaceId] : []);
+  meetings.value.unshift(meeting);
+  activeMeetingId.value = meeting.id;
+  showToast("已添加一场组会");
+}
+
+function persistMeetings() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(meetings.value.map(({ tagDraft, ...meeting }) => meeting)));
+}
+
+function persistDeckJobs() {
+  localStorage.setItem(DECK_STORAGE_KEY, JSON.stringify(deckJobs));
+}
+
+function persistReviewJobs() {
+  localStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(reviewJobs));
+}
+
+function formatMeetingDate(value) {
+  if (!value) return "未定时间";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "未定时间";
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function toDatetimeLocal(date) {
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
+}
+
+function addTag(meeting) {
+  const tag = meeting.tagDraft.trim();
+  if (!tag) return;
+  if (!meeting.tags.includes(tag)) meeting.tags.push(tag);
+  meeting.tagDraft = "";
+  persistMeetings();
+}
+
+function removeTag(meeting, tag) {
+  meeting.tags = meeting.tags.filter((item) => item !== tag);
+  persistMeetings();
+}
+
+function openPaperPicker(meeting) {
+  paperPicker.open = true;
+  paperPicker.meeting = meeting;
+  activeMeetingId.value = meeting.id;
+}
+
+function closePaperPicker() {
+  paperPicker.open = false;
+  paperPicker.meeting = null;
+}
+
+function toggleMeetingPaper(meeting, paper) {
+  if (!meeting || !paper?.workspaceId) return;
+  const exists = meeting.papers.includes(paper.workspaceId);
+  meeting.papers = exists
+    ? meeting.papers.filter((id) => id !== paper.workspaceId)
+    : [paper.workspaceId, ...meeting.papers];
+  if (!meeting.papers.includes(meeting.primaryPaperId)) {
+    meeting.primaryPaperId = meeting.papers[0] || "";
+  }
+  persistMeetings();
 }
 
 async function uploadPaper(event) {
@@ -315,8 +500,12 @@ async function uploadPaper(event) {
   try {
     const paper = await paperpilotApi.uploadLibraryPaper(file);
     papers.value = [paper, ...papers.value.filter((item) => item.workspaceId !== paper.workspaceId)];
-    selectedWorkspaceId.value = paper.workspaceId;
-    showToast("论文已上传并保存到文献库");
+    if (paperPicker.meeting) {
+      paperPicker.meeting.papers = [paper.workspaceId, ...paperPicker.meeting.papers.filter((id) => id !== paper.workspaceId)];
+      paperPicker.meeting.primaryPaperId = paper.workspaceId;
+      persistMeetings();
+    }
+    showToast("论文已上传并加入组会文献");
   } catch (error) {
     showToast(error?.response?.data?.message || "论文上传失败");
   } finally {
@@ -324,66 +513,157 @@ async function uploadPaper(event) {
   }
 }
 
-async function openReview(paper) {
-  reviewDrawer.open = true;
-  reviewDrawer.paper = paper;
-  reviewDrawer.loading = true;
-  reviewDrawer.progress = 12;
-  reviewDrawer.message = "正在读取已保存综述";
-  reviewDrawer.sections = emptySections();
+function setPrimaryPaper(meeting, paperId) {
+  meeting.primaryPaperId = paperId;
+  activeMeetingId.value = meeting.id;
+  persistMeetings();
+}
+
+function primaryPaper(meeting) {
+  const paperId = meeting?.primaryPaperId || meeting?.papers?.[0];
+  return papers.value.find((paper) => paper.workspaceId === paperId) || null;
+}
+
+function paperTitle(paperId) {
+  return papers.value.find((paper) => paper.workspaceId === paperId)?.title || "未命名论文";
+}
+
+function paperMeta(paperId) {
+  const paper = papers.value.find((item) => item.workspaceId === paperId);
+  return paper ? compactMeta(paper) : "论文信息待同步";
+}
+
+function compactMeta(paper) {
+  return [paper?.authors || "作者待补全", paper?.publishYear || "年份未知", paper?.source || "来源未记录"]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function hasPdf(paper) {
+  return paperpilotApi.isLikelyPdfUrl(paper?.paperUrl || "");
+}
+
+function meetingStatus(meeting) {
+  const deck = deckJobs[meeting.id];
+  const paper = primaryPaper(meeting);
+  const review = paper ? reviewJobs[paper.workspaceId] : null;
+  if (deck?.status === "running" || review?.status === "running") return "running";
+  if (deck?.downloadUrl || deck?.status === "generated") return "ready";
+  if (review?.status === "generated") return "ready";
+  if (deck?.status === "failed") return "failed";
+  if (review?.status === "failed") return "failed";
+  return "idle";
+}
+
+function statusText(meeting) {
+  const status = meetingStatus(meeting);
+  if (status === "ready") return "已生成";
+  if (status === "running") return "执行中";
+  if (status === "failed") return "失败";
+  return "未开始";
+}
+
+function reviewPercent(meeting) {
+  const paper = primaryPaper(meeting);
+  const job = paper ? reviewJobs[paper.workspaceId] : null;
+  return Math.round(job?.progress || 0);
+}
+
+function deckPercent(meeting) {
+  const job = deckJobs[meeting.id];
+  if (job?.downloadUrl || job?.status === "generated") return 100;
+  return Math.round(job?.progress || 0);
+}
+
+function isReviewBusy(meeting) {
+  const paper = primaryPaper(meeting);
+  return Boolean(paper && reviewJobs[paper.workspaceId]?.status === "running");
+}
+
+function isDeckBusy(meeting) {
+  return deckJobs[meeting.id]?.status === "running";
+}
+
+async function openReview(meeting) {
+  const paper = primaryPaper(meeting);
+  if (!paper) {
+    showToast("请先添加组会汇报文献");
+    return;
+  }
+  activeMeetingId.value = meeting.id;
+  Object.assign(reviewModal, {
+    open: true,
+    meeting,
+    paper,
+    sections: emptySections(),
+    generated: false,
+    loading: true,
+    generating: false,
+    saving: false,
+    progress: reviewJobs[paper.workspaceId]?.progress || 10,
+    message: "正在读取已保存综述",
+    modelName: "",
+  });
   try {
     const data = await paperpilotApi.getMeetingReport(paper.workspaceId);
     applyReviewData(data);
-    if (!data.generated) {
+    if (!data.generated && !isReviewBusy(meeting)) {
       await generateReview();
     }
   } catch (error) {
     showToast(error?.response?.data?.message || "综述读取失败");
   } finally {
-    reviewDrawer.loading = false;
+    reviewModal.loading = false;
   }
 }
 
 function closeReview() {
-  reviewDrawer.open = false;
-  stopReviewPolling();
+  reviewModal.open = false;
 }
 
 async function generateReview() {
-  const paper = reviewDrawer.paper;
-  if (!paper?.workspaceId || reviewDrawer.generating) return;
-  reviewDrawer.generating = true;
-  reviewJobs[paper.workspaceId] = { progress: 1, message: "提交生成任务" };
+  const paper = reviewModal.paper;
+  if (!paper?.workspaceId || reviewModal.generating) return;
+  reviewModal.generating = true;
+  reviewJobs[paper.workspaceId] = { status: "running", progress: 1, message: "提交生成任务" };
+  persistReviewJobs();
   try {
     const result = await paperpilotApi.generateMeetingReport(paper.workspaceId);
     if (result?.status === "completed" || result?.generated) {
       applyReviewData(result);
-      reviewJobs[paper.workspaceId] = null;
+      reviewJobs[paper.workspaceId] = { status: "generated", progress: 100, message: "已生成" };
       showToast("论文综述已生成并永久保存");
     } else {
       pollReview(paper.workspaceId);
     }
   } catch (error) {
-    showToast(error?.response?.data?.message || "论文综述生成失败");
-    reviewJobs[paper.workspaceId] = null;
-    reviewDrawer.generating = false;
+    reviewJobs[paper.workspaceId] = { status: "failed", progress: 0, message: error?.response?.data?.message || "论文综述生成失败" };
+    reviewModal.generating = false;
+    showToast(reviewJobs[paper.workspaceId].message);
   }
 }
 
-async function pollReview(workspaceId) {
-  stopReviewPolling();
-  reviewPollTimer = window.setTimeout(async () => {
+function pollReview(workspaceId) {
+  if (reviewTimers.has(workspaceId)) window.clearTimeout(reviewTimers.get(workspaceId));
+  const timer = window.setTimeout(async () => {
     try {
       const status = await paperpilotApi.getMeetingReportGenerateStatus(workspaceId);
-      reviewJobs[workspaceId] = { progress: status.progress || 0, message: status.message || "" };
-      reviewDrawer.progress = status.progress || 0;
-      reviewDrawer.message = status.message || "";
+      reviewJobs[workspaceId] = {
+        status: status.done ? (status.success ? "generated" : "failed") : "running",
+        progress: status.success ? 100 : (status.progress || 0),
+        message: status.message || "",
+      };
+      if (reviewModal.paper?.workspaceId === workspaceId) {
+        reviewModal.progress = reviewJobs[workspaceId].progress;
+        reviewModal.message = reviewJobs[workspaceId].message;
+      }
       if (status.done) {
-        stopReviewPolling();
-        reviewDrawer.generating = false;
-        reviewJobs[workspaceId] = null;
+        reviewTimers.delete(workspaceId);
+        reviewModal.generating = false;
         if (status.success) {
-          applyReviewData(await paperpilotApi.getMeetingReport(workspaceId));
+          if (reviewModal.paper?.workspaceId === workspaceId) {
+            applyReviewData(await paperpilotApi.getMeetingReport(workspaceId));
+          }
           showToast("论文综述已生成并永久保存");
         } else {
           showToast(status.message || "论文综述生成失败");
@@ -392,148 +672,143 @@ async function pollReview(workspaceId) {
       }
       pollReview(workspaceId);
     } catch (error) {
-      stopReviewPolling();
-      reviewDrawer.generating = false;
-      reviewJobs[workspaceId] = null;
-      showToast(error?.response?.data?.message || "综述状态刷新失败");
+      reviewJobs[workspaceId] = { status: "failed", progress: reviewJobs[workspaceId]?.progress || 0, message: error?.response?.data?.message || "综述状态刷新失败" };
+      reviewModal.generating = false;
+      showToast(reviewJobs[workspaceId].message);
     }
-  }, 1200);
+  }, 1400);
+  reviewTimers.set(workspaceId, timer);
 }
 
 async function saveReview() {
-  const paper = reviewDrawer.paper;
-  if (!paper?.workspaceId || reviewDrawer.saving) return;
-  reviewDrawer.saving = true;
+  const paper = reviewModal.paper;
+  if (!paper?.workspaceId || reviewModal.saving) return;
+  reviewModal.saving = true;
   try {
     const data = await paperpilotApi.saveMeetingReport(paper.workspaceId, {
-      sections: reviewDrawer.sections,
-      modelName: reviewDrawer.modelName || "人工编辑",
+      sections: reviewModal.sections,
+      modelName: reviewModal.modelName || "人工编辑",
     });
     applyReviewData(data);
+    reviewJobs[paper.workspaceId] = { status: "generated", progress: 100, message: "已保存" };
     showToast("综述编辑已保存");
   } catch (error) {
     showToast(error?.response?.data?.message || "综述保存失败");
   } finally {
-    reviewDrawer.saving = false;
+    reviewModal.saving = false;
   }
 }
 
 function applyReviewData(data = {}) {
-  reviewDrawer.sections = { ...emptySections(), ...(data.sections || {}) };
-  reviewDrawer.generated = Boolean(data.generated);
-  reviewDrawer.modelName = data.modelName || "";
-  reviewDrawer.progress = 100;
-  reviewDrawer.message = data.generated ? "已保存" : "尚未生成";
+  reviewModal.sections = { ...emptySections(), ...(data.sections || {}) };
+  reviewModal.generated = Boolean(data.generated);
+  reviewModal.modelName = data.modelName || "";
+  reviewModal.progress = data.generated ? 100 : reviewModal.progress;
+  reviewModal.message = data.generated ? "已保存" : "尚未生成";
 }
 
-async function makePpt(paper) {
-  if (!hasPdf(paper) || isDeckBusy(paper)) return;
-  stopDeckPolling();
-  Object.assign(deckJob, {
-    jobId: "",
-    paperWorkspaceId: paper.workspaceId,
-    paperTitle: paper.title,
+async function makePpt(meeting) {
+  const paper = primaryPaper(meeting);
+  if (!paper || !hasPdf(paper) || isDeckBusy(meeting)) return;
+  activeMeetingId.value = meeting.id;
+  deckJobs[meeting.id] = {
     status: "running",
     progress: 1,
     message: "正在提交 PPT Master 任务",
+    paperWorkspaceId: paper.workspaceId,
+    paperTitle: paper.title,
+    jobId: "",
     confirmUrl: "",
     downloadUrl: "",
-  });
+  };
+  persistDeckJobs();
   try {
     const result = await paperpilotApi.generateMeetingDeck({
       engine: "ppt-master-skill",
       reportWorkspaceId: paper.workspaceId,
-      paperIds: [paper.workspaceId],
+      paperIds: meeting.papers,
+      slideCount: meeting.params.slideCount,
+      audience: meeting.params.audience,
+      focus: meeting.notes,
+      templateName: meeting.params.reportType,
     });
-    applyDeckJob(result, paper);
+    applyDeckJob(meeting, result, paper);
     if (result?.jobId && !result.done) {
-      pollDeck(result.jobId, paper);
-      showToast("PPT 制作任务已开始");
+      pollDeck(meeting.id, result.jobId, paper);
+      showToast("PPT 已进入后台生成，可以离开页面");
     } else if (result?.success && result.downloadUrl) {
-      window.open(absoluteApiUrl(result.downloadUrl), "_blank");
+      showToast("PPT 已生成，可以下载");
     }
   } catch (error) {
-    deckJob.status = "failed";
-    deckJob.message = error?.response?.data?.message || "PPT 制作失败";
-    showToast(deckJob.message);
+    deckJobs[meeting.id] = {
+      ...deckJobs[meeting.id],
+      status: "failed",
+      progress: deckJobs[meeting.id]?.progress || 0,
+      message: error?.response?.data?.message || "PPT 制作失败",
+    };
+    showToast(deckJobs[meeting.id].message);
   }
 }
 
-function pollDeck(jobId, paper) {
-  stopDeckPolling();
-  deckPollTimer = window.setTimeout(async () => {
+function pollDeck(meetingId, jobId, paper) {
+  if (deckTimers.has(meetingId)) window.clearTimeout(deckTimers.get(meetingId));
+  const timer = window.setTimeout(async () => {
     try {
       const result = await paperpilotApi.getMeetingDeckStatus(jobId);
-      applyDeckJob(result, paper);
+      const meeting = meetings.value.find((item) => item.id === meetingId);
+      applyDeckJob(meeting || { id: meetingId }, result, paper);
       if (result.done) {
-        stopDeckPolling();
-        if (result.success && result.downloadUrl) {
-          window.open(absoluteApiUrl(result.downloadUrl), "_blank");
-          showToast("PPT 已生成，正在打开下载链接");
-        } else {
-          showToast(result.message || "PPT 制作失败");
-        }
+        deckTimers.delete(meetingId);
+        showToast(result.success ? "PPT 已生成，可以下载" : (result.message || "PPT 制作失败"));
         return;
       }
-      pollDeck(jobId, paper);
+      pollDeck(meetingId, jobId, paper);
     } catch (error) {
-      showToast(error?.response?.data?.message || "PPT 状态刷新失败");
-      pollDeck(jobId, paper);
+      deckJobs[meetingId] = {
+        ...deckJobs[meetingId],
+        status: "running",
+        message: error?.response?.data?.message || "PPT 状态刷新失败，稍后自动重试",
+      };
+      pollDeck(meetingId, jobId, paper);
     }
-  }, 1400);
+  }, 1600);
+  deckTimers.set(meetingId, timer);
 }
 
-function applyDeckJob(payload = {}, paper = {}) {
-  deckJob.jobId = payload.jobId || deckJob.jobId || "";
-  deckJob.paperWorkspaceId = paper.workspaceId || deckJob.paperWorkspaceId || "";
-  deckJob.paperTitle = paper.title || deckJob.paperTitle || "";
-  deckJob.status = payload.status || deckJob.status || "running";
-  deckJob.progress = Number(payload.progress ?? deckJob.progress ?? 0);
-  deckJob.message = payload.message || deckJob.message || "";
-  deckJob.confirmUrl = payload.confirmUrl || deckJob.confirmUrl || "";
-  deckJob.downloadUrl = payload.downloadUrl || deckJob.downloadUrl || "";
-  if (deckJob.confirmUrl && confirmOpened.value !== deckJob.confirmUrl) {
-    openConfirmUrl();
+function applyDeckJob(meeting, payload = {}, paper = {}) {
+  if (!meeting?.id) return;
+  deckJobs[meeting.id] = {
+    ...(deckJobs[meeting.id] || {}),
+    status: payload.status || (payload.success ? "generated" : "running"),
+    progress: payload.success ? 100 : Number(payload.progress ?? deckJobs[meeting.id]?.progress ?? 0),
+    message: payload.message || deckJobs[meeting.id]?.message || "",
+    paperWorkspaceId: paper.workspaceId || deckJobs[meeting.id]?.paperWorkspaceId || "",
+    paperTitle: paper.title || deckJobs[meeting.id]?.paperTitle || "",
+    jobId: payload.jobId || deckJobs[meeting.id]?.jobId || "",
+    confirmUrl: payload.confirmUrl || deckJobs[meeting.id]?.confirmUrl || "",
+    downloadUrl: payload.downloadUrl || deckJobs[meeting.id]?.downloadUrl || "",
+  };
+  if (deckJobs[meeting.id].downloadUrl) deckJobs[meeting.id].status = "generated";
+  if (deckJobs[meeting.id].confirmUrl && confirmOpened.value !== deckJobs[meeting.id].confirmUrl) {
+    confirmOpened.value = deckJobs[meeting.id].confirmUrl;
+    window.open(deckJobs[meeting.id].confirmUrl, "_blank");
   }
+  persistDeckJobs();
 }
 
-function openConfirmUrl() {
-  if (!deckJob.confirmUrl) return;
-  confirmOpened.value = deckJob.confirmUrl;
-  window.open(deckJob.confirmUrl, "_blank");
+function resumeDeckJobs() {
+  Object.entries(deckJobs).forEach(([meetingId, job]) => {
+    if (job?.status === "running" && job.jobId) {
+      const paper = papers.value.find((item) => item.workspaceId === job.paperWorkspaceId) || {};
+      pollDeck(meetingId, job.jobId, paper);
+    }
+  });
 }
 
-function stopReviewPolling() {
-  if (reviewPollTimer) window.clearTimeout(reviewPollTimer);
-  reviewPollTimer = null;
-}
-
-function stopDeckPolling() {
-  if (deckPollTimer) window.clearTimeout(deckPollTimer);
-  deckPollTimer = null;
-}
-
-function hasPdf(paper) {
-  return paperpilotApi.isLikelyPdfUrl(paper?.paperUrl || "");
-}
-
-function normalizedTags(paper) {
-  const tags = Array.isArray(paper?.journalTags) ? paper.journalTags : [];
-  return tags.length ? tags.slice(0, 3) : [paper?.venueType || "待分类"];
-}
-
-function isReviewBusy(paper) {
-  return Boolean(paper?.workspaceId && reviewJobs[paper.workspaceId]);
-}
-
-function reviewProgressLabel(paper) {
-  const job = paper ? reviewJobs[paper.workspaceId] : null;
-  const progress = job?.progress ?? reviewDrawer.progress ?? 1;
-  return `综述 ${Math.round(progress)}%`;
-}
-
-function isDeckBusy(paper) {
-  return Boolean(paper?.workspaceId && deckJob.status === "running" && deckJob.paperWorkspaceId === paper.workspaceId);
+function resumeReviewJobs() {
+  Object.entries(reviewJobs).forEach(([workspaceId, job]) => {
+    if (job?.status === "running") pollReview(workspaceId);
+  });
 }
 
 function absoluteApiUrl(url) {
@@ -547,451 +822,545 @@ function showToast(message) {
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     toastMessage.value = "";
-  }, 2800);
+  }, 3000);
 }
 </script>
 
 <style scoped>
-.meeting-page {
+.meeting-timeline-page {
   min-height: 100vh;
-  padding: 30px min(40px, 4vw) 56px;
-  background: linear-gradient(180deg, #eef4fb 0, #f7f9fc 330px, #f8fafc 100%);
-  color: #162033;
+  padding: 30px min(44px, 4vw) 64px;
+  background: linear-gradient(180deg, #eef4fb 0, #f6f8fb 360px, #f9fbfd 100%);
+  color: #152033;
   font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 }
 
-.meeting-hero,
-.meeting-workbench,
-.paper-library {
-  width: min(1500px, 100%);
+.timeline-header,
+.timeline-shell {
+  width: min(1420px, 100%);
   margin-inline: auto;
 }
 
-.meeting-hero {
+.timeline-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 22px;
+  margin-bottom: 28px;
 }
 
-.hero-copy {
-  max-width: 900px;
-}
-
-.eyebrow,
-.library-head span,
-.suite-card > span,
-.cover-title > span,
-.paper-brief span {
-  color: #1556d6;
-  font-size: 12px;
+.timeline-header span,
+.box-title span,
+.review-modal header span,
+.paper-picker header span {
+  color: #1f5ed8;
+  font-size: 13px;
   font-weight: 850;
-  letter-spacing: .04em;
-  text-transform: uppercase;
 }
 
-.hero-copy h1 {
-  margin: 9px 0 0;
+.timeline-header h1 {
+  margin: 8px 0 0;
   color: #111827;
-  font-size: clamp(26px, 2.2vw, 38px);
-  line-height: 1.22;
+  font-size: 32px;
+  line-height: 1.25;
   letter-spacing: 0;
 }
 
-.hero-copy p {
+.timeline-header p {
   max-width: 760px;
-  margin: 12px 0 0;
-  color: #526277;
+  margin: 10px 0 0;
+  color: #4b5f76;
   font-size: 14px;
   line-height: 1.75;
 }
 
-.upload-button {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  min-width: 136px;
-  height: 46px;
-  border: 1px solid #1d5be3;
-  border-radius: 8px;
-  background: #1d5be3;
-  color: #fff;
+.add-meeting-button,
+.primary-button,
+.download-button,
+.soft-button,
+.upload-inline {
+  min-height: 42px;
+  border-radius: 10px;
+  padding: 0 16px;
+  font-weight: 850;
   cursor: pointer;
 }
 
-.upload-button input {
+.add-meeting-button,
+.primary-button,
+.download-button {
+  border: 0;
+  background: #225ce0;
+  color: #fff;
+}
+
+.add-meeting-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 auto;
+}
+
+.add-meeting-button span {
+  color: inherit;
+  font-size: 21px;
+}
+
+.soft-button,
+.upload-inline {
+  border: 1px solid #cdd9e8;
+  background: #fff;
+  color: #172033;
+}
+
+.download-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  background: #0f8b65;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: .56;
+}
+
+.timeline-list {
+  position: relative;
+  display: grid;
+  gap: 18px;
+  padding-left: 30px;
+}
+
+.timeline-list::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 16px;
+  bottom: 16px;
+  width: 2px;
+  border-radius: 999px;
+  background: #c8d7e8;
+}
+
+.meeting-card {
+  position: relative;
+  border-radius: 14px;
+  padding: 22px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(21, 32, 51, .08);
+}
+
+.meeting-card.tone-0 { background: #fff; }
+.meeting-card.tone-1 { background: #f7fbff; }
+.meeting-card.tone-2 { background: #fbfcf7; }
+.meeting-card.tone-3 { background: #f8fbf8; }
+
+.timeline-pin {
+  position: absolute;
+  left: -31px;
+  top: 30px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #e9f1fb;
+}
+
+.timeline-pin span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #225ce0;
+}
+
+.meeting-card-head,
+.meeting-card-body,
+.meeting-meta-controls,
+.generation-grid,
+.picker-tools {
+  display: grid;
+  gap: 14px;
+}
+
+.meeting-card-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.meeting-date-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.meeting-date-block input,
+.meeting-meta-controls select,
+.meeting-title-input,
+.library-search,
+.picker-tools input,
+.tag-row input {
+  border: 1px solid #cfdbea;
+  border-radius: 10px;
+  background: #fff;
+  color: #162033;
+  outline: 0;
+}
+
+.meeting-date-block input {
+  height: 38px;
+  padding: 0 10px;
+}
+
+.meeting-date-block strong {
+  color: #111827;
+  font-size: 20px;
+}
+
+.meeting-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: #eef3f8;
+  color: #43546a;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.meeting-status span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.meeting-status[data-status="running"] {
+  background: #fff1f1;
+  color: #b42323;
+}
+
+.meeting-status[data-status="running"] span { background: #dc2626; }
+.meeting-status[data-status="ready"] {
+  background: #e5f7ee;
+  color: #047857;
+}
+.meeting-status[data-status="ready"] span { background: #10b981; }
+.meeting-status[data-status="failed"] {
+  background: #fff7dc;
+  color: #8a4b00;
+}
+.meeting-status[data-status="failed"] span { background: #d97706; }
+
+.meeting-card-body {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  align-items: stretch;
+}
+
+.meeting-main,
+.meeting-side {
+  min-width: 0;
+}
+
+.meeting-title-input {
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.meeting-meta-controls {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.meeting-meta-controls label {
+  display: grid;
+  gap: 7px;
+  color: #526277;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.meeting-meta-controls select {
+  height: 40px;
+  padding: 0 10px;
+  font: inherit;
+}
+
+.meeting-notes {
+  display: grid;
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.meeting-notes span {
+  color: #27364a;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.meeting-notes textarea {
+  width: 100%;
+  min-height: 112px;
+  box-sizing: border-box;
+  border: 1px solid #cfdbea;
+  border-radius: 12px;
+  padding: 14px;
+  resize: vertical;
+  color: #243247;
+  outline: 0;
+  font: 14px/1.75 inherit;
+}
+
+.tag-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 9px;
+  background: #e8f0fb;
+  color: #254061;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tag-pill button {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(37, 64, 97, .12);
+  color: #254061;
+  cursor: pointer;
+}
+
+.tag-row input {
+  min-width: 160px;
+  height: 32px;
+  padding: 0 10px;
+}
+
+.meeting-side {
+  display: grid;
+  gap: 14px;
+}
+
+.paper-box,
+.generation-action {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .72);
+  padding: 16px;
+}
+
+.box-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.box-title button {
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: #e8f0fb;
+  color: #174fbf;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.paper-box p {
+  margin: 16px 0 0;
+  color: #526277;
+  line-height: 1.7;
+}
+
+.selected-papers {
+  display: grid;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.selected-paper {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  border: 1px solid #d7e2ee;
+  border-radius: 10px;
+  padding: 11px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.selected-paper strong {
+  color: #152033;
+  line-height: 1.45;
+}
+
+.selected-paper small {
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generation-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.progress-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.progress-label span {
+  color: #526277;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.progress-label strong {
+  color: #152033;
+  font-size: 16px;
+}
+
+.generation-action button,
+.generation-action a {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, .34);
+}
+
+.modal-panel {
+  width: min(980px, 100%);
+  max-height: min(82vh, 900px);
+  overflow: auto;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .18);
+}
+
+.modal-panel header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px;
+  border-bottom: 1px solid #e5edf6;
+  background: #fff;
+}
+
+.modal-panel header h2 {
+  margin: 6px 0 0;
+  color: #111827;
+  font-size: 22px;
+  line-height: 1.4;
+}
+
+.modal-panel header button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #d5e0eb;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.picker-tools {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 18px 24px 0;
+}
+
+.picker-tools input {
+  height: 42px;
+  padding: 0 13px;
+}
+
+.upload-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-inline input {
   position: absolute;
   width: 1px;
   height: 1px;
   opacity: 0;
 }
 
-.upload-button span {
-  font-size: 22px;
-  line-height: 1;
-}
-
-.upload-button strong {
-  font-size: 14px;
-}
-
-.upload-button:hover {
-  background: #194fc6;
-}
-
-.upload-button.busy {
-  cursor: wait;
-  opacity: .7;
-}
-
-.meeting-workbench {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 18px;
-  align-items: stretch;
-}
-
-.featured-paper,
-.action-suite,
-.paper-library {
-  border: 1px solid #dce5ef;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, .92);
-}
-
-.featured-paper {
-  display: grid;
-  grid-template-columns: minmax(360px, .95fr) minmax(300px, .75fr);
-  gap: 18px;
-  min-height: 390px;
-  padding: 18px;
-}
-
-.paper-cover {
-  position: relative;
-  display: grid;
-  align-content: space-between;
-  min-height: 354px;
-  overflow: hidden;
-  border-radius: 8px;
-  padding: 24px;
-  background:
-    linear-gradient(140deg, #12203a 0 62%, #edf5ff 62% 100%);
-  color: #fff;
-}
-
-.paper-cover::before {
-  content: "";
-  position: absolute;
-  right: 46px;
-  top: 32px;
-  width: 156px;
-  height: 156px;
-  border: 1px solid rgba(29, 91, 227, .25);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .22);
-}
-
-.paper-cover.empty {
-  background: linear-gradient(140deg, #1f2a44 0 62%, #eef4fb 62% 100%);
-}
-
-.cover-topline,
-.cover-bottomline {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.cover-topline {
-  justify-content: space-between;
-}
-
-.cover-topline span,
-.cover-topline strong,
-.cover-bottomline span {
-  border: 1px solid rgba(255, 255, 255, .25);
-  border-radius: 999px;
-  padding: 5px 9px;
-  background: rgba(255, 255, 255, .1);
-  color: #eaf2ff;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.cover-title {
-  position: relative;
-  z-index: 1;
-  max-width: min(86%, 660px);
-}
-
-.cover-title h2 {
-  margin: 13px 0 0;
-  color: #fff;
-  font-size: clamp(23px, 1.9vw, 31px);
-  line-height: 1.18;
-  letter-spacing: 0;
-  text-wrap: balance;
-  overflow-wrap: anywhere;
-}
-
-.cover-title p {
-  margin: 15px 0 0;
-  color: #d8e3f4;
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-.paper-brief {
-  display: grid;
-  gap: 14px;
-}
-
-.paper-brief section {
-  border: 1px solid #e0e8f1;
-  border-radius: 8px;
-  padding: 18px;
-  background: #fbfdff;
-}
-
-.paper-brief p,
-.paper-brief li {
-  color: #3f5067;
-  font-size: 14px;
-  line-height: 1.8;
-}
-
-.paper-brief p {
-  margin: 10px 0 0;
-}
-
-.paper-brief ul {
-  margin: 12px 0 0;
-  padding-left: 19px;
-}
-
-.action-suite {
-  display: grid;
-  gap: 1px;
-  overflow: hidden;
-}
-
-.suite-card {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  min-height: 190px;
-  padding: 20px;
-  background: #fff;
-}
-
-.suite-card + .suite-card {
-  border-top: 1px solid #e2e9f2;
-}
-
-.suite-card h2 {
-  margin: 0;
-  color: #111827;
-  font-size: 19px;
-  line-height: 1.35;
-}
-
-.suite-card p {
-  margin: 0;
-  color: #55657a;
-  font-size: 13px;
-  line-height: 1.75;
-}
-
-.primary-action,
-.secondary-action,
-.ghost-action,
-.paper-card-actions button {
-  min-height: 40px;
-  border-radius: 8px;
-  padding: 0 14px;
-  font-weight: 850;
-  cursor: pointer;
-}
-
-.primary-action {
-  border: 1px solid #1d5be3;
-  background: #1d5be3;
-  color: #fff;
-}
-
-.secondary-action,
-.ghost-action {
-  border: 1px solid #cbd8e7;
-  background: #fff;
-  color: #162033;
-}
-
-.ghost-action {
-  color: #1556d6;
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: .55;
-}
-
-.deck-actions {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-}
-
-.progress-line {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-}
-
-.progress-line i {
-  display: block;
-  height: 8px;
-  border-radius: 999px;
-  background: #1d5be3;
-  transition: width .2s ease;
-}
-
-.progress-line::before {
-  content: "";
-  grid-column: 1;
-  grid-row: 1;
-  height: 8px;
-  border-radius: 999px;
-  background: #e4edf7;
-}
-
-.progress-line i {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.progress-line strong {
-  color: #526277;
-  font-size: 12px;
-}
-
-.deck-card[data-status="failed"] .progress-line i {
-  background: #dc2626;
-}
-
-.deck-card[data-status="generated"] .progress-line i {
-  background: #0f766e;
-}
-
-.paper-library {
-  margin-top: 18px;
-  padding: 18px;
-}
-
-.library-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.library-head h2 {
-  margin: 4px 0 0;
-  color: #111827;
-  font-size: 22px;
-}
-
-.library-tools {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.library-tools strong {
-  color: #526277;
-  font-size: 13px;
-}
-
-.library-tools input {
-  width: min(320px, 42vw);
-  height: 40px;
-  border: 1px solid #d5e0eb;
-  border-radius: 8px;
-  padding: 0 12px;
-  background: #fff;
-  color: #162033;
-  outline: none;
-}
-
-.library-tools input:focus {
-  border-color: #1d5be3;
-  box-shadow: 0 0 0 3px rgba(29, 91, 227, .1);
-}
-
-.paper-grid {
+.picker-paper-list,
+.paper-loading {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  padding: 18px 24px 24px;
 }
 
-.paper-card {
+.picker-paper {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 116px;
-  gap: 14px;
-  align-items: stretch;
-  min-height: 176px;
-  border: 1px solid #dde6ef;
-  border-radius: 8px;
+  gap: 7px;
+  border: 1px solid #dce6f1;
+  border-radius: 12px;
   padding: 14px;
   background: #fff;
+  text-align: left;
   cursor: pointer;
-  transition: border-color .16s ease, background .16s ease;
 }
 
-.paper-card:hover,
-.paper-card.active {
-  border-color: #1d5be3;
-  background: #f7fbff;
+.picker-paper.selected {
+  border-color: #225ce0;
+  background: #f2f7ff;
 }
 
-.paper-card-index {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: #edf3fa;
-  color: #4b5f78;
-  font-size: 13px;
-  font-weight: 900;
+.picker-paper strong {
+  color: #152033;
+  line-height: 1.45;
 }
 
-.paper-card.active .paper-card-index {
-  background: #1d5be3;
-  color: #fff;
-}
-
-.paper-card-body {
-  min-width: 0;
-}
-
-.paper-card-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #718098;
-  font-size: 12px;
+.picker-paper small {
+  color: #617188;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pdf-badge {
+  width: fit-content;
   border-radius: 999px;
   padding: 3px 8px;
   font-size: 11px;
@@ -1000,7 +1369,7 @@ button:disabled {
 
 .pdf-badge.ready {
   color: #047857;
-  background: #e4f6ed;
+  background: #dff6ec;
 }
 
 .pdf-badge.missing {
@@ -1008,230 +1377,110 @@ button:disabled {
   background: #fff1d7;
 }
 
-.paper-card h3 {
-  margin: 11px 0 0;
-  color: #152033;
-  font-size: 17px;
-  line-height: 1.45;
-  text-wrap: pretty;
-}
-
-.paper-card p {
-  margin: 9px 0 0;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.6;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.paper-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 12px;
-}
-
-.paper-tags span {
-  border-radius: 999px;
-  padding: 4px 8px;
-  background: #eef4fb;
-  color: #40536b;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.paper-card-actions {
-  display: grid;
-  gap: 8px;
-  align-content: center;
-}
-
-.paper-card-actions button {
-  border: 1px solid #cbd8e7;
-  background: #fff;
-  color: #162033;
-  font-size: 12px;
-}
-
-.paper-card-actions .make-deck {
-  border-color: #1d5be3;
-  background: #1d5be3;
-  color: #fff;
-}
-
-.paper-skeletons {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.paper-skeletons span {
-  height: 176px;
-  border-radius: 8px;
-  background: linear-gradient(90deg, #f5f7fb, #edf3fa, #f5f7fb);
+.paper-loading span {
+  height: 110px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #f4f7fb, #eaf0f7, #f4f7fb);
   background-size: 220% 100%;
   animation: shimmer 1.2s ease-in-out infinite;
 }
 
-.empty-library {
-  display: grid;
-  place-content: center;
-  min-height: 220px;
-  text-align: center;
+.review-modal {
+  width: min(1080px, 100%);
 }
 
-.empty-library strong {
-  color: #172033;
-  font-size: 18px;
+.review-loading,
+.review-modal-actions {
+  padding: 20px 24px 0;
 }
 
-.empty-library p {
-  max-width: 360px;
-  margin: 9px auto 0;
-  color: #64748b;
-  line-height: 1.7;
-}
-
-.review-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  justify-content: flex-end;
-  background: rgba(15, 23, 42, .28);
-}
-
-.review-drawer {
-  width: min(760px, 100vw);
-  height: 100vh;
-  overflow: auto;
-  border-left: 1px solid #dce5ef;
-  background: #fff;
-}
-
-.review-drawer header {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 22px;
-  border-bottom: 1px solid #e6edf5;
-  background: #fff;
-}
-
-.review-drawer header span {
-  color: #0f766e;
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.review-drawer header h2 {
-  margin: 6px 0 0;
-  color: #111827;
-  font-size: 18px;
-  line-height: 1.45;
-}
-
-.review-drawer header button {
-  width: 34px;
-  height: 34px;
-  border: 1px solid #d7e0ea;
-  border-radius: 8px;
-  background: #fff;
-  cursor: pointer;
-  font-size: 20px;
-}
-
-.review-actions {
-  display: flex;
-  gap: 10px;
-  padding: 16px 22px 0;
-}
-
-.review-loading {
-  padding: 28px 22px;
-}
-
-.review-section-list {
-  display: grid;
-  gap: 14px;
-  padding: 18px 22px 28px;
-}
-
-.review-section {
-  border: 1px solid #dfe7f1;
-  border-radius: 8px;
+.wide-progress {
+  height: 10px;
+  margin-top: 14px;
+  border-radius: 999px;
+  background: #e5edf7;
   overflow: hidden;
 }
 
-.review-section-head {
+.wide-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #225ce0;
+}
+
+.review-modal-actions {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  gap: 10px;
+}
+
+.review-point-list {
+  display: grid;
   gap: 12px;
-  padding: 12px 14px;
-  border-bottom: 1px solid #e7edf5;
-  background: #f8fafc;
+  padding: 18px 24px 26px;
 }
 
-.review-section-head strong {
-  color: #162033;
-  font-size: 14px;
-}
-
-.review-section-head small {
-  color: #64748b;
-  font-size: 12px;
-}
-
-.review-section textarea {
-  width: 100%;
-  min-height: 116px;
-  box-sizing: border-box;
-  border: 0;
-  resize: vertical;
+.review-point {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 14px;
+  border-radius: 12px;
   padding: 14px;
-  color: #1f2937;
-  outline: 0;
-  font: 13px/1.75 inherit;
+  background: #f8fbff;
 }
 
-.review-section textarea::placeholder {
-  color: #697891;
+.review-point strong {
+  display: block;
+  color: #152033;
+  font-size: 15px;
+}
+
+.review-point small {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.review-point textarea {
+  min-height: 92px;
+  border: 1px solid #d5e0eb;
+  border-radius: 10px;
+  padding: 12px;
+  resize: vertical;
+  color: #243247;
+  outline: 0;
+  font: 14px/1.75 inherit;
 }
 
 .meeting-toast {
   position: fixed;
   left: 50%;
-  bottom: 22px;
+  bottom: 24px;
   z-index: 60;
   transform: translateX(-50%);
-  max-width: min(620px, calc(100vw - 32px));
-  border-radius: 8px;
+  max-width: min(640px, calc(100vw - 32px));
+  border-radius: 10px;
   padding: 12px 16px;
-  background: #172033;
+  background: #152033;
   color: #fff;
   font-size: 13px;
 }
 
-.drawer-fade-enter-active,
-.drawer-fade-leave-active,
-.slide-up-enter-active,
-.slide-up-leave-active {
+.modal-fade-enter-active,
+.modal-fade-leave-active,
+.toast-slide-enter-active,
+.toast-slide-leave-active {
   transition: opacity .18s ease, transform .18s ease;
 }
 
-.drawer-fade-enter-from,
-.drawer-fade-leave-to {
+.modal-fade-enter-from,
+.modal-fade-leave-to {
   opacity: 0;
 }
 
-.slide-up-enter-from,
-.slide-up-leave-to {
+.toast-slide-enter-from,
+.toast-slide-leave-to {
   opacity: 0;
   transform: translate(-50%, 8px);
 }
@@ -1241,79 +1490,60 @@ button:disabled {
   to { background-position: -120% 0; }
 }
 
-@media (max-width: 1180px) {
-  .meeting-workbench,
-  .featured-paper {
+@media (max-width: 1120px) {
+  .meeting-card-body {
     grid-template-columns: 1fr;
-  }
-
-  .action-suite {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .suite-card + .suite-card {
-    border-top: 0;
-    border-left: 1px solid #e2e9f2;
   }
 }
 
-@media (max-width: 900px) {
-  .meeting-page {
+@media (max-width: 820px) {
+  .meeting-timeline-page {
     padding: 20px 12px 42px;
   }
 
-  .meeting-hero,
-  .library-head {
-    flex-direction: column;
-    align-items: stretch;
+  .timeline-header,
+  .meeting-card-head {
+    grid-template-columns: 1fr;
+    display: grid;
   }
 
-  .upload-button,
-  .library-tools input {
+  .add-meeting-button,
+  .picker-tools {
     width: 100%;
   }
 
-  .library-tools {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .paper-grid,
-  .paper-skeletons,
-  .action-suite {
+  .meeting-meta-controls,
+  .generation-grid,
+  .picker-tools,
+  .picker-paper-list,
+  .paper-loading,
+  .review-point {
     grid-template-columns: 1fr;
   }
 
-  .suite-card + .suite-card {
-    border-left: 0;
-    border-top: 1px solid #e2e9f2;
+  .timeline-list {
+    padding-left: 24px;
+  }
+
+  .timeline-pin {
+    left: -27px;
   }
 }
 
-@media (max-width: 620px) {
-  .paper-cover {
-    min-height: 320px;
-    padding: 20px;
+@media (max-width: 520px) {
+  .meeting-card {
+    padding: 16px;
   }
 
-  .cover-title {
-    max-width: 100%;
+  .meeting-title-input {
+    font-size: 18px;
   }
 
-  .cover-title h2 {
-    font-size: 23px;
+  .modal-backdrop {
+    padding: 10px;
   }
 
-  .paper-card {
-    grid-template-columns: 40px minmax(0, 1fr);
-  }
-
-  .paper-card-actions {
-    grid-column: 1 / -1;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .review-actions {
+  .review-modal-actions {
     flex-direction: column;
   }
 }
