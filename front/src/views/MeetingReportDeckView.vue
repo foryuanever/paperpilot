@@ -56,6 +56,12 @@
           >
             打开 PPT Master 官方参数页
           </button>
+          <div v-if="deckJob.status === 'awaiting_agent'" class="agent-handoff">
+            <strong>已停止网页老渲染器</strong>
+            <span>官方参数已确认，项目材料已准备好，需要由 Codex/PPT Master agent 接管逐页 SVG 设计与导出。</span>
+            <small v-if="deckJob.projectPath">项目目录：{{ deckJob.projectPath }}</small>
+            <small v-if="deckJob.handoffPath">交接文件：{{ deckJob.handoffPath }}</small>
+          </div>
         </div>
       </section>
     </main>
@@ -84,6 +90,8 @@ const deckJob = reactive({
   message: "",
   downloadUrl: "",
   confirmUrl: "",
+  projectPath: "",
+  handoffPath: "",
 });
 let toastTimer = null;
 let deckPollTimer = null;
@@ -170,6 +178,8 @@ function applyDeckJob(payload = {}) {
   deckJob.message = payload.message || deckJob.message || "";
   deckJob.downloadUrl = payload.downloadUrl || deckJob.downloadUrl || "";
   deckJob.confirmUrl = payload.confirmUrl || deckJob.confirmUrl || "";
+  deckJob.projectPath = payload.projectPath || deckJob.projectPath || "";
+  deckJob.handoffPath = payload.handoffPath || deckJob.handoffPath || "";
   if (deckJob.confirmUrl && confirmOpened.value !== deckJob.confirmUrl) {
     confirmOpened.value = deckJob.confirmUrl;
     window.open(deckJob.confirmUrl, "_blank");
@@ -199,6 +209,8 @@ async function refreshDeckJob(jobId) {
       if (result.success && result.downloadUrl) {
         window.open(absoluteApiUrl(result.downloadUrl), "_blank");
         showToast("PPT 已生成，正在打开下载链接");
+      } else if (result?.status === "awaiting_agent") {
+        showToast("官方参数已确认，等待 Codex/PPT Master agent 接管");
       } else {
         showToast(result?.message || "PPT 生成失败");
       }
@@ -854,8 +866,39 @@ function showToast(message) {
   font-weight: 780;
 }
 
+.agent-handoff {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid rgba(14, 116, 144, 0.18);
+  border-radius: 8px;
+  background: #ecfeff;
+  color: #164e63;
+}
+
+.agent-handoff strong,
+.agent-handoff span,
+.agent-handoff small {
+  display: block;
+}
+
+.agent-handoff span,
+.agent-handoff small {
+  line-height: 1.45;
+}
+
 .deck-progress[data-status="generated"] .progress-track i {
   background: #0f766e;
+}
+
+.deck-progress[data-status="awaiting_agent"] {
+  border-color: rgba(14, 116, 144, 0.2);
+  background: #f0fdff;
+}
+
+.deck-progress[data-status="awaiting_agent"] .progress-track i {
+  background: #0891b2;
 }
 
 .deck-progress[data-status="failed"] {

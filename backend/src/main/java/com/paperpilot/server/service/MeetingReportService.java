@@ -544,53 +544,20 @@ public class MeetingReportService {
             return;
         }
 
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("jobId", jobId);
-        response.put("engine", "ppt-master-skill");
-        response.put("paperCount", papers.size());
-        response.put("template", templateName);
-        response.put("slideCount", slideCount);
-        response.put("materialPath", materialPath.toAbsolutePath().toString());
-        response.put("reportPaperPath", reportPaperPath == null ? "" : reportPaperPath.toAbsolutePath().toString());
-        response.put("outputPath", pptxPath.toAbsolutePath().toString());
-        response.put("downloadUrl", "/api/meeting-reports/deck/jobs/" + jobId + "/download");
         try {
-            job.progress(30, "强模型多轮 Agent 正在精读主论文、规划叙事与逐页设计");
-            Map<String, Object> deckPayload = buildStructuredDeckPayload(
-                papers,
-                body,
-                dimensions,
-                templateName,
+            Map<String, Object> handoff = createPptMasterAgentHandoff(
+                jobId,
+                outputDir,
+                materialPath,
+                reportPaperPath,
                 slideCount,
                 audience,
-                focus,
-                pptMasterSettings,
-                reportPaperPath,
-                job
+                pptMasterSettings
             );
-            Path structurePath = outputDir.resolve("deck-structure.json");
-            Files.writeString(
-                structurePath,
-                objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(deckPayload)
-            );
-            response.put("structurePath", structurePath.toAbsolutePath().toString());
-            job.progress(58, "多轮 Agent 内容完成，正在调用已安装的 PPT Master skill 生成 SVG/PPTX");
-            Map<String, Object> renderResult = executePptMasterSkill(structurePath, pptxPath, outputDir);
-            response.putAll(renderResult);
-            if (Boolean.TRUE.equals(response.get("generated"))) {
-                response.put("message", "PPT Master skill 已完成逐页 SVG、质检、预览与导出");
-                job.complete(response);
-                return;
-            }
-        } catch (ResponseStatusException error) {
-            job.fail(Optional.ofNullable(error.getReason()).orElse("PPT 生成失败"));
-            return;
+            job.awaitingAgent(handoff);
         } catch (Exception error) {
-            response.put("status", "failed");
-            response.put("generated", false);
-            response.put("message", "PPT 结构化生成失败：" + readableError(error));
+            job.fail("PPT Master 项目交接材料生成失败：" + readableError(error));
         }
-        job.fail(Objects.toString(response.getOrDefault("message", "PPT 生成失败"), "PPT 生成失败"));
     }
 
     public GeneratedDeck readGeneratedDeck(String jobId) {
@@ -1629,6 +1596,77 @@ public class MeetingReportService {
             response.put("message", "PPT Master skill 渲染失败：" + readableError(error));
             return response;
         }
+    }
+
+    private Map<String, Object> createPptMasterAgentHandoff(
+        String jobId,
+        Path projectDir,
+        Path materialPath,
+        Path reportPaperPath,
+        String slideCount,
+        String audience,
+        Map<String, Object> pptMasterSettings
+    ) throws Exception {
+        Path handoffPath = projectDir.resolve("PPT_MASTER_AGENT_HANDOFF.md");
+        Path confirmedPath = projectDir.resolve("confirm_ui").resolve("result.json");
+        String confirmedJson = Files.isRegularFile(confirmedPath)
+            ? Files.readString(confirmedPath)
+            : "{}";
+        String instructions = """
+            # PPT Master Agent Handoff
+
+            这个目录已经完成网页侧准备：
+
+            - 主论文 PDF：`%s`
+            - 材料摘要：`%s`
+            - 官方参数确认结果：`%s`
+            - 目标页数：`%s`
+            - 汇报对象：`%s`
+
+            ## 必须走真正 PPT Master skill
+
+            不要再调用 `backend/pptx-renderer/render-meeting-deck.mjs`。
+            根据 `/Users/yuan/.codex/skills/ppt-master/SKILL.md`，真正流程必须由 Codex/PPT Master agent 串行执行：
+
+            1. `source_to_md.py` 转换主论文。
+            2. `project_manager.py init/import-sources` 创建并导入项目。
+            3. 使用本目录 `confirm_ui/result.json` 作为已确认参数。
+            4. Strategist 写 `design_spec.md` 和 `spec_lock.md`。
+            5. Executor 按页手写 SVG，逐页读取 `spec_lock.md`，不能脚本批量生成。
+            6. 启动 live preview，跑 `svg_quality_checker.py`。
+            7. 依次执行 `total_md_split.py`、`finalize_svg.py`、`svg_to_pptx.py` 导出 PPTX。
+
+            ## 已确认参数
+
+            ```json
+            %s
+            ```
+            """.formatted(
+            reportPaperPath == null ? "" : reportPaperPath.toAbsolutePath(),
+            materialPath.toAbsolutePath(),
+            confirmedPath.toAbsolutePath(),
+            slideCount,
+            audience,
+            confirmedJson
+        );
+        Files.writeString(handoffPath, instructions, StandardCharsets.UTF_8);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("jobId", jobId);
+        response.put("engine", "ppt-master-skill");
+        response.put("status", "awaiting_agent");
+        response.put("generated", false);
+        response.put("paperCount", 0);
+        response.put("slideCount", slideCount);
+        response.put("audience", audience);
+        response.put("projectPath", projectDir.toAbsolutePath().toString());
+        response.put("materialPath", materialPath.toAbsolutePath().toString());
+        response.put("reportPaperPath", reportPaperPath == null ? "" : reportPaperPath.toAbsolutePath().toString());
+        response.put("confirmResultPath", confirmedPath.toAbsolutePath().toString());
+        response.put("handoffPath", handoffPath.toAbsolutePath().toString());
+        response.put("pptMasterSettings", pptMasterSettings);
+        response.put("message", "官方参数已确认，已停止网页老渲染器；请由 Codex/PPT Master agent 接管逐页设计与导出。");
+        return response;
     }
 
     private Map<String, Object> runPptMasterConfirmUi(
@@ -2823,9 +2861,11 @@ public class MeetingReportService {
         response.put("progress", job.progress());
         response.put("stage", job.stage());
         response.put("message", job.message());
-        response.put("done", "generated".equals(job.status()) || "failed".equals(job.status()));
+        response.put("done", "generated".equals(job.status()) || "failed".equals(job.status()) || "awaiting_agent".equals(job.status()));
         response.put("success", "generated".equals(job.status()));
-        response.put("downloadUrl", "/api/meeting-reports/deck/jobs/" + job.jobId() + "/download");
+        if ("generated".equals(job.status())) {
+            response.put("downloadUrl", "/api/meeting-reports/deck/jobs/" + job.jobId() + "/download");
+        }
         response.put("statusUrl", "/api/meeting-reports/deck/jobs/" + job.jobId() + "/status");
         response.put("updatedAt", job.updatedAt());
         response.putAll(job.result());
@@ -2917,6 +2957,16 @@ public class MeetingReportService {
             this.progress = 100;
             this.stage = "已完成";
             this.message = Objects.toString(response.getOrDefault("message", "PPT Master 生成完成"), "PPT Master 生成完成");
+            this.result.clear();
+            this.result.putAll(response);
+            this.updatedAt = System.currentTimeMillis();
+        }
+
+        void awaitingAgent(Map<String, Object> response) {
+            this.status = "awaiting_agent";
+            this.progress = 36;
+            this.stage = "等待 Agent 接管";
+            this.message = Objects.toString(response.getOrDefault("message", "等待 PPT Master agent 接管"), "等待 PPT Master agent 接管");
             this.result.clear();
             this.result.putAll(response);
             this.updatedAt = System.currentTimeMillis();
