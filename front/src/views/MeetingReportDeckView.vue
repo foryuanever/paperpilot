@@ -182,7 +182,7 @@
         <section class="review-modal modal-panel" aria-label="组会论文综述">
           <header>
             <div>
-              <span>{{ reviewModal.generated ? "已永久保存" : "组会汇报综述" }}</span>
+              <span>{{ reviewModal.generated ? "已保存综述" : "组会汇报综述" }}</span>
               <h2>{{ reviewModal.paper?.title || "论文综述" }}</h2>
             </div>
             <button type="button" aria-label="关闭" @click="closeReview">×</button>
@@ -211,7 +211,11 @@
                   <strong>{{ section.title }}</strong>
                   <small>{{ section.hint }}</small>
                 </div>
-                <textarea v-model="reviewModal.sections[section.key]" :placeholder="section.placeholder"></textarea>
+                <textarea
+                  v-model="reviewModal.sections[section.key]"
+                  :placeholder="section.placeholder"
+                  @input="resizeReviewTextarea"
+                ></textarea>
               </section>
             </div>
           </template>
@@ -226,7 +230,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { paperpilotApi } from "../services/paperpilotApi";
 import { API_BASE_URL } from "../services/apiClient";
 
@@ -577,6 +581,10 @@ async function openReview(meeting) {
   try {
     const data = await paperpilotApi.getMeetingReport(paper.workspaceId);
     applyReviewData(data);
+    if (data.generated) {
+      reviewJobs[paper.workspaceId] = { status: "generated", progress: 100, message: "已读取历史综述" };
+      persistReviewJobs();
+    }
     if (!data.generated && !isReviewBusy(meeting)) {
       await generateReview();
     }
@@ -674,7 +682,22 @@ function applyReviewData(data = {}) {
   reviewModal.generated = Boolean(data.generated);
   reviewModal.modelName = data.modelName || "";
   reviewModal.progress = data.generated ? 100 : reviewModal.progress;
-  reviewModal.message = data.generated ? "已保存" : "尚未生成";
+  reviewModal.message = data.generated ? "已读取历史保存的论文综述" : "尚未生成";
+  nextTick(resizeAllReviewTextareas);
+}
+
+function resizeReviewTextarea(event) {
+  const textarea = event?.target;
+  if (!textarea) return;
+  textarea.style.height = "auto";
+  textarea.style.height = `${textarea.scrollHeight}px`;
+}
+
+function resizeAllReviewTextareas() {
+  document.querySelectorAll(".review-point textarea").forEach((textarea) => {
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  });
 }
 
 async function makePpt(meeting) {
@@ -1392,6 +1415,11 @@ button:disabled {
   background: #f8fbff;
 }
 
+.review-point:nth-child(4n + 1) { background: #f6faff; }
+.review-point:nth-child(4n + 2) { background: #f8fbf7; }
+.review-point:nth-child(4n + 3) { background: #fffaf3; }
+.review-point:nth-child(4n + 4) { background: #f8f7ff; }
+
 .review-point strong {
   display: block;
   color: #152033;
@@ -1407,10 +1435,13 @@ button:disabled {
 
 .review-point textarea {
   min-height: 92px;
+  height: auto;
+  overflow: hidden;
   border: 1px solid #d5e0eb;
   border-radius: 10px;
   padding: 12px;
-  resize: vertical;
+  resize: none;
+  background: rgba(255, 255, 255, .86);
   color: #243247;
   outline: 0;
   font: 14px/1.75 inherit;

@@ -34,21 +34,23 @@
             <span v-html="chromeIcons.bell"></span>
             <span v-if="authStore.unreadCount" class="notification-badge">{{ authStore.unreadCount }}</span>
           </button>
-          <div v-if="uiStore.layout.showNotifications" class="popover-panel app-popover">
+          <div v-if="uiStore.layout.showNotifications" class="popover-panel app-popover notification-popover">
             <div class="popover-header">
               <div class="popover-title">消息通知</div>
               <router-link class="auth-link" to="/library">查看文献库</router-link>
             </div>
-            <div v-if="authStore.session.notifications.length === 0" class="popover-empty">暂无新消息</div>
-            <button
-              v-for="item in authStore.session.notifications"
-              :key="item.id"
-              class="notification-item"
-              @click="openNotification(item)"
-            >
-              <strong>{{ item.title }}</strong>
-              <span>{{ item.desc }}</span>
-            </button>
+            <div class="notification-list">
+              <div v-if="authStore.session.notifications.length === 0" class="popover-empty">暂无新消息</div>
+              <button
+                v-for="item in authStore.session.notifications"
+                :key="item.id"
+                class="notification-item"
+                @click="openNotification(item)"
+              >
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.desc }}</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -687,6 +689,19 @@ async function submitPasswordChange() {
   .spatial-nav-actions::-webkit-scrollbar {
     display: none;
   }
+
+  .notification-popover.app-popover {
+    position: fixed;
+    top: 78px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-height: calc(100vh - 96px);
+  }
+
+  .notification-list {
+    max-height: calc(100vh - 154px);
+  }
 }
 
 .site-message-label {
@@ -902,6 +917,96 @@ async function submitPasswordChange() {
 
 .app-landing-main {
   min-height: 100vh;
+}
+
+.topbar-menu-wrap {
+  position: relative;
+}
+
+.notification-popover.app-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 40;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(520px, calc(100vh - 112px));
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, .08);
+  background: rgba(255, 255, 255, .98);
+  box-shadow: 0 10px 18px rgba(15, 23, 42, .12);
+}
+
+.notification-popover .popover-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #edf1f6;
+  background: #fff;
+}
+
+.notification-popover .popover-title {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.notification-popover .auth-link {
+  flex: 0 0 auto;
+  color: #1d5be3;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.notification-list {
+  max-height: calc(min(520px, calc(100vh - 112px)) - 48px);
+  overflow-y: auto;
+  padding: 6px 10px 10px;
+}
+
+.notification-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #eef2f7;
+  padding: 11px 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notification-item:hover {
+  background: #f7fbff;
+}
+
+.notification-item strong {
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.notification-item span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #52637a;
+  font-size: 12px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.notification-popover .popover-empty {
+  padding: 26px 12px;
+  color: #64748b;
+  text-align: center;
+  font-size: 13px;
 }
 
 /* User Profile Popover styles */
