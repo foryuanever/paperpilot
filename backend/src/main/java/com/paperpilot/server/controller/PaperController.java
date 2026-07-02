@@ -6,6 +6,7 @@ import com.paperpilot.server.service.ExternalSearchService;
 import com.paperpilot.server.vo.SearchPaperVO;
 import com.paperpilot.server.service.PaperWorkspaceService;
 import com.paperpilot.server.vo.PaperWorkspaceVO;
+import com.paperpilot.server.vo.LibraryPaperVO;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.net.URI;
@@ -46,6 +48,20 @@ public class PaperController {
     @PostMapping("/import")
     public PaperWorkspaceVO importPaper(@Valid @RequestBody PaperImportRequest request) {
         return paperWorkspaceService.importPaper(request);
+    }
+
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public LibraryPaperVO uploadNewPaper(@RequestParam("file") MultipartFile file) throws IOException {
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("请上传 PDF 文件");
+        }
+        java.nio.file.Path temp = java.nio.file.Files.createTempFile("paperpilot-upload-", ".pdf");
+        try {
+            java.nio.file.Files.copy(file.getInputStream(), temp, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return researchDataService.createFromUploadedPdf(file.getOriginalFilename(), temp);
+        } finally {
+            java.nio.file.Files.deleteIfExists(temp);
+        }
     }
 
     @PostMapping("/import-by-url")

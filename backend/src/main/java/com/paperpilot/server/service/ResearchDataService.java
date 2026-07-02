@@ -22,9 +22,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.time.LocalDateTime;
+import java.util.UUID;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -185,6 +187,44 @@ public class ResearchDataService {
             .filter((paper) -> normalizedAuthor.isBlank()
                 || paper.getAuthors().toLowerCase(Locale.ROOT).contains(normalizedAuthor))
             .toList();
+    }
+
+    @Transactional
+    public LibraryPaperVO createFromUploadedPdf(String originalFilename, Path pdfPath) {
+        Long userId = currentUserService.getOrCreateDefaultUserId();
+        String workspaceId = UUID.randomUUID().toString();
+        try {
+            Path uploadDir = Path.of("uploads");
+            Files.createDirectories(uploadDir);
+            Files.copy(pdfPath, uploadDir.resolve(workspaceId + ".pdf"), StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception error) {
+            throw new IllegalStateException("PDF 保存失败");
+        }
+        PaperEntity entity = new PaperEntity();
+        entity.setWorkspaceId(workspaceId);
+        entity.setUserId(userId);
+        entity.setTitle(titleFromFilename(originalFilename));
+        entity.setSource("本地上传");
+        entity.setAuthors("作者待补全");
+        entity.setPaperUrl("/api/papers/uploads/" + workspaceId + ".pdf");
+        entity.setSourceUrl("");
+        entity.setImportSource("组会汇报上传");
+        entity.setAbstractText("");
+        entity.setProgress("1%");
+        entity.setImportance("B");
+        entity.setNote("PDF 已上传，可生成论文综述或制作组会 PPT。");
+        entity.setJournalTags("PDF已上传,组会候选");
+        entity.setVenueType("待分类");
+        entity.setVenueRanking("待补全");
+        entity.setPublishYear("-");
+        entity.setReadAt(LocalDateTime.now());
+        PaperEntity saved = paperRepository.save(entity);
+        try {
+            enrichPaperFromUploadedPdf(workspaceId, Path.of("uploads").resolve(workspaceId + ".pdf"));
+            saved = paperRepository.findByWorkspaceId(workspaceId).orElse(saved);
+        } catch (Exception ignored) {
+        }
+        return toLibraryPaper(saved);
     }
 
     @Transactional
@@ -383,6 +423,12 @@ public class ResearchDataService {
             .map(String::trim)
             .filter((item) -> !item.isBlank())
             .toList();
+    }
+
+    private String titleFromFilename(String originalFilename) {
+        String name = originalFilename == null || originalFilename.isBlank() ? "未命名论文.pdf" : originalFilename;
+        name = name.replaceAll("[\\\\/:*?\"<>|]+", " ").trim();
+        return name.replaceFirst("(?i)\\.pdf$", "").trim();
     }
 
     public String inferVenueType(String source) {

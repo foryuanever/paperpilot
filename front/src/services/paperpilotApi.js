@@ -147,6 +147,17 @@ export const paperpilotApi = {
     });
     return data;
   },
+  async uploadLibraryPaper(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const { data } = await apiClient.post("/api/papers/upload", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 120000,
+    });
+    return data;
+  },
   normalizePdfUrl(url) {
     if (!url) return "";
     if (url.startsWith("blob:") || url.startsWith("data:")) return url;

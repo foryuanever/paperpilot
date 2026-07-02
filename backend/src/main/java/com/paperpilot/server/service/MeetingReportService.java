@@ -463,6 +463,16 @@ public class MeetingReportService {
             if (reportPaper != null && !reportPaper.isEmpty()) {
                 reportPaperBytes = reportPaper.getBytes();
                 reportPaperName = Optional.ofNullable(reportPaper.getOriginalFilename()).orElse("report-paper.pdf");
+            } else {
+                String reportWorkspaceId = Objects.toString(body.get("reportWorkspaceId"), "").trim();
+                if (!reportWorkspaceId.isBlank()) {
+                    PaperEntity paper = requirePaper(reportWorkspaceId, currentUserService.getOrCreateDefaultUserId());
+                    Optional<byte[]> storedPdf = loadPdfBytes(paper);
+                    if (storedPdf.isPresent()) {
+                        reportPaperBytes = storedPdf.get();
+                        reportPaperName = safeDeckPaperFilename(paper);
+                    }
+                }
             }
         } catch (Exception error) {
             job.fail("上传汇报论文读取失败：" + readableError(error));
@@ -472,6 +482,16 @@ public class MeetingReportService {
         String finalReportPaperName = reportPaperName;
         deckExecutor.submit(() -> runDeckGenerationJob(job, body, finalReportPaperName, finalReportPaperBytes));
         return deckJobResponse(job);
+    }
+
+    private String safeDeckPaperFilename(PaperEntity paper) {
+        String title = Optional.ofNullable(paper.getTitle()).orElse("paper")
+            .replaceAll("[\\\\/:*?\"<>|]+", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+        if (title.isBlank()) title = "paper";
+        if (title.length() > 80) title = title.substring(0, 80).trim();
+        return title + ".pdf";
     }
 
     private void runDeckGenerationJob(DeckJob job, Map<String, Object> body, String reportPaperName, byte[] reportPaperBytes) {
