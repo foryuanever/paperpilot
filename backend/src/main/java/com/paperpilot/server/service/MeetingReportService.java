@@ -519,6 +519,26 @@ public class MeetingReportService {
                 materialPath,
                 buildDeckMaterial(papers, dimensions, templateName, slideCount, audience, focus, reportPaperPath)
             );
+            Map<String, Object> confirmedSettings = runPptMasterConfirmUi(
+                job,
+                outputDir,
+                materialPath,
+                reportPaperPath,
+                slideCount,
+                audience
+            );
+            pptMasterSettings.put("confirmUi", confirmedSettings);
+            if (StringUtils.hasText(Objects.toString(confirmedSettings.get("page_count"), ""))) {
+                slideCount = Objects.toString(confirmedSettings.get("page_count"), slideCount);
+                pptMasterSettings.put("slideCount", slideCount);
+            }
+            if (StringUtils.hasText(Objects.toString(confirmedSettings.get("audience"), ""))) {
+                audience = Objects.toString(confirmedSettings.get("audience"), audience);
+                pptMasterSettings.put("audience", audience);
+            }
+        } catch (ResponseStatusException error) {
+            job.fail(Optional.ofNullable(error.getReason()).orElse("PPT Master 参数确认失败"));
+            return;
         } catch (Exception error) {
             job.fail("PPT 生成材料写入失败：" + readableError(error));
             return;
@@ -1427,6 +1447,214 @@ public class MeetingReportService {
             response.put("message", "PPT Master skill 渲染失败：" + readableError(error));
             return response;
         }
+    }
+
+    private Map<String, Object> runPptMasterConfirmUi(
+        DeckJob job,
+        Path projectDir,
+        Path materialPath,
+        Path reportPaperPath,
+        String slideCount,
+        String audience
+    ) {
+        Path skillDir = Path.of(Objects.toString(pptMasterSkillDir, "")).toAbsolutePath().normalize();
+        Path confirmServer = skillDir.resolve("scripts/confirm_ui/server.py");
+        if (!Files.isRegularFile(confirmServer)) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "未找到 PPT Master 官方参数确认页脚本：" + confirmServer);
+        }
+        Optional<String> pythonPath = resolvePptMasterPython();
+        if (pythonPath.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "未检测到 Python，无法启动 PPT Master 参数确认页");
+        }
+        try {
+            Path confirmDir = projectDir.resolve("confirm_ui");
+            Files.createDirectories(confirmDir);
+            Files.writeString(
+                confirmDir.resolve("recommendations.json"),
+                objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(
+                    buildConfirmRecommendations(materialPath, reportPaperPath, slideCount, audience)
+                )
+            );
+            List<String> command = List.of(
+                pythonPath.get(),
+                confirmServer.toAbsolutePath().toString(),
+                projectDir.toAbsolutePath().toString(),
+                "--daemon",
+                "--no-browser"
+            );
+            Process launch = new ProcessBuilder(command)
+                .directory(skillDir.toFile())
+                .redirectErrorStream(true)
+                .start();
+            boolean launched = launch.waitFor(10, TimeUnit.SECONDS);
+            String output = new String(launch.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            if (!launched || launch.exitValue() != 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "PPT Master 参数确认页启动失败：" + compactLog(output));
+            }
+            String confirmUrl = firstUrl(output);
+            if (confirmUrl.isBlank()) {
+                confirmUrl = "http://127.0.0.1:5050";
+            }
+            job.result().put("confirmUrl", confirmUrl);
+            job.result().put("confirmProjectPath", projectDir.toAbsolutePath().toString());
+            job.progress(24, "已打开 PPT Master 官方参数确认页，请完成确认后继续生成");
+
+            Path resultPath = confirmDir.resolve("result.json");
+            long deadline = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(12);
+            while (System.currentTimeMillis() < deadline) {
+                if (Files.isRegularFile(resultPath)) {
+                    Map<String, Object> result = objectMapper.readValue(Files.readString(resultPath), new TypeReference<>() {});
+                    String status = Objects.toString(result.get("status"), "");
+                    String stage = Objects.toString(result.get("stage"), "final");
+                    if ("confirmed".equals(status) && ("final".equals(stage) || stage.isBlank())) {
+                        job.result().put("confirmResultPath", resultPath.toAbsolutePath().toString());
+                        job.progress(28, "PPT Master 参数已确认，正在进入论文精读与设计流程");
+                        shutdownPptMasterConfirmUi(projectDir, skillDir, pythonPath.get());
+                        return result;
+                    }
+                }
+                Thread.sleep(1000);
+            }
+            shutdownPptMasterConfirmUi(projectDir, skillDir, pythonPath.get());
+            throw new ResponseStatusException(HttpStatus.REQUEST_TIMEOUT, "等待 PPT Master 参数确认超时，请重新点击生成并确认参数页");
+        } catch (ResponseStatusException error) {
+            throw error;
+        } catch (Exception error) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "PPT Master 参数确认页异常：" + readableError(error));
+        }
+    }
+
+    private Map<String, Object> buildConfirmRecommendations(Path materialPath, Path reportPaperPath, String slideCount, String audience) {
+        Map<String, Object> root = new LinkedHashMap<>();
+        root.put("lang", "zh");
+        root.put("source", Map.of(
+            "material_path", materialPath.toAbsolutePath().toString(),
+            "report_paper_path", reportPaperPath == null ? "" : reportPaperPath.toAbsolutePath().toString()
+        ));
+        Map<String, Object> recommend = new LinkedHashMap<>();
+        recommend.put("canvas", "ppt169");
+        recommend.put("mode", "pyramid");
+        recommend.put("visual_style", "editorial");
+        recommend.put("icons", "tabler-outline");
+        recommend.put("image_usage", List.of("provided", "ai"));
+        recommend.put("image_ai_path", "auto");
+        recommend.put("formula_policy", "mixed");
+        recommend.put("generation_mode", "continuous");
+        recommend.put("delivery_purpose", "balanced");
+        root.put("recommend", recommend);
+        root.put("page_count", Map.of("value", StringUtils.hasText(slideCount) ? slideCount : "10-12"));
+        root.put("audience", Map.of("value", StringUtils.hasText(audience) ? audience : "导师与课题组"));
+        root.put("content_divergence", Map.of("value", "忠实论文事实，但允许按组会汇报逻辑重组叙事，突出研究问题、方法、证据、贡献和可讨论局限。"));
+        root.put("image_notes", Map.of("value", "优先使用论文 PDF 中的图、表、公式和流程图；封面、章节过渡或抽象机制页可使用 AI 生成学术风格辅助图像；不要用无关装饰图。"));
+        root.put("color", Map.of(
+            "selected", 0,
+            "candidates", List.of(
+                colorCandidate("深海学术蓝", "稳重、克制，适合论文精读和导师组会。", "#F7FAFC", "#EEF4FA", "#123A63", "#0EA5A4", "#7C3AED", "#152033"),
+                colorCandidate("墨绿研究室", "更像研究机构报告，强调方法链条和证据感。", "#FAFBF8", "#EEF6EF", "#174C43", "#D97706", "#2563EB", "#17211F"),
+                colorCandidate("黑白编辑部", "更接近高级期刊专题，适合理论和概念密集论文。", "#FFFFFF", "#F2F4F7", "#111827", "#2563EB", "#10B981", "#111827")
+            )
+        ));
+        root.put("typography", Map.of(
+            "selected", 0,
+            "candidates", List.of(
+                typographyCandidate("思源黑体学术版", "清晰稳妥，中文论文汇报优先。", "论文核心问题", "Research Question", "方法、证据与贡献链条", "Method, evidence and contribution", "Source Han Sans SC", "Inter", 24),
+                typographyCandidate("霞鹜文楷标题版", "标题更有讲述感，正文保持清晰。", "研究背景与方法路径", "Background and Method", "从问题到验证的叙事", "From problem to validation", "LXGW WenKai", "Aptos", 24),
+                typographyCandidate("苹方现代版", "更像现代产品研究汇报，页面更轻。", "关键结果与讨论", "Results and Discussion", "结论、局限与启发", "Findings, limits and insights", "PingFang SC", "Inter", 24)
+            )
+        ));
+        root.put("image_strategy", Map.of(
+            "selected", 0,
+            "candidates", List.of(
+                imageStrategy("论文资产优先", "paper-native", "cool-academic", "保留论文图表和公式，少量 AI 背景辅助。", "浅底、蓝绿强调、低饱和", "严谨、可信、可讲解"),
+                imageStrategy("机制图重绘", "vector-diagram", "research-green", "将方法流程和变量关系重绘成矢量机制图。", "白底、墨绿主线、橙色强调", "清楚、结构化"),
+                imageStrategy("编辑部专题", "editorial-abstract", "mono-accent", "用抽象几何和章节大标题增强节奏。", "黑白灰为主、单一亮色点题", "高级、克制")
+            )
+        ));
+        root.put("refine_spec", Map.of("value", false));
+        return root;
+    }
+
+    private Map<String, Object> colorCandidate(String name, String note, String background, String secondaryBg, String primary, String accent, String secondaryAccent, String bodyText) {
+        return Map.of(
+            "name", name,
+            "note", note,
+            "palette", Map.of(
+                "background", background,
+                "secondary_bg", secondaryBg,
+                "primary", primary,
+                "accent", accent,
+                "secondary_accent", secondaryAccent,
+                "body_text", bodyText
+            )
+        );
+    }
+
+    private Map<String, Object> typographyCandidate(
+        String name,
+        String note,
+        String sampleHeading,
+        String sampleHeadingLatin,
+        String sampleBody,
+        String sampleBodyLatin,
+        String cjk,
+        String latin,
+        int bodySize
+    ) {
+        String css = "'" + cjk + "','" + latin + "',sans-serif";
+        return Map.of(
+            "name", name,
+            "note", note,
+            "sample_heading", sampleHeading,
+            "sample_heading_latin", sampleHeadingLatin,
+            "sample_body", sampleBody,
+            "sample_body_latin", sampleBodyLatin,
+            "heading", Map.of("cjk", cjk, "latin", latin, "css", css),
+            "body", Map.of("cjk", cjk, "latin", latin, "css", css),
+            "body_size", bodySize,
+            "sizes", Map.of("title", 42, "subtitle", 30, "annotation", 18)
+        );
+    }
+
+    private Map<String, Object> imageStrategy(String name, String rendering, String palette, String visual, String color, String mood) {
+        return Map.of(
+            "name", name,
+            "rendering", rendering,
+            "palette", palette,
+            "visual", visual,
+            "color", color,
+            "mood", mood
+        );
+    }
+
+    private Optional<String> resolvePptMasterPython() {
+        if (StringUtils.hasText(pptMasterPython)) return Optional.of(pptMasterPython.trim());
+        Optional<String> python3 = resolveCommand("python3");
+        return python3.isPresent() ? python3 : resolveCommand("python");
+    }
+
+    private void shutdownPptMasterConfirmUi(Path projectDir, Path skillDir, String pythonPath) {
+        try {
+            new ProcessBuilder(
+                pythonPath,
+                skillDir.resolve("scripts/confirm_ui/server.py").toAbsolutePath().toString(),
+                projectDir.toAbsolutePath().toString(),
+                "--shutdown"
+            )
+                .directory(skillDir.toFile())
+                .redirectErrorStream(true)
+                .start()
+                .waitFor(5, TimeUnit.SECONDS);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private String firstUrl(String output) {
+        if (output == null || output.isBlank()) return "";
+        for (String token : output.split("\\s+")) {
+            String clean = token.replaceAll("[,.;)\\]]+$", "");
+            if (clean.startsWith("http://") || clean.startsWith("https://")) return clean;
+        }
+        return "";
     }
 
     private void mergeRendererMetadata(Map<String, Object> response, String output) {

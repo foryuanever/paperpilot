@@ -48,6 +48,14 @@
             <i :style="{ width: `${Math.max(2, deckJob.progress || 0)}%` }"></i>
           </div>
           <small>{{ deckJob.message || "正在准备生成任务" }}</small>
+          <button
+            v-if="deckJob.confirmUrl && deckJob.status === 'running'"
+            type="button"
+            class="confirm-link"
+            @click="openConfirmUrl"
+          >
+            打开 PPT Master 官方参数页
+          </button>
         </div>
       </section>
     </main>
@@ -75,9 +83,11 @@ const deckJob = reactive({
   stage: "",
   message: "",
   downloadUrl: "",
+  confirmUrl: "",
 });
 let toastTimer = null;
 let deckPollTimer = null;
+const confirmOpened = ref("");
 
 const canSubmitDeck = computed(() => Boolean(reportPaperFile.value));
 
@@ -159,6 +169,17 @@ function applyDeckJob(payload = {}) {
   deckJob.stage = payload.stage || deckJob.stage || "";
   deckJob.message = payload.message || deckJob.message || "";
   deckJob.downloadUrl = payload.downloadUrl || deckJob.downloadUrl || "";
+  deckJob.confirmUrl = payload.confirmUrl || deckJob.confirmUrl || "";
+  if (deckJob.confirmUrl && confirmOpened.value !== deckJob.confirmUrl) {
+    confirmOpened.value = deckJob.confirmUrl;
+    window.open(deckJob.confirmUrl, "_blank");
+  }
+}
+
+function openConfirmUrl() {
+  if (!deckJob.confirmUrl) return;
+  confirmOpened.value = deckJob.confirmUrl;
+  window.open(deckJob.confirmUrl, "_blank");
 }
 
 function scheduleDeckPolling(jobId, delay = 1200) {
@@ -817,6 +838,20 @@ function showToast(message) {
   border-radius: inherit;
   background: linear-gradient(90deg, #2563eb, #0f766e);
   transition: width 0.28s ease;
+}
+
+.confirm-link {
+  width: fit-content;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 8px;
+  background: #fff;
+  color: #1d4ed8;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 780;
 }
 
 .deck-progress[data-status="generated"] .progress-track i {
