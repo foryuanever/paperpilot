@@ -1,0 +1,14 @@
+{
+  "name": "pptx-renderer",
+  "version": "1.0.0",
+  "description": "PaperPilot meeting report deck renderer powered by PPT Master SVG export",
+  "type": "module",
+  "main": "render-meeting-deck.mjs",
+  "scripts": {
+    "render": "node render-meeting-deck.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {}
+}

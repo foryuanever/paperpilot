@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PaperSolver Capture</title>
+    <style>
+      body {
+        width: 320px;
+        margin: 0;
+        padding: 16px;
+        box-sizing: border-box;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #172033;
+      }
+      h1 { margin: 0 0 6px; font-size: 17px; }
+      h1 small { color: #667085; font-size: 12px; font-weight: 700; }
+      p { margin: 0 0 14px; color: #667085; font-size: 12.5px; line-height: 1.55; }
+      label { display: grid; gap: 6px; color: #344054; font-size: 12px; font-weight: 800; }
+      .account {
+        margin: 10px 0 12px;
+        padding: 9px 10px;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: #f8fafc;
+        color: #475467;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      input {
+        height: 38px;
+        padding: 0 10px;
+        border: 1px solid #d0d7e2;
+        border-radius: 10px;
+        font: inherit;
+      }
+      button {
+        width: 100%;
+        height: 38px;
+        margin-top: 12px;
+        border: 0;
+        border-radius: 10px;
+        background: #2563eb;
+        color: #fff;
+        font: inherit;
+        font-weight: 900;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #111827;
+      }
+      .status { min-height: 18px; margin-top: 10px; color: #079455; font-size: 12px; }
+      .status.error { color: #dc2626; }
+    </style>
+  </head>
+  <body>
+    <h1>PaperSolver Capture <small id="version"></small></h1>
+    <p>在官网论文详情页或 PDF 页面自动识别文献信息，并导入本地 PaperSolver。</p>
+    <div id="account" class="account">尚未绑定 PaperSolver 登录账号。请先打开一次 PaperSolver 页面。</div>
+    <label>
+      PaperSolver 后端地址
+      <input id="apiBase" placeholder="http://127.0.0.1:8080" />
+    </label>
+    <button id="save">保存配置</button>
+    <button id="test" class="secondary">测试连接与账号</button>
+    <div id="status" class="status"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

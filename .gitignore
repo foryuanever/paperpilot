@@ -1,0 +1,52 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Secrets and local runtime config
+.env
+.env.*
+!.env.example
+front/.env.local
+front/.env.*.local
+backend/src/main/resources/application.yml
+backend/src/main/resources/application-*.yml
+!backend/src/main/resources/application.example.yml
+
+# Java / Spring Boot
+backend/target/
+backend/*.log
+
+# Node / frontend
+front/node_modules/
+front/dist/
+front/output/
+front/public/downloads/*.zip
+backend/pptx-renderer/node_modules/
+
+# Python / local AI runtimes
+.mineru-venv/
+.playwright-cli/
+__pycache__/
+*.pyc
+
+# Generated papers, OCR, PPT, and local storage
+output/
+uploads/
+presenton-data/
+backend/mineru-output/
+backend/mineru-inputs/
+backend/translations/
+backend/pptxgen-jobs/
+backend/pptagent-jobs/
+backend/generated-pptx/
+backend/uploads/
+backend/logs/
+backend/ppt-master-runtime/
+
+# Local memory and scratch artifacts
+memory/
+MEMORY.md
+.trash/

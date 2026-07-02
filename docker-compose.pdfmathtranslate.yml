@@ -1,0 +1,32 @@
+services:
+  pdfmath-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  pdfmath-api:
+    image: ghcr.io/byaidu/pdfmathtranslate:latest
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -lc
+      - pip install --no-cache-dir flask celery redis && python -c "from pdf2zh.backend import flask_app; flask_app.run(host='0.0.0.0', port=11008)"
+    ports:
+      - "11008:11008"
+    environment:
+      CELERY_BROKER: redis://pdfmath-redis:6379/0
+      CELERY_RESULT: redis://pdfmath-redis:6379/0
+    depends_on:
+      - pdfmath-redis
+
+  pdfmath-worker:
+    image: ghcr.io/byaidu/pdfmathtranslate:latest
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -lc
+      - pip install --no-cache-dir flask celery redis && pdf2zh --celery worker
+    environment:
+      CELERY_BROKER: redis://pdfmath-redis:6379/0
+      CELERY_RESULT: redis://pdfmath-redis:6379/0
+    depends_on:
+      - pdfmath-redis

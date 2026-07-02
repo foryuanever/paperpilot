@@ -1,0 +1,48 @@
+server:
+  port: 8080
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: paperpilot-server
+  servlet:
+    multipart:
+      max-file-size: 120MB
+      max-request-size: 130MB
+  datasource:
+    url: jdbc:mysql://${PAPER_DB_HOST:127.0.0.1}:${PAPER_DB_PORT:3306}/${PAPER_DB_NAME:paper}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+    username: ${PAPER_DB_USERNAME:root}
+    password: ${PAPER_DB_PASSWORD:change-me}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: Asia/Shanghai
+
+paperpilot:
+  ai:
+    openai-compatible-timeout-ms: 60000
+  storage:
+    mode: mysql
+  translate:
+    deepl-api-key: ${DEEPL_API_KEY:}
+    baidu-app-id: ${BAIDU_APP_ID:}
+    baidu-secret: ${BAIDU_SECRET:}
+    microsoft-key: ${MICROSOFT_TRANSLATOR_KEY:}
+    microsoft-region: ${MICROSOFT_TRANSLATOR_REGION:eastasia}
+  pdfmathtranslate:
+    base-url: ${PDFMATH_TRANSLATE_URL:http://127.0.0.1:11008}
+  mineru:
+    binary: ${MINERU_BINARY:../.mineru-venv/bin/mineru}
+    model-source: ${MINERU_MODEL_SOURCE:modelscope}
+  presenton:
+    enabled: ${PRESENTON_ENABLED:false}
+    base-url: ${PRESENTON_BASE_URL:http://127.0.0.1:5001}
+    username: ${PRESENTON_USERNAME:admin}
+    password: ${PRESENTON_PASSWORD:change-me}
+    template: ${PRESENTON_TEMPLATE:general}

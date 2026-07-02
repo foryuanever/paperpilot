@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "PaperSolver Capture",
+  "version": "0.2.4",
+  "description": "在论文官网、数据库详情页和 PDF 页面识别文献信息，并一键导入 PaperSolver。",
+  "icons": {
+    "128": "icon-128.svg"
+  },
+  "permissions": ["storage", "notifications", "tabs", "scripting"],
+  "host_permissions": ["<all_urls>", "http://127.0.0.1:8080/*", "http://localhost:8080/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "PaperSolver Capture",
+    "default_popup": "popup.html"
+  }
+}
