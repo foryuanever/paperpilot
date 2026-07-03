@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/payments")
@@ -31,9 +32,10 @@ public class PaymentController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "支付方式仅支持支付宝或微信支付");
         }
         Map<String, Object> order = new LinkedHashMap<>();
-        order.put("orderNo", "PP" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + userId);
+        order.put("orderNo", "PP" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")) + userId + UUID.randomUUID().toString().substring(0, 6).toUpperCase());
         order.put("planId", planId);
         order.put("provider", provider);
+        order.put("amount", body.getOrDefault("amount", ""));
         String paymentUrl = resolvePaymentUrl(provider, String.valueOf(order.get("orderNo")), planId);
         order.put("status", paymentUrl.isBlank() ? "config_required" : "pending_payment");
         order.put("paymentUrl", paymentUrl);

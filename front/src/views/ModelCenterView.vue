@@ -64,6 +64,7 @@
           <strong>{{ totalRequestsDisplay }}</strong>
           <p>总请求数</p>
         </div>
+        <button type="button" class="recharge-entry" @click="openRecharge">充值</button>
       </article>
 
       <article class="day-card cyan">
@@ -179,6 +180,72 @@
         <span>组会 PPT 完成后会写入本页账单。由于执行器只返回材料、提示词和日志规模，系统按同一 Token 口径入账，用户侧不展示底层调用配置。</span>
       </aside>
     </section>
+
+    <div v-if="showRecharge" class="recharge-backdrop" @click.self="closeRecharge">
+      <section class="recharge-dialog" role="dialog" aria-modal="true" aria-label="额度充值">
+        <header>
+          <div>
+            <p>额度充值</p>
+            <h2>选择套餐与支付方式</h2>
+          </div>
+          <button type="button" class="dialog-close" aria-label="关闭" @click="closeRecharge">×</button>
+        </header>
+
+        <div class="recharge-body">
+          <div class="plan-picker">
+            <button
+              v-for="plan in rechargePlans"
+              :key="plan.id"
+              type="button"
+              class="plan-option"
+              :class="{ active: selectedPlanId === plan.id, recommended: plan.highlight }"
+              @click="selectedPlanId = plan.id"
+            >
+              <span>{{ plan.name }}</span>
+              <strong>{{ plan.price }}<small>{{ plan.period }}</small></strong>
+              <em>{{ formatTokens(plan.tokenQuota) }} Token</em>
+            </button>
+          </div>
+
+          <div class="payment-picker">
+            <button
+              type="button"
+              class="pay-option alipay"
+              :class="{ active: selectedProvider === 'alipay' }"
+              @click="selectedProvider = 'alipay'"
+            >
+              <i>支</i>
+              <span>支付宝</span>
+            </button>
+            <button
+              type="button"
+              class="pay-option wechat"
+              :class="{ active: selectedProvider === 'wechat' }"
+              @click="selectedProvider = 'wechat'"
+            >
+              <i>微</i>
+              <span>微信支付</span>
+            </button>
+          </div>
+
+          <div class="payment-summary">
+            <span>应付金额</span>
+            <strong>{{ selectedPlan?.price || "-" }}</strong>
+          </div>
+
+          <p v-if="paymentMessage" class="payment-message" :class="{ warning: paymentStatus === 'config_required' }">
+            {{ paymentMessage }}
+          </p>
+        </div>
+
+        <footer>
+          <button type="button" class="ghost-action" @click="closeRecharge">取消</button>
+          <button type="button" class="primary-action" :disabled="paying || !selectedPlan" @click="createRechargeOrder">
+            {{ paying ? "创建订单中" : `去${selectedProvider === "alipay" ? "支付宝" : "微信"}支付` }}
+          </button>
+        </footer>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -186,6 +253,8 @@
 import { computed, onMounted, ref } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useUsageStore } from "../stores/usage";
+import { billingPlans } from "../constants/pages";
+import { paperpilotApi } from "../services/paperpilotApi";
 
 const usageStore = useUsageStore();
 const authStore = useAuthStore();
@@ -195,6 +264,15 @@ const activeChart = ref("cost");
 const activeLogTab = ref("all");
 const selectedScene = ref("");
 const TOKEN_UNIT_PRICE = 0.02;
+const showRecharge = ref(false);
+const selectedPlanId = ref("monthly-pro");
+const selectedProvider = ref("alipay");
+const paying = ref(false);
+const paymentMessage = ref("");
+const paymentStatus = ref("");
+
+const rechargePlans = computed(() => billingPlans.filter((plan) => ["monthly-basic", "monthly-pro", "quarterly-pro", "yearly-pro"].includes(plan.id)));
+const selectedPlan = computed(() => rechargePlans.value.find((plan) => plan.id === selectedPlanId.value) || rechargePlans.value[0]);
 
 const sceneOptions = computed(() => [
   ...new Set(usageStore.state.recentCalls.map((row) => row.action).filter(Boolean)),
@@ -264,6 +342,44 @@ async function refreshUsage() {
     });
   } finally {
     loading.value = false;
+  }
+}
+
+function openRecharge() {
+  paymentMessage.value = "";
+  paymentStatus.value = "";
+  if (!selectedPlan.value && rechargePlans.value.length) {
+    selectedPlanId.value = rechargePlans.value[0].id;
+  }
+  showRecharge.value = true;
+}
+
+function closeRecharge() {
+  if (paying.value) return;
+  showRecharge.value = false;
+}
+
+async function createRechargeOrder() {
+  if (!selectedPlan.value) return;
+  paying.value = true;
+  paymentMessage.value = "";
+  paymentStatus.value = "";
+  try {
+    const order = await paperpilotApi.createPaymentOrder({
+      planId: selectedPlan.value.id,
+      provider: selectedProvider.value,
+      amount: selectedPlan.value.price,
+    });
+    paymentStatus.value = order.status || "";
+    paymentMessage.value = order.message || "订单已创建。";
+    if (order.paymentUrl) {
+      window.open(order.paymentUrl, "_blank", "noopener,noreferrer");
+    }
+  } catch (error) {
+    paymentStatus.value = "failed";
+    paymentMessage.value = error?.response?.data?.message || "订单创建失败，请稍后重试。";
+  } finally {
+    paying.value = false;
   }
 }
 
@@ -495,7 +611,7 @@ button:disabled {
 
 .balance-card {
   display: grid;
-  grid-template-columns: 62px repeat(3, 1fr);
+  grid-template-columns: 62px repeat(3, 1fr) auto;
   align-items: center;
   gap: 20px;
   min-height: 112px;
@@ -515,6 +631,28 @@ button:disabled {
 .balance-card p,
 .day-card p {
   margin: 7px 0 0;
+}
+
+.recharge-entry {
+  min-width: 96px;
+  height: 42px;
+  border: 0;
+  border-radius: 11px;
+  background: #1f5be3;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background .18s ease, transform .18s ease;
+}
+
+.recharge-entry:hover {
+  background: #1748c4;
+}
+
+.recharge-entry:active {
+  transform: translateY(1px);
 }
 
 .day-card {
@@ -765,6 +903,238 @@ button:disabled {
   color: #1b4eb6;
 }
 
+.recharge-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, .42);
+}
+
+.recharge-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid #dce5f2;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .22);
+}
+
+.recharge-dialog header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px 26px 18px;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.recharge-dialog header p {
+  margin: 0 0 6px;
+  color: #2357d6;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.recharge-dialog h2 {
+  margin: 0;
+  color: #172033;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.dialog-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #dce4ef;
+  border-radius: 50%;
+  background: #fff;
+  color: #526075;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.recharge-body {
+  display: grid;
+  gap: 18px;
+  padding: 22px 26px;
+}
+
+.plan-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.plan-option {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-height: 112px;
+  border: 1px solid #dfe7f2;
+  border-radius: 14px;
+  background: #fbfdff;
+  padding: 16px;
+  color: #1f2937;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plan-option.recommended::after {
+  content: "推荐";
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border-radius: 999px;
+  background: #e8f1ff;
+  color: #2357d6;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.plan-option.active {
+  border-color: #2d63df;
+  background: #f5f8ff;
+}
+
+.plan-option span {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.plan-option strong {
+  color: #111827;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.plan-option small {
+  margin-left: 2px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.plan-option em {
+  color: #667085;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.payment-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pay-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  border: 1px solid #dfe7f2;
+  border-radius: 13px;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.pay-option i {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-left: 14px;
+  border-radius: 10px;
+  color: #fff;
+  font-style: normal;
+}
+
+.pay-option.alipay i { background: #1677ff; }
+.pay-option.wechat i { background: #16a34a; }
+
+.pay-option.active {
+  border-color: #2d63df;
+  background: #f6f9ff;
+}
+
+.payment-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #e6edf6;
+  border-radius: 13px;
+  background: #f8fbff;
+  padding: 14px 16px;
+}
+
+.payment-summary span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.payment-summary strong {
+  color: #111827;
+  font-size: 24px;
+}
+
+.payment-message {
+  margin: 0;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.payment-message.warning {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.recharge-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 18px 26px 24px;
+  border-top: 1px solid #edf1f6;
+}
+
+.ghost-action,
+.primary-action {
+  min-width: 112px;
+  height: 42px;
+  border-radius: 11px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ghost-action {
+  border: 1px solid #d9e1ec;
+  background: #fff;
+  color: #344158;
+}
+
+.primary-action {
+  border: 0;
+  background: #1f5be3;
+  color: #fff;
+}
+
 @media (max-width: 1120px) {
   .metric-strip,
   .summary-grid,
@@ -808,6 +1178,15 @@ button:disabled {
   .balance-card div:not(:first-child) {
     border-left: 0;
     padding-left: 0;
+  }
+
+  .recharge-entry {
+    width: 100%;
+  }
+
+  .plan-picker,
+  .payment-picker {
+    grid-template-columns: 1fr;
   }
 
   .bar-chart {
