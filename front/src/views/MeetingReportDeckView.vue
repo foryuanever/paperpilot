@@ -94,6 +94,10 @@
                     <span>论文综述</span>
                     <strong>{{ reviewPercent(meeting) }}%</strong>
                   </div>
+                  <p class="generation-step">{{ reviewStepText(meeting) }}</p>
+                  <div class="generation-progress" aria-hidden="true">
+                    <i :style="{ width: `${reviewPercent(meeting)}%` }"></i>
+                  </div>
                   <button
                     type="button"
                     class="soft-button"
@@ -108,6 +112,10 @@
                   <div class="progress-label">
                     <span>PPT</span>
                     <strong>{{ deckPercent(meeting) }}%</strong>
+                  </div>
+                  <p class="generation-step">{{ deckStepText(meeting) }}</p>
+                  <div class="generation-progress ppt-progress" aria-hidden="true">
+                    <i :style="{ width: `${deckPercent(meeting)}%` }"></i>
                   </div>
                   <a
                     v-if="deckJobs[meeting.id]?.downloadUrl"
@@ -217,7 +225,10 @@
                   :title="`复制${section.title}`"
                   @click="copyReviewSection(section)"
                 >
-                  复制
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="8" y="8" width="10" height="10" rx="2"></rect>
+                    <path d="M6 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
                 </button>
                 <textarea
                   v-model="reviewModal.sections[section.key]"
@@ -528,7 +539,7 @@ function meetingStatus(meeting) {
   const deck = deckJobs[meeting.id];
   const paper = primaryPaper(meeting);
   const review = paper ? reviewJobs[paper.workspaceId] : null;
-  if (deck?.status === "running" || review?.status === "running") return "running";
+  if (isDeckRunning(deck) || review?.status === "running") return "running";
   if (deck?.downloadUrl || deck?.status === "generated") return "ready";
   if (review?.status === "generated") return "ready";
   if (deck?.status === "failed") return "failed";
@@ -562,7 +573,30 @@ function isReviewBusy(meeting) {
 }
 
 function isDeckBusy(meeting) {
-  return deckJobs[meeting.id]?.status === "running";
+  return isDeckRunning(deckJobs[meeting.id]);
+}
+
+function isDeckRunning(job) {
+  return job?.status === "running" || job?.status === "awaiting_agent";
+}
+
+function reviewStepText(meeting) {
+  const paper = primaryPaper(meeting);
+  const job = paper ? reviewJobs[paper.workspaceId] : null;
+  if (!paper) return "先添加汇报文献";
+  if (job?.status === "running") return job.message || "正在生成综述";
+  if (job?.status === "generated") return "已保存，可重新生成";
+  if (job?.status === "failed") return "生成失败，可重试";
+  return "等待生成或查看";
+}
+
+function deckStepText(meeting) {
+  const job = deckJobs[meeting.id];
+  if (!primaryPaper(meeting)) return "先添加汇报文献";
+  if (!job) return "等待启动 PPT 任务";
+  if (job.status === "generated") return "已生成，可下载";
+  if (job.status === "failed") return job.message || "生成失败";
+  return [job.stage, job.message].filter(Boolean).join(" · ") || "后台生成中";
 }
 
 async function openReview(meeting) {
@@ -685,12 +719,30 @@ async function saveReview() {
 }
 
 function applyReviewData(data = {}) {
-  reviewModal.sections = { ...emptySections(), ...(data.sections || {}) };
+  reviewModal.sections = formatReviewSections({ ...emptySections(), ...(data.sections || {}) });
   reviewModal.generated = Boolean(data.generated);
   reviewModal.modelName = data.modelName || "";
   reviewModal.progress = data.generated ? 100 : reviewModal.progress;
   reviewModal.message = data.generated ? "已读取历史保存的论文综述" : "尚未生成";
   nextTick(resizeAllReviewTextareas);
+}
+
+function formatReviewSections(sections) {
+  return Object.fromEntries(Object.entries(sections).map(([key, value]) => [key, formatReviewParagraphs(value)]));
+}
+
+function formatReviewParagraphs(value = "") {
+  const labels = [
+    "研究背景", "论文定位", "核心要点", "要点", "研究问题", "整体框架", "关键模块", "实现流程",
+    "主要发现", "关键证据", "实验设置", "数据来源", "方法路线", "结果证据", "贡献", "局限", "讨论点", "启发"
+  ];
+  const labelPattern = labels.join("|");
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(new RegExp(`([^\\n])((?:${labelPattern})[：:])`, "g"), "$1\n\n$2")
+    .replace(/([。；;])((?:第二|第三|第四|第五|第六|第七|其次|再次|最后)[，,])/g, "$1\n\n$2")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function resizeReviewTextarea(event) {
@@ -741,6 +793,7 @@ async function makePpt(meeting) {
   deckJobs[meeting.id] = {
     status: "running",
     progress: 1,
+    stage: "提交任务",
     message: "正在提交 PPT Master 任务",
     paperWorkspaceId: paper.workspaceId,
     paperTitle: paper.title,
@@ -771,6 +824,7 @@ async function makePpt(meeting) {
       ...deckJobs[meeting.id],
       status: "failed",
       progress: deckJobs[meeting.id]?.progress || 0,
+      stage: "生成失败",
       message: error?.response?.data?.message || "PPT 制作失败",
     };
     showToast(deckJobs[meeting.id].message);
@@ -794,6 +848,7 @@ function pollDeck(meetingId, jobId, paper) {
       deckJobs[meetingId] = {
         ...deckJobs[meetingId],
         status: "running",
+        stage: deckJobs[meetingId]?.stage || "刷新状态",
         message: error?.response?.data?.message || "PPT 状态刷新失败，稍后自动重试",
       };
       pollDeck(meetingId, jobId, paper);
@@ -808,6 +863,7 @@ function applyDeckJob(meeting, payload = {}, paper = {}) {
     ...(deckJobs[meeting.id] || {}),
     status: payload.status || (payload.success ? "generated" : "running"),
     progress: payload.success ? 100 : Number(payload.progress ?? deckJobs[meeting.id]?.progress ?? 0),
+    stage: payload.stage || deckJobs[meeting.id]?.stage || "",
     message: payload.message || deckJobs[meeting.id]?.message || "",
     paperWorkspaceId: paper.workspaceId || deckJobs[meeting.id]?.paperWorkspaceId || "",
     paperTitle: paper.title || deckJobs[meeting.id]?.paperTitle || "",
@@ -1271,28 +1327,47 @@ button:disabled {
 
 .generation-action {
   display: grid;
-  align-content: space-between;
+  grid-template-rows: auto auto auto 1fr;
   min-height: 116px;
   border: 1px solid rgba(203, 216, 231, .72);
 }
 
-.generation-action::after {
-  content: "";
-  display: block;
+.generation-step {
+  min-height: 34px;
+  margin: 0 0 9px;
+  color: #52637a;
+  font-size: 12px;
+  line-height: 1.45;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.generation-progress {
   height: 6px;
-  grid-row: 2;
-  align-self: end;
   margin: 0 0 11px;
   border-radius: 999px;
+  background: #d9e4f5;
+  overflow: hidden;
+}
+
+.generation-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
   background: linear-gradient(90deg, #225ce0, #7aa2ff);
-  opacity: .22;
+}
+
+.ppt-progress i {
+  background: linear-gradient(90deg, #2563eb, #10b981);
 }
 
 .generation-action button,
 .generation-action a {
   width: 100%;
   box-sizing: border-box;
-  grid-row: 3;
+  align-self: end;
   min-height: 38px;
   border-radius: 9px;
 }
@@ -1508,19 +1583,28 @@ button:disabled {
   position: absolute;
   top: 12px;
   right: 12px;
-  min-height: 28px;
+  width: 30px;
+  height: 30px;
   border: 1px solid color-mix(in srgb, currentColor 28%, #d5e0eb);
-  border-radius: 999px;
-  padding: 0 9px;
+  border-radius: 9px;
+  padding: 0;
   background: rgba(255, 255, 255, .72);
   color: currentColor;
-  font-size: 12px;
-  font-weight: 850;
   cursor: pointer;
 }
 
 .copy-section-button:hover {
   background: #fff;
+}
+
+.copy-section-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .review-point textarea {
@@ -1535,6 +1619,11 @@ button:disabled {
   color: currentColor;
   outline: 0;
   font: 14px/1.75 inherit;
+  white-space: pre-wrap;
+}
+
+.review-point textarea::placeholder {
+  color: color-mix(in srgb, currentColor 46%, #94a3b8);
 }
 
 .meeting-toast {
