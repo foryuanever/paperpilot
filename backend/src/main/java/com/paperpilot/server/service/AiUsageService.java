@@ -2,8 +2,10 @@ package com.paperpilot.server.service;
 
 import com.paperpilot.server.entity.AiUsageRecordEntity;
 import com.paperpilot.server.entity.AppUserEntity;
+import com.paperpilot.server.entity.ModelConfigEntity;
 import com.paperpilot.server.repository.AiUsageRecordRepository;
 import com.paperpilot.server.repository.AppUserRepository;
+import com.paperpilot.server.repository.ModelConfigRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -22,15 +24,18 @@ public class AiUsageService {
 
     private final AiUsageRecordRepository repository;
     private final AppUserRepository appUserRepository;
+    private final ModelConfigRepository modelConfigRepository;
     private final CurrentUserService currentUserService;
 
     public AiUsageService(
         AiUsageRecordRepository repository,
         AppUserRepository appUserRepository,
+        ModelConfigRepository modelConfigRepository,
         CurrentUserService currentUserService
     ) {
         this.repository = repository;
         this.appUserRepository = appUserRepository;
+        this.modelConfigRepository = modelConfigRepository;
         this.currentUserService = currentUserService;
     }
 
@@ -129,8 +134,62 @@ public class AiUsageService {
         result.put("modelBreakdown", buildBreakdown(recent, "model"));
         result.put("sceneBreakdown", buildBreakdown(recent, "scene"));
         result.put("actionBreakdown", buildBreakdown(recent, "action"));
+        result.put("activeModels", buildActiveModels(recent));
         result.put("recentCalls", buildRecentCalls(recent));
         return result;
+    }
+
+    private List<Map<String, Object>> buildActiveModels(List<AiUsageRecordEntity> recent) {
+        Map<String, Long> tokensByModel = new LinkedHashMap<>();
+        for (AiUsageRecordEntity record : recent) {
+            String modelName = blankTo(record.getModelName(), "unknown-model");
+            tokensByModel.put(modelName, tokensByModel.getOrDefault(modelName, 0L) + safe(record.getTotalTokens()));
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        addActiveModel(
+            rows,
+            tokensByModel,
+            ModelConfigService.SCENE_MEETING_DECK,
+            "组会 PPT Agent",
+            "PPT 专用中转站",
+            "gpt-5.5",
+            "PPT 生成完成后按日志与材料估算入账"
+        );
+        addActiveModel(
+            rows,
+            tokensByModel,
+            ModelConfigService.SCENE_GENERAL,
+            "通用模型池",
+            "OpenCode Free",
+            "deepseek-v4-flash-free",
+            "聊天、翻译、综述等普通调用按网关返回入账"
+        );
+        return rows;
+    }
+
+    private void addActiveModel(
+        List<Map<String, Object>> rows,
+        Map<String, Long> tokensByModel,
+        String scene,
+        String label,
+        String fallbackProvider,
+        String fallbackModel,
+        String accountingRule
+    ) {
+        ModelConfigEntity active = modelConfigRepository.findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(scene).orElse(null);
+        String modelName = active == null ? fallbackModel : blankTo(active.getModelName(), fallbackModel);
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("scene", scene);
+        row.put("label", label);
+        row.put("providerName", active == null ? fallbackProvider : blankTo(active.getProviderName(), fallbackProvider));
+        row.put("modelName", modelName);
+        row.put("apiFormat", active == null ? "openai_chat" : blankTo(active.getApiFormat(), "openai_chat"));
+        row.put("baseUrl", active == null ? "" : blankTo(active.getBaseUrl(), ""));
+        row.put("configured", active != null);
+        row.put("recordedTokens", tokensByModel.getOrDefault(modelName, 0L));
+        row.put("accountingRule", accountingRule);
+        rows.add(row);
     }
 
     private List<Map<String, Object>> buildDailyUsage(List<AiUsageRecordEntity> recent) {

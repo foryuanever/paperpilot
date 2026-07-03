@@ -83,6 +83,31 @@
       </article>
     </section>
 
+    <section class="active-model-panel" aria-label="当前计费模型范围">
+      <div class="active-model-head">
+        <div>
+          <p>当前计费模型范围</p>
+          <strong>这里显示正在被功能调用的真实模型配置，不把未发生的调用伪造成用量。</strong>
+        </div>
+        <span>{{ activeModels.length }} 条路由</span>
+      </div>
+      <div class="active-model-grid">
+        <article v-for="model in activeModels" :key="model.scene" class="active-model-card">
+          <div class="model-route-top">
+            <span>{{ model.label }}</span>
+            <em :class="{ muted: !model.configured }">{{ model.configured ? "已配置" : "未配置" }}</em>
+          </div>
+          <h3>{{ model.modelName || "unknown-model" }}</h3>
+          <p>{{ model.providerName || "未知供应商" }}</p>
+          <div class="model-route-meta">
+            <span>{{ model.apiFormat || "openai_chat" }}</span>
+            <strong>{{ formatTokens(model.recordedTokens || 0) }} Token</strong>
+          </div>
+          <small>{{ model.accountingRule }}</small>
+        </article>
+      </div>
+    </section>
+
     <section class="chart-panel">
       <div class="panel-toolbar">
         <nav class="soft-tabs" aria-label="统计维度">
@@ -167,7 +192,9 @@
           <strong>{{ formatTokens(row.tokens || 0) }}</strong>
         </div>
       </div>
-      <p v-if="!filteredCalls.length" class="empty-text">当前筛选下没有调用记录。</p>
+      <p v-if="!filteredCalls.length" class="empty-text">
+        {{ selectedModel && activeModelNames.includes(selectedModel) ? "该模型当前已配置，但还没有真实入账记录；组会 PPT 生成完成后会在这里显示用量。" : "当前筛选下没有调用记录。" }}
+      </p>
       <footer class="table-footer">
         <span>显示最近 {{ filteredCalls.length }} 条已入账记录，Token 用量 = 输入 + 输出。</span>
       </footer>
@@ -193,8 +220,15 @@ const activeLogTab = ref("all");
 const selectedModel = ref("");
 const selectedScene = ref("");
 
+const activeModels = computed(() => usageStore.state.activeModels || []);
+
+const activeModelNames = computed(() => activeModels.value.map((row) => row.modelName).filter(Boolean));
+
 const modelOptions = computed(() => [
-  ...new Set(usageStore.state.recentCalls.map((row) => row.model).filter(Boolean)),
+  ...new Set([
+    ...usageStore.state.recentCalls.map((row) => row.model).filter(Boolean),
+    ...activeModelNames.value,
+  ]),
 ]);
 
 const sceneOptions = computed(() => [
@@ -383,6 +417,7 @@ button:disabled {
 
 .metric-strip,
 .summary-grid,
+.active-model-panel,
 .chart-panel,
 .ledger-panel {
   max-width: 1560px;
@@ -501,6 +536,122 @@ button:disabled {
   align-items: center;
   gap: 18px;
   padding: 22px 24px;
+}
+
+.active-model-panel {
+  margin-bottom: 22px;
+  border: 1px solid #e4eaf2;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(18, 31, 53, .04);
+}
+
+.active-model-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 12px;
+}
+
+.active-model-head p {
+  margin: 0 0 6px;
+  color: #182234;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.active-model-head strong {
+  color: #667085;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.active-model-head > span {
+  border-radius: 999px;
+  background: #edf4ff;
+  color: #2357d6;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.active-model-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0 24px 22px;
+}
+
+.active-model-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dfe7f2;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f7fbff 100%);
+  padding: 18px;
+}
+
+.model-route-top,
+.model-route-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.model-route-top span {
+  color: #526075;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.model-route-top em {
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #087b4a;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.model-route-top em.muted {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.active-model-card h3 {
+  margin: 0;
+  color: #182234;
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.active-model-card p {
+  margin: 0;
+  color: #607086;
+  font-size: 13px;
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.model-route-meta span {
+  color: #7a8799;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.model-route-meta strong {
+  color: #1f2a44;
+  font-size: 15px;
+}
+
+.active-model-card small {
+  color: #7a8799;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .panel-toolbar {
@@ -732,7 +883,8 @@ button:disabled {
 
 @media (max-width: 1120px) {
   .metric-strip,
-  .summary-grid {
+  .summary-grid,
+  .active-model-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -759,8 +911,16 @@ button:disabled {
 
   .metric-strip,
   .summary-grid,
+  .active-model-grid,
   .balance-card {
     grid-template-columns: 1fr;
+  }
+
+  .active-model-head,
+  .model-route-top,
+  .model-route-meta {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .balance-card div:not(:first-child) {

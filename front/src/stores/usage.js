@@ -36,6 +36,7 @@ const defaultState = {
   modelBreakdown: [],
   sceneBreakdown: [],
   actionBreakdown: [],
+  activeModels: [],
   recentCalls: [],
 };
 
