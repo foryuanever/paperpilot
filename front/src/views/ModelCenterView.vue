@@ -3,8 +3,8 @@
     <header class="usage-header">
       <div>
         <p class="page-kicker">模型与额度</p>
-        <h1>消耗看板</h1>
-        <p>所有数字来自后端 AI 调用记录与账号额度，不展示模拟数据。</p>
+        <h1>模型用量看板</h1>
+        <p>这里统计已入账的模型调用：输入 Token、输出 Token 和账号额度都来自后端记录。</p>
       </div>
       <div class="header-actions">
         <span class="scope-pill">{{ usageStore.state.usageScope === "all" ? "全站最近记录" : "当前账号" }}</span>
@@ -54,7 +54,7 @@
         <span class="balance-icon">◔</span>
         <div>
           <strong>{{ formatTokens(usageStore.state.tokenUsed) }}</strong>
-          <p>累计 Token 消耗</p>
+          <p>累计 Token 用量</p>
         </div>
         <div>
           <strong>{{ formatMoney(usageStore.state.estimatedCost || 0) }}</strong>
@@ -86,12 +86,12 @@
     <section class="chart-panel">
       <div class="panel-toolbar">
         <nav class="soft-tabs" aria-label="统计维度">
-          <button type="button" :class="{ active: activeChart === 'cost' }" @click="activeChart = 'cost'">消耗分布</button>
+          <button type="button" :class="{ active: activeChart === 'cost' }" @click="activeChart = 'cost'">估算成本</button>
           <button type="button" :class="{ active: activeChart === 'calls' }" @click="activeChart = 'calls'">调用分布</button>
           <button type="button" :class="{ active: activeChart === 'tokens' }" @click="activeChart = 'tokens'">Token分布</button>
         </nav>
         <div class="chart-meta">
-          <span>同步频率 10-20 分钟</span>
+          <span>点击刷新后实时读取</span>
           <strong>周期 7 天</strong>
         </div>
       </div>
@@ -115,8 +115,9 @@
       <div class="panel-toolbar ledger-toolbar">
         <nav class="soft-tabs" aria-label="调用记录筛选">
           <button type="button" :class="{ active: activeLogTab === 'all' }" @click="activeLogTab = 'all'">全部</button>
-          <button type="button" :class="{ active: activeLogTab === 'consume' }" @click="activeLogTab = 'consume'">消耗</button>
-          <button type="button" :class="{ active: activeLogTab === 'system' }" @click="activeLogTab = 'system'">系统</button>
+          <button type="button" :class="{ active: activeLogTab === 'report' }" @click="activeLogTab = 'report'">组会</button>
+          <button type="button" :class="{ active: activeLogTab === 'translate' }" @click="activeLogTab = 'translate'">翻译</button>
+          <button type="button" :class="{ active: activeLogTab === 'qa' }" @click="activeLogTab = 'qa'">问答</button>
         </nav>
         <button type="button" class="icon-button" :disabled="loading" title="刷新" @click="refreshUsage">↻</button>
       </div>
@@ -154,7 +155,7 @@
           <span>论文 / 任务</span>
           <span>输入</span>
           <span>输出</span>
-          <span>消耗</span>
+          <span>Token 用量</span>
         </div>
         <div v-for="row in filteredCalls" :key="`${row.time}-${row.paper}-${row.tokens}`" class="usage-row" role="row">
           <span>{{ row.time || "-" }}</span>
@@ -168,53 +169,20 @@
       </div>
       <p v-if="!filteredCalls.length" class="empty-text">当前筛选下没有调用记录。</p>
       <footer class="table-footer">
-        <span>显示最近 {{ filteredCalls.length }} 条，接口仅返回真实记录，不补假行。</span>
-        <button type="button" class="billing-link" @click="showBilling = !showBilling">
-          {{ showBilling ? "收起套餐" : "查看套餐" }}
-        </button>
+        <span>显示最近 {{ filteredCalls.length }} 条已入账记录，Token 用量 = 输入 + 输出。</span>
       </footer>
-    </section>
-
-    <section v-if="showBilling" class="billing-panel">
-      <div class="billing-head">
-        <div>
-          <h2>科研订阅套餐</h2>
-          <p>购买后写入账号额度，消耗页会按真实调用记录继续计算。</p>
-        </div>
-        <strong>{{ usageStore.state.planName }}</strong>
-      </div>
-      <div class="pricing-rows">
-        <section v-for="row in planRows" :key="row.cycle" class="pricing-row">
-          <div class="pricing-row-title">
-            <strong>{{ row.cycle }}</strong>
-            <span>{{ row.summary }}</span>
-          </div>
-          <div class="pricing-grid">
-            <article
-              v-for="plan in row.plans"
-              :key="plan.id"
-              class="pricing-card"
-              :class="{ active: usageStore.state.planId === plan.id }"
-            >
-              <span>{{ plan.tier }}</span>
-              <h3>{{ plan.name }}</h3>
-              <p class="price-line"><strong>{{ plan.price }}</strong><em>{{ plan.period }}</em></p>
-              <p>{{ formatTokens(plan.tokenQuota) }} Token</p>
-              <button type="button" @click="selectPlan(plan, 'alipay')">创建订单</button>
-            </article>
-          </div>
-        </section>
-      </div>
+      <aside class="accounting-note">
+        <strong>PPT 生成为什么可能不在表里？</strong>
+        <span>PPT Master 组会 PPT 是 Codex CLI 外部 Agent 流程，目前不会回写真实 token 明细；本表只展示通过后端 AI 网关成功入账的模型调用。</span>
+      </aside>
     </section>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { billingPlans } from "../constants/pages";
 import { useAuthStore } from "../stores/auth";
 import { useUsageStore } from "../stores/usage";
-import { paperpilotApi } from "../services/paperpilotApi";
 
 const usageStore = useUsageStore();
 const authStore = useAuthStore();
@@ -224,22 +192,6 @@ const activeChart = ref("cost");
 const activeLogTab = ref("all");
 const selectedModel = ref("");
 const selectedScene = ref("");
-const showBilling = ref(false);
-
-const planRows = computed(() => {
-  const summaries = {
-    月包: "短期精读、课程论文和临时组会",
-    季包: "开题准备、阶段综述和连续汇报",
-    年包: "毕业论文、长期课题和团队协作",
-  };
-  return ["月包", "季包", "年包"]
-    .map((cycle) => ({
-      cycle,
-      summary: summaries[cycle],
-      plans: billingPlans.filter((plan) => plan.billingCycle === cycle),
-    }))
-    .filter((row) => row.plans.length);
-});
 
 const modelOptions = computed(() => [
   ...new Set(usageStore.state.recentCalls.map((row) => row.model).filter(Boolean)),
@@ -252,8 +204,9 @@ const sceneOptions = computed(() => [
 const filteredCalls = computed(() => usageStore.state.recentCalls.filter((row) => {
   if (selectedModel.value && row.model !== selectedModel.value) return false;
   if (selectedScene.value && row.action !== selectedScene.value) return false;
-  if (activeLogTab.value === "consume") return Number(row.tokens || 0) > 0;
-  if (activeLogTab.value === "system") return /系统|配置|模型|失败|生成/.test(String(row.action || ""));
+  if (activeLogTab.value === "report") return /组会|汇报|综述/.test(String(row.action || ""));
+  if (activeLogTab.value === "translate") return /翻译/.test(String(row.action || ""));
+  if (activeLogTab.value === "qa") return /问答|提问/.test(String(row.action || ""));
   return true;
 }));
 
@@ -331,37 +284,19 @@ function formatMoney(value) {
   return `$${Number(value || 0).toFixed(4)}`;
 }
 
-async function selectPlan(plan, provider) {
-  try {
-    const order = await paperpilotApi.createPaymentOrder({
-      planId: plan.id,
-      provider,
-      amount: plan.price,
-      tokenQuota: plan.tokenQuota,
-      durationMonths: plan.durationMonths || 1,
-    });
-    if (order.paymentUrl) {
-      window.open(order.paymentUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
-    authStore.addNotification({
-      title: "订单已创建",
-      desc: order.message || `订单号：${order.orderNo}`,
-    });
-  } catch (error) {
-    authStore.addNotification({
-      title: "创建支付订单失败",
-      desc: error?.response?.data?.message || "请检查支付配置或稍后重试。",
-    });
-  }
-}
-
 const sceneMap = {
   translate: "学术翻译",
   analyze: "论文解析",
   summary: "汇总综述",
-  report: "组会汇报",
+  report: "组会",
   qa: "论文问答",
+  "组会汇报": "组会论文综述生成",
+  "组会论文内容生成": "组会论文内容生成",
+  "组会论文综述生成": "组会论文综述生成",
+  "双栏翻译": "PDF双栏翻译",
+  "PDF双栏翻译": "PDF双栏翻译",
+  "论文问答": "论文问答",
+  "论文选区提问": "论文选区提问",
 };
 
 function translateScene(value) {
@@ -419,7 +354,6 @@ function translateAction(value) {
 
 .scope-pill,
 .refresh-button,
-.billing-link,
 .icon-button {
   border: 1px solid #d9e1ec;
   border-radius: 10px;
@@ -435,7 +369,6 @@ function translateAction(value) {
 }
 
 .refresh-button,
-.billing-link,
 .icon-button {
   min-height: 38px;
   padding: 0 14px;
@@ -450,8 +383,7 @@ button:disabled {
 .metric-strip,
 .summary-grid,
 .chart-panel,
-.ledger-panel,
-.billing-panel {
+.ledger-panel {
   max-width: 1560px;
   margin-left: auto;
   margin-right: auto;
@@ -468,8 +400,7 @@ button:disabled {
 .balance-card,
 .day-card,
 .chart-panel,
-.ledger-panel,
-.billing-panel {
+.ledger-panel {
   border: 1px solid #e4eaf2;
   border-radius: 14px;
   background: #fff;
@@ -769,15 +700,10 @@ button:disabled {
 .table-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 16px 26px;
   color: #717b8d;
   font-size: 13px;
-}
-
-.billing-link {
-  color: #1d4ed8;
 }
 
 .empty-text {
@@ -786,93 +712,21 @@ button:disabled {
   line-height: 1.7;
 }
 
-.billing-panel {
-  margin-top: 22px;
-  padding: 24px;
-}
-
-.billing-head,
-.pricing-row-title {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.billing-head h2 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.billing-head p,
-.pricing-row-title span {
-  color: #697588;
-}
-
-.pricing-rows {
+.accounting-note {
   display: grid;
-  gap: 18px;
-  margin-top: 22px;
+  gap: 6px;
+  margin: 0 26px 22px;
+  padding: 14px 16px;
+  border: 1px solid #cfe1ff;
+  border-radius: 11px;
+  background: #f7fbff;
+  color: #40506a;
+  font-size: 13px;
+  line-height: 1.65;
 }
 
-.pricing-row {
-  display: grid;
-  gap: 12px;
-}
-
-.pricing-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.pricing-card {
-  padding: 18px;
-  border: 1px solid #e1e8f2;
-  border-radius: 12px;
-  background: #fbfcfe;
-}
-
-.pricing-card.active {
-  border-color: #5b70f2;
-}
-
-.pricing-card span {
-  color: #667085;
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.pricing-card h3 {
-  margin: 8px 0 0;
-  font-size: 16px;
-}
-
-.price-line {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-}
-
-.price-line strong {
-  font-size: 24px;
-}
-
-.price-line em {
-  color: #667085;
-  font-style: normal;
-}
-
-.pricing-card button {
-  width: 100%;
-  height: 38px;
-  border: 0;
-  border-radius: 9px;
-  background: #2458dc;
-  color: #fff;
-  font: inherit;
-  font-weight: 900;
-  cursor: pointer;
+.accounting-note strong {
+  color: #1b4eb6;
 }
 
 @media (max-width: 1120px) {
@@ -885,8 +739,7 @@ button:disabled {
     grid-column: 1 / -1;
   }
 
-  .ledger-filters,
-  .pricing-grid {
+  .ledger-filters {
     grid-template-columns: 1fr;
   }
 }

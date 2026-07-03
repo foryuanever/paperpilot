@@ -789,8 +789,8 @@ public class AiChatService {
     private String inferAction(String systemPrompt, String userPrompt) {
         String scene = inferScene(systemPrompt, userPrompt);
         return switch (scene) {
-            case "translate" -> "双栏翻译";
-            case "report" -> "组会汇报";
+            case "translate" -> "PDF双栏翻译";
+            case "report" -> "组会论文内容生成";
             case "summary" -> "综述生成";
             case "qa" -> "论文问答";
             default -> "论文解析";

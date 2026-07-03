@@ -259,7 +259,7 @@ public class MeetingReportService {
                 userId,
                 modelName,
                 "report",
-                "组会汇报",
+                "组会论文综述生成",
                 paper.getTitle(),
                 promptTokens,
                 completionTokens,
