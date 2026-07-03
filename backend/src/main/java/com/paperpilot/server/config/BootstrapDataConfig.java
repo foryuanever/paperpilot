@@ -215,6 +215,7 @@ public class BootstrapDataConfig {
     private void seedUser(AppUserRepository appUserRepository, String username, String email, String password, String role, String lastIp, long activeTime, long tokenLimit, long tokenUsed) {
         java.util.Optional<AppUserEntity> existingOpt = appUserRepository.findByEmail(email);
         AppUserEntity user;
+        boolean isNew = existingOpt.isEmpty();
         if (existingOpt.isPresent()) {
             user = existingOpt.get();
         } else {
@@ -228,8 +229,12 @@ public class BootstrapDataConfig {
         user.setPlainPassword(password);
         user.setLastIp(lastIp);
         user.setActiveTime(activeTime);
-        user.setTokenLimit(tokenLimit);
-        user.setTokenUsed(tokenUsed);
+        if (isNew || user.getTokenLimit() == null) {
+            user.setTokenLimit(tokenLimit);
+        }
+        if (isNew || user.getTokenUsed() == null) {
+            user.setTokenUsed(tokenUsed);
+        }
         appUserRepository.save(user);
     }
 
