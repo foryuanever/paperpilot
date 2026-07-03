@@ -117,24 +117,35 @@
                   <div class="generation-progress ppt-progress" aria-hidden="true">
                     <i :style="{ width: `${deckPercent(meeting)}%` }"></i>
                   </div>
-                  <a
-                    v-if="deckJobs[meeting.id]?.downloadUrl"
-                    class="download-button"
-                    :href="absoluteApiUrl(deckJobs[meeting.id].downloadUrl)"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    下载 PPT
-                  </a>
-                  <button
-                    v-else
-                    type="button"
-                    class="primary-button"
-                    :disabled="!primaryPaper(meeting) || !hasPdf(primaryPaper(meeting)) || isDeckBusy(meeting)"
-                    @click="makePpt(meeting)"
-                  >
-                    {{ isDeckBusy(meeting) ? "后台生成中" : "生成汇报 PPT" }}
-                  </button>
+                  <div class="deck-action-row">
+                    <a
+                      v-if="deckJobs[meeting.id]?.downloadUrl"
+                      class="download-button"
+                      :href="absoluteApiUrl(deckJobs[meeting.id].downloadUrl)"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      下载 PPT
+                    </a>
+                    <button
+                      v-else
+                      type="button"
+                      class="primary-button"
+                      :disabled="!primaryPaper(meeting) || !hasPdf(primaryPaper(meeting)) || isDeckBusy(meeting)"
+                      @click="makePpt(meeting)"
+                    >
+                      {{ isDeckBusy(meeting) ? "执行中" : "生成汇报 PPT" }}
+                    </button>
+                    <a
+                      v-if="deckJobs[meeting.id]?.confirmUrl && isDeckBusy(meeting)"
+                      class="confirm-link-button"
+                      :href="deckJobs[meeting.id].confirmUrl"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      参数页
+                    </a>
+                  </div>
                 </div>
               </div>
             </aside>
@@ -596,6 +607,7 @@ function deckStepText(meeting) {
   if (!job) return "等待启动 PPT 任务";
   if (job.status === "generated") return "已生成，可下载";
   if (job.status === "failed") return job.message || "生成失败";
+  if (job.confirmUrl && Number(job.progress || 0) <= 24) return "等待参数确认 · 请打开参数页后继续";
   return [job.stage, job.message].filter(Boolean).join(" · ") || "后台生成中";
 }
 
@@ -740,6 +752,7 @@ function formatReviewParagraphs(value = "") {
   return String(value || "")
     .replace(/\r\n/g, "\n")
     .replace(new RegExp(`([^\\n])((?:${labelPattern})[：:])`, "g"), "$1\n\n$2")
+    .replace(new RegExp(`\\n((?:${labelPattern})[：:])`, "g"), "\n\n$1")
     .replace(/([。；;])((?:第二|第三|第四|第五|第六|第七|其次|再次|最后)[，,])/g, "$1\n\n$2")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -881,7 +894,7 @@ function applyDeckJob(meeting, payload = {}, paper = {}) {
 
 function resumeDeckJobs() {
   Object.entries(deckJobs).forEach(([meetingId, job]) => {
-    if (job?.status === "running" && job.jobId) {
+    if (isDeckRunning(job) && job.jobId) {
       const paper = papers.value.find((item) => item.workspaceId === job.paperWorkspaceId) || {};
       pollDeck(meetingId, job.jobId, paper);
     }
@@ -1363,13 +1376,36 @@ button:disabled {
   background: linear-gradient(90deg, #2563eb, #10b981);
 }
 
+.deck-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-self: end;
+}
+
+.deck-action-row:has(.confirm-link-button) {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .generation-action button,
 .generation-action a {
   width: 100%;
   box-sizing: border-box;
-  align-self: end;
   min-height: 38px;
   border-radius: 9px;
+}
+
+.confirm-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  border: 1px solid #c7d8ef;
+  background: #f8fbff;
+  color: #194fbf;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 850;
 }
 
 .generation-action .soft-button {
@@ -1585,6 +1621,8 @@ button:disabled {
   right: 12px;
   width: 30px;
   height: 30px;
+  display: grid;
+  place-items: center;
   border: 1px solid color-mix(in srgb, currentColor 28%, #d5e0eb);
   border-radius: 9px;
   padding: 0;
