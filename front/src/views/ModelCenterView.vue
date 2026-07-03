@@ -2,14 +2,14 @@
   <div class="usage-page">
     <header class="usage-header">
       <div>
-        <p class="page-kicker">模型与额度</p>
-        <h1>模型用量看板</h1>
-        <p>这里统计已入账的模型调用：输入 Token、输出 Token 和账号额度都来自后端记录。</p>
+        <p class="page-kicker">用量与额度</p>
+        <h1>用量与费用看板</h1>
+        <p>这里统计已入账的功能调用：输入 Token、输出 Token、费用和账号额度都来自后端记录。</p>
       </div>
       <div class="header-actions">
         <span class="scope-pill">{{ usageStore.state.usageScope === "all" ? "全站最近记录" : "当前账号" }}</span>
         <button type="button" class="refresh-button" :disabled="loading" @click="refreshUsage">
-          {{ loading ? "刷新中" : "刷新" }}
+          <span>{{ loading ? "刷新中" : "刷新" }}</span>
         </button>
       </div>
     </header>
@@ -42,9 +42,9 @@
       <article class="metric-card violet">
         <span class="metric-icon">$</span>
         <div>
-          <small>当前 MPM</small>
+          <small>每分钟费用</small>
           <strong>{{ formatMoney(usageStore.state.mpm || 0) }}</strong>
-          <em>按系统估算单价</em>
+          <em>按已入账 Token 单价计算</em>
         </div>
       </article>
     </section>
@@ -58,7 +58,7 @@
         </div>
         <div>
           <strong>{{ formatMoney(usageStore.state.estimatedCost || 0) }}</strong>
-          <p>估算成本</p>
+          <p>累计费用</p>
         </div>
         <div>
           <strong>{{ totalRequestsDisplay }}</strong>
@@ -83,35 +83,10 @@
       </article>
     </section>
 
-    <section class="active-model-panel" aria-label="当前计费模型范围">
-      <div class="active-model-head">
-        <div>
-          <p>当前计费模型范围</p>
-          <strong>这里显示正在被功能调用的真实模型配置，不把未发生的调用伪造成用量。</strong>
-        </div>
-        <span>{{ activeModels.length }} 条路由</span>
-      </div>
-      <div class="active-model-grid">
-        <article v-for="model in activeModels" :key="model.scene" class="active-model-card">
-          <div class="model-route-top">
-            <span>{{ model.label }}</span>
-            <em :class="{ muted: !model.configured }">{{ model.configured ? "已配置" : "未配置" }}</em>
-          </div>
-          <h3>{{ model.modelName || "unknown-model" }}</h3>
-          <p>{{ model.providerName || "未知供应商" }}</p>
-          <div class="model-route-meta">
-            <span>{{ model.apiFormat || "openai_chat" }}</span>
-            <strong>{{ formatTokens(model.recordedTokens || 0) }} Token</strong>
-          </div>
-          <small>{{ model.accountingRule }}</small>
-        </article>
-      </div>
-    </section>
-
     <section class="chart-panel">
       <div class="panel-toolbar">
         <nav class="soft-tabs" aria-label="统计维度">
-          <button type="button" :class="{ active: activeChart === 'cost' }" @click="activeChart = 'cost'">估算成本</button>
+          <button type="button" :class="{ active: activeChart === 'cost' }" @click="activeChart = 'cost'">费用</button>
           <button type="button" :class="{ active: activeChart === 'calls' }" @click="activeChart = 'calls'">调用分布</button>
           <button type="button" :class="{ active: activeChart === 'tokens' }" @click="activeChart = 'tokens'">Token分布</button>
         </nav>
@@ -136,6 +111,14 @@
       <p v-else class="empty-text">暂无可统计的调用记录。</p>
     </section>
 
+    <section class="cost-formula-card" aria-label="费用计算">
+      <div>
+        <p>费用计算</p>
+        <strong>费用 = Token 用量 × {{ formatMoney(TOKEN_UNIT_PRICE) }} / 1K</strong>
+      </div>
+      <span>每条记录按输入 Token 与输出 Token 合计计算；页面只展示费用结果，不暴露底层调用配置。</span>
+    </section>
+
     <section class="ledger-panel">
       <div class="panel-toolbar ledger-toolbar">
         <nav class="soft-tabs" aria-label="调用记录筛选">
@@ -157,13 +140,6 @@
           <input :value="dateRange.end" type="text" readonly>
         </label>
         <label>
-          模型名称
-          <select v-model="selectedModel">
-            <option value="">全部模型</option>
-            <option v-for="model in modelOptions" :key="model" :value="model">{{ model }}</option>
-          </select>
-        </label>
-        <label>
           调用类型
           <select v-model="selectedScene">
             <option value="">全部类型</option>
@@ -176,31 +152,31 @@
         <div class="usage-row usage-head" role="row">
           <span>创建时间</span>
           <span>类型</span>
-          <span>模型</span>
           <span>论文 / 任务</span>
           <span>输入</span>
           <span>输出</span>
           <span>Token 用量</span>
+          <span>费用</span>
         </div>
         <div v-for="row in filteredCalls" :key="`${row.time}-${row.paper}-${row.tokens}`" class="usage-row" role="row">
           <span>{{ row.time || "-" }}</span>
           <span>{{ translateAction(row.action) }}</span>
-          <span class="model-cell"><i></i>{{ row.model || "unknown-model" }}</span>
           <span class="paper-cell">{{ row.paper || "当前论文" }}</span>
           <span>{{ formatTokens(row.promptTokens || 0) }}</span>
           <span>{{ formatTokens(row.completionTokens || 0) }}</span>
           <strong>{{ formatTokens(row.tokens || 0) }}</strong>
+          <strong>{{ formatMoney(rowCost(row)) }}</strong>
         </div>
       </div>
       <p v-if="!filteredCalls.length" class="empty-text">
-        {{ selectedModel && activeModelNames.includes(selectedModel) ? "该模型当前已配置，但还没有真实入账记录；组会 PPT 生成完成后会在这里显示用量。" : "当前筛选下没有调用记录。" }}
+        当前筛选下没有调用记录。
       </p>
       <footer class="table-footer">
-        <span>显示最近 {{ filteredCalls.length }} 条已入账记录，Token 用量 = 输入 + 输出。</span>
+        <span>显示最近 {{ filteredCalls.length }} 条已入账记录，Token 用量 = 输入 + 输出，费用按已入账 Token 统一计算。</span>
       </footer>
       <aside class="accounting-note">
-        <strong>关于 PPT Agent 用量</strong>
-        <span>PPT Master 组会 PPT 会以“组会PPT Agent执行（估算）”入账并显示 GPT5.5；因为 Codex CLI 不返回供应商精确 token，系统按提示词、材料和日志做本地估算。</span>
+        <strong>关于组会 PPT 用量</strong>
+        <span>组会 PPT 完成后会写入本页账单。由于执行器只返回材料、提示词和日志规模，系统按同一 Token 口径入账，用户侧不展示底层调用配置。</span>
       </aside>
     </section>
   </div>
@@ -217,26 +193,14 @@ const authStore = useAuthStore();
 const loading = ref(false);
 const activeChart = ref("cost");
 const activeLogTab = ref("all");
-const selectedModel = ref("");
 const selectedScene = ref("");
-
-const activeModels = computed(() => usageStore.state.activeModels || []);
-
-const activeModelNames = computed(() => activeModels.value.map((row) => row.modelName).filter(Boolean));
-
-const modelOptions = computed(() => [
-  ...new Set([
-    ...usageStore.state.recentCalls.map((row) => row.model).filter(Boolean),
-    ...activeModelNames.value,
-  ]),
-]);
+const TOKEN_UNIT_PRICE = 0.02;
 
 const sceneOptions = computed(() => [
   ...new Set(usageStore.state.recentCalls.map((row) => row.action).filter(Boolean)),
 ]);
 
 const filteredCalls = computed(() => usageStore.state.recentCalls.filter((row) => {
-  if (selectedModel.value && row.model !== selectedModel.value) return false;
   if (selectedScene.value && row.action !== selectedScene.value) return false;
   if (activeLogTab.value === "report") return /组会|汇报|综述/.test(String(row.action || ""));
   if (activeLogTab.value === "translate") return /翻译/.test(String(row.action || ""));
@@ -260,7 +224,7 @@ const dateRange = computed(() => {
 const chartRows = computed(() => (usageStore.state.dailyUsage || []).map((item) => {
   const tokens = Number(item.tokens || 0);
   const calls = Number(item.calls || 0);
-  const cost = tokens * 0.02 / 1000;
+  const cost = tokens * TOKEN_UNIT_PRICE / 1000;
   return {
     label: item.label,
     tokens,
@@ -318,6 +282,11 @@ function formatMoney(value) {
   return `$${Number(value || 0).toFixed(4)}`;
 }
 
+function rowCost(row) {
+  if (row?.cost !== undefined && row?.cost !== null) return Number(row.cost || 0);
+  return Number(row?.tokens || 0) * TOKEN_UNIT_PRICE / 1000;
+}
+
 const sceneMap = {
   translate: "学术翻译",
   analyze: "论文解析",
@@ -327,7 +296,6 @@ const sceneMap = {
   "组会汇报": "组会论文综述生成",
   "组会论文内容生成": "组会论文内容生成",
   "组会论文综述生成": "组会论文综述生成",
-  "组会PPT Agent执行（估算）": "组会PPT Agent执行（估算）",
   "双栏翻译": "PDF双栏翻译",
   "PDF双栏翻译": "PDF双栏翻译",
   "论文问答": "论文问答",
@@ -335,11 +303,15 @@ const sceneMap = {
 };
 
 function translateScene(value) {
-  return sceneMap[value] || value || "-";
+  return sceneMap[value] || cleanActionName(value);
 }
 
 function translateAction(value) {
-  return sceneMap[value] || value || "-";
+  return sceneMap[value] || cleanActionName(value);
+}
+
+function cleanActionName(value) {
+  return String(value || "-").replace(/（[^）]*）/g, "");
 }
 </script>
 
@@ -405,9 +377,22 @@ function translateAction(value) {
 
 .refresh-button,
 .icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 38px;
   padding: 0 14px;
   cursor: pointer;
+}
+
+.refresh-button {
+  width: 74px;
+}
+
+.refresh-button span {
+  display: inline-block;
+  width: 42px;
+  text-align: center;
 }
 
 button:disabled {
@@ -417,7 +402,7 @@ button:disabled {
 
 .metric-strip,
 .summary-grid,
-.active-model-panel,
+.cost-formula-card,
 .chart-panel,
 .ledger-panel {
   max-width: 1560px;
@@ -435,6 +420,7 @@ button:disabled {
 .metric-card,
 .balance-card,
 .day-card,
+.cost-formula-card,
 .chart-panel,
 .ledger-panel {
   border: 1px solid #e4eaf2;
@@ -536,122 +522,6 @@ button:disabled {
   align-items: center;
   gap: 18px;
   padding: 22px 24px;
-}
-
-.active-model-panel {
-  margin-bottom: 22px;
-  border: 1px solid #e4eaf2;
-  border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 8px 18px rgba(18, 31, 53, .04);
-}
-
-.active-model-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 24px 12px;
-}
-
-.active-model-head p {
-  margin: 0 0 6px;
-  color: #182234;
-  font-size: 16px;
-  font-weight: 900;
-}
-
-.active-model-head strong {
-  color: #667085;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.active-model-head > span {
-  border-radius: 999px;
-  background: #edf4ff;
-  color: #2357d6;
-  padding: 7px 11px;
-  font-size: 12px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.active-model-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  padding: 0 24px 22px;
-}
-
-.active-model-card {
-  display: grid;
-  gap: 10px;
-  border: 1px solid #dfe7f2;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #fbfdff 0%, #f7fbff 100%);
-  padding: 18px;
-}
-
-.model-route-top,
-.model-route-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.model-route-top span {
-  color: #526075;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.model-route-top em {
-  border-radius: 999px;
-  background: #dcfce7;
-  color: #087b4a;
-  padding: 5px 9px;
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 900;
-}
-
-.model-route-top em.muted {
-  background: #f1f5f9;
-  color: #64748b;
-}
-
-.active-model-card h3 {
-  margin: 0;
-  color: #182234;
-  font-size: 22px;
-  line-height: 1.15;
-}
-
-.active-model-card p {
-  margin: 0;
-  color: #607086;
-  font-size: 13px;
-  font-weight: 700;
-  word-break: break-word;
-}
-
-.model-route-meta span {
-  color: #7a8799;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.model-route-meta strong {
-  color: #1f2a44;
-  font-size: 15px;
-}
-
-.active-model-card small {
-  color: #7a8799;
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 .panel-toolbar {
@@ -762,6 +632,35 @@ button:disabled {
   overflow: hidden;
 }
 
+.cost-formula-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 18px;
+  padding: 18px 22px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.cost-formula-card p {
+  margin: 0 0 5px;
+  color: #526075;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.cost-formula-card strong {
+  color: #182234;
+  font-size: 18px;
+}
+
+.cost-formula-card span {
+  max-width: 620px;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .ledger-toolbar {
   padding-bottom: 18px;
   border-bottom: 1px solid #edf1f6;
@@ -775,7 +674,7 @@ button:disabled {
 
 .ledger-filters {
   display: grid;
-  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
   gap: 18px;
   padding: 20px 26px;
   border-bottom: 1px solid #edf1f6;
@@ -806,7 +705,7 @@ button:disabled {
 
 .usage-row {
   display: grid;
-  grid-template-columns: 150px 120px 180px minmax(240px, 1fr) 110px 110px 110px;
+  grid-template-columns: 150px 180px minmax(280px, 1fr) 110px 110px 120px 110px;
   gap: 14px;
   align-items: center;
   min-height: 52px;
@@ -821,21 +720,6 @@ button:disabled {
   color: #2e384a;
   font-weight: 900;
   border-bottom-style: solid;
-}
-
-.model-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #505b6f;
-  font-weight: 800;
-}
-
-.model-cell i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #4ade80;
 }
 
 .paper-cell {
@@ -884,7 +768,7 @@ button:disabled {
 @media (max-width: 1120px) {
   .metric-strip,
   .summary-grid,
-  .active-model-grid {
+  .cost-formula-card {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -911,14 +795,12 @@ button:disabled {
 
   .metric-strip,
   .summary-grid,
-  .active-model-grid,
+  .cost-formula-card,
   .balance-card {
     grid-template-columns: 1fr;
   }
 
-  .active-model-head,
-  .model-route-top,
-  .model-route-meta {
+  .cost-formula-card {
     align-items: flex-start;
     flex-direction: column;
   }

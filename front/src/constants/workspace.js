@@ -66,7 +66,7 @@ export const pageNavItems = [
   { to: "/meeting-report", label: "组会汇报", icon: "slides" },
   { to: "/search", label: "学术搜索", icon: "search" },
   { to: "/forum", label: "学术论坛", icon: "forum" },
-  { to: "/models", label: "模型与额度", icon: "models" },
+  { to: "/models", label: "用量与额度", icon: "models" },
   { to: "/referral", label: "邀请推广", icon: "referral" },
   { to: "/team", label: "我的team", icon: "team" },
 ];

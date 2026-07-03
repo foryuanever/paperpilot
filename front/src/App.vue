@@ -120,7 +120,7 @@
               <router-link class="spatial-btn spatial-btn-accent" style="grid-column: 1 / -1; text-align: center; display: grid; place-items: center; text-decoration: none;" to="/profile" @click="uiStore.closeOverlays">
                 个人主页
               </router-link>
-              <router-link class="spatial-btn spatial-btn-ghost" to="/models" @click="uiStore.closeOverlays">模型中心</router-link>
+              <router-link class="spatial-btn spatial-btn-ghost" to="/models" @click="uiStore.closeOverlays">用量中心</router-link>
               <button class="spatial-btn spatial-btn-ghost" @click="logout">退出登录</button>
             </div>
           </div>
@@ -232,7 +232,7 @@ const navItems = computed(() => {
       { to: "/meeting-report", label: "组会汇报" },
       { to: "/search", label: "检索" },
       { to: "/forum", label: "社区" },
-      { to: "/models", label: "模型" },
+      { to: "/models", label: "用量" },
       { to: "/referral", label: "邀请" },
       { to: "/team", label: "团队" }
     ];
