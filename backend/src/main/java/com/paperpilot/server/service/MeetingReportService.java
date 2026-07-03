@@ -1750,6 +1750,7 @@ public class MeetingReportService {
         job.result().put("modelName", modelConfig.getModelName());
         job.progress(36, "正在启动 PPT Master 多轮 Agent，使用管理员组会汇报模型：" + modelConfig.getModelName());
 
+        validateCodexResponsesModel(modelConfig);
         String providerBaseUrl = cleanCodexProviderBaseUrl(modelConfig.getBaseUrl());
         List<String> command = new ArrayList<>(List.of(
             codexExecutable,
@@ -1904,6 +1905,22 @@ public class MeetingReportService {
         String clean = Objects.toString(baseUrl, "").trim();
         clean = clean.replaceFirst("/(?:v1/)?(?:chat/completions|responses)$", "");
         return clean.replaceAll("/+$", "");
+    }
+
+    private void validateCodexResponsesModel(ModelConfigEntity modelConfig) {
+        String apiFormat = Objects.toString(modelConfig.getApiFormat(), "openai_chat").trim();
+        String baseUrl = Objects.toString(modelConfig.getBaseUrl(), "").trim();
+        if ("openai_responses".equalsIgnoreCase(apiFormat) || baseUrl.matches(".*/(?:v1/)?responses/?$")) return;
+        String provider = Objects.toString(modelConfig.getProviderName(), "当前模型").trim();
+        String model = Objects.toString(modelConfig.getModelName(), "").trim();
+        throw new IllegalStateException(
+            "组会 PPT 的 PPT Master Agent 需要支持 OpenAI Responses 协议的模型路由；"
+                + provider
+                + (StringUtils.hasText(model) ? " / " + model : "")
+                + " 当前是 Chat Completions 协议，不能用于 Codex Agent。"
+                + "请在管理员模型池的“组会汇报/PPT生成”单独配置支持 /responses 的中转 GPT-5.5 路由，"
+                + "不要填 DeepSeek 官方 https://api.deepseek.com。"
+        );
     }
 
     private String tomlString(String value) {
