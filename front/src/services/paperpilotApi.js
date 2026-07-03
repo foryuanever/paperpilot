@@ -2,11 +2,11 @@ import { apiClient } from "./apiClient";
 
 export const paperpilotApi = {
   async login(payload) {
-    const { data } = await apiClient.post("/api/auth/login", payload);
+    const { data } = await apiClient.post("/api/auth/login", payload, { timeout: 5000 });
     return data;
   },
   async register(payload) {
-    const { data } = await apiClient.post("/api/auth/register", payload);
+    const { data } = await apiClient.post("/api/auth/register", payload, { timeout: 5000 });
     return data;
   },
   async changePassword(payload) {
