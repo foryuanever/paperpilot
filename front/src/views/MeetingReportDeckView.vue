@@ -89,12 +89,12 @@
               </div>
 
               <div class="generation-grid">
-                <div class="generation-action">
+                <div class="generation-action" :data-status="reviewActionStatus(meeting)">
                   <div class="progress-label">
                     <span>论文综述</span>
                     <strong>{{ reviewPercent(meeting) }}%</strong>
                   </div>
-                  <p class="generation-step">{{ reviewStepText(meeting) }}</p>
+                  <p class="generation-step" :title="reviewStepText(meeting)">{{ reviewStepText(meeting) }}</p>
                   <div class="generation-progress" aria-hidden="true">
                     <i :style="{ width: `${reviewPercent(meeting)}%` }"></i>
                   </div>
@@ -108,12 +108,12 @@
                   </button>
                 </div>
 
-                <div class="generation-action">
+                <div class="generation-action" :data-status="deckActionStatus(meeting)">
                   <div class="progress-label">
                     <span>PPT</span>
-                    <strong>{{ deckPercent(meeting) }}%</strong>
+                    <strong>{{ deckProgressLabel(meeting) }}</strong>
                   </div>
-                  <p class="generation-step">{{ deckStepText(meeting) }}</p>
+                  <p class="generation-step" :title="deckStepText(meeting)">{{ deckStepText(meeting) }}</p>
                   <div class="generation-progress ppt-progress" aria-hidden="true">
                     <i :style="{ width: `${deckPercent(meeting)}%` }"></i>
                   </div>
@@ -134,7 +134,7 @@
                       :disabled="!primaryPaper(meeting) || !hasPdf(primaryPaper(meeting)) || isDeckBusy(meeting)"
                       @click="makePpt(meeting)"
                     >
-                      {{ isDeckBusy(meeting) ? "执行中" : "生成汇报 PPT" }}
+                      {{ deckJobs[meeting.id]?.status === "failed" ? "重新生成 PPT" : isDeckBusy(meeting) ? "执行中" : "生成汇报 PPT" }}
                     </button>
                     <a
                       v-if="deckJobs[meeting.id]?.confirmUrl && isDeckBusy(meeting)"
@@ -574,8 +574,15 @@ function reviewPercent(meeting) {
 
 function deckPercent(meeting) {
   const job = deckJobs[meeting.id];
+  if (job?.status === "failed") return 100;
   if (job?.downloadUrl || job?.status === "generated") return 100;
   return Math.round(job?.progress || 0);
+}
+
+function deckProgressLabel(meeting) {
+  const job = deckJobs[meeting.id];
+  if (job?.status === "failed") return "失败";
+  return `${deckPercent(meeting)}%`;
 }
 
 function isReviewBusy(meeting) {
@@ -589,6 +596,18 @@ function isDeckBusy(meeting) {
 
 function isDeckRunning(job) {
   return job?.status === "running" || job?.status === "awaiting_agent";
+}
+
+function reviewActionStatus(meeting) {
+  const paper = primaryPaper(meeting);
+  const job = paper ? reviewJobs[paper.workspaceId] : null;
+  return job?.status || "idle";
+}
+
+function deckActionStatus(meeting) {
+  const job = deckJobs[meeting.id];
+  if (job?.downloadUrl) return "generated";
+  return job?.status || "idle";
 }
 
 function reviewStepText(meeting) {
@@ -1355,6 +1374,45 @@ button:disabled {
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.generation-action[data-status="running"],
+.generation-action[data-status="awaiting_agent"] {
+  border-color: #bfdbfe;
+  background: linear-gradient(180deg, #f8fbff, #eff6ff);
+}
+
+.generation-action[data-status="generated"] {
+  border-color: #bbf7d0;
+  background: linear-gradient(180deg, #f6fffb, #ecfdf5);
+}
+
+.generation-action[data-status="failed"] {
+  border-color: #fecaca;
+  background: linear-gradient(180deg, #fffafa, #fff1f2);
+}
+
+.generation-action[data-status="failed"] .progress-label span,
+.generation-action[data-status="failed"] .progress-label strong,
+.generation-action[data-status="failed"] .generation-step {
+  color: #b42323;
+}
+
+.generation-action[data-status="failed"] .generation-step {
+  min-height: 68px;
+  -webkit-line-clamp: 4;
+}
+
+.generation-action[data-status="failed"] .generation-progress {
+  background: #fee2e2;
+}
+
+.generation-action[data-status="failed"] .generation-progress i {
+  background: linear-gradient(90deg, #dc2626, #ef4444);
+}
+
+.generation-action[data-status="failed"] .primary-button {
+  background: #b42323;
 }
 
 .generation-progress {
