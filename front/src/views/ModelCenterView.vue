@@ -1,175 +1,188 @@
 <template>
-  <div class="spatial-page models-spatial">
-    <section class="spatial-chapter" style="padding-top:24px">
-      <div class="spatial-chapter-inner">
-        <span class="spatial-chapter-eyebrow">额度与计费</span>
-        <h1 class="spatial-chapter-title">AI 额度与计费中心</h1>
-        <p class="spatial-chapter-lead">查看平台 AI 服务消耗、计费记录，并购买适合科研工作的 Token 套餐。</p>
-
-        <!-- Premium Tab Switcher -->
-        <div class="spatial-nav-tabs">
-          <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'usage' }"
-            @click="activeTab = 'usage'"
-          >
-            消耗与计费
-          </button>
-          <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'billing' }"
-            @click="activeTab = 'billing'"
-          >
-            套餐购买
-          </button>
-        </div>
+  <div class="usage-page">
+    <header class="usage-header">
+      <div>
+        <p class="page-kicker">模型与额度</p>
+        <h1>消耗看板</h1>
+        <p>所有数字来自后端 AI 调用记录与账号额度，不展示模拟数据。</p>
       </div>
-    </section>
-
-    <!-- Tab 1: Models and Usage Dashboard -->
-    <section v-if="activeTab === 'usage'" class="spatial-chapter-inner model-dashboard">
-      <div class="usage-overview-strip">
-        <div class="usage-quota-main">
-          <span>本周期额度</span>
-          <strong>{{ formatTokens(usageStore.tokenRemaining) }}</strong>
-          <p>剩余 Token · 已使用 {{ usageStore.usagePercent }}%</p>
-          <div class="usage-quota-meter">
-            <div :style="{ width: usageStore.usagePercent + '%' }"></div>
-          </div>
-        </div>
-        <div class="usage-kpi">
-          <span>已用 / 总额</span>
-          <strong>{{ formatTokens(usageStore.state.tokenUsed) }} / {{ formatTokens(usageStore.state.tokenQuota) }}</strong>
-        </div>
-        <div class="usage-kpi">
-          <span>近 7 日</span>
-          <strong>{{ formatTokens(usageStore.state.weekTokens) }}</strong>
-        </div>
-        <div class="usage-kpi">
-          <span>今日调用</span>
-          <strong>{{ todayCalls }}</strong>
-        </div>
-        <button class="usage-plan-button" @click="activeTab = 'billing'">
-          <span>当前套餐</span>
-          <strong>{{ usageStore.state.planName }}</strong>
+      <div class="header-actions">
+        <span class="scope-pill">{{ usageStore.state.usageScope === "all" ? "全站最近记录" : "当前账号" }}</span>
+        <button type="button" class="refresh-button" :disabled="loading" @click="refreshUsage">
+          {{ loading ? "刷新中" : "刷新" }}
         </button>
       </div>
+    </header>
 
-      <div class="usage-workbench">
-        <section class="usage-panel usage-panel-wide">
-          <div class="model-panel-head">
-            <div>
-              <h2>近 7 日 Token 用量</h2>
-              <p>按调用日期聚合，展示近期消耗峰值和低谷。</p>
-            </div>
-            <span class="toolbar-chip">{{ formatTokens(usageStore.state.weekTokens) }}</span>
-          </div>
-          <div class="usage-chart">
-            <div v-for="item in usageStore.state.dailyUsage" :key="item.label" class="usage-chart-col">
-              <div class="usage-chart-bar-wrap">
-                <div class="usage-chart-bar" :style="{ height: barHeight(item.tokens) + '%' }"></div>
-              </div>
-              <span class="usage-chart-label">{{ item.label }}</span>
-              <span class="usage-chart-value">{{ formatTokens(item.tokens) }}</span>
-            </div>
-          </div>
-        </section>
-
-        <section class="usage-panel">
-          <div class="model-panel-head">
-            <div>
-              <h2>消耗构成</h2>
-              <p>模型通道与场景拆分。</p>
-            </div>
-          </div>
-          <div v-if="usageStore.state.modelBreakdown.length || usageStore.state.sceneBreakdown.length" class="usage-split-list">
-            <div v-for="item in usageStore.state.modelBreakdown" :key="item.model" class="usage-split-row">
-              <span>{{ displayPlanModelName }}</span>
-              <strong>{{ item.share }}%</strong>
-              <div><i :style="{ width: item.share + '%' }"></i></div>
-            </div>
-            <div v-for="item in usageStore.state.sceneBreakdown" :key="item.scene" class="usage-split-row muted">
-              <span>{{ translateScene(item.scene) }}</span>
-              <strong>{{ formatTokens(item.tokens) }}</strong>
-              <div><i :style="{ width: item.share + '%' }"></i></div>
-            </div>
-          </div>
-          <p v-else class="usage-empty-state">暂无 AI 调用记录。完成一次论文分析后，这里会显示模型、场景和 Token 构成。</p>
-        </section>
-
-        <section class="usage-panel">
-          <div class="model-panel-head">
-            <div>
-              <h2>输入 / 输出</h2>
-              <p>Prompt 与生成内容占比。</p>
-            </div>
-            <span class="toolbar-chip">估算</span>
-          </div>
-          <div class="token-composition compact">
-            <div class="token-composition-ring" :style="{ '--prompt-deg': `${promptShare * 3.6}deg` }">
-              <div class="token-composition-core">
-                <strong>{{ formatTokens(usageStore.state.promptTokens + usageStore.state.completionTokens) }}</strong>
-                <span>总计</span>
-              </div>
-            </div>
-            <div class="token-composition-legend">
-              <div class="composition-row">
-                <span class="composition-dot prompt"></span>
-                <strong>输入</strong>
-                <span>{{ formatTokens(usageStore.state.promptTokens) }}</span>
-              </div>
-              <div class="composition-row">
-                <span class="composition-dot completion"></span>
-                <strong>输出</strong>
-                <span>{{ formatTokens(usageStore.state.completionTokens) }}</span>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <section class="usage-panel">
-        <div class="model-panel-head">
-          <h2>最近调用记录</h2>
-          <span class="toolbar-chip">{{ usageStore.state.usageScope === "all" ? "全站最近" : "当前账号" }}</span>
+    <section class="metric-strip" aria-label="用量概览">
+      <article class="metric-card pink">
+        <span class="metric-icon">₮</span>
+        <div>
+          <small>当前 Token 余额</small>
+          <strong>{{ formatTokens(usageStore.tokenRemaining) }}</strong>
+          <em>已用 {{ usageStore.usagePercent }}%</em>
         </div>
-        <div v-if="usageStore.state.recentCalls.length" class="model-call-table">
-          <div v-for="row in usageStore.state.recentCalls" :key="row.time + row.paper" class="model-call-row">
-            <span>{{ row.time }}</span>
-            <strong>{{ translateAction(row.action) }}</strong>
-            <span class="model-call-paper">{{ row.paper }}</span>
-            <span class="model-call-tokens">-{{ formatTokens(row.tokens) }}</span>
-          </div>
+      </article>
+      <article class="metric-card teal">
+        <span class="metric-icon">↻</span>
+        <div>
+          <small>当前 RPM</small>
+          <strong>{{ usageStore.state.rpm || 0 }}</strong>
+          <em>最近一分钟请求数</em>
         </div>
-        <p v-else class="usage-empty-state">还没有可展示的调用记录。运行一次 AI 分析后会自动写入这里。</p>
-      </section>
-
+      </article>
+      <article class="metric-card indigo">
+        <span class="metric-icon">∑</span>
+        <div>
+          <small>当前 TPM</small>
+          <strong>{{ formatTokens(usageStore.state.tpm || 0) }}</strong>
+          <em>最近一分钟 Token</em>
+        </div>
+      </article>
+      <article class="metric-card violet">
+        <span class="metric-icon">$</span>
+        <div>
+          <small>当前 MPM</small>
+          <strong>{{ formatMoney(usageStore.state.mpm || 0) }}</strong>
+          <em>按系统估算单价</em>
+        </div>
+      </article>
     </section>
 
-    <!-- Tab 2: Billing packages and Pricing Center -->
-    <section v-else-if="activeTab === 'billing'" class="spatial-chapter-inner billing-dashboard">
-      <div class="billing-header-card spatial-glass-panel">
-        <div class="quota-progress-section">
-          <h3>账户额度分配</h3>
-          <p class="quota-desc">
-            当前套餐：<strong>{{ usageStore.state.planName }}</strong> ·
-            剩余 Token <strong>{{ formatTokens(usageStore.tokenRemaining) }}</strong>
-          </p>
-          <div class="token-meter">
-            <div class="token-meter-bar">
-              <div class="token-meter-fill" :style="{ width: usageStore.usagePercent + '%' }"></div>
-            </div>
-            <span class="token-meter-label">已用 {{ formatTokens(usageStore.state.tokenUsed) }} / {{ formatTokens(usageStore.state.tokenQuota) }}</span>
-          </div>
+    <section class="summary-grid">
+      <article class="balance-card">
+        <span class="balance-icon">◔</span>
+        <div>
+          <strong>{{ formatTokens(usageStore.state.tokenUsed) }}</strong>
+          <p>累计 Token 消耗</p>
         </div>
-        <div class="quota-summary-box">
-          <span class="spatial-drift-label">账户 Token 剩余</span>
-          <strong class="usage-big-number">{{ formatTokens(usageStore.tokenRemaining) }}</strong>
-          <p class="spatial-drift-detail text-muted">额度将于 {{ usageStore.state.resetAt }} 重置</p>
+        <div>
+          <strong>{{ formatMoney(usageStore.state.estimatedCost || 0) }}</strong>
+          <p>估算成本</p>
+        </div>
+        <div>
+          <strong>{{ totalRequestsDisplay }}</strong>
+          <p>总请求数</p>
+        </div>
+      </article>
+
+      <article class="day-card cyan">
+        <span class="balance-icon">⟳</span>
+        <div>
+          <strong>{{ usageStore.state.todayRequests || 0 }}</strong>
+          <p>今日请求数</p>
+        </div>
+      </article>
+
+      <article class="day-card amber">
+        <span class="balance-icon">∑</span>
+        <div>
+          <strong>{{ formatTokens(usageStore.state.todayTokens || 0) }}</strong>
+          <p>今日 Token 数</p>
+        </div>
+      </article>
+    </section>
+
+    <section class="chart-panel">
+      <div class="panel-toolbar">
+        <nav class="soft-tabs" aria-label="统计维度">
+          <button type="button" :class="{ active: activeChart === 'cost' }" @click="activeChart = 'cost'">消耗分布</button>
+          <button type="button" :class="{ active: activeChart === 'calls' }" @click="activeChart = 'calls'">调用分布</button>
+          <button type="button" :class="{ active: activeChart === 'tokens' }" @click="activeChart = 'tokens'">Token分布</button>
+        </nav>
+        <div class="chart-meta">
+          <span>同步频率 10-20 分钟</span>
+          <strong>周期 7 天</strong>
         </div>
       </div>
 
-      <h2 class="section-heading">科研订阅套餐</h2>
+      <div class="chart-note">
+        7天内总计 <strong>{{ chartTotalLabel }}</strong>，平均每天 <strong>{{ chartAverageLabel }}</strong>
+      </div>
+
+      <div v-if="usageStore.state.dailyUsage.length" class="bar-chart" :style="{ '--max': maxDailyValue }">
+        <div v-for="item in chartRows" :key="item.label" class="bar-column">
+          <div class="bar-rail">
+            <i :style="{ height: `${barHeight(item.value)}%` }"></i>
+          </div>
+          <span>{{ item.label }}</span>
+        </div>
+      </div>
+      <p v-else class="empty-text">暂无可统计的调用记录。</p>
+    </section>
+
+    <section class="ledger-panel">
+      <div class="panel-toolbar ledger-toolbar">
+        <nav class="soft-tabs" aria-label="调用记录筛选">
+          <button type="button" :class="{ active: activeLogTab === 'all' }" @click="activeLogTab = 'all'">全部</button>
+          <button type="button" :class="{ active: activeLogTab === 'consume' }" @click="activeLogTab = 'consume'">消耗</button>
+          <button type="button" :class="{ active: activeLogTab === 'system' }" @click="activeLogTab = 'system'">系统</button>
+        </nav>
+        <button type="button" class="icon-button" :disabled="loading" title="刷新" @click="refreshUsage">↻</button>
+      </div>
+
+      <div class="ledger-filters">
+        <label>
+          开始
+          <input :value="dateRange.start" type="text" readonly>
+        </label>
+        <label>
+          结束
+          <input :value="dateRange.end" type="text" readonly>
+        </label>
+        <label>
+          模型名称
+          <select v-model="selectedModel">
+            <option value="">全部模型</option>
+            <option v-for="model in modelOptions" :key="model" :value="model">{{ model }}</option>
+          </select>
+        </label>
+        <label>
+          调用类型
+          <select v-model="selectedScene">
+            <option value="">全部类型</option>
+            <option v-for="scene in sceneOptions" :key="scene" :value="scene">{{ translateScene(scene) }}</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="usage-table" role="table" aria-label="最近调用记录">
+        <div class="usage-row usage-head" role="row">
+          <span>创建时间</span>
+          <span>类型</span>
+          <span>模型</span>
+          <span>论文 / 任务</span>
+          <span>输入</span>
+          <span>输出</span>
+          <span>消耗</span>
+        </div>
+        <div v-for="row in filteredCalls" :key="`${row.time}-${row.paper}-${row.tokens}`" class="usage-row" role="row">
+          <span>{{ row.time || "-" }}</span>
+          <span>{{ translateAction(row.action) }}</span>
+          <span class="model-cell"><i></i>{{ row.model || "unknown-model" }}</span>
+          <span class="paper-cell">{{ row.paper || "当前论文" }}</span>
+          <span>{{ formatTokens(row.promptTokens || 0) }}</span>
+          <span>{{ formatTokens(row.completionTokens || 0) }}</span>
+          <strong>{{ formatTokens(row.tokens || 0) }}</strong>
+        </div>
+      </div>
+      <p v-if="!filteredCalls.length" class="empty-text">当前筛选下没有调用记录。</p>
+      <footer class="table-footer">
+        <span>显示最近 {{ filteredCalls.length }} 条，接口仅返回真实记录，不补假行。</span>
+        <button type="button" class="billing-link" @click="showBilling = !showBilling">
+          {{ showBilling ? "收起套餐" : "查看套餐" }}
+        </button>
+      </footer>
+    </section>
+
+    <section v-if="showBilling" class="billing-panel">
+      <div class="billing-head">
+        <div>
+          <h2>科研订阅套餐</h2>
+          <p>购买后写入账号额度，消耗页会按真实调用记录继续计算。</p>
+        </div>
+        <strong>{{ usageStore.state.planName }}</strong>
+      </div>
       <div class="pricing-rows">
         <section v-for="row in planRows" :key="row.cycle" class="pricing-row">
           <div class="pricing-row-title">
@@ -181,30 +194,13 @@
               v-for="plan in row.plans"
               :key="plan.id"
               class="pricing-card"
-              :class="{ featured: plan.highlight, active: usageStore.state.planId === plan.id }"
+              :class="{ active: usageStore.state.planId === plan.id }"
             >
-              <span class="spatial-drift-label">{{ plan.tier }}</span>
+              <span>{{ plan.tier }}</span>
               <h3>{{ plan.name }}</h3>
-              <div class="pricing-amount">
-                <strong>{{ plan.price }}</strong>
-                <span>{{ plan.period }}</span>
-              </div>
-              <p class="pricing-quota">{{ formatTokens(plan.tokenQuota) }} Token</p>
-              <ul class="pricing-features">
-                <li v-for="item in plan.features" :key="item">{{ item }}</li>
-              </ul>
-              <div class="payment-button-row">
-                <button class="payment-btn alipay" @click="selectPlan(plan, 'alipay')">
-                  <span class="pay-logo alipay-logo">支</span>
-                  <span>支付宝</span>
-                </button>
-                <button class="payment-btn wechat" @click="selectPlan(plan, 'wechat')">
-                  <span class="pay-logo wechat-logo" aria-hidden="true">
-                    <i></i><i></i>
-                  </span>
-                  <span>微信支付</span>
-                </button>
-              </div>
+              <p class="price-line"><strong>{{ plan.price }}</strong><em>{{ plan.period }}</em></p>
+              <p>{{ formatTokens(plan.tokenQuota) }} Token</p>
+              <button type="button" @click="selectPlan(plan, 'alipay')">创建订单</button>
             </article>
           </div>
         </section>
@@ -214,28 +210,22 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from "vue";
-import { useRoute } from "vue-router";
-import { useScrollReveal } from "../composables/useScrollReveal";
+import { computed, onMounted, ref } from "vue";
 import { billingPlans } from "../constants/pages";
-import { useUsageStore } from "../stores/usage";
 import { useAuthStore } from "../stores/auth";
+import { useUsageStore } from "../stores/usage";
 import { paperpilotApi } from "../services/paperpilotApi";
 
-useScrollReveal(".models-spatial");
-
-const route = useRoute();
 const usageStore = useUsageStore();
 const authStore = useAuthStore();
 
-const activeTab = ref("usage");
-const displayPlanModelName = computed(() => {
-  const name = usageStore.state.planName || "当前套餐";
-  if (/Elite|课题组|年包|旗舰/.test(name)) return "旗舰精读模型通道";
-  if (/Pro|深度|季包|进阶/.test(name)) return "Pro 深度阅读模型";
-  if (/Plus|冲刺|月包/.test(name)) return "Plus 论文冲刺模型";
-  return "Starter 基础分析模型";
-});
+const loading = ref(false);
+const activeChart = ref("cost");
+const activeLogTab = ref("all");
+const selectedModel = ref("");
+const selectedScene = ref("");
+const showBilling = ref(false);
+
 const planRows = computed(() => {
   const summaries = {
     月包: "短期精读、课程论文和临时组会",
@@ -251,42 +241,94 @@ const planRows = computed(() => {
     .filter((row) => row.plans.length);
 });
 
-onMounted(async () => {
+const modelOptions = computed(() => [
+  ...new Set(usageStore.state.recentCalls.map((row) => row.model).filter(Boolean)),
+]);
+
+const sceneOptions = computed(() => [
+  ...new Set(usageStore.state.recentCalls.map((row) => row.action).filter(Boolean)),
+]);
+
+const filteredCalls = computed(() => usageStore.state.recentCalls.filter((row) => {
+  if (selectedModel.value && row.model !== selectedModel.value) return false;
+  if (selectedScene.value && row.action !== selectedScene.value) return false;
+  if (activeLogTab.value === "consume") return Number(row.tokens || 0) > 0;
+  if (activeLogTab.value === "system") return /系统|配置|模型|失败|生成/.test(String(row.action || ""));
+  return true;
+}));
+
+const totalRequestsDisplay = computed(() => {
+  const total = Number(usageStore.state.totalRequests || 0);
+  return total || usageStore.state.recentCalls.length;
+});
+
+const dateRange = computed(() => {
+  const rows = usageStore.state.dailyUsage || [];
+  return {
+    start: rows[0]?.label || "-",
+    end: rows[rows.length - 1]?.label || "-",
+  };
+});
+
+const chartRows = computed(() => (usageStore.state.dailyUsage || []).map((item) => {
+  const tokens = Number(item.tokens || 0);
+  const calls = Number(item.calls || 0);
+  const cost = tokens * 0.02 / 1000;
+  return {
+    label: item.label,
+    tokens,
+    calls,
+    cost,
+    value: activeChart.value === "calls" ? calls : activeChart.value === "cost" ? cost : tokens,
+  };
+}));
+
+const maxDailyValue = computed(() => Math.max(...chartRows.value.map((row) => Number(row.value || 0)), 1));
+
+const chartTotalLabel = computed(() => {
+  const total = chartRows.value.reduce((sum, row) => sum + Number(row.value || 0), 0);
+  if (activeChart.value === "cost") return formatMoney(total);
+  if (activeChart.value === "calls") return `${total} 次`;
+  return formatTokens(total);
+});
+
+const chartAverageLabel = computed(() => {
+  const count = Math.max(chartRows.value.length, 1);
+  const total = chartRows.value.reduce((sum, row) => sum + Number(row.value || 0), 0) / count;
+  if (activeChart.value === "cost") return formatMoney(total);
+  if (activeChart.value === "calls") return `${total.toFixed(1)} 次`;
+  return formatTokens(Math.round(total));
+});
+
+onMounted(refreshUsage);
+
+async function refreshUsage() {
+  loading.value = true;
   try {
     await usageStore.fetchSummary();
   } catch (error) {
-    console.error("Failed to fetch usage summary", error);
+    authStore.addNotification({
+      title: "用量加载失败",
+      desc: error?.response?.data?.message || "请确认后端服务正在运行。",
+    });
+  } finally {
+    loading.value = false;
   }
-  if (route.query.tab === "billing") {
-    activeTab.value = "billing";
-  }
-});
-
-const maxDailyTokens = computed(() =>
-  Math.max(...usageStore.state.dailyUsage.map((item) => item.tokens), 1),
-);
-
-const todayCalls = computed(() => {
-  const today = new Date();
-  const label = `${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  return usageStore.state.recentCalls.filter((item) => String(item.time || "").startsWith(label)).length;
-});
-const promptShare = computed(() => {
-  const prompt = Number(usageStore.state.promptTokens || 0);
-  const completion = Number(usageStore.state.completionTokens || 0);
-  const total = prompt + completion;
-  if (!total) return 50;
-  return Math.round((prompt / total) * 100);
-});
-
-function formatTokens(n) {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${Math.round(n / 1000)}K`;
-  return String(n);
 }
 
-function barHeight(tokens) {
-  return Math.max(8, Math.round((tokens / maxDailyTokens.value) * 100));
+function barHeight(value) {
+  return Math.max(Number(value || 0) > 0 ? 4 : 0, Math.round((Number(value || 0) / maxDailyValue.value) * 100));
+}
+
+function formatTokens(value) {
+  const number = Number(value || 0);
+  if (number >= 1_000_000) return `${(number / 1_000_000).toFixed(2)}M`;
+  if (number >= 10_000) return `${(number / 1000).toFixed(1)}K`;
+  return new Intl.NumberFormat("zh-CN").format(Math.round(number));
+}
+
+function formatMoney(value) {
+  return `$${Number(value || 0).toFixed(4)}`;
 }
 
 async function selectPlan(plan, provider) {
@@ -303,7 +345,7 @@ async function selectPlan(plan, provider) {
       return;
     }
     authStore.addNotification({
-      title: `${provider === "alipay" ? "支付宝" : "微信支付"}订单待配置`,
+      title: "订单已创建",
       desc: order.message || `订单号：${order.orderNo}`,
     });
   } catch (error) {
@@ -318,778 +360,464 @@ const sceneMap = {
   translate: "学术翻译",
   analyze: "论文解析",
   summary: "汇总综述",
-  report: "七章论文分析",
+  report: "组会汇报",
   qa: "论文问答",
 };
-function translateScene(s) {
-  return sceneMap[s] || s;
+
+function translateScene(value) {
+  return sceneMap[value] || value || "-";
 }
-function translateAction(a) {
-  return sceneMap[a] || a;
+
+function translateAction(value) {
+  return sceneMap[value] || value || "-";
 }
 </script>
 
 <style scoped>
-.models-spatial .spatial-chapter {
-  margin: 0;
-  padding-left: 0;
-  padding-right: 0;
+.usage-page {
+  min-height: 100vh;
+  padding: 28px 32px 48px;
+  background: #f7f9fc;
+  color: #171d2a;
 }
 
-/* Premium Tab Switcher Styles */
-.spatial-nav-tabs {
-  display: inline-flex;
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.04);
-  padding: 4px;
-  border-radius: 999px;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  margin-top: 24px;
-  backdrop-filter: blur(8px);
+.usage-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 0 auto 22px;
+  max-width: 1560px;
 }
 
-.tab-btn {
-  background: transparent;
-  border: none;
-  padding: 8px 20px;
-  border-radius: 999px;
+.page-kicker {
+  margin: 0 0 6px;
+  color: #5d6b82;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary, #8e8e93);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  font-weight: 800;
 }
 
-.tab-btn:hover {
-  color: var(--text-main, #111);
-}
-
-.tab-btn.active {
-  background: #ffffff;
-  color: var(--spatial-accent, #0066ff);
-  box-shadow: 0 4px 12px rgba(10, 10, 12, 0.08);
-}
-
-.model-dashboard,
-.billing-dashboard {
-  display: grid;
-  gap: 18px;
-  margin-top: 16px;
-}
-
-.usage-overview-strip {
-  display: grid;
-  grid-template-columns: minmax(360px, 1fr) repeat(4, minmax(136px, auto));
-  align-items: stretch;
-  gap: 12px;
-  overflow: hidden;
-  padding: 16px;
-  border: 1px solid #d8e6ff;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #f7fbff 0%, #ffffff 62%);
-  box-shadow: 0 18px 48px rgba(25, 42, 70, .055);
-}
-
-.usage-quota-main,
-.usage-kpi,
-.usage-plan-button {
-  min-height: 94px;
-}
-
-.usage-quota-main {
-  display: grid;
-  align-content: center;
-  padding: 12px 14px;
-}
-
-.usage-quota-main span,
-.usage-kpi span {
-  display: block;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.usage-quota-main strong {
-  display: block;
-  margin: 7px 0 4px;
-  color: #0f172a;
-  font-size: 32px;
-  line-height: 1;
+.usage-header h1 {
+  margin: 0;
+  color: #161b26;
+  font-size: 30px;
+  line-height: 1.15;
   letter-spacing: 0;
 }
 
-.usage-quota-main p {
-  margin: 0 0 12px;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 700;
+.usage-header p:last-child {
+  margin: 9px 0 0;
+  color: #667085;
+  font-size: 14px;
 }
 
-.usage-quota-meter {
-  height: 9px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, .08);
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.usage-quota-meter div {
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #14b8a6);
-}
-
-.usage-kpi {
-  display: grid;
-  align-content: center;
-  gap: 9px;
-  min-width: 0;
-  padding: 16px 14px;
-  border: 1px solid #edf2f8;
-  border-radius: 12px;
-  background: #ffffff;
-}
-
-.usage-kpi strong {
-  color: #111827;
-  font-size: 18px;
-  line-height: 1.2;
-}
-
-.usage-plan-button {
-  display: grid;
-  align-content: center;
-  gap: 8px;
-  min-width: 148px;
-  border: 1px solid #cfe0ff;
-  border-radius: 12px;
-  padding: 16px 18px;
-  color: #1d4ed8;
-  background: #ffffff;
+.scope-pill,
+.refresh-button,
+.billing-link,
+.icon-button {
+  border: 1px solid #d9e1ec;
+  border-radius: 10px;
+  background: #fff;
+  color: #293548;
   font: inherit;
-  text-align: left;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.scope-pill {
+  padding: 9px 12px;
+}
+
+.refresh-button,
+.billing-link,
+.icon-button {
+  min-height: 38px;
+  padding: 0 14px;
   cursor: pointer;
 }
 
-.usage-plan-button span {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 700;
+button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
 }
 
-.usage-plan-button strong {
-  color: #1d4ed8;
-  font-size: 15px;
-  font-weight: 850;
+.metric-strip,
+.summary-grid,
+.chart-panel,
+.ledger-panel,
+.billing-panel {
+  max-width: 1560px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-.usage-plan-button:hover {
-  background: #fff;
-}
-
-.usage-workbench {
+.metric-strip {
   display: grid;
-  grid-template-columns: minmax(520px, 1.45fr) minmax(340px, .95fr);
-  gap: 18px;
-}
-
-.usage-panel {
-  padding: 22px;
-  border: 1px solid #e6edf5;
-  border-radius: 16px;
-  background: #ffffff;
-  box-shadow: 0 16px 40px rgba(25, 42, 70, .045);
-}
-
-.usage-panel-wide {
-  grid-row: span 2;
-  min-width: 0;
-  min-height: 344px;
-}
-
-.usage-empty-state {
-  margin: 0;
-  color: #64748b;
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.usage-split-list {
-  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+  margin-bottom: 18px;
 }
 
-.usage-split-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px 12px;
-  align-items: center;
-  font-size: 13px;
-  padding: 2px 0 8px;
-  border-bottom: 1px solid #edf2f8;
+.metric-card,
+.balance-card,
+.day-card,
+.chart-panel,
+.ledger-panel,
+.billing-panel {
+  border: 1px solid #e4eaf2;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(18, 31, 53, .04);
 }
 
-.usage-split-row span {
-  min-width: 0;
-  overflow: hidden;
-  color: #1f2937;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.usage-split-row strong {
-  color: #475569;
-  font-size: 12px;
-}
-
-.usage-split-row div {
-  grid-column: 1 / -1;
-  height: 6px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #eef2f7;
-}
-
-.usage-split-row i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: #2563eb;
-}
-
-.usage-split-row.muted i {
-  background: #16a34a;
-}
-
-.model-stats-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-}
-
-.model-stat-card {
-  padding: 22px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 12px 32px rgba(10, 10, 12, 0.04);
-}
-
-.model-stat-primary {
-  grid-column: span 1;
-  background: linear-gradient(145deg, rgba(0, 102, 255, 0.06), rgba(255, 255, 255, 0.9));
-}
-
-.model-stat-value {
-  display: block;
-  margin-top: 10px;
-  font-size: 2.2rem;
-  letter-spacing: -0.04em;
-}
-
-.model-stat-sm {
-  font-size: 1.3rem;
-}
-
-.model-stat-bar {
-  margin-top: 12px;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.06);
-  overflow: hidden;
-}
-
-.model-stat-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--spatial-accent, #0066ff);
-}
-
-.model-stat-meta {
-  display: block;
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--spatial-gray, #8e8e93);
-}
-
-.model-stat-link {
-  margin-top: 12px;
-  display: inline-flex;
-  font-size: 13px;
-  padding: 8px 14px;
-  min-height: auto;
-}
-
-.model-dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 20px;
-}
-
-.model-panel {
-  padding: 24px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-}
-
-.model-panel-head {
+.metric-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.model-panel-head h2 {
-  margin: 0;
-  color: #0f172a;
-  font-size: 1.1rem;
-  letter-spacing: 0;
-}
-
-.model-panel-head p {
-  margin: 5px 0 0;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.usage-chart {
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  min-height: 220px;
-  padding: 20px 4px 2px;
-  background:
-    linear-gradient(to top, rgba(226, 232, 240, .8) 1px, transparent 1px) 0 20px / 100% 46px no-repeat,
-    linear-gradient(to top, rgba(226, 232, 240, .54) 1px, transparent 1px) 0 66px / 100% 46px no-repeat,
-    linear-gradient(to top, rgba(226, 232, 240, .36) 1px, transparent 1px) 0 112px / 100% 46px no-repeat;
-}
-
-.usage-chart-col {
-  flex: 1;
-  display: grid;
-  gap: 6px;
-  justify-items: center;
-}
-
-.usage-chart-bar-wrap {
-  width: 100%;
-  height: 152px;
-  display: flex;
-  align-items: flex-end;
-  padding: 0 2px;
-}
-
-.usage-chart-bar {
-  width: 100%;
-  border-radius: 10px 10px 3px 3px;
-  background: linear-gradient(180deg, #60a5fa, #2563eb);
-  min-height: 8px;
-  transition: height .24s ease;
-}
-
-.usage-chart-label,
-.usage-chart-value {
-  font-size: 11px;
-  color: var(--spatial-gray, #8e8e93);
-}
-
-.model-breakdown-list {
-  display: grid;
-  gap: 16px;
-}
-
-.model-breakdown-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px 16px;
-  align-items: center;
-}
-
-.model-breakdown-info {
-  display: grid;
-  gap: 2px;
-}
-
-.model-breakdown-info span {
-  font-size: 12px;
-  color: var(--spatial-gray, #8e8e93);
-}
-
-.model-breakdown-bar {
-  grid-column: 1 / -1;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.06);
-  overflow: hidden;
-}
-
-.model-breakdown-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: rgba(0, 102, 255, 0.5);
-}
-
-.model-breakdown-fill.scene-fill {
-  background: rgba(15, 157, 88, 0.55);
-}
-
-.model-breakdown-tokens {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.token-composition {
-  display: grid;
-  grid-template-columns: 180px 1fr;
-  gap: 24px;
-  align-items: center;
-}
-
-.token-composition.compact {
-  grid-template-columns: 120px 1fr;
   gap: 18px;
+  min-height: 96px;
+  padding: 20px 22px;
 }
 
-.token-composition-ring {
-  width: 180px;
-  height: 180px;
+.metric-icon,
+.balance-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
   border-radius: 50%;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.metric-card.pink .metric-icon { background: #ec5f9f; }
+.metric-card.teal .metric-icon { background: #28c7bd; }
+.metric-card.indigo .metric-icon { background: #7786e8; }
+.metric-card.violet .metric-icon { background: #c75ada; }
+
+.metric-card div {
   display: grid;
-  place-items: center;
-  background:
-    conic-gradient(#0066ff 0deg,
-      #0066ff var(--prompt-deg, 180deg),
-      #34c759 var(--prompt-deg, 180deg),
-      #34c759 360deg);
-  position: relative;
-}
-
-.token-composition.compact .token-composition-ring {
-  width: 120px;
-  height: 120px;
-}
-
-.token-composition-ring::before {
-  content: "";
-  position: absolute;
-  inset: 18px;
-  border-radius: 50%;
-  background: #fff;
-}
-
-.token-composition.compact .token-composition-ring::before {
-  inset: 13px;
-}
-
-.token-composition-core {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  justify-items: center;
+  flex: 1;
+  min-width: 0;
   gap: 4px;
 }
 
-.token-composition-core strong {
-  font-size: 1.4rem;
+.metric-card small,
+.balance-card p,
+.day-card p {
+  color: #717b8d;
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.token-composition-core span,
-.composition-row span:last-child {
-  color: var(--spatial-gray, #8e8e93);
+.metric-card strong,
+.balance-card strong,
+.day-card strong {
+  color: #1a2030;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.metric-card em {
+  color: #8a94a6;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px 280px;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.balance-card {
+  display: grid;
+  grid-template-columns: 62px repeat(3, 1fr);
+  align-items: center;
+  gap: 20px;
+  min-height: 112px;
+  padding: 22px 26px;
+}
+
+.balance-card .balance-icon,
+.day-card.cyan .balance-icon { background: #2ecbc0; }
+.day-card.amber .balance-icon { background: #f5b51b; }
+
+.balance-card div:not(:first-child) {
+  min-width: 0;
+  border-left: 1px solid #edf1f6;
+  padding-left: 22px;
+}
+
+.balance-card p,
+.day-card p {
+  margin: 7px 0 0;
+}
+
+.day-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 22px 24px;
+}
+
+.panel-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 26px 0;
+}
+
+.soft-tabs {
+  display: flex;
+  gap: 24px;
+}
+
+.soft-tabs button {
+  position: relative;
+  border: 0;
+  background: transparent;
+  color: #4f5b6f;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.soft-tabs button.active {
+  color: #161b26;
+}
+
+.soft-tabs button.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -14px;
+  height: 2px;
+  border-radius: 999px;
+  background: #171d2a;
+}
+
+.chart-meta {
+  display: flex;
+  gap: 22px;
+  color: #717b8d;
+  font-size: 13px;
+}
+
+.chart-meta strong {
+  color: #3b4658;
+}
+
+.chart-note {
+  margin: 32px 26px 0;
+  color: #7a8495;
+  font-size: 14px;
+}
+
+.chart-note strong {
+  color: #4a5568;
+}
+
+.bar-chart {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(42px, 1fr));
+  align-items: end;
+  gap: 34px;
+  height: 380px;
+  margin: 24px 32px 28px;
+  padding: 0 20px 28px;
+  border-bottom: 2px solid #8a909a;
+  background:
+    linear-gradient(to bottom, transparent 24%, #eef1f5 24.2%, transparent 24.5%),
+    linear-gradient(to bottom, transparent 49%, #eef1f5 49.2%, transparent 49.5%),
+    linear-gradient(to bottom, transparent 74%, #eef1f5 74.2%, transparent 74.5%);
+}
+
+.bar-column {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 10px;
+  min-width: 0;
+  height: 100%;
+  text-align: center;
+}
+
+.bar-rail {
+  display: flex;
+  align-items: flex-end;
+  min-height: 0;
+}
+
+.bar-rail i {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  background: #5868f6;
+  transition: height .22s ease;
+}
+
+.bar-column span {
+  color: #3f4857;
   font-size: 12px;
 }
 
-.token-composition-legend {
-  display: grid;
-  gap: 14px;
+.ledger-panel {
+  margin-top: 22px;
+  overflow: hidden;
 }
 
-.composition-row {
-  display: grid;
-  grid-template-columns: 14px auto 1fr;
-  gap: 10px;
-  align-items: center;
+.ledger-toolbar {
+  padding-bottom: 18px;
+  border-bottom: 1px solid #edf1f6;
 }
 
-.composition-dot {
-  width: 10px;
-  height: 10px;
+.icon-button {
+  width: 36px;
+  padding: 0;
   border-radius: 50%;
 }
 
-.composition-dot.prompt {
-  background: #0066ff;
-}
-
-.composition-dot.completion {
-  background: #34c759;
-}
-
-.action-pill-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.action-pill {
-  min-width: 160px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+.ledger-filters {
   display: grid;
-  gap: 5px;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 18px;
+  padding: 20px 26px;
+  border-bottom: 1px solid #edf1f6;
 }
 
-.action-pill span {
-  color: var(--spatial-gray, #8e8e93);
-  font-size: 12px;
-}
-
-.model-showcase-grid {
+.ledger-filters label {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 16px;
-}
-
-.model-showcase-card {
-  text-align: left;
-  padding: 20px;
-  border-radius: 16px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  background: rgba(255, 255, 255, 0.9);
-  cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.model-showcase-card:hover,
-.model-showcase-card.active {
-  border-color: rgba(0, 102, 255, 0.35);
-  box-shadow: 0 12px 28px rgba(0, 102, 255, 0.08);
-}
-
-.model-showcase-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.model-status {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 4px 8px;
-  border-radius: 999px;
-}
-
-.model-status.online {
-  background: rgba(52, 199, 89, 0.12);
-  color: #2fa45e;
-}
-
-.model-showcase-card h3 {
-  margin: 0 0 8px;
-  font-size: 1.1rem;
-}
-
-.model-showcase-card p {
-  margin: 0;
-  font-size: 13px;
-  color: var(--spatial-gray, #666);
-  line-height: 1.6;
-}
-
-.model-showcase-meta {
-  display: flex;
-  flex-wrap: wrap;
   gap: 8px;
-  margin-top: 14px;
-  font-size: 11px;
-  color: var(--spatial-gray, #888);
-}
-
-.model-call-table {
-  display: grid;
-  gap: 0;
-}
-
-.model-call-row {
-  display: grid;
-  grid-template-columns: 100px 100px minmax(0, 1fr) auto;
-  gap: 12px;
-  padding: 14px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  color: #384357;
   font-size: 13px;
-  align-items: center;
+  font-weight: 850;
 }
 
-.model-call-paper {
-  color: var(--spatial-gray, #666);
+.ledger-filters input,
+.ledger-filters select {
+  height: 38px;
+  border: 1px solid #dce4ef;
+  border-radius: 9px;
+  padding: 0 12px;
+  background: #fff;
+  color: #202938;
+  font: inherit;
+}
+
+.usage-table {
+  min-width: 940px;
+}
+
+.usage-row {
+  display: grid;
+  grid-template-columns: 150px 120px 180px minmax(240px, 1fr) 110px 110px 110px;
+  gap: 14px;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 26px;
+  border-bottom: 1px dashed #edf1f6;
+  color: #606b7c;
+  font-size: 13px;
+}
+
+.usage-head {
+  min-height: 48px;
+  color: #2e384a;
+  font-weight: 900;
+  border-bottom-style: solid;
+}
+
+.model-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #505b6f;
+  font-weight: 800;
+}
+
+.model-cell i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4ade80;
+}
+
+.paper-cell {
   overflow: hidden;
+  color: #596579;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.model-call-tokens {
-  font-weight: 600;
-  color: #c1322b;
+.usage-row strong {
+  color: #384357;
 }
 
-@media (max-width: 720px) {
-  .usage-overview-strip,
-  .usage-workbench {
-    grid-template-columns: 1fr;
-  }
-
-  .model-call-row {
-    grid-template-columns: 1fr auto;
-  }
-
-  .model-call-paper {
-    grid-column: 1 / -1;
-  }
-
-  .token-composition {
-    grid-template-columns: 1fr;
-    justify-items: center;
-  }
-}
-
-.model-config-drawer {
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-.model-config-drawer summary {
-  padding: 16px 20px;
-  cursor: pointer;
-  font-weight: 600;
-  list-style: none;
-}
-
-.model-config-drawer summary::-webkit-details-marker {
-  display: none;
-}
-
-.model-config-drawer :deep(.reader-panel) {
-  margin: 0 20px 20px;
-}
-
-/* Tab 2: Billing Styles */
-.billing-header-card {
+.table-footer {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 32px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 16px 48px rgba(10, 10, 12, 0.04);
-  flex-wrap: wrap;
-  gap: 24px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 26px;
+  color: #717b8d;
+  font-size: 13px;
 }
 
-.quota-progress-section {
-  flex: 1;
-  min-width: 280px;
+.billing-link {
+  color: #1d4ed8;
 }
 
-.quota-progress-section h3 {
-  margin: 0 0 12px;
-  font-size: 1.4rem;
+.empty-text {
+  margin: 20px 26px;
+  color: #717b8d;
+  line-height: 1.7;
 }
 
-.quota-desc {
-  font-size: 14px;
-  color: var(--text-secondary, #666);
-}
-
-.token-meter {
-  margin-top: 20px;
-  max-width: 460px;
-}
-
-.token-meter-bar {
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.06);
-  overflow: hidden;
-}
-
-.token-meter-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #0066ff, #4d7cff);
-}
-
-.token-meter-label {
-  display: block;
-  margin-top: 8px;
-  font-size: 12.5px;
-  color: var(--spatial-gray, #8e8e93);
-}
-
-.quota-summary-box {
-  background: rgba(0, 102, 255, 0.04);
-  border: 1px solid rgba(0, 102, 255, 0.08);
+.billing-panel {
+  margin-top: 22px;
   padding: 24px;
-  border-radius: 20px;
-  text-align: right;
-  min-width: 220px;
 }
 
-.usage-big-number {
-  display: block;
-  margin-top: 10px;
-  font-size: 2.8rem;
-  letter-spacing: -0.04em;
-  color: var(--spatial-accent, #0066ff);
+.billing-head,
+.pricing-row-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.spatial-drift-detail {
-  font-size: 11.5px;
-  margin: 8px 0 0;
-  color: var(--spatial-gray, #8e8e93);
+.billing-head h2 {
+  margin: 0;
+  font-size: 20px;
 }
 
-.section-heading {
-  margin: 32px 0 16px;
-  font-size: 1.4rem;
-  font-weight: 700;
+.billing-head p,
+.pricing-row-title span {
+  color: #697588;
 }
 
 .pricing-rows {
   display: grid;
   gap: 18px;
+  margin-top: 22px;
 }
 
 .pricing-row {
-  padding: 18px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.66);
-}
-
-.pricing-row-title {
-  display: flex;
-  align-items: baseline;
+  display: grid;
   gap: 12px;
-  margin-bottom: 14px;
-}
-
-.pricing-row-title strong {
-  font-size: 1.25rem;
-  color: #111827;
-}
-
-.pricing-row-title span {
-  font-size: 13px;
-  color: var(--spatial-gray, #8e8e93);
 }
 
 .pricing-grid {
@@ -1099,140 +827,103 @@ function translateAction(a) {
 }
 
 .pricing-card {
-  padding: 20px;
-  border-radius: 14px;
-  background: #fff;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 12px 28px rgba(10, 10, 12, 0.035);
-}
-
-.pricing-card.featured {
-  border-color: rgba(0, 102, 255, 0.2);
-  box-shadow: 0 14px 34px rgba(0, 102, 255, 0.08);
+  padding: 18px;
+  border: 1px solid #e1e8f2;
+  border-radius: 12px;
+  background: #fbfcfe;
 }
 
 .pricing-card.active {
-  outline: 2px solid rgba(0, 102, 255, 0.35);
+  border-color: #5b70f2;
+}
+
+.pricing-card span {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 850;
 }
 
 .pricing-card h3 {
-  margin: 10px 0 0;
-  font-size: 1.15rem;
+  margin: 8px 0 0;
+  font-size: 16px;
 }
 
-.pricing-amount {
-  margin-top: 12px;
+.price-line {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 5px;
 }
 
-.pricing-amount strong {
-  font-size: 1.7rem;
-  letter-spacing: -0.03em;
+.price-line strong {
+  font-size: 24px;
 }
 
-.pricing-amount span {
-  color: var(--spatial-gray, #8e8e93);
-  font-size: 14px;
+.price-line em {
+  color: #667085;
+  font-style: normal;
 }
 
-.pricing-quota {
-  margin: 8px 0 0;
-  font-size: 14px;
-  color: var(--spatial-accent, #0066ff);
-  font-weight: 600;
-}
-
-.pricing-features {
-  margin: 14px 0;
-  padding-left: 18px;
-  color: var(--spatial-gray, #555);
-  font-size: 12.8px;
-  line-height: 1.65;
-}
-
-.payment-button-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.payment-btn {
-  min-height: 42px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 10px;
-  background: #fff;
-  color: #111827;
+.pricing-card button {
+  width: 100%;
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: #2458dc;
+  color: #fff;
   font: inherit;
-  font-weight: 800;
+  font-weight: 900;
   cursor: pointer;
 }
 
-.payment-btn:hover {
-  background: #f8fafc;
-}
+@media (max-width: 1120px) {
+  .metric-strip,
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 
-.payment-btn.alipay {
-  border-color: rgba(22, 119, 255, 0.35);
-  color: #1677ff;
-}
+  .balance-card {
+    grid-column: 1 / -1;
+  }
 
-.payment-btn.wechat {
-  border-color: rgba(7, 193, 96, 0.35);
-  color: #079455;
-}
-
-.pay-logo {
-  width: 20px;
-  height: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 20px;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.alipay-logo {
-  background: #1677ff;
-}
-
-.wechat-logo {
-  position: relative;
-  background: #07c160;
-}
-
-.wechat-logo i {
-  position: absolute;
-  width: 10px;
-  height: 7px;
-  border-radius: 999px;
-  background: #fff;
-}
-
-.wechat-logo i:first-child {
-  left: 4px;
-  top: 5px;
-}
-
-.wechat-logo i:last-child {
-  right: 4px;
-  bottom: 5px;
-  opacity: 0.82;
-}
-
-@media (max-width: 980px) {
+  .ledger-filters,
   .pricing-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .usage-page {
+    padding: 20px 14px 32px;
+  }
+
+  .usage-header,
+  .panel-toolbar,
+  .table-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .metric-strip,
+  .summary-grid,
+  .balance-card {
+    grid-template-columns: 1fr;
+  }
+
+  .balance-card div:not(:first-child) {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .bar-chart {
+    gap: 12px;
+    margin-left: 14px;
+    margin-right: 14px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .ledger-panel {
+    overflow-x: auto;
   }
 }
 </style>

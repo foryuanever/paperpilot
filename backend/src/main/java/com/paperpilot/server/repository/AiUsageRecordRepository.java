@@ -11,4 +11,7 @@ public interface AiUsageRecordRepository extends JpaRepository<AiUsageRecordEnti
     List<AiUsageRecordEntity> findByUserIdAndCreatedAtAfterOrderByCreatedAtDesc(Long userId, LocalDateTime createdAt);
     List<AiUsageRecordEntity> findTop240ByOrderByCreatedAtDesc();
     List<AiUsageRecordEntity> findByCreatedAtAfterOrderByCreatedAtDesc(LocalDateTime createdAt);
+    long countByUserId(Long userId);
+    long countByUserIdAndCreatedAtAfter(Long userId, LocalDateTime createdAt);
+    long countByCreatedAtAfter(LocalDateTime createdAt);
 }

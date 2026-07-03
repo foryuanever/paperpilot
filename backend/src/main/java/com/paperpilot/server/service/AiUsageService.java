@@ -87,10 +87,24 @@ public class AiUsageService {
         long completionTokens = recent.stream().mapToLong(r -> safe(r.getCompletionTokens())).sum();
         long totalTokens = recent.stream().mapToLong(r -> safe(r.getTotalTokens())).sum();
         LocalDateTime weekStart = LocalDateTime.now().minusDays(6).withHour(0).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+        LocalDateTime minuteStart = LocalDateTime.now().minusMinutes(1);
         long weekTokens = (showingAllUsers
             ? repository.findByCreatedAtAfterOrderByCreatedAtDesc(weekStart)
             : repository.findByUserIdAndCreatedAtAfterOrderByCreatedAtDesc(user.getId(), weekStart)
         ).stream().mapToLong(r -> safe(r.getTotalTokens())).sum();
+        List<AiUsageRecordEntity> todayRecords = showingAllUsers
+            ? repository.findByCreatedAtAfterOrderByCreatedAtDesc(todayStart)
+            : repository.findByUserIdAndCreatedAtAfterOrderByCreatedAtDesc(user.getId(), todayStart);
+        List<AiUsageRecordEntity> minuteRecords = showingAllUsers
+            ? repository.findByCreatedAtAfterOrderByCreatedAtDesc(minuteStart)
+            : repository.findByUserIdAndCreatedAtAfterOrderByCreatedAtDesc(user.getId(), minuteStart);
+        long todayTokens = todayRecords.stream().mapToLong(r -> safe(r.getTotalTokens())).sum();
+        long minuteTokens = minuteRecords.stream().mapToLong(r -> safe(r.getTotalTokens())).sum();
+        long totalRequests = showingAllUsers ? repository.count() : repository.countByUserId(user.getId());
+        long todayRequests = showingAllUsers
+            ? repository.countByCreatedAtAfter(todayStart)
+            : repository.countByUserIdAndCreatedAtAfter(user.getId(), todayStart);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("planId", inferPlanId(safe(user.getTokenLimit())));
@@ -103,6 +117,13 @@ public class AiUsageService {
         result.put("completionTokens", completionTokens);
         result.put("weekTokens", weekTokens);
         result.put("estimatedCost", ((double) totalTokens / 1000D) * 0.02D);
+        result.put("totalRequests", totalRequests);
+        result.put("todayRequests", todayRequests);
+        result.put("todayTokens", todayTokens);
+        result.put("rpm", minuteRecords.size());
+        result.put("tpm", minuteTokens);
+        result.put("mpm", ((double) minuteTokens / 1000D) * 0.02D);
+        result.put("currentMinuteCost", ((double) minuteTokens / 1000D) * 0.02D);
         result.put("usageScope", showingAllUsers ? "all" : "current");
         result.put("dailyUsage", buildDailyUsage(recent));
         result.put("modelBreakdown", buildBreakdown(recent, "model"));
@@ -114,18 +135,26 @@ public class AiUsageService {
 
     private List<Map<String, Object>> buildDailyUsage(List<AiUsageRecordEntity> recent) {
         Map<LocalDate, Long> daily = new LinkedHashMap<>();
+        Map<LocalDate, Long> calls = new LinkedHashMap<>();
         for (int i = 6; i >= 0; i--) {
-            daily.put(LocalDate.now().minusDays(i), 0L);
+            LocalDate day = LocalDate.now().minusDays(i);
+            daily.put(day, 0L);
+            calls.put(day, 0L);
         }
         for (AiUsageRecordEntity record : recent) {
             LocalDate day = record.getCreatedAt() == null ? null : record.getCreatedAt().toLocalDate();
             if (day != null && daily.containsKey(day)) {
                 daily.put(day, daily.get(day) + safe(record.getTotalTokens()));
+                calls.put(day, calls.get(day) + 1L);
             }
         }
         List<Map<String, Object>> rows = new ArrayList<>();
         for (Map.Entry<LocalDate, Long> entry : daily.entrySet()) {
-            rows.add(Map.of("label", entry.getKey().format(DAY_LABEL), "tokens", entry.getValue()));
+            rows.add(Map.of(
+                "label", entry.getKey().format(DAY_LABEL),
+                "tokens", entry.getValue(),
+                "calls", calls.getOrDefault(entry.getKey(), 0L)
+            ));
         }
         return rows;
     }
