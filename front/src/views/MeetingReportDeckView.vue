@@ -267,6 +267,8 @@ import { API_BASE_URL } from "../services/apiClient";
 const STORAGE_KEY = "paperpilot-meeting-timeline-v1";
 const DECK_STORAGE_KEY = "paperpilot-meeting-deck-jobs-v1";
 const REVIEW_STORAGE_KEY = "paperpilot-meeting-review-jobs-v1";
+const DEFAULT_MEETING_TITLE = "新组会汇报";
+const DEFAULT_MEETING_NOTES = "本次重点：先讲清研究问题，再讨论方法路线、证据质量和后续可推进方向。";
 
 const reviewSections = [
   { key: "basicInfo", title: "基本信息", hint: "题录、来源与研究对象", placeholder: "作者、年份、期刊/会议、研究对象、数据来源。" },
@@ -329,6 +331,7 @@ onMounted(async () => {
   loadPersistedState();
   await loadPapers();
   ensureFirstMeeting();
+  cleanupAutoSeededMeetings();
   resumeDeckJobs();
   resumeReviewJobs();
 });
@@ -375,8 +378,7 @@ async function loadPapers() {
 
 function ensureFirstMeeting() {
   if (meetings.value.length) return;
-  const firstPaper = papers.value.find(hasPdf) || papers.value[0];
-  meetings.value = [createMeeting(firstPaper ? [firstPaper.workspaceId] : [])];
+  meetings.value = [createMeeting()];
   activeMeetingId.value = meetings.value[0].id;
 }
 
@@ -386,8 +388,8 @@ function createMeeting(paperIds = []) {
   return {
     id: `meeting-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
     meetingTime: toDatetimeLocal(now),
-    title: "新组会汇报",
-    notes: "本次重点：先讲清研究问题，再讨论方法路线、证据质量和后续可推进方向。",
+    title: DEFAULT_MEETING_TITLE,
+    notes: DEFAULT_MEETING_NOTES,
     tags: ["待汇报"],
     tagDraft: "",
     params: {
@@ -405,7 +407,7 @@ function normalizeMeeting(meeting = {}) {
   return {
     id: meeting.id || `meeting-${Date.now()}`,
     meetingTime: meeting.meetingTime || toDatetimeLocal(new Date()),
-    title: meeting.title || "组会汇报",
+    title: meeting.title || DEFAULT_MEETING_TITLE,
     notes: meeting.notes || "",
     tags: Array.isArray(meeting.tags) ? meeting.tags : [],
     tagDraft: "",
@@ -420,11 +422,31 @@ function normalizeMeeting(meeting = {}) {
 }
 
 function addMeeting() {
-  const firstPaper = papers.value.find(hasPdf) || papers.value[0];
-  const meeting = createMeeting(firstPaper ? [firstPaper.workspaceId] : []);
+  const meeting = createMeeting();
   meetings.value.unshift(meeting);
   activeMeetingId.value = meeting.id;
-  showToast("已添加一场组会");
+  showToast("已添加一场空白组会，请选择本次汇报文献");
+}
+
+function cleanupAutoSeededMeetings() {
+  let changed = false;
+  meetings.value = meetings.value.map((meeting) => {
+    if (!isAutoSeededMeeting(meeting)) return meeting;
+    changed = true;
+    return {
+      ...meeting,
+      papers: [],
+      primaryPaperId: "",
+    };
+  });
+  if (changed) persistMeetings();
+}
+
+function isAutoSeededMeeting(meeting) {
+  if (!meeting || meeting.papers?.length !== 1) return false;
+  const deck = deckJobs[meeting.id];
+  if (deck?.jobId || deck?.downloadUrl || deck?.status === "generated" || deck?.status === "running") return false;
+  return (meeting.title || "") === DEFAULT_MEETING_TITLE && (meeting.notes || "") === DEFAULT_MEETING_NOTES;
 }
 
 function removeMeeting(meetingId) {
