@@ -42,6 +42,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -600,6 +601,8 @@ public class MeetingReportService {
         if (!cleanJobId.matches("meeting-deck-[A-Za-z0-9_-]+")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PPT 任务编号无效");
         }
+        DeckJob job = deckJobs.get(cleanJobId);
+        if (job != null) ensurePptUsageRecorded(job);
         Path root = Path.of(System.getProperty("user.dir"), "ppt-master-jobs").toAbsolutePath().normalize();
         Path pptx = root.resolve(cleanJobId).resolve("meeting-report.pptx").normalize();
         if (!pptx.startsWith(root) || !Files.isRegularFile(pptx)) {
@@ -1920,16 +1923,52 @@ public class MeetingReportService {
         Path logPath,
         Path lastMessagePath
     ) {
+        ensurePptUsageRecorded(job, modelConfig, agentPrompt, materialPath, logPath, lastMessagePath);
+    }
+
+    private void ensurePptUsageRecorded(DeckJob job) {
+        if (job == null || !"generated".equals(job.status())) return;
+        Path outputDir = Path.of(System.getProperty("user.dir"), "ppt-master-jobs", job.jobId());
+        ModelConfigEntity modelConfig = modelConfigRepository
+            .findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK)
+            .orElse(null);
+        ensurePptUsageRecorded(
+            job,
+            modelConfig,
+            readFileIfSmall(outputDir.resolve("ppt-master-agent-prompt.md"), 60000),
+            outputDir.resolve("meeting-report-input.md"),
+            outputDir.resolve("ppt-master-agent.log"),
+            outputDir.resolve("ppt-master-agent-final.txt")
+        );
+    }
+
+    private void ensurePptUsageRecorded(
+        DeckJob job,
+        ModelConfigEntity modelConfig,
+        String agentPrompt,
+        Path materialPath,
+        Path logPath,
+        Path lastMessagePath
+    ) {
+        if (job == null || !job.markUsageRecording()) return;
         try {
             String material = readFileIfSmall(materialPath, 24000);
             String finalMessage = readFileIfSmall(lastMessagePath, 12000);
             String logTail = readTail(logPath, 16000);
             long promptTokens = estimateTokens(agentPrompt) + estimateTokens(material);
             long completionTokens = estimateTokens(finalMessage) + Math.max(0L, estimateTokens(logTail) / 3L);
-            long totalTokens = Math.max(1L, promptTokens + completionTokens);
+            long loggedTotalTokens = parseLoggedTokenUsage(logTail);
+            long totalTokens = Math.max(1L, Math.max(loggedTotalTokens, promptTokens + completionTokens));
+            if (loggedTotalTokens > 0) {
+                promptTokens = Math.max(1L, Math.round(totalTokens * 0.65D));
+                completionTokens = Math.max(1L, totalTokens - promptTokens);
+            }
+            String modelName = modelConfig == null
+                ? Objects.toString(job.result().getOrDefault("modelName", "gpt-5.5"), "gpt-5.5")
+                : modelConfig.getModelName();
             aiUsageService.recordAndCharge(
                 job.userId(),
-                modelConfig.getModelName(),
+                modelName,
                 "report",
                 "组会PPT Agent执行（估算）",
                 job.paperTitle(),
@@ -1941,9 +1980,26 @@ public class MeetingReportService {
             job.result().put("usagePromptTokens", promptTokens);
             job.result().put("usageCompletionTokens", completionTokens);
             job.result().put("usageTotalTokens", totalTokens);
-        } catch (Exception ignored) {
+        } catch (Exception error) {
+            job.unmarkUsageRecording();
+            job.result().put("usageAccountingError", readableError(error));
             // PPT generation result should not fail because accounting failed.
         }
+    }
+
+    private long parseLoggedTokenUsage(String logTail) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+            .compile("tokens used\\s*\\R\\s*([0-9][0-9,]*)", java.util.regex.Pattern.CASE_INSENSITIVE)
+            .matcher(Objects.toString(logTail, ""));
+        long last = 0L;
+        while (matcher.find()) {
+            try {
+                last = Long.parseLong(matcher.group(1).replace(",", ""));
+            } catch (Exception ignored) {
+                // Keep scanning; malformed tool output should not block accounting.
+            }
+        }
+        return last;
     }
 
     private String readFileIfSmall(Path path, int maxChars) {
@@ -3265,6 +3321,7 @@ public class MeetingReportService {
     }
 
     private Map<String, Object> deckJobResponse(DeckJob job) {
+        if ("generated".equals(job.status())) ensurePptUsageRecorded(job);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("jobId", job.jobId());
         response.put("status", job.status());
@@ -3336,6 +3393,7 @@ public class MeetingReportService {
     private static final class DeckJob {
         private final String jobId;
         private final Map<String, Object> result = new ConcurrentHashMap<>();
+        private final AtomicBoolean usageRecorded = new AtomicBoolean(false);
         private volatile Long userId;
         private volatile String paperTitle = "组会汇报PPT";
         private volatile String status = "running";
@@ -3357,6 +3415,14 @@ public class MeetingReportService {
         String paperTitle() { return paperTitle; }
         long updatedAt() { return updatedAt; }
         Map<String, Object> result() { return result; }
+
+        boolean markUsageRecording() {
+            return usageRecorded.compareAndSet(false, true);
+        }
+
+        void unmarkUsageRecording() {
+            usageRecorded.set(false);
+        }
 
         void userId(Long userId) {
             if (userId != null) this.userId = userId;
