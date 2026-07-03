@@ -456,6 +456,8 @@ public class MeetingReportService {
     private Map<String, Object> prepareDeckGeneration(Map<String, Object> body, MultipartFile reportPaper) {
         String jobId = "meeting-deck-" + UUID.randomUUID();
         DeckJob job = new DeckJob(jobId);
+        job.userId(currentUserService.getOrCreateDefaultUserId());
+        job.paperTitle(Objects.toString(body.getOrDefault("reportPaperTitle", body.getOrDefault("title", "组会汇报PPT")), "组会汇报PPT"));
         deckJobs.put(jobId, job);
         byte[] reportPaperBytes = null;
         String reportPaperName = "";
@@ -471,6 +473,7 @@ public class MeetingReportService {
                     if (storedPdf.isPresent()) {
                         reportPaperBytes = storedPdf.get();
                         reportPaperName = safeDeckPaperFilename(paper);
+                        job.paperTitle(paper.getTitle());
                     }
                 }
             }
@@ -1731,7 +1734,7 @@ public class MeetingReportService {
         Path logPath = outputDir.resolve("ppt-master-agent.log");
         Path lastMessagePath = outputDir.resolve("ppt-master-agent-final.txt");
         Files.createDirectories(agentProjectDir);
-        Files.writeString(promptPath, buildPptMasterAgentPrompt(
+        String agentPrompt = buildPptMasterAgentPrompt(
             outputDir,
             agentProjectDir,
             skillDir,
@@ -1740,7 +1743,8 @@ public class MeetingReportService {
             pptxPath,
             pythonPath,
             handoff
-        ), StandardCharsets.UTF_8);
+        );
+        Files.writeString(promptPath, agentPrompt, StandardCharsets.UTF_8);
 
         job.result().put("engine", "ppt-master-skill-agent");
         job.result().put("agentProjectPath", agentProjectDir.toAbsolutePath().toString());
@@ -1771,7 +1775,7 @@ public class MeetingReportService {
             "-c", "model_providers.paperpilot_relay.wire_api=\"responses\"",
             "-c", "model_providers.paperpilot_relay.requires_openai_auth=true",
             "-o", lastMessagePath.toAbsolutePath().toString(),
-            Files.readString(promptPath, StandardCharsets.UTF_8)
+            agentPrompt
         ));
         ProcessBuilder processBuilder = new ProcessBuilder(command)
             .directory(agentProjectDir.toFile())
@@ -1812,6 +1816,7 @@ public class MeetingReportService {
             }
         }
         if (process.isAlive()) process.waitFor(5, TimeUnit.SECONDS);
+        recordPptMasterAgentUsage(job, modelConfig, agentPrompt, materialPath, logPath, lastMessagePath);
         job.progress(96, "PPT Master Agent 已结束，正在定位并校验 PPTX 文件");
 
         Path generated = locateGeneratedPptx(outputDir, pptxPath);
@@ -1905,6 +1910,71 @@ public class MeetingReportService {
         String clean = Objects.toString(baseUrl, "").trim();
         clean = clean.replaceFirst("/(?:v1/)?(?:chat/completions|responses)$", "");
         return clean.replaceAll("/+$", "");
+    }
+
+    private void recordPptMasterAgentUsage(
+        DeckJob job,
+        ModelConfigEntity modelConfig,
+        String agentPrompt,
+        Path materialPath,
+        Path logPath,
+        Path lastMessagePath
+    ) {
+        try {
+            String material = readFileIfSmall(materialPath, 24000);
+            String finalMessage = readFileIfSmall(lastMessagePath, 12000);
+            String logTail = readTail(logPath, 16000);
+            long promptTokens = estimateTokens(agentPrompt) + estimateTokens(material);
+            long completionTokens = estimateTokens(finalMessage) + Math.max(0L, estimateTokens(logTail) / 3L);
+            long totalTokens = Math.max(1L, promptTokens + completionTokens);
+            aiUsageService.recordAndCharge(
+                job.userId(),
+                modelConfig.getModelName(),
+                "report",
+                "组会PPT Agent执行（估算）",
+                job.paperTitle(),
+                promptTokens,
+                completionTokens,
+                totalTokens
+            );
+            job.result().put("usageAccounting", "estimated");
+            job.result().put("usagePromptTokens", promptTokens);
+            job.result().put("usageCompletionTokens", completionTokens);
+            job.result().put("usageTotalTokens", totalTokens);
+        } catch (Exception ignored) {
+            // PPT generation result should not fail because accounting failed.
+        }
+    }
+
+    private String readFileIfSmall(Path path, int maxChars) {
+        try {
+            if (path == null || !Files.isRegularFile(path)) return "";
+            String text = Files.readString(path, StandardCharsets.UTF_8);
+            return text.length() > maxChars ? text.substring(0, maxChars) : text;
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private long estimateTokens(String text) {
+        if (!StringUtils.hasText(text)) return 0L;
+        long cjk = 0L;
+        long compactChars = 0L;
+        for (int i = 0; i < text.length(); ) {
+            int codePoint = text.codePointAt(i);
+            i += Character.charCount(codePoint);
+            if (Character.isWhitespace(codePoint)) continue;
+            Character.UnicodeScript script = Character.UnicodeScript.of(codePoint);
+            if (script == Character.UnicodeScript.HAN
+                || script == Character.UnicodeScript.HIRAGANA
+                || script == Character.UnicodeScript.KATAKANA
+                || script == Character.UnicodeScript.HANGUL) {
+                cjk++;
+            } else {
+                compactChars++;
+            }
+        }
+        return Math.max(1L, cjk + (long) Math.ceil(compactChars / 4.0));
     }
 
     private void validateCodexResponsesModel(ModelConfigEntity modelConfig) {
@@ -3266,6 +3336,8 @@ public class MeetingReportService {
     private static final class DeckJob {
         private final String jobId;
         private final Map<String, Object> result = new ConcurrentHashMap<>();
+        private volatile Long userId;
+        private volatile String paperTitle = "组会汇报PPT";
         private volatile String status = "running";
         private volatile int progress = 1;
         private volatile String stage = "排队中";
@@ -3281,8 +3353,18 @@ public class MeetingReportService {
         int progress() { return progress; }
         String stage() { return stage; }
         String message() { return message; }
+        Long userId() { return userId; }
+        String paperTitle() { return paperTitle; }
         long updatedAt() { return updatedAt; }
         Map<String, Object> result() { return result; }
+
+        void userId(Long userId) {
+            if (userId != null) this.userId = userId;
+        }
+
+        void paperTitle(String paperTitle) {
+            if (StringUtils.hasText(paperTitle)) this.paperTitle = paperTitle;
+        }
 
         void progress(int progress, String message) {
             this.status = "running";

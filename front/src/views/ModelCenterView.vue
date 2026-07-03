@@ -172,8 +172,8 @@
         <span>显示最近 {{ filteredCalls.length }} 条已入账记录，Token 用量 = 输入 + 输出。</span>
       </footer>
       <aside class="accounting-note">
-        <strong>PPT 生成为什么可能不在表里？</strong>
-        <span>PPT Master 组会 PPT 是 Codex CLI 外部 Agent 流程，目前不会回写真实 token 明细；本表只展示通过后端 AI 网关成功入账的模型调用。</span>
+        <strong>关于 PPT Agent 用量</strong>
+        <span>PPT Master 组会 PPT 会以“组会PPT Agent执行（估算）”入账并显示 GPT5.5；因为 Codex CLI 不返回供应商精确 token，系统按提示词、材料和日志做本地估算。</span>
       </aside>
     </section>
   </div>
@@ -293,6 +293,7 @@ const sceneMap = {
   "组会汇报": "组会论文综述生成",
   "组会论文内容生成": "组会论文内容生成",
   "组会论文综述生成": "组会论文综述生成",
+  "组会PPT Agent执行（估算）": "组会PPT Agent执行（估算）",
   "双栏翻译": "PDF双栏翻译",
   "PDF双栏翻译": "PDF双栏翻译",
   "论文问答": "论文问答",
