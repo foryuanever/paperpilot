@@ -1,0 +1,60 @@
+package com.paperpilot.server.entity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "payment_order")
+public class PaymentOrderEntity {
+    @Id
+    @Column(name = "order_no", length = 64)
+    private String orderNo;
+
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
+    @Column(nullable = false)
+    private Double amount = 0.0;
+
+    @Column(nullable = false, length = 32)
+    private String provider = "";
+
+    @Column(nullable = false, length = 32)
+    private String status = "created";
+
+    @Column(name = "payment_url", length = 1000)
+    private String paymentUrl = "";
+
+    @Column(length = 500)
+    private String message = "";
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    void onCreate() {
+        if (createdAt == null) createdAt = LocalDateTime.now();
+    }
+
+    public String getOrderNo() { return orderNo; }
+    public void setOrderNo(String orderNo) { this.orderNo = orderNo; }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
+    public Double getAmount() { return amount; }
+    public void setAmount(Double amount) { this.amount = amount; }
+    public String getProvider() { return provider; }
+    public void setProvider(String provider) { this.provider = provider; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public String getPaymentUrl() { return paymentUrl; }
+    public void setPaymentUrl(String paymentUrl) { this.paymentUrl = paymentUrl; }
+    public String getMessage() { return message; }
+    public void setMessage(String message) { this.message = message; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+}

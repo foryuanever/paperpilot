@@ -180,13 +180,8 @@
     </section>
     </template>
 
-    <section v-else class="recharge-page-card" aria-label="余额充值">
-      <div class="recharge-copy">
-        <p>余额充值</p>
-        <h2>充值金额，调用时自动扣费</h2>
-        <span>充值后形成账户余额。每次 AI 调用完成后，系统按管理员设置的规则从余额扣除。</span>
-      </div>
-
+    <template v-else>
+    <section class="recharge-page-card" aria-label="余额充值">
       <div class="amount-panel">
         <label>
           充值金额
@@ -236,6 +231,48 @@
         </button>
       </div>
     </section>
+
+    <section class="order-panel" aria-label="订单与售后">
+      <div class="order-panel-head">
+        <div>
+          <p>订单信息</p>
+          <h3>充值订单与售后工单</h3>
+        </div>
+        <div class="order-head-actions">
+          <button type="button" class="secondary-action" @click="createTicket('support')">新建工单</button>
+          <button type="button" class="secondary-action" :disabled="ordersLoading" @click="loadPaymentOrders">
+            {{ ordersLoading ? "刷新中" : "刷新订单" }}
+          </button>
+        </div>
+      </div>
+
+      <div class="order-grid">
+        <article v-for="order in paymentOrders" :key="order.orderNo" class="order-card">
+          <div>
+            <span>{{ providerLabel(order.provider) }}</span>
+            <strong>{{ formatCny(order.amount || 0) }}</strong>
+          </div>
+          <p>{{ order.orderNo }}</p>
+          <em>{{ statusLabel(order.status) }} · {{ formatDateTime(order.createdAt) }}</em>
+          <div class="order-actions">
+            <button type="button" @click="createTicket('support', order.orderNo)">新建工单</button>
+            <button type="button" @click="createTicket('refund', order.orderNo)">申请退款</button>
+          </div>
+        </article>
+        <div v-if="!paymentOrders.length" class="order-empty">
+          暂无充值订单。创建订单后会在这里显示订单号、金额、支付方式和处理状态。
+        </div>
+      </div>
+
+      <div class="ticket-strip">
+        <strong>最近工单</strong>
+        <span v-if="!paymentTickets.length">暂无工单或退款申请。</span>
+        <span v-for="ticket in paymentTickets" :key="ticket.id">
+          {{ ticket.type === "refund" ? "退款" : "工单" }} #{{ ticket.id }} · {{ ticket.orderNo || "未关联订单" }} · {{ statusLabel(ticket.status) }}
+        </span>
+      </div>
+    </section>
+    </template>
   </div>
 </template>
 
@@ -260,6 +297,9 @@ const paymentMessage = ref("");
 const paymentStatus = ref("");
 const rechargeAmount = ref(50);
 const quickAmounts = [20, 50, 100, 200, 500];
+const paymentOrders = ref([]);
+const paymentTickets = ref([]);
+const ordersLoading = ref(false);
 const validRechargeAmount = computed(() => Number(rechargeAmount.value || 0) > 0);
 
 const sceneOptions = computed(() => [
@@ -317,7 +357,10 @@ const chartAverageLabel = computed(() => {
   return formatTokens(Math.round(total));
 });
 
-onMounted(refreshUsage);
+onMounted(async () => {
+  await refreshUsage();
+  await loadPaymentOrders();
+});
 
 async function refreshUsage() {
   loading.value = true;
@@ -349,11 +392,38 @@ async function createRechargeOrder() {
     if (order.paymentUrl) {
       window.open(order.paymentUrl, "_blank", "noopener,noreferrer");
     }
+    await loadPaymentOrders();
   } catch (error) {
     paymentStatus.value = "failed";
     paymentMessage.value = error?.response?.data?.message || "订单创建失败，请稍后重试。";
   } finally {
     paying.value = false;
+  }
+}
+
+async function loadPaymentOrders() {
+  ordersLoading.value = true;
+  try {
+    const result = await paperpilotApi.getPaymentOrders();
+    paymentOrders.value = result.orders || [];
+    paymentTickets.value = result.tickets || [];
+  } catch (error) {
+    paymentOrders.value = [];
+    paymentTickets.value = [];
+  } finally {
+    ordersLoading.value = false;
+  }
+}
+
+async function createTicket(type, orderNo = "") {
+  try {
+    await paperpilotApi.createPaymentTicket({ type, orderNo });
+    paymentMessage.value = type === "refund" ? "退款申请已提交，管理员会在后台处理。" : "工单已提交，管理员会在后台处理。";
+    paymentStatus.value = "";
+    await loadPaymentOrders();
+  } catch (error) {
+    paymentStatus.value = "failed";
+    paymentMessage.value = error?.response?.data?.message || "工单提交失败，请稍后重试。";
   }
 }
 
@@ -374,6 +444,29 @@ function formatMoney(value) {
 
 function formatCny(value) {
   return `¥${Number(value || 0).toFixed(2)}`;
+}
+
+function providerLabel(provider) {
+  return provider === "wechat" ? "微信支付" : "支付宝";
+}
+
+function statusLabel(status) {
+  return {
+    config_required: "待配置",
+    pending_payment: "待支付",
+    paid: "已支付",
+    open: "处理中",
+    closed: "已关闭",
+  }[status] || "处理中";
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  if (Array.isArray(value)) {
+    const [y, m = 1, d = 1, h = 0, min = 0] = value;
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")} ${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  }
+  return String(value).replace("T", " ").slice(0, 16);
 }
 
 function rowCost(row) {
@@ -881,55 +974,23 @@ button:disabled {
 }
 
 .recharge-page-card {
-  display: grid;
-  grid-template-columns: minmax(0, .9fr) minmax(360px, .7fr);
-  gap: 28px;
+  display: block;
   max-width: 1560px;
-  margin: 0 auto;
+  margin: 0 auto 18px;
   border: 1px solid #e4eaf2;
   border-radius: 16px;
-  background: #fff;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(31, 91, 227, .08), transparent 28%),
+    linear-gradient(135deg, #fff 0%, #f9fcff 100%);
   padding: 30px;
   box-shadow: 0 8px 18px rgba(18, 31, 53, .04);
 }
 
-.recharge-copy {
-  display: flex;
-  min-height: 360px;
-  flex-direction: column;
-  justify-content: center;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #eff6ff 0%, #f8fbff 62%, #f0fdfa 100%);
-  padding: 34px;
-}
-
-.recharge-copy p {
-  margin: 0 0 10px;
-  color: #2357d6;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.recharge-copy h2 {
-  max-width: 520px;
-  margin: 0;
-  color: #162033;
-  font-size: 34px;
-  line-height: 1.15;
-}
-
-.recharge-copy span {
-  max-width: 600px;
-  margin-top: 16px;
-  color: #526075;
-  font-size: 15px;
-  line-height: 1.75;
-}
-
 .amount-panel {
   display: grid;
-  align-content: center;
   gap: 16px;
+  max-width: 680px;
+  margin-left: auto;
 }
 
 .amount-panel label {
@@ -1081,16 +1142,159 @@ button:disabled {
   cursor: pointer;
 }
 
-.ghost-action {
-  border: 1px solid #d9e1ec;
-  background: #fff;
-  color: #344158;
-}
-
 .primary-action {
   border: 0;
   background: #1f5be3;
   color: #fff;
+}
+
+.order-panel {
+  max-width: 1560px;
+  margin: 0 auto;
+  border: 1px solid #e4eaf2;
+  border-radius: 16px;
+  background: #fff;
+  padding: 24px;
+  box-shadow: 0 10px 24px rgba(18, 31, 53, .05);
+}
+
+.order-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.order-panel-head p {
+  margin: 0 0 5px;
+  color: #1f5be3;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.order-panel-head h3 {
+  margin: 0;
+  color: #171d2a;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.order-head-actions,
+.order-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.secondary-action,
+.order-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px solid #d9e5f7;
+  border-radius: 10px;
+  background: #fff;
+  color: #2550b8;
+  padding: 0 13px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.secondary-action:hover,
+.order-actions button:hover {
+  border-color: #9fb8f7;
+  background: #f5f8ff;
+}
+
+.order-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.order-card,
+.order-empty {
+  min-height: 146px;
+  border: 1px solid #dce6f5;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f7fbff 100%);
+  padding: 16px;
+}
+
+.order-card {
+  display: grid;
+  gap: 10px;
+}
+
+.order-card div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.order-card span {
+  color: #50627d;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.order-card strong {
+  color: #111827;
+  font-size: 22px;
+}
+
+.order-card p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #40506a;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.order-card em {
+  color: #718096;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.order-empty {
+  display: grid;
+  place-items: center;
+  grid-column: 1 / -1;
+  color: #718096;
+  text-align: center;
+  line-height: 1.7;
+}
+
+.ticket-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  border-top: 1px solid #edf2f7;
+  padding-top: 16px;
+}
+
+.ticket-strip strong {
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.ticket-strip span {
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #526075;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 750;
 }
 
 @media (max-width: 1120px) {
@@ -1101,6 +1305,15 @@ button:disabled {
 
   .recharge-page-card {
     grid-template-columns: 1fr;
+  }
+
+  .amount-panel {
+    margin-left: 0;
+    max-width: none;
+  }
+
+  .order-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
 
   .balance-card {
@@ -1147,7 +1360,6 @@ button:disabled {
     width: 100%;
   }
 
-  .plan-picker,
   .payment-picker {
     grid-template-columns: 1fr;
   }
@@ -1156,13 +1368,17 @@ button:disabled {
     padding: 16px;
   }
 
-  .recharge-copy {
-    min-height: 0;
-    padding: 22px;
+  .order-panel {
+    padding: 16px;
   }
 
-  .recharge-copy h2 {
-    font-size: 25px;
+  .order-panel-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .order-grid {
+    grid-template-columns: 1fr;
   }
 
   .bar-chart {
