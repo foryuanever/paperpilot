@@ -458,9 +458,12 @@ public class AdminController {
         row.put("email", appUserRepository.findById(order.getUserId()).map(AppUserEntity::getEmail).orElse("—"));
         row.put("provider", order.getProvider());
         row.put("amount", order.getAmount());
+        row.put("actualPayAmount", order.getActualPayAmount());
         row.put("status", order.getStatus());
+        row.put("platformOrderNo", order.getPlatformOrderNo());
         row.put("message", order.getMessage());
         row.put("createdAt", order.getCreatedAt());
+        row.put("paidAt", order.getPaidAt());
         return row;
     }
 

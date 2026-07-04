@@ -45,3 +45,13 @@ paperpilot:
     python: ${PPT_MASTER_PYTHON:}
     codex: ${PPT_MASTER_CODEX:/Applications/Codex.app/Contents/Resources/codex}
     agent-timeout-minutes: ${PPT_MASTER_AGENT_TIMEOUT_MINUTES:120}
+  payment:
+    zhifufm:
+      api-base-url: ${PAPERPILOT_ZHIFUFM_API_BASE_URL:}
+      merchant-num: ${PAPERPILOT_ZHIFUFM_MERCHANT_NUM:}
+      secret: ${PAPERPILOT_ZHIFUFM_SECRET:}
+      public-base-url: ${PAPERPILOT_PUBLIC_BASE_URL:}
+      notify-url: ${PAPERPILOT_ZHIFUFM_NOTIFY_URL:}
+      return-url: ${PAPERPILOT_ZHIFUFM_RETURN_URL:}
+      alipay-pay-type: ${PAPERPILOT_ZHIFUFM_ALIPAY_PAY_TYPE:alipay}
+      wechat-pay-type: ${PAPERPILOT_ZHIFUFM_WECHAT_PAY_TYPE:wechat}

@@ -30,11 +30,23 @@ public class PaymentOrderEntity {
     @Column(name = "payment_url", length = 1000)
     private String paymentUrl = "";
 
+    @Column(name = "platform_order_no", length = 128)
+    private String platformOrderNo = "";
+
+    @Column(name = "actual_pay_amount")
+    private Double actualPayAmount = 0.0;
+
     @Column(length = 500)
     private String message = "";
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "paid_at")
+    private LocalDateTime paidAt;
+
+    @Column(name = "notify_payload", length = 2000)
+    private String notifyPayload = "";
 
     @PrePersist
     void onCreate() {
@@ -53,8 +65,16 @@ public class PaymentOrderEntity {
     public void setStatus(String status) { this.status = status; }
     public String getPaymentUrl() { return paymentUrl; }
     public void setPaymentUrl(String paymentUrl) { this.paymentUrl = paymentUrl; }
+    public String getPlatformOrderNo() { return platformOrderNo; }
+    public void setPlatformOrderNo(String platformOrderNo) { this.platformOrderNo = platformOrderNo; }
+    public Double getActualPayAmount() { return actualPayAmount; }
+    public void setActualPayAmount(Double actualPayAmount) { this.actualPayAmount = actualPayAmount; }
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDateTime getPaidAt() { return paidAt; }
+    public void setPaidAt(LocalDateTime paidAt) { this.paidAt = paidAt; }
+    public String getNotifyPayload() { return notifyPayload; }
+    public void setNotifyPayload(String notifyPayload) { this.notifyPayload = notifyPayload; }
 }
