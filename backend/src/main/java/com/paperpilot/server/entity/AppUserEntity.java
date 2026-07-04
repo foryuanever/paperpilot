@@ -171,4 +171,26 @@ public class AppUserEntity {
     public void setTeamId(Long teamId) {
         this.teamId = teamId;
     }
+
+    @Column(name = "avatar_url", columnDefinition = "LONGTEXT")
+    private String avatarUrl;
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
+    }
+
+    @Column(name = "background_url", columnDefinition = "LONGTEXT")
+    private String backgroundUrl;
+
+    public String getBackgroundUrl() {
+        return backgroundUrl;
+    }
+
+    public void setBackgroundUrl(String backgroundUrl) {
+        this.backgroundUrl = backgroundUrl;
+    }
 }

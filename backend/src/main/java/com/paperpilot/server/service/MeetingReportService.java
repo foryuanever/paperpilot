@@ -2036,9 +2036,17 @@ public class MeetingReportService {
     private void validateCodexResponsesModel(ModelConfigEntity modelConfig) {
         String apiFormat = Objects.toString(modelConfig.getApiFormat(), "openai_chat").trim();
         String baseUrl = Objects.toString(modelConfig.getBaseUrl(), "").trim();
-        if ("openai_responses".equalsIgnoreCase(apiFormat) || baseUrl.matches(".*/(?:v1/)?responses/?$")) return;
         String provider = Objects.toString(modelConfig.getProviderName(), "当前模型").trim();
         String model = Objects.toString(modelConfig.getModelName(), "").trim();
+        String source = (provider + " " + model + " " + baseUrl).toLowerCase(Locale.ROOT);
+        if (source.contains("deepseek") || source.contains("api.deepseek.com")) {
+            throw new IllegalStateException(
+                "组会 PPT 的 PPT Master Agent 不能使用 DeepSeek 官方 API；"
+                    + "DeepSeek 只兼容 Chat Completions，不支持 Codex Agent 需要的 Responses 协议。"
+                    + "请在管理员模型池的“组会汇报/PPT生成”单独配置支持 /responses 的 GPT-5.5 中转路由。"
+            );
+        }
+        if ("openai_responses".equalsIgnoreCase(apiFormat) || baseUrl.matches(".*/(?:v1/)?responses/?$")) return;
         throw new IllegalStateException(
             "组会 PPT 的 PPT Master Agent 需要支持 OpenAI Responses 协议的模型路由；"
                 + provider

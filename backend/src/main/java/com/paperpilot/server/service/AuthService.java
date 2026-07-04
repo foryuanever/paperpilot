@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Service
 public class AuthService {
@@ -130,6 +131,19 @@ public class AuthService {
     }
 
     @Transactional
+    public AuthSessionVO updateProfile(Long userId, Map<String, Object> body) {
+        AppUserEntity user = appUserRepository.findById(userId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
+        String name = text(body.get("name"));
+        if (!name.isBlank()) user.setUsername(name);
+        if (body.containsKey("avatarUrl")) user.setAvatarUrl(limitDataUrl(text(body.get("avatarUrl")), 2_800_000, "头像图片过大"));
+        if (body.containsKey("backgroundUrl")) user.setBackgroundUrl(limitDataUrl(text(body.get("backgroundUrl")), 5_600_000, "封面图片过大"));
+        AppUserEntity saved = appUserRepository.save(user);
+        logAction("用户更新个人资料: " + saved.getUsername() + " (" + saved.getEmail() + ")", "info", saved.getLastIp());
+        return toSession(saved);
+    }
+
+    @Transactional
     public AppUserEntity adminCreateUser(String username, String email, String password, String role, String ip) {
         if (appUserRepository.findByEmail(email).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "该邮箱已注册");
@@ -227,7 +241,18 @@ public class AuthService {
     }
 
     private AuthSessionVO toSession(AppUserEntity user) {
-        return new AuthSessionVO(user.getId(), user.getUsername(), user.getEmail(), user.getInviteCode(), user.getRole());
+        return new AuthSessionVO(user.getId(), user.getUsername(), user.getEmail(), user.getInviteCode(), user.getRole(), user.getAvatarUrl(), user.getBackgroundUrl());
+    }
+
+    private String text(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private String limitDataUrl(String value, int maxLength, String message) {
+        if (value.length() > maxLength) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        }
+        return value;
     }
 
     private String hash(String input) {

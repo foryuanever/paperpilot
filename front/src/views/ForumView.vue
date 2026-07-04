@@ -20,10 +20,15 @@
         <div><span>03</span><p><strong>遵守内容规范</strong>严禁暴力、色情、违法及攻击性内容</p></div>
         <div><span>04</span><p><strong>谨慎私下交易</strong>任何交易均与本站无关，违规内容发现即封号</p></div>
       </div>
-      <button class="hero-publish-button" @click="openCreateModal">
-        <span class="plus-icon">+</span>
-        我已知晓，去发帖
-      </button>
+      <div class="hero-action-stack">
+        <button class="hero-publish-button" @click="openCreateModal">
+          <span class="plus-icon">+</span>
+          我已知晓，去发帖
+        </button>
+        <button class="hero-manage-button" @click="showMyPostsManager = !showMyPostsManager">
+          管理帖子
+        </button>
+      </div>
     </section>
 
     <section class="module-strip">
@@ -116,10 +121,10 @@
                 </div>
               </div>
               <div v-if="isAdmin" class="admin-post-actions">
-                <button :class="{ danger: post.banned }" @click="forumStore.toggleBan(post.id)">
+                <button :disabled="moderationBusy[post.id]" :class="{ danger: post.banned }" @click="toggleModeration(post, 'ban')">
                   {{ post.banned ? "解封" : "封禁" }}
                 </button>
-                <button :class="{ active: post.pinned }" @click="forumStore.togglePin(post.id)">
+                <button :disabled="moderationBusy[post.id]" :class="{ active: post.pinned }" @click="toggleModeration(post, 'pin')">
                   {{ post.pinned ? "取消置顶" : "置顶" }}
                 </button>
               </div>
@@ -142,10 +147,6 @@
                 <img v-if="avatar.url" :src="avatar.url" :alt="avatar.name" />
                 <b v-else>{{ avatar.text }}</b>
               </span>
-              <div>
-                <strong>{{ post.replies.length }} 人参与讨论</strong>
-                <small>最新评论头像</small>
-              </div>
             </div>
 
             <div v-if="post.images?.length" class="post-image-grid">
@@ -528,6 +529,7 @@ const directionQuery = ref("人工智能");
 const directionPickerOpen = ref(false);
 const contentEditor = ref(null);
 const showMarkdownPreview = ref(false);
+const moderationBusy = reactive({});
 
 const blankForm = () => ({
   postType: "数据集求助",
@@ -701,6 +703,17 @@ function isMine(post) {
 async function removeMyPost(post) {
   if (!window.confirm(`确定删除“${post.title}”吗？`)) return;
   await forumStore.deletePost(post.id);
+}
+
+async function toggleModeration(post, action) {
+  if (moderationBusy[post.id]) return;
+  moderationBusy[post.id] = true;
+  try {
+    if (action === "pin") await forumStore.togglePin(post.id);
+    else await forumStore.toggleBan(post.id);
+  } finally {
+    moderationBusy[post.id] = false;
+  }
 }
 
 function avatarUrlFor(postOrReply) {
@@ -1132,12 +1145,19 @@ button { cursor: pointer; }
 .post-author-main {
   width: fit-content;
   display: flex;
+  flex-direction: row !important;
   align-items: center;
   gap: 9px;
   margin-left: -4px;
   padding: 4px 8px 4px 4px;
   border-radius: 10px;
   transition: color .18s ease, background-color .18s ease;
+}
+
+.post-author-main > div {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start;
 }
 
 .post-author-main[data-user-id]:hover {
@@ -1171,6 +1191,11 @@ button { cursor: pointer; }
   font-weight: 800;
 }
 
+.admin-post-actions button:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
 .admin-post-actions button.active {
   border-color: #9ec1ff;
   color: #075ee5;
@@ -1184,10 +1209,14 @@ button { cursor: pointer; }
 }
 
 .reply-avatar-strip {
+  position: absolute;
+  top: 50%;
+  right: 28px;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   gap: 0;
-  margin-top: 11px;
+  margin-top: 0;
 }
 
 .reply-mini-avatar {
@@ -1207,24 +1236,30 @@ button { cursor: pointer; }
   font-size: 10px;
 }
 
-.reply-avatar-strip > div {
-  margin-left: 14px;
-  display: grid;
-  gap: 2px;
-}
-
-.reply-avatar-strip strong {
-  color: #344158;
-  font-size: 11px;
-}
-
-.reply-avatar-strip small {
-  color: #98a2b2;
-  font-size: 10px;
-}
-
 .markdown-text {
   white-space: pre-wrap;
+}
+
+.hero-action-stack {
+  display: grid;
+  gap: 10px;
+  justify-items: stretch;
+}
+
+.hero-manage-button {
+  height: 42px;
+  border: 1px solid #cfe0fb;
+  border-radius: 12px;
+  color: #075ee5;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.research-post {
+  position: relative;
+  min-height: 172px;
+  padding-right: 170px;
 }
 
 .direction-combobox {
@@ -1268,29 +1303,35 @@ button { cursor: pointer; }
 
 .markdown-editor {
   overflow: hidden;
-  border: 1px solid #dfe5ee;
-  border-radius: 12px;
-  background: #fff;
+  border: 1px solid #dbe5f2;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff, #fbfdff);
 }
 
 .markdown-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 8px;
+  padding: 10px;
   border-bottom: 1px solid #edf0f4;
-  background: #f7f9fc;
+  background: #f8fbff;
 }
 
 .markdown-toolbar button {
   height: 28px;
-  padding: 0 10px;
-  border: 1px solid #dce4ef;
-  border-radius: 8px;
+  padding: 0 11px;
+  border: 1px solid #d7e4f6;
+  border-radius: 999px;
   background: #fff;
-  color: #39475d;
+  color: #30405a;
   font-size: 11px;
   font-weight: 800;
+}
+
+.markdown-toolbar button:hover {
+  border-color: #8db7ff;
+  color: #075ee5;
+  background: #edf4ff;
 }
 
 .markdown-editor textarea {
@@ -1298,6 +1339,9 @@ button { cursor: pointer; }
   border: 0;
   border-radius: 0;
   box-shadow: none !important;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1.75;
 }
 
 .markdown-hints {
@@ -1397,6 +1441,16 @@ button { cursor: pointer; }
   .post-author-row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .research-post {
+    padding-right: 20px;
+  }
+
+  .reply-avatar-strip {
+    position: static;
+    transform: none;
+    margin-top: 10px;
   }
 
   .admin-post-actions {

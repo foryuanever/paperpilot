@@ -9,8 +9,8 @@ export const useForumStore = defineStore("forum", () => {
     error: ""
   });
 
-  async function fetchPosts() {
-    state.loading = true;
+  async function fetchPosts(options = {}) {
+    if (!options.silent) state.loading = true;
     state.error = "";
     try {
       state.posts = await paperpilotApi.getForumPosts();
@@ -18,7 +18,7 @@ export const useForumStore = defineStore("forum", () => {
       state.error = "研究社区加载失败，请稍后重试";
       console.error("Failed to fetch forum posts:", error);
     } finally {
-      state.loading = false;
+      if (!options.silent) state.loading = false;
     }
   }
 
@@ -43,9 +43,9 @@ export const useForumStore = defineStore("forum", () => {
     if (post) post.pinned = !post.pinned;
     try {
       await paperpilotApi.toggleForumPostPin(postId);
-      await fetchPosts();
+      await fetchPosts({ silent: true });
     } catch (error) {
-      await fetchPosts();
+      await fetchPosts({ silent: true });
       throw error;
     }
   }
@@ -55,9 +55,9 @@ export const useForumStore = defineStore("forum", () => {
     if (post) post.banned = !post.banned;
     try {
       await paperpilotApi.toggleForumPostBan(postId);
-      await fetchPosts();
+      await fetchPosts({ silent: true });
     } catch (error) {
-      await fetchPosts();
+      await fetchPosts({ silent: true });
       throw error;
     }
   }

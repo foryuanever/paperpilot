@@ -7,13 +7,17 @@ public class AuthSessionVO {
     private String email;
     private String inviteCode;
     private String role;
+    private String avatarUrl;
+    private String backgroundUrl;
 
-    public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role) {
+    public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl) {
         this.userId = userId;
         this.name = name;
         this.email = email;
         this.inviteCode = inviteCode;
         this.role = role;
+        this.avatarUrl = avatarUrl;
+        this.backgroundUrl = backgroundUrl;
     }
 
     public Long getUserId() {
@@ -34,5 +38,13 @@ public class AuthSessionVO {
 
     public String getRole() {
         return role;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public String getBackgroundUrl() {
+        return backgroundUrl;
     }
 }

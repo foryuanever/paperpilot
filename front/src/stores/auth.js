@@ -39,12 +39,30 @@ export const useAuthStore = defineStore("auth", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
   }
 
-  function updateProfileFields(payload) {
+  async function updateProfileFields(payload) {
     if (session.user) {
       if (payload.name !== undefined) session.user.name = payload.name;
       if (payload.avatarUrl !== undefined) session.user.avatarUrl = payload.avatarUrl;
       if (payload.backgroundUrl !== undefined) session.user.backgroundUrl = payload.backgroundUrl;
       persist();
+      try {
+        const saved = await paperpilotApi.updateProfile(payload);
+        session.user = {
+          ...session.user,
+          userId: saved.userId,
+          name: saved.name,
+          email: saved.email,
+          inviteCode: saved.inviteCode,
+          role: saved.role || session.user.role || "学生",
+          avatarUrl: saved.avatarUrl || "",
+          backgroundUrl: saved.backgroundUrl || "",
+        };
+        session.role = session.user.role;
+        persist();
+      } catch (error) {
+        console.error("Failed to persist profile fields:", error);
+        throw error;
+      }
     }
   }
 
@@ -57,6 +75,8 @@ export const useAuthStore = defineStore("auth", () => {
       email: user.email,
       inviteCode: user.inviteCode,
       role: user.role || "学生",
+      avatarUrl: user.avatarUrl || "",
+      backgroundUrl: user.backgroundUrl || "",
     };
     // Provide a direct shortcut for role checks used throughout the app
     session.role = session.user.role;

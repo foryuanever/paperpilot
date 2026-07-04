@@ -13,6 +13,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.post("/api/auth/change-password", payload);
     return data;
   },
+  async updateProfile(payload) {
+    const { data } = await apiClient.patch("/api/auth/profile", payload);
+    return data;
+  },
   async sendForgotPasswordCode(email) {
     const { data } = await apiClient.post(`/api/auth/forgot-password/send-code?email=${encodeURIComponent(email)}`);
     return data;

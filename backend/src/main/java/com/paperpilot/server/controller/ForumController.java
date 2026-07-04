@@ -218,8 +218,10 @@ public class ForumController {
         map.put("id", "post-" + post.getId());
         map.put("title", post.getTitle());
         map.put("author", post.getAuthor());
-        map.put("authorUserId", resolveUserId(post.getUserId(), post.getAuthor()));
+        Long authorUserId = resolveUserId(post.getUserId(), post.getAuthor());
+        map.put("authorUserId", authorUserId);
         map.put("avatar", avatar(post.getAvatar(), post.getAuthor()));
+        map.put("avatarUrl", avatarUrl(authorUserId));
         map.put("postType", fallback(post.getPostType(), inferPostType(post)));
         map.put("direction", fallback(post.getResearchArea(), "人工智能"));
         map.put("discipline", fallback(post.getDiscipline(), "计算机科学"));
@@ -249,8 +251,10 @@ public class ForumController {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", "reply-" + reply.getId());
             item.put("author", reply.getAuthor());
-            item.put("authorUserId", resolveUserId(reply.getUserId(), reply.getAuthor()));
+            Long replyUserId = resolveUserId(reply.getUserId(), reply.getAuthor());
+            item.put("authorUserId", replyUserId);
             item.put("avatar", avatar(reply.getAvatar(), reply.getAuthor()));
+            item.put("avatarUrl", avatarUrl(replyUserId));
             item.put("content", reply.getContent());
             item.put("replyToReplyId", reply.getReplyToReplyId());
             item.put("replyToAuthor", reply.getReplyToAuthor());
@@ -348,6 +352,10 @@ public class ForumController {
         if (userId != null && userId > 0 && appUserRepository.existsById(userId)) return userId;
         if (!StringUtils.hasText(author)) return null;
         return appUserRepository.findByUsername(author.trim()).map(AppUserEntity::getId).orElse(null);
+    }
+    private String avatarUrl(Long userId) {
+        if (userId == null) return "";
+        return appUserRepository.findById(userId).map(AppUserEntity::getAvatarUrl).orElse("");
     }
     private String fallback(String value, String fallback) { return StringUtils.hasText(value) ? value : fallback; }
     private String text(Map<String, Object> body, String key) { return body.get(key) == null ? "" : String.valueOf(body.get(key)).trim(); }

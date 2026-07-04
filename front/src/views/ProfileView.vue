@@ -468,7 +468,7 @@ async function onAvatarUpload(event) {
   }
   try {
     const base64 = await fileToBase64(file);
-    authStore.updateProfileFields({ avatarUrl: base64 });
+    await authStore.updateProfileFields({ avatarUrl: base64 });
     flash(profileSuccess, "头像已更新");
   } catch (error) {
     console.error("avatar upload failed", error);
@@ -484,20 +484,24 @@ async function onBackgroundUpload(event) {
   }
   try {
     const base64 = await fileToBase64(file);
-    authStore.updateProfileFields({ backgroundUrl: base64 });
+    await authStore.updateProfileFields({ backgroundUrl: base64 });
     flash(profileSuccess, "封面已更新");
   } catch (error) {
     console.error("background upload failed", error);
   }
 }
 
-function saveProfileData() {
+async function saveProfileData() {
   if (!tempName.value.trim()) {
     dialogStore.alert("空间昵称不能为空");
     return;
   }
-  authStore.updateProfileFields({ name: tempName.value.trim() });
-  flash(profileSuccess, "个人资料已保存");
+  try {
+    await authStore.updateProfileFields({ name: tempName.value.trim() });
+    flash(profileSuccess, "个人资料已保存");
+  } catch (error) {
+    dialogStore.alert(error?.response?.data?.message || "个人资料保存失败");
+  }
 }
 
 async function submitPasswordChange() {

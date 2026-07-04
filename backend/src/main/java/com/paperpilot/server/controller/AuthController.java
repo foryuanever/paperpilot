@@ -9,9 +9,12 @@ import com.paperpilot.server.vo.AuthSessionVO;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -41,6 +44,12 @@ public class AuthController {
     public void changePassword(@Valid @RequestBody ChangePasswordRequest request) {
         Long userId = currentUserService.getOrCreateDefaultUserId();
         authService.changePassword(userId, request.getOldPassword(), request.getNewPassword());
+    }
+
+    @PatchMapping("/profile")
+    public AuthSessionVO updateProfile(@RequestBody Map<String, Object> body) {
+        Long userId = currentUserService.getOrCreateDefaultUserId();
+        return authService.updateProfile(userId, body);
     }
 
     @PostMapping("/forgot-password/send-code")

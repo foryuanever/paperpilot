@@ -133,6 +133,8 @@ public class FriendController {
         map.put("email", user.getEmail());
         map.put("role", user.getRole());
         map.put("avatar", avatar(user.getUsername()));
+        map.put("avatarUrl", user.getAvatarUrl());
+        map.put("backgroundUrl", user.getBackgroundUrl());
         map.put("registerTime", user.getCreatedAt() == null ? "" : user.getCreatedAt().toLocalDate().toString());
         map.put("activeTime", user.getActiveTime() == null ? 0 : user.getActiveTime());
         map.put("teamId", user.getTeamId());
