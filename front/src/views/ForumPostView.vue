@@ -16,6 +16,8 @@
           <article class="post-article">
             <div class="label-row">
               <span class="type-label" :class="typeClass(post.postType)">{{ post.postType }}</span>
+              <span v-if="post.pinned" class="state-badge pin-badge">📌 置顶</span>
+              <span v-if="post.banned" class="state-badge ban-badge">已封禁</span>
               <span>{{ post.direction }}</span>
               <time>{{ post.time }}</time>
             </div>
@@ -23,7 +25,8 @@
             <h1>{{ post.title }}</h1>
             <div class="author-row">
               <div class="author-profile-trigger" :data-user-id="post.authorUserId" title="查看个人卡片">
-                <span class="avatar">{{ post.avatar }}</span>
+                <img v-if="avatarUrlFor(post)" :src="avatarUrlFor(post)" class="avatar-img" :alt="post.author" />
+                <span v-else class="avatar">{{ post.avatar }}</span>
                 <div>
                   <strong>{{ post.author }}</strong>
                   <small>发布于 {{ post.direction }}</small>
@@ -82,6 +85,10 @@
             </header>
 
             <div class="comment-editor">
+              <div v-if="replyTarget" class="reply-target-bar">
+                正在回复 {{ replyTarget.author }}
+                <button @click="replyTarget = null">取消</button>
+              </div>
               <textarea v-model="replyContent" rows="4" placeholder="提供数据线索、方法建议或可验证的研究观点"></textarea>
               <div>
                 <span>以 {{ authStore.profile.name }} 身份回复</span>
@@ -93,13 +100,16 @@
 
             <div v-if="post.replies.length" class="comment-list">
               <article v-for="reply in post.replies" :key="reply.id" class="comment-item">
-                <span class="comment-avatar" :data-user-id="reply.authorUserId" title="查看个人卡片">{{ reply.avatar }}</span>
+                <img v-if="avatarUrlFor(reply)" :src="avatarUrlFor(reply)" class="comment-avatar-img" :data-user-id="reply.authorUserId" :alt="reply.author" title="查看个人卡片" />
+                <span v-else class="comment-avatar" :data-user-id="reply.authorUserId" title="查看个人卡片">{{ reply.avatar }}</span>
                 <div>
                   <header>
                     <strong>{{ reply.author }}</strong>
                     <time>{{ reply.time }}</time>
                     <button :class="{ active: reply.hasLiked }" @click="forumStore.likeReply(post.id, reply.id)">赞同 {{ reply.likes }}</button>
+                    <button @click="setReplyTarget(reply)">回复</button>
                   </header>
+                  <small v-if="reply.replyToAuthor" class="reply-to-note">回复 {{ reply.replyToAuthor }}</small>
                   <p>{{ reply.content }}</p>
                 </div>
               </article>
@@ -147,6 +157,7 @@ const forumStore = useForumStore();
 const replyContent = ref("");
 const submitting = ref(false);
 const previewImage = ref("");
+const replyTarget = ref(null);
 
 const post = computed(() => forumStore.state.posts.find(item => item.id === route.params.id));
 
@@ -177,11 +188,29 @@ async function submitReply() {
   if (!content || submitting.value) return;
   submitting.value = true;
   try {
-    await forumStore.addReply(post.value.id, { content, author: authStore.profile.name });
+    await forumStore.addReply(post.value.id, {
+      content,
+      author: authStore.profile.name,
+      replyToReplyId: replyTarget.value?.id || "",
+      replyToAuthor: replyTarget.value?.author || ""
+    });
     replyContent.value = "";
+    replyTarget.value = null;
   } finally {
     submitting.value = false;
   }
+}
+
+function setReplyTarget(reply) {
+  replyTarget.value = reply;
+  replyContent.value = replyContent.value || `@${reply.author} `;
+}
+
+function avatarUrlFor(postOrReply) {
+  if (String(postOrReply?.authorUserId || "") === String(authStore.profile.userId || "")) {
+    return authStore.profile.avatarUrl || "";
+  }
+  return postOrReply?.avatarUrl || "";
 }
 </script>
 
@@ -200,12 +229,16 @@ button, textarea { font: inherit; }
 .label-row .type-label.paper { color: #6554d9; background: #eeeaff; }
 .label-row .type-label.research { color: #087d5e; background: #ddf7ef; }
 .label-row .type-label.competition { color: #c83e5d; background: #ffe8ee; }
+.state-badge { padding: 5px 9px; border-radius: 7px; font-size: 11px; font-weight: 900; }
+.pin-badge { color: #075ee5; background: #eaf2ff; }
+.ban-badge { color: #b4233a; background: #fff0f2; }
 .label-row time { margin-left: auto; color: #97a1b1; }
 .post-article h1 { margin: 20px 0 14px; font-size: clamp(25px, 3vw, 36px); line-height: 1.35; letter-spacing: -.025em; }
 .author-row { display: flex; align-items: center; gap: 10px; padding-bottom: 20px; border-bottom: 1px solid #edf0f4; }
 .author-profile-trigger { display: flex; align-items: center; gap: 10px; margin-left: -4px; padding: 4px 8px 4px 4px; border-radius: 11px; transition: color .18s ease, background-color .18s ease; }
 .author-profile-trigger[data-user-id]:hover { color: #075ee5; background: #f1f6ff; }
 .avatar, .comment-avatar { width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; color: #fff; background: linear-gradient(135deg, #176ce4, #643bd4); font-size: 11px; font-weight: 800; }
+.avatar-img, .comment-avatar-img { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; }
 .author-profile-trigger > div { display: flex; flex-direction: column; gap: 3px; }
 .author-row strong { font-size: 13px; }
 .author-row small { color: #96a0b0; }
@@ -239,19 +272,23 @@ button, textarea { font: inherit; }
 .comments-card h2 { margin: 4px 0 0; font-size: 20px; }
 .comments-card > header > strong { width: 35px; height: 35px; display: grid; place-items: center; border-radius: 10px; color: #0865ee; background: #eaf2ff; }
 .comment-editor { margin: 20px 0; padding: 13px; border: 1px solid #dde4ed; border-radius: 13px; }
+.reply-target-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; padding: 8px 10px; border-radius: 9px; color: #075ee5; background: #edf4ff; font-size: 12px; font-weight: 800; }
+.reply-target-bar button { border: 0; color: #667085; background: transparent; font-size: 11px; }
 .comment-editor textarea { width: 100%; border: 0; outline: 0; resize: vertical; box-sizing: border-box; color: #344157; }
 .comment-editor > div { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #edf0f4; color: #8b95a5; font-size: 10px; }
 .comment-editor button { padding: 8px 14px; border: 0; border-radius: 8px; color: #fff; background: #0865ee; font-weight: 800; cursor: pointer; }
 .comment-editor button:disabled { opacity: .45; cursor: not-allowed; }
 .comment-list { display: flex; flex-direction: column; gap: 10px; }
 .comment-item { display: flex; gap: 11px; padding: 15px; border-radius: 13px; background: #f7f9fc; }
-.comment-avatar { width: 32px; height: 32px; }
+.comment-avatar, .comment-avatar-img { width: 32px; height: 32px; }
 .comment-item > div { min-width: 0; flex: 1; }
 .comment-item header { display: flex; align-items: center; gap: 10px; }
 .comment-item header strong { font-size: 12px; }
 .comment-item time { color: #98a2b1; font-size: 10px; }
 .comment-item button { margin-left: auto; border: 0; color: #8792a3; background: transparent; cursor: pointer; font-size: 10px; }
+.comment-item button + button { margin-left: 0; }
 .comment-item button.active { color: #0865ee; }
+.reply-to-note { display: inline-block; margin-top: 7px; padding: 4px 8px; border-radius: 999px; color: #075ee5; background: #edf4ff; font-size: 10px; font-weight: 800; }
 .comment-item p { margin: 8px 0 0; color: #4e5b70; font-size: 12px; line-height: 1.75; white-space: pre-wrap; }
 .empty-comments { padding: 40px; text-align: center; color: #929cac; background: #f8fafc; border-radius: 13px; font-size: 12px; }
 aside { position: sticky; top: 116px; display: flex; flex-direction: column; gap: 14px; }

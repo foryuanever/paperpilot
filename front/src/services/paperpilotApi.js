@@ -380,6 +380,14 @@ export const paperpilotApi = {
   async deleteForumPost(id) {
     await apiClient.delete(`/api/forum/posts/${id}`);
   },
+  async toggleForumPostPin(id) {
+    const { data } = await apiClient.post(`/api/forum/posts/${id}/pin`);
+    return data;
+  },
+  async toggleForumPostBan(id) {
+    const { data } = await apiClient.post(`/api/forum/posts/${id}/ban`);
+    return data;
+  },
   async likeForumPost(id) {
     const { data } = await apiClient.post(`/api/forum/posts/${id}/like`);
     return data;

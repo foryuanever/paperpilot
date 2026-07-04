@@ -26,6 +26,12 @@ public class ForumReplyEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "reply_to_reply_id", length = 64)
+    private String replyToReplyId;
+
+    @Column(name = "reply_to_author", length = 128)
+    private String replyToAuthor;
+
     @Column(nullable = false)
     private Integer likes = 0;
 
@@ -84,6 +90,22 @@ public class ForumReplyEntity {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public String getReplyToReplyId() {
+        return replyToReplyId;
+    }
+
+    public void setReplyToReplyId(String replyToReplyId) {
+        this.replyToReplyId = replyToReplyId;
+    }
+
+    public String getReplyToAuthor() {
+        return replyToAuthor;
+    }
+
+    public void setReplyToAuthor(String replyToAuthor) {
+        this.replyToAuthor = replyToAuthor;
     }
 
     public Integer getLikes() {

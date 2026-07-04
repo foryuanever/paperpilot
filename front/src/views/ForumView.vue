@@ -94,6 +94,9 @@
           >
             <header class="post-label-row">
               <div class="primary-labels">
+                <span v-if="post.pinned" class="state-badge pin-badge">📌 置顶</span>
+                <span v-if="isHotPost(post)" class="state-badge hot-badge">🔥 热帖</span>
+                <span v-if="post.banned" class="state-badge ban-badge">已封禁</span>
                 <button class="type-label" :class="typeClass(post.postType)" @click="activeType = post.postType">
                   {{ post.postType }}
                 </button>
@@ -103,16 +106,47 @@
               <time>{{ post.time }}</time>
             </header>
 
-            <div class="post-author-row" :data-user-id="post.authorUserId" title="查看个人卡片">
-              <span class="post-avatar">{{ post.avatar }}</span>
-              <div>
-                <strong>{{ post.author }}</strong>
-                <span>发布于 {{ post.direction }}</span>
+            <div class="post-author-row">
+              <div class="post-author-main" :data-user-id="post.authorUserId" title="查看个人卡片">
+                <img v-if="avatarUrlFor(post)" :src="avatarUrlFor(post)" class="post-avatar-img" :alt="post.author" />
+                <span v-else class="post-avatar">{{ post.avatar }}</span>
+                <div>
+                  <strong>{{ post.author }}</strong>
+                  <span>发布于 {{ post.direction }}</span>
+                </div>
+              </div>
+              <div v-if="isAdmin" class="admin-post-actions">
+                <button :class="{ danger: post.banned }" @click="forumStore.toggleBan(post.id)">
+                  {{ post.banned ? "解封" : "封禁" }}
+                </button>
+                <button :class="{ active: post.pinned }" @click="forumStore.togglePin(post.id)">
+                  {{ post.pinned ? "取消置顶" : "置顶" }}
+                </button>
               </div>
             </div>
 
-            <h2 @click="openPost(post.id)">{{ post.title }}</h2>
-            <p class="post-content">{{ post.content }}</p>
+            <h2 @click="openPost(post.id)">
+              <span v-if="post.pinned" class="title-icon">📌</span>
+              <span v-if="isHotPost(post)" class="title-icon">🔥</span>
+              {{ post.title }}
+            </h2>
+            <p class="post-content markdown-text">{{ post.content }}</p>
+
+            <div v-if="replyAvatars(post).length" class="reply-avatar-strip">
+              <span
+                v-for="avatar in replyAvatars(post)"
+                :key="`${post.id}-${avatar.key}`"
+                class="reply-mini-avatar"
+                :title="avatar.name"
+              >
+                <img v-if="avatar.url" :src="avatar.url" :alt="avatar.name" />
+                <b v-else>{{ avatar.text }}</b>
+              </span>
+              <div>
+                <strong>{{ post.replies.length }} 人参与讨论</strong>
+                <small>最新评论头像</small>
+              </div>
+            </div>
 
             <div v-if="post.images?.length" class="post-image-grid">
               <button v-for="(image, index) in post.images" :key="`${post.id}-image-${index}`" @click="previewImage = image">
@@ -218,6 +252,25 @@
             </span>
             <b>›</b>
           </button>
+          <button class="manage-posts-entry" @click="showMyPostsManager = !showMyPostsManager">
+            <span class="research">管</span>
+            <span>
+              <strong>管理帖子</strong>
+              <small>编辑或删除我发布的主题</small>
+            </span>
+            <b>{{ showMyPostsManager ? "−" : "›" }}</b>
+          </button>
+          <div v-if="showMyPostsManager" class="my-post-manager">
+            <article v-for="post in myPosts" :key="post.id">
+              <strong>{{ post.title }}</strong>
+              <span>{{ post.direction }} · {{ post.time }}</span>
+              <div>
+                <button @click="openPost(post.id)">查看</button>
+                <button class="danger" @click="removeMyPost(post)">删除</button>
+              </div>
+            </article>
+            <p v-if="!myPosts.length">还没有发布过帖子。</p>
+          </div>
         </section>
 
         <section class="sidebar-card">
@@ -279,11 +332,25 @@
 
           <div class="form-section">
             <h3><span>2</span> 选择所属方向</h3>
-            <label class="wide-field">
+            <label class="wide-field direction-combobox">
               <span>所属方向</span>
-              <select v-model="form.direction">
-                <option v-for="item in directions.slice(1)" :key="item" :value="item">{{ item }}</option>
-              </select>
+              <input
+                v-model="directionQuery"
+                placeholder="输入关键词搜索方向，例如 人工智能 / 临床 / 金融"
+                @focus="directionPickerOpen = true"
+              />
+              <div v-if="directionPickerOpen" class="direction-suggestion-panel">
+                <button
+                  v-for="item in filteredDirectionOptions"
+                  :key="item"
+                  type="button"
+                  :class="{ active: form.direction === item }"
+                  @click="chooseDirection(item)"
+                >
+                  {{ item }}
+                </button>
+              </div>
+              <small>当前：{{ form.direction }}</small>
             </label>
           </div>
 
@@ -295,11 +362,28 @@
             </label>
             <label class="wide-field">
               <span>详细内容</span>
-              <textarea v-model="form.content" rows="5" placeholder="补充研究背景、已有条件、使用限制或推荐理由"></textarea>
-            </label>
-            <label class="wide-field">
-              <span>研究标签 <small>最多 8 个，用空格或逗号分隔</small></span>
-              <input v-model="form.tagsRaw" placeholder="例如：多模态 医学影像 小样本" />
+              <div class="markdown-editor">
+                <div class="markdown-toolbar">
+                  <button type="button" @click="insertMarkdown('**', '**')">B</button>
+                  <button type="button" @click="insertMarkdown('- ', '')">列表</button>
+                  <button type="button" @click="insertMarkdown('> ', '')">引用</button>
+                  <button type="button" @click="insertMarkdown('`', '`')">代码</button>
+                  <button type="button" @click="insertMarkdown('[链接文字](', ')')">链接</button>
+                </div>
+                <textarea
+                  ref="contentEditor"
+                  v-model="form.content"
+                  rows="7"
+                  placeholder="支持 Markdown：列出背景、已尝试方法、数据条件、希望别人回答的关键点"
+                ></textarea>
+                <div class="markdown-hints">
+                  <span>支持 **加粗**、列表、引用、链接、代码片段</span>
+                  <button type="button" @click="showMarkdownPreview = !showMarkdownPreview">
+                    {{ showMarkdownPreview ? "收起预览" : "预览" }}
+                  </button>
+                </div>
+                <div v-if="showMarkdownPreview" class="markdown-preview markdown-text">{{ form.content || "预览会显示在这里。" }}</div>
+              </div>
             </label>
             <div class="upload-grid">
               <label class="upload-card">
@@ -361,14 +445,6 @@
             </div>
           </div>
 
-          <div v-if="form.postType === '数据集求助' || form.postType === '科研羊毛'" class="form-section optional-section">
-            <h3><span>4</span> 补充资源信息</h3>
-            <label class="wide-field">
-              <span>资源链接 <small>可选</small></span>
-              <input v-model="form.resourceLink" type="url" placeholder="https://" />
-            </label>
-          </div>
-
           <div class="ai-review-note" :class="{ rejected: moderationError }">
             <span class="ai-review-icon">AI</span>
             <div>
@@ -401,7 +477,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useForumStore } from "../stores/forum";
@@ -447,6 +523,11 @@ const showCreateModal = ref(false);
 const publishing = ref(false);
 const moderationError = ref("");
 const previewImage = ref(null);
+const showMyPostsManager = ref(false);
+const directionQuery = ref("人工智能");
+const directionPickerOpen = ref(false);
+const contentEditor = ref(null);
+const showMarkdownPreview = ref(false);
 
 const blankForm = () => ({
   postType: "数据集求助",
@@ -494,6 +575,14 @@ const filteredPosts = computed(() => {
 
 const totalReplies = computed(() => forumStore.state.posts.reduce((sum, post) => sum + post.replies.length, 0));
 const hasFilters = computed(() => Boolean(searchQuery.value || activeType.value || activeTag.value || activeDirection.value !== "全部方向"));
+const isAdmin = computed(() => authStore.profile.role === "管理员" || authStore.session?.role === "管理员");
+const myPosts = computed(() => forumStore.state.posts.filter(post => isMine(post)));
+const filteredDirectionOptions = computed(() => {
+  const q = directionQuery.value.trim().toLowerCase();
+  const list = directions.slice(1);
+  if (!q) return list.slice(0, 18);
+  return list.filter(item => item.toLowerCase().includes(q)).slice(0, 18);
+});
 
 const popularTags = computed(() => {
   const counts = {};
@@ -535,6 +624,9 @@ function normalizeLink(value) {
 
 function openCreateModal(type = "") {
   Object.assign(form, blankForm());
+  directionQuery.value = form.direction;
+  directionPickerOpen.value = false;
+  showMarkdownPreview.value = false;
   moderationError.value = "";
   if (type) form.postType = type;
   showCreateModal.value = true;
@@ -548,7 +640,7 @@ async function submitPost() {
   if (!canSubmit.value || publishing.value) return;
   publishing.value = true;
   moderationError.value = "";
-  const tags = form.tagsRaw.split(/[\s,，#]+/).map(tag => tag.trim()).filter(Boolean).slice(0, 8);
+  const tags = [form.direction, form.postType, ...form.title.split(/[\s,，#：:]+/)].map(tag => tag.trim()).filter(Boolean).slice(0, 8);
   try {
     const result = await forumStore.addPost({
       title: form.title.trim(),
@@ -561,7 +653,7 @@ async function submitPost() {
       publishYear: selectedPaper.value?.publishYear || selectedPaper.value?.year || "",
       venueName: form.venueName.trim(),
       venueLevel: form.venueLevel,
-      resourceLink: form.resourceLink.trim(),
+      resourceLink: "",
       images: form.images,
       attachments: form.attachments
     });
@@ -577,6 +669,64 @@ async function submitPost() {
   } finally {
     publishing.value = false;
   }
+}
+
+function chooseDirection(item) {
+  form.direction = item;
+  directionQuery.value = item;
+  directionPickerOpen.value = false;
+}
+
+async function insertMarkdown(before, after = "") {
+  const textarea = contentEditor.value;
+  if (!textarea) {
+    form.content += `${before}${after}`;
+    return;
+  }
+  const start = textarea.selectionStart || 0;
+  const end = textarea.selectionEnd || 0;
+  const selected = form.content.slice(start, end);
+  form.content = `${form.content.slice(0, start)}${before}${selected}${after}${form.content.slice(end)}`;
+  await nextTick();
+  const cursor = start + before.length + selected.length + after.length;
+  textarea.focus();
+  textarea.setSelectionRange(cursor, cursor);
+}
+
+function isMine(post) {
+  return String(post.authorUserId || "") === String(authStore.profile.userId || "")
+    || post.author === authStore.profile.name;
+}
+
+async function removeMyPost(post) {
+  if (!window.confirm(`确定删除“${post.title}”吗？`)) return;
+  await forumStore.deletePost(post.id);
+}
+
+function avatarUrlFor(postOrReply) {
+  if (String(postOrReply?.authorUserId || "") === String(authStore.profile.userId || "")) {
+    return authStore.profile.avatarUrl || "";
+  }
+  return postOrReply?.avatarUrl || "";
+}
+
+function replyAvatars(post) {
+  const seen = new Set();
+  return (post.replies || []).slice(-6).reverse().map(reply => ({
+    key: reply.id,
+    name: reply.author,
+    text: reply.avatar || String(reply.author || "U").slice(0, 1).toUpperCase(),
+    url: avatarUrlFor(reply)
+  })).filter(item => {
+    const key = item.url || item.text + item.name;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 5);
+}
+
+function isHotPost(post) {
+  return Number(post.likes || 0) + Number(post.replies?.length || 0) >= 50;
 }
 
 async function handleImageUpload(event) {
@@ -938,5 +1088,319 @@ button { cursor: pointer; }
   .resource-panel, .post-footer { align-items: flex-start; flex-direction: column; }
   .resource-main { width: 100%; grid-template-columns: 1fr; }
   .publish-modal > footer { align-items: flex-start; flex-direction: column; }
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: 40px repeat(auto-fill, minmax(92px, 1fr));
+  max-height: 112px;
+  overflow: hidden;
+  gap: 8px;
+  padding-bottom: 0;
+}
+
+.filter-label {
+  grid-row: 1 / span 3;
+  align-self: start;
+  padding-top: 6px;
+}
+
+.filter-button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: #f7f9fc;
+}
+
+.state-badge {
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.pin-badge { color: #075ee5; background: #eaf2ff; }
+.hot-badge { color: #b85b00; background: #fff0d6; }
+.ban-badge { color: #b4233a; background: #fff0f2; }
+.title-icon { margin-right: 4px; font-size: 14px; }
+
+.post-author-row {
+  justify-content: space-between;
+}
+
+.post-author-main {
+  width: fit-content;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-left: -4px;
+  padding: 4px 8px 4px 4px;
+  border-radius: 10px;
+  transition: color .18s ease, background-color .18s ease;
+}
+
+.post-author-main[data-user-id]:hover {
+  color: #075ee5;
+  background: #f1f6ff;
+}
+
+.post-avatar-img,
+.reply-mini-avatar img {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.admin-post-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-post-actions button {
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid #d8e2f1;
+  border-radius: 9px;
+  background: #fff;
+  color: #46546b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-post-actions button.active {
+  border-color: #9ec1ff;
+  color: #075ee5;
+  background: #edf4ff;
+}
+
+.admin-post-actions button.danger {
+  border-color: #f0bdc7;
+  color: #b4233a;
+  background: #fff5f6;
+}
+
+.reply-avatar-strip {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-top: 11px;
+}
+
+.reply-mini-avatar {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  margin-right: -7px;
+  overflow: hidden;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #176ce4, #643bd4);
+}
+
+.reply-mini-avatar b {
+  color: #fff;
+  font-size: 10px;
+}
+
+.reply-avatar-strip > div {
+  margin-left: 14px;
+  display: grid;
+  gap: 2px;
+}
+
+.reply-avatar-strip strong {
+  color: #344158;
+  font-size: 11px;
+}
+
+.reply-avatar-strip small {
+  color: #98a2b2;
+  font-size: 10px;
+}
+
+.markdown-text {
+  white-space: pre-wrap;
+}
+
+.direction-combobox {
+  position: relative;
+}
+
+.direction-combobox > small {
+  color: #075ee5;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.direction-suggestion-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+  max-height: 174px;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid #dbe6f5;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.direction-suggestion-panel button {
+  min-height: 32px;
+  border: 1px solid #e2e8f2;
+  border-radius: 9px;
+  background: #fff;
+  color: #45536a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.direction-suggestion-panel button.active,
+.direction-suggestion-panel button:hover {
+  border-color: #8db7ff;
+  color: #075ee5;
+  background: #edf4ff;
+}
+
+.markdown-editor {
+  overflow: hidden;
+  border: 1px solid #dfe5ee;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.markdown-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid #edf0f4;
+  background: #f7f9fc;
+}
+
+.markdown-toolbar button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #39475d;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.markdown-editor textarea {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none !important;
+}
+
+.markdown-hints {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-top: 1px solid #edf0f4;
+  color: #8a95a6;
+  font-size: 11px;
+}
+
+.markdown-hints button {
+  border: 0;
+  background: transparent;
+  color: #075ee5;
+  font-weight: 800;
+}
+
+.markdown-preview {
+  margin: 0 10px 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f7f9fc;
+  color: #344158;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.manage-posts-entry {
+  margin-top: 4px;
+}
+
+.my-post-manager {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #edf0f4;
+}
+
+.my-post-manager article {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #e3e9f2;
+  border-radius: 11px;
+  background: #f8fbff;
+}
+
+.my-post-manager strong {
+  overflow: hidden;
+  color: #243048;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-post-manager span,
+.my-post-manager p {
+  margin: 0;
+  color: #8b95a6;
+  font-size: 10px;
+}
+
+.my-post-manager article > div {
+  display: flex;
+  gap: 6px;
+}
+
+.my-post-manager button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #d8e2f1;
+  border-radius: 8px;
+  background: #fff;
+  color: #075ee5;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.my-post-manager button.danger {
+  color: #b4233a;
+}
+
+@media (max-width: 760px) {
+  .filter-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 150px;
+  }
+
+  .filter-label {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  .post-author-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-post-actions {
+    width: 100%;
+  }
 }
 </style>

@@ -55,7 +55,9 @@ public class ForumController {
     public List<Map<String, Object>> getPosts() {
         AppUserEntity currentUser = currentUserService.getOrCreateDefaultUser();
         return forumPostRepository.findAllByOrderByCreatedAtDesc().stream()
+            .filter(post -> !post.isBanned() || isAdmin(currentUser) || isOwner(post, currentUser))
             .map(post -> toMap(post, currentUser))
+            .sorted((a, b) -> Boolean.compare(Boolean.TRUE.equals(b.get("pinned")), Boolean.TRUE.equals(a.get("pinned"))))
             .toList();
     }
 
@@ -147,10 +149,54 @@ public class ForumController {
         reply.setContent(content);
         reply.setAuthor(defaultText(body, "author", actor.getUsername()));
         reply.setAvatar(avatar("", reply.getAuthor()));
+        reply.setReplyToReplyId(text(body, "replyToReplyId"));
+        reply.setReplyToAuthor(text(body, "replyToAuthor"));
         ForumReplyEntity saved = forumReplyRepository.save(reply);
-        notificationService.create(post.getUserId(), actor.getId(), "forum_reply", post.getId(),
-            "你的帖子收到新评论", reply.getAuthor() + " 评论了《" + post.getTitle() + "》");
+        Long receiverId = post.getUserId();
+        String replyToId = text(body, "replyToReplyId");
+        if (StringUtils.hasText(replyToId)) {
+            forumReplyRepository.findById(parseId(replyToId, "reply-"))
+                .map(ForumReplyEntity::getUserId)
+                .ifPresent(value -> {
+                    if (value != null) notificationService.create(value, actor.getId(), "forum_reply", post.getId(),
+                        "你的评论收到回复", reply.getAuthor() + " 回复了你在《" + post.getTitle() + "》下的评论");
+                });
+        }
+        if (receiverId != null && !Objects.equals(receiverId, actor.getId())) {
+            notificationService.create(receiverId, actor.getId(), "forum_reply", post.getId(),
+                "你的帖子收到新评论", reply.getAuthor() + " 评论了《" + post.getTitle() + "》");
+        }
         return Map.of("id", "reply-" + saved.getId());
+    }
+
+    @PostMapping("/posts/{id}/pin")
+    public Map<String, Object> togglePin(@PathVariable String id) {
+        AppUserEntity actor = currentUserService.getOrCreateDefaultUser();
+        ensureAdmin(actor);
+        ForumPostEntity post = findPost(id);
+        post.setPinned(!post.isPinned());
+        forumPostRepository.save(post);
+        if (post.getUserId() != null) {
+            notificationService.create(post.getUserId(), actor.getId(), "forum_pin", post.getId(),
+                post.isPinned() ? "你的帖子已被置顶" : "你的帖子已取消置顶",
+                "管理员" + (post.isPinned() ? "置顶了" : "取消置顶了") + "《" + post.getTitle() + "》");
+        }
+        return Map.of("pinned", post.isPinned());
+    }
+
+    @PostMapping("/posts/{id}/ban")
+    public Map<String, Object> toggleBan(@PathVariable String id) {
+        AppUserEntity actor = currentUserService.getOrCreateDefaultUser();
+        ensureAdmin(actor);
+        ForumPostEntity post = findPost(id);
+        post.setBanned(!post.isBanned());
+        forumPostRepository.save(post);
+        if (post.getUserId() != null) {
+            notificationService.create(post.getUserId(), actor.getId(), "forum_ban", post.getId(),
+                post.isBanned() ? "你的帖子已被封禁" : "你的帖子已解除封禁",
+                "管理员" + (post.isBanned() ? "封禁了" : "解除封禁了") + "《" + post.getTitle() + "》");
+        }
+        return Map.of("banned", post.isBanned());
     }
 
     @PostMapping("/posts/{postId}/reply/{replyId}/like")
@@ -194,6 +240,9 @@ public class ForumController {
         map.put("hasBookmarked", post.isHasBookmarked());
         map.put("resolved", post.isResolved());
         map.put("canManage", isOwner(post, currentUser));
+        map.put("canAdminManage", isAdmin(currentUser));
+        map.put("pinned", post.isPinned());
+        map.put("banned", post.isBanned());
         map.put("time", post.getCreatedAt().format(FORMATTER));
         List<Map<String, Object>> replies = new ArrayList<>();
         for (ForumReplyEntity reply : forumReplyRepository.findAllByPostIdOrderByCreatedAtAsc(post.getId())) {
@@ -203,6 +252,8 @@ public class ForumController {
             item.put("authorUserId", resolveUserId(reply.getUserId(), reply.getAuthor()));
             item.put("avatar", avatar(reply.getAvatar(), reply.getAuthor()));
             item.put("content", reply.getContent());
+            item.put("replyToReplyId", reply.getReplyToReplyId());
+            item.put("replyToAuthor", reply.getReplyToAuthor());
             item.put("likes", value(reply.getLikes()));
             item.put("hasLiked", reply.isHasLiked());
             item.put("time", reply.getCreatedAt().format(FORMATTER));
@@ -243,6 +294,16 @@ public class ForumController {
     private boolean isOwner(ForumPostEntity post, AppUserEntity currentUser) {
         return Objects.equals(post.getUserId(), currentUser.getId())
             || (post.getUserId() == null && Objects.equals(post.getAuthor(), currentUser.getUsername()));
+    }
+
+    private boolean isAdmin(AppUserEntity user) {
+        return user != null && "管理员".equals(user.getRole());
+    }
+
+    private void ensureAdmin(AppUserEntity user) {
+        if (!isAdmin(user)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅管理员可管理论坛帖子");
+        }
     }
 
     private ForumPostEntity findPost(String id) {

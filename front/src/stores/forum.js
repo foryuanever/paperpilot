@@ -38,6 +38,30 @@ export const useForumStore = defineStore("forum", () => {
     state.posts = state.posts.filter(item => item.id !== postId);
   }
 
+  async function togglePin(postId) {
+    const post = state.posts.find(item => item.id === postId);
+    if (post) post.pinned = !post.pinned;
+    try {
+      await paperpilotApi.toggleForumPostPin(postId);
+      await fetchPosts();
+    } catch (error) {
+      await fetchPosts();
+      throw error;
+    }
+  }
+
+  async function toggleBan(postId) {
+    const post = state.posts.find(item => item.id === postId);
+    if (post) post.banned = !post.banned;
+    try {
+      await paperpilotApi.toggleForumPostBan(postId);
+      await fetchPosts();
+    } catch (error) {
+      await fetchPosts();
+      throw error;
+    }
+  }
+
   async function addReply(postId, payload) {
     await paperpilotApi.replyForumPost(postId, payload);
     await fetchPosts();
@@ -85,5 +109,5 @@ export const useForumStore = defineStore("forum", () => {
 
   fetchPosts();
 
-  return { state, fetchPosts, addPost, updatePost, deletePost, addReply, likePost, bookmarkPost, likeReply };
+  return { state, fetchPosts, addPost, updatePost, deletePost, togglePin, toggleBan, addReply, likePost, bookmarkPost, likeReply };
 });

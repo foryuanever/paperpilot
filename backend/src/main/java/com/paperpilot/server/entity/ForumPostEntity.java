@@ -77,6 +77,12 @@ public class ForumPostEntity {
     @Column(nullable = false)
     private boolean resolved = false;
 
+    @Column(nullable = false)
+    private boolean pinned = false;
+
+    @Column(nullable = false)
+    private boolean banned = false;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -134,6 +140,10 @@ public class ForumPostEntity {
     public void setHasBookmarked(boolean hasBookmarked) { this.hasBookmarked = hasBookmarked; }
     public boolean isResolved() { return resolved; }
     public void setResolved(boolean resolved) { this.resolved = resolved; }
+    public boolean isPinned() { return pinned; }
+    public void setPinned(boolean pinned) { this.pinned = pinned; }
+    public boolean isBanned() { return banned; }
+    public void setBanned(boolean banned) { this.banned = banned; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }
