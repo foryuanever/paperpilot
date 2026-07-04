@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface PaymentTicketRepository extends JpaRepository<PaymentTicketEntity, Long> {
     List<PaymentTicketEntity> findTop20ByUserIdOrderByCreatedAtDesc(Long userId);
+    List<PaymentTicketEntity> findTop80ByOrderByCreatedAtDesc();
 }

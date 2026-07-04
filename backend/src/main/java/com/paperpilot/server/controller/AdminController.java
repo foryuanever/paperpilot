@@ -7,6 +7,8 @@ import com.paperpilot.server.entity.TeamEntity;
 import com.paperpilot.server.entity.SystemLogEntity;
 import com.paperpilot.server.entity.SiteMessageEntity;
 import com.paperpilot.server.entity.TranslationRecordEntity;
+import com.paperpilot.server.entity.PaymentOrderEntity;
+import com.paperpilot.server.entity.PaymentTicketEntity;
 import com.paperpilot.server.repository.AppUserRepository;
 import com.paperpilot.server.repository.AiUsageRecordRepository;
 import com.paperpilot.server.repository.RechargeRecordRepository;
@@ -15,6 +17,8 @@ import com.paperpilot.server.repository.SystemLogRepository;
 import com.paperpilot.server.repository.SiteMessageRepository;
 import com.paperpilot.server.repository.PaperRepository;
 import com.paperpilot.server.repository.TranslationRecordRepository;
+import com.paperpilot.server.repository.PaymentOrderRepository;
+import com.paperpilot.server.repository.PaymentTicketRepository;
 import com.paperpilot.server.service.AuthService;
 import com.paperpilot.server.service.BillingService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,6 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 @RestController
@@ -40,6 +45,8 @@ public class AdminController {
     private final AuthService authService;
     private final SiteMessageRepository siteMessageRepository;
     private final BillingService billingService;
+    private final PaymentOrderRepository paymentOrderRepository;
+    private final PaymentTicketRepository paymentTicketRepository;
 
     public AdminController(
         AppUserRepository appUserRepository,
@@ -51,7 +58,9 @@ public class AdminController {
         TranslationRecordRepository translationRecordRepository,
         AuthService authService,
         SiteMessageRepository siteMessageRepository,
-        BillingService billingService
+        BillingService billingService,
+        PaymentOrderRepository paymentOrderRepository,
+        PaymentTicketRepository paymentTicketRepository
     ) {
         this.appUserRepository = appUserRepository;
         this.aiUsageRecordRepository = aiUsageRecordRepository;
@@ -63,6 +72,8 @@ public class AdminController {
         this.authService = authService;
         this.siteMessageRepository = siteMessageRepository;
         this.billingService = billingService;
+        this.paymentOrderRepository = paymentOrderRepository;
+        this.paymentTicketRepository = paymentTicketRepository;
     }
 
     // --- Dynamic Global Statistics ---
@@ -255,6 +266,37 @@ public class AdminController {
         return saved;
     }
 
+    @GetMapping("/payments")
+    public Map<String, Object> getPaymentWorkdesk() {
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("orders", paymentOrderRepository.findTop80ByOrderByCreatedAtDesc().stream().map(this::paymentOrderToMap).toList());
+        result.put("tickets", paymentTicketRepository.findTop80ByOrderByCreatedAtDesc().stream()
+            .filter(this::isUsablePaymentTicket)
+            .map(this::paymentTicketToMap)
+            .toList());
+        return result;
+    }
+
+    @PatchMapping("/payments/tickets/{id}")
+    public Map<String, Object> updatePaymentTicket(
+        @PathVariable("id") Long id,
+        @RequestBody Map<String, Object> body,
+        HttpServletRequest request
+    ) {
+        PaymentTicketEntity ticket = paymentTicketRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "工单不存在"));
+        String status = String.valueOf(body.getOrDefault("status", "processed")).trim().toLowerCase();
+        if (!List.of("open", "processed", "rejected").contains(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "工单状态仅支持 open、processed 或 rejected");
+        }
+        ticket.setStatus(status);
+        ticket.setAdminNote(String.valueOf(body.getOrDefault("adminNote", "")).trim());
+        ticket.setProcessedAt(status.equals("open") ? null : LocalDateTime.now());
+        PaymentTicketEntity saved = paymentTicketRepository.save(ticket);
+        authService.logAction("处理支付工单 #" + saved.getId() + ": " + paymentStatusLabel(status), "info", getClientIp(request));
+        return paymentTicketToMap(saved);
+    }
+
     // --- Teams ---
 
     @GetMapping("/teams")
@@ -407,5 +449,47 @@ public class AdminController {
         if (level >= 6) return "学术专家";
         if (level >= 3) return "科研骨干";
         return "科研萌新";
+    }
+
+    private Map<String, Object> paymentOrderToMap(PaymentOrderEntity order) {
+        Map<String, Object> row = new java.util.LinkedHashMap<>();
+        row.put("orderNo", order.getOrderNo());
+        row.put("userId", order.getUserId());
+        row.put("email", appUserRepository.findById(order.getUserId()).map(AppUserEntity::getEmail).orElse("—"));
+        row.put("provider", order.getProvider());
+        row.put("amount", order.getAmount());
+        row.put("status", order.getStatus());
+        row.put("message", order.getMessage());
+        row.put("createdAt", order.getCreatedAt());
+        return row;
+    }
+
+    private Map<String, Object> paymentTicketToMap(PaymentTicketEntity ticket) {
+        Map<String, Object> row = new java.util.LinkedHashMap<>();
+        row.put("id", ticket.getId());
+        row.put("userId", ticket.getUserId());
+        row.put("email", appUserRepository.findById(ticket.getUserId()).map(AppUserEntity::getEmail).orElse("—"));
+        row.put("type", ticket.getType());
+        row.put("orderNo", ticket.getOrderNo());
+        row.put("subject", ticket.getSubject());
+        row.put("detail", ticket.getDetail());
+        row.put("status", ticket.getStatus());
+        row.put("adminNote", ticket.getAdminNote());
+        row.put("createdAt", ticket.getCreatedAt());
+        row.put("processedAt", ticket.getProcessedAt());
+        return row;
+    }
+
+    private String paymentStatusLabel(String status) {
+        return switch (status) {
+            case "processed" -> "已处理";
+            case "rejected" -> "已驳回";
+            default -> "处理中";
+        };
+    }
+
+    private boolean isUsablePaymentTicket(PaymentTicketEntity ticket) {
+        return ticket.getDetail() != null && !ticket.getDetail().isBlank()
+            && ticket.getOrderNo() != null && !ticket.getOrderNo().isBlank();
     }
 }

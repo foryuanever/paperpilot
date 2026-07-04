@@ -192,8 +192,59 @@
         <!-- Tab Content: Recharges -->
         <div v-if="activeTab === 'recharges'" class="tab-pane">
           <div class="pane-header-row">
-            <h3>充值入账记录</h3>
+            <div>
+              <h3>充值订单与售后处理</h3>
+              <p class="pane-description">这里处理用户提交的支付工单和退款申请；处理结果会同步回用户充值页。</p>
+            </div>
             <button class="spatial-btn spatial-btn-accent compact-btn" @click="showAddRechargeModal = true">手动入账</button>
+          </div>
+
+          <div class="payment-admin-grid">
+            <section class="payment-work-card spatial-glass-panel">
+              <div class="payment-work-head">
+                <div>
+                  <span>售后工单</span>
+                  <strong>{{ paymentTickets.length }} 条</strong>
+                </div>
+                <button class="action-btn text-btn" @click="fetchAllData">刷新</button>
+              </div>
+              <article v-for="ticket in paymentTickets" :key="ticket.id" class="payment-ticket-admin" :class="`status-${ticket.status}`">
+                <header>
+                  <div>
+                    <span>{{ ticket.type === "refund" ? "退款申请" : "支付工单" }} #{{ ticket.id }}</span>
+                    <strong>{{ ticket.subject }}</strong>
+                    <small>{{ ticket.email }} · {{ formatDateTime(ticket.createdAt) }}</small>
+                  </div>
+                  <b>{{ paymentStatusLabel(ticket.status) }}</b>
+                </header>
+                <p>{{ ticket.detail }}</p>
+                <code v-if="ticket.orderNo">{{ ticket.orderNo }}</code>
+                <em v-if="ticket.adminNote">处理备注：{{ ticket.adminNote }}</em>
+                <div class="payment-ticket-actions">
+                  <button class="spatial-btn spatial-btn-ghost compact-btn" @click="openPaymentTicketModal(ticket, 'processed')">标记已处理</button>
+                  <button class="spatial-btn spatial-btn-ghost compact-btn danger-lite" @click="openPaymentTicketModal(ticket, 'rejected')">驳回</button>
+                </div>
+              </article>
+              <div v-if="!paymentTickets.length" class="payment-empty">暂无支付工单或退款申请。</div>
+            </section>
+
+            <section class="payment-work-card spatial-glass-panel">
+              <div class="payment-work-head">
+                <div>
+                  <span>支付订单</span>
+                  <strong>{{ paymentOrders.length }} 笔</strong>
+                </div>
+              </div>
+              <article v-for="order in paymentOrders" :key="order.orderNo" class="payment-order-admin">
+                <div>
+                  <strong>¥{{ formatMoney(order.amount) }}</strong>
+                  <span>{{ providerLabel(order.provider) }} · {{ paymentStatusLabel(order.status) }}</span>
+                  <small>{{ order.email }} · {{ formatDateTime(order.createdAt) }}</small>
+                </div>
+                <code>{{ order.orderNo }}</code>
+              </article>
+              <div v-if="!paymentOrders.length" class="payment-empty">暂无用户创建的支付订单。</div>
+            </section>
           </div>
 
           <!-- Search toolbar -->
@@ -699,6 +750,26 @@
         </div>
       </div>
     </Transition>
+
+    <!-- Payment Ticket Modal -->
+    <Transition name="fade">
+      <div v-if="showPaymentTicketModal" class="admin-modal-overlay" @click="showPaymentTicketModal = false">
+        <div class="admin-modal-card spatial-glass-panel" @click.stop>
+          <h4>{{ paymentTicketDecision === "processed" ? "处理完成" : "驳回工单" }}</h4>
+          <p class="form-hint" style="margin-top: 8px;">{{ selectedPaymentTicket?.subject }} · #{{ selectedPaymentTicket?.id }}</p>
+          <div class="form-group" style="margin-top: 14px;">
+            <label>处理备注</label>
+            <textarea v-model.trim="paymentTicketNote" placeholder="写给用户看的处理结果，例如：已核对订单，稍后人工入账。"></textarea>
+          </div>
+          <div class="modal-actions" style="margin-top: 24px;">
+            <button class="spatial-btn spatial-btn-ghost" @click="showPaymentTicketModal = false">取消</button>
+            <button class="spatial-btn spatial-btn-accent" :disabled="paymentTicketSaving" @click="submitPaymentTicketDecision">
+              {{ paymentTicketSaving ? "保存中..." : "确认处理" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -733,6 +804,7 @@ const showAddUserModal = ref(false);
 const showAddRechargeModal = ref(false);
 const showAddTeamModal = ref(false);
 const showViewTeamModal = ref(false);
+const showPaymentTicketModal = ref(false);
 const siteMessagePublishing = ref(false);
 
 const selectedUser = ref(null);
@@ -740,6 +812,10 @@ const selectedUserQuota = ref(5000000);
 const selectedTeam = ref(null);
 const selectedTeamMembers = ref([]);
 const teamMembersLoading = ref(false);
+const selectedPaymentTicket = ref(null);
+const paymentTicketDecision = ref("processed");
+const paymentTicketNote = ref("");
+const paymentTicketSaving = ref(false);
 
 const newUser = ref({
   username: "",
@@ -762,6 +838,8 @@ const newSiteMessage = ref({ title: "", content: "" });
 // Reactive Data
 const systemUsers = ref([]);
 const rechargeRecords = ref([]);
+const paymentOrders = ref([]);
+const paymentTickets = ref([]);
 const teams = ref([]);
 const systemLogs = ref([]);
 const translationProviders = ref([]);
@@ -994,6 +1072,9 @@ async function fetchAllData() {
       time: formatDateTime(r.createdAt),
     }));
 
+    const paymentsData = await paperpilotApi.getAdminPayments();
+    paymentOrders.value = paymentsData.orders || [];
+    paymentTickets.value = paymentsData.tickets || [];
 
     // 3. Fetch Teams
     const teamsData = await paperpilotApi.getTeams();
@@ -1181,6 +1262,23 @@ function formatMoney(value) {
   });
 }
 
+function providerLabel(provider) {
+  return provider === "wechat" ? "微信支付" : "支付宝";
+}
+
+function paymentStatusLabel(status) {
+  return {
+    config_required: "待配置",
+    pending_payment: "待支付",
+    paid: "已支付",
+    open: "处理中",
+    processed: "已处理",
+    rejected: "已驳回",
+    closed: "已关闭",
+    refunded: "已退款",
+  }[status] || "处理中";
+}
+
 function formatActiveTime(seconds) {
   const total = Number(seconds || 0);
   const hours = Math.floor(total / 3600);
@@ -1281,6 +1379,30 @@ async function addRecharge() {
   } catch (error) {
     console.error("Failed to distribute quota:", error);
     dialogStore.alert("充值入账失败，可能是邮箱对应的用户不存在");
+  }
+}
+
+function openPaymentTicketModal(ticket, status) {
+  selectedPaymentTicket.value = ticket;
+  paymentTicketDecision.value = status;
+  paymentTicketNote.value = ticket.adminNote || (status === "processed" ? "已处理完成，请刷新订单状态或查看账户余额。" : "申请信息不足，暂无法处理。");
+  showPaymentTicketModal.value = true;
+}
+
+async function submitPaymentTicketDecision() {
+  if (!selectedPaymentTicket.value) return;
+  paymentTicketSaving.value = true;
+  try {
+    await paperpilotApi.updatePaymentTicket(selectedPaymentTicket.value.id, {
+      status: paymentTicketDecision.value,
+      adminNote: paymentTicketNote.value,
+    });
+    showPaymentTicketModal.value = false;
+    await fetchAllData();
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "工单处理失败");
+  } finally {
+    paymentTicketSaving.value = false;
   }
 }
 
@@ -1647,6 +1769,147 @@ async function removeSiteMessage(message) {
   color: #64748b;
   font-size: .82rem;
   line-height: 1.6;
+}
+
+.payment-admin-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(320px, .88fr);
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.payment-work-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 260px;
+  padding: 18px;
+  border-radius: 16px;
+}
+
+.payment-work-head,
+.payment-ticket-admin header,
+.payment-order-admin {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.payment-work-head span,
+.payment-ticket-admin span,
+.payment-order-admin span {
+  color: #64748b;
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.payment-work-head strong {
+  display: block;
+  margin-top: 3px;
+  color: #0f172a;
+  font-size: 1.15rem;
+}
+
+.payment-ticket-admin,
+.payment-order-admin {
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .72);
+  padding: 14px;
+}
+
+.payment-ticket-admin strong,
+.payment-order-admin strong {
+  display: block;
+  color: #0f172a;
+  font-size: .98rem;
+  line-height: 1.35;
+}
+
+.payment-ticket-admin small,
+.payment-order-admin small,
+.payment-ticket-admin em {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+  font-size: .76rem;
+  font-style: normal;
+  line-height: 1.5;
+}
+
+.payment-ticket-admin p {
+  margin: 10px 0;
+  color: #334155;
+  font-size: .86rem;
+  line-height: 1.65;
+}
+
+.payment-ticket-admin code,
+.payment-order-admin code {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  border-radius: 8px;
+  background: rgba(0, 102, 255, .06);
+  color: #2550b8;
+  padding: 5px 8px;
+  font-size: .75rem;
+}
+
+.payment-ticket-admin header b {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #1d4ed8;
+  padding: 5px 9px;
+  font-size: .75rem;
+}
+
+.payment-ticket-admin.status-processed header b {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.payment-ticket-admin.status-rejected header b {
+  background: #fee2e2;
+  color: #b42318;
+}
+
+.payment-ticket-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.danger-lite {
+  border-color: rgba(239, 68, 68, .22) !important;
+  color: #dc2626 !important;
+  background: rgba(254, 242, 242, .72) !important;
+}
+
+.payment-empty {
+  display: grid;
+  place-items: center;
+  min-height: 150px;
+  border: 1px dashed rgba(100, 116, 139, .28);
+  border-radius: 14px;
+  color: #64748b;
+  font-size: .88rem;
+}
+
+.form-group textarea {
+  width: 100%;
+  min-height: 120px;
+  border: 1px solid rgba(15, 23, 42, .1);
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+  padding: 10px 12px;
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
 }
 
 /* User Table */
@@ -2507,6 +2770,9 @@ async function removeSiteMessage(message) {
 .site-message-empty { padding: 46px 20px; color: #94a3b8; font-size: 0.84rem; text-align: center; }
 
 @media (max-width: 900px) {
-  .site-message-admin-grid { grid-template-columns: 1fr; }
+  .site-message-admin-grid,
+  .payment-admin-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

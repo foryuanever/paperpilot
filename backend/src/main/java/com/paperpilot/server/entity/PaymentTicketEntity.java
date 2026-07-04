@@ -29,11 +29,20 @@ public class PaymentTicketEntity {
     @Column(nullable = false, length = 120)
     private String subject = "";
 
+    @Column(length = 1000)
+    private String detail = "";
+
     @Column(nullable = false, length = 32)
     private String status = "open";
 
+    @Column(name = "admin_note", length = 1000)
+    private String adminNote = "";
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "processed_at")
+    private LocalDateTime processedAt;
 
     @PrePersist
     void onCreate() {
@@ -49,8 +58,14 @@ public class PaymentTicketEntity {
     public void setOrderNo(String orderNo) { this.orderNo = orderNo; }
     public String getSubject() { return subject; }
     public void setSubject(String subject) { this.subject = subject; }
+    public String getDetail() { return detail; }
+    public void setDetail(String detail) { this.detail = detail; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getAdminNote() { return adminNote; }
+    public void setAdminNote(String adminNote) { this.adminNote = adminNote; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDateTime getProcessedAt() { return processedAt; }
+    public void setProcessedAt(LocalDateTime processedAt) { this.processedAt = processedAt; }
 }

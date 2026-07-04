@@ -304,6 +304,14 @@ export const paperpilotApi = {
     const { data } = await apiClient.patch("/api/admin/billing", payload);
     return data;
   },
+  async getAdminPayments() {
+    const { data } = await apiClient.get("/api/admin/payments");
+    return data;
+  },
+  async updatePaymentTicket(id, payload) {
+    const { data } = await apiClient.patch(`/api/admin/payments/tickets/${id}`, payload);
+    return data;
+  },
   async addRechargeRecord(payload) {
     const { data } = await apiClient.post("/api/admin/recharges", payload);
     return data;

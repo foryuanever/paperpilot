@@ -182,6 +182,27 @@
 
     <template v-else>
     <section class="recharge-page-card" aria-label="余额充值">
+      <aside class="recharge-account-panel">
+        <div class="account-balance-line">
+          <span>当前余额</span>
+          <strong>{{ formatCny(usageStore.state.balanceAmount || 0) }}</strong>
+        </div>
+        <div class="account-mini-grid">
+          <div>
+            <small>待支付订单</small>
+            <b>{{ pendingOrderCount }}</b>
+          </div>
+          <div>
+            <small>处理中工单</small>
+            <b>{{ openTicketCount }}</b>
+          </div>
+          <div>
+            <small>已处理</small>
+            <b>{{ processedTicketCount }}</b>
+          </div>
+        </div>
+        <p>充值订单会逐条保存在下方。退款和工单必须绑定具体说明，管理员处理后这里会同步显示状态。</p>
+      </aside>
       <div class="amount-panel">
         <label>
           充值金额
@@ -239,7 +260,7 @@
           <h3>充值订单与售后工单</h3>
         </div>
         <div class="order-head-actions">
-          <button type="button" class="secondary-action" @click="createTicket('support')">新建工单</button>
+          <button type="button" class="secondary-action" @click="openTicketDialog('support')">新建工单</button>
           <button type="button" class="secondary-action" :disabled="ordersLoading" @click="loadPaymentOrders">
             {{ ordersLoading ? "刷新中" : "刷新订单" }}
           </button>
@@ -255,8 +276,8 @@
           <p>{{ order.orderNo }}</p>
           <em>{{ statusLabel(order.status) }} · {{ formatDateTime(order.createdAt) }}</em>
           <div class="order-actions">
-            <button type="button" @click="createTicket('support', order.orderNo)">新建工单</button>
-            <button type="button" @click="createTicket('refund', order.orderNo)">申请退款</button>
+            <button type="button" @click="openTicketDialog('support', order.orderNo)">新建工单</button>
+            <button type="button" @click="openTicketDialog('refund', order.orderNo)">申请退款</button>
           </div>
         </article>
         <div v-if="!paymentOrders.length" class="order-empty">
@@ -264,14 +285,65 @@
         </div>
       </div>
 
-      <div class="ticket-strip">
-        <strong>最近工单</strong>
-        <span v-if="!paymentTickets.length">暂无工单或退款申请。</span>
-        <span v-for="ticket in paymentTickets" :key="ticket.id">
-          {{ ticket.type === "refund" ? "退款" : "工单" }} #{{ ticket.id }} · {{ ticket.orderNo || "未关联订单" }} · {{ statusLabel(ticket.status) }}
-        </span>
+      <div class="ticket-list">
+        <div class="ticket-list-head">
+          <strong>最近售后</strong>
+          <span>{{ paymentTickets.length }} 条</span>
+        </div>
+        <article v-for="ticket in paymentTickets" :key="ticket.id" class="ticket-card" :class="`ticket-${ticket.status || 'open'}`">
+          <div>
+            <span>{{ ticket.type === "refund" ? "退款申请" : "支付工单" }} #{{ ticket.id }}</span>
+            <strong>{{ ticket.subject }}</strong>
+            <p>{{ ticket.detail }}</p>
+            <small>关联订单 {{ ticket.orderNo }}</small>
+          </div>
+          <aside>
+            <b>{{ statusLabel(ticket.status) }}</b>
+            <em>{{ ticket.processedAt ? formatDateTime(ticket.processedAt) : formatDateTime(ticket.createdAt) }}</em>
+            <p v-if="ticket.adminNote">{{ ticket.adminNote }}</p>
+          </aside>
+        </article>
+        <div v-if="!paymentTickets.length" class="order-empty compact">
+          暂无售后记录。需要退款或支付协助时，请在具体订单上提交说明。
+        </div>
       </div>
     </section>
+
+    <div v-if="showTicketDialog" class="ticket-dialog-backdrop" @click="closeTicketDialog">
+      <form class="ticket-dialog" @submit.prevent="submitTicket" @click.stop>
+        <header>
+          <div>
+            <span>{{ ticketForm.type === "refund" ? "退款申请" : "支付工单" }}</span>
+            <h3>{{ ticketForm.type === "refund" ? "说明退款原因" : "描述支付问题" }}</h3>
+          </div>
+          <button type="button" aria-label="关闭" @click="closeTicketDialog">×</button>
+        </header>
+        <label>
+          关联订单
+          <select v-model="ticketForm.orderNo" :disabled="Boolean(ticketForm.lockedOrderNo)">
+            <option value="">请选择一笔订单</option>
+            <option v-for="order in paymentOrders" :key="order.orderNo" :value="order.orderNo">
+              {{ providerLabel(order.provider) }} · {{ formatCny(order.amount || 0) }} · {{ order.orderNo }}
+            </option>
+          </select>
+        </label>
+        <label>
+          标题
+          <input v-model.trim="ticketForm.subject" maxlength="80" placeholder="例如：微信支付后未到账" />
+        </label>
+        <label>
+          具体说明
+          <textarea v-model.trim="ticketForm.detail" maxlength="600" placeholder="请写清楚时间、订单、支付方式、希望如何处理。"></textarea>
+        </label>
+        <p v-if="ticketError" class="ticket-error">{{ ticketError }}</p>
+        <footer>
+          <button type="button" class="secondary-action" @click="closeTicketDialog">取消</button>
+          <button type="submit" class="primary-action" :disabled="ticketSubmitting">
+            {{ ticketSubmitting ? "提交中" : "提交" }}
+          </button>
+        </footer>
+      </form>
+    </div>
     </template>
   </div>
 </template>
@@ -300,7 +372,20 @@ const quickAmounts = [20, 50, 100, 200, 500];
 const paymentOrders = ref([]);
 const paymentTickets = ref([]);
 const ordersLoading = ref(false);
+const showTicketDialog = ref(false);
+const ticketSubmitting = ref(false);
+const ticketError = ref("");
+const ticketForm = ref({
+  type: "support",
+  orderNo: "",
+  lockedOrderNo: "",
+  subject: "",
+  detail: "",
+});
 const validRechargeAmount = computed(() => Number(rechargeAmount.value || 0) > 0);
+const pendingOrderCount = computed(() => paymentOrders.value.filter((order) => ["pending_payment", "config_required"].includes(order.status)).length);
+const openTicketCount = computed(() => paymentTickets.value.filter((ticket) => ticket.status === "open").length);
+const processedTicketCount = computed(() => paymentTickets.value.filter((ticket) => ["processed", "rejected", "closed"].includes(ticket.status)).length);
 
 const sceneOptions = computed(() => [
   ...new Set(usageStore.state.recentCalls.map((row) => row.action).filter(Boolean)),
@@ -415,15 +500,54 @@ async function loadPaymentOrders() {
   }
 }
 
-async function createTicket(type, orderNo = "") {
+function openTicketDialog(type, orderNo = "") {
+  ticketError.value = "";
+  ticketForm.value = {
+    type,
+    orderNo,
+    lockedOrderNo: orderNo,
+    subject: type === "refund" ? "退款申请" : "支付问题咨询",
+    detail: "",
+  };
+  showTicketDialog.value = true;
+}
+
+function closeTicketDialog() {
+  if (ticketSubmitting.value) return;
+  showTicketDialog.value = false;
+}
+
+async function submitTicket() {
+  ticketError.value = "";
+  if (!ticketForm.value.orderNo) {
+    ticketError.value = "请先选择一笔具体充值订单。";
+    return;
+  }
+  if (!ticketForm.value.subject) {
+    ticketError.value = "请填写标题。";
+    return;
+  }
+  if (ticketForm.value.detail.length < 6) {
+    ticketError.value = "请把问题说明写具体一点。";
+    return;
+  }
+  ticketSubmitting.value = true;
   try {
-    await paperpilotApi.createPaymentTicket({ type, orderNo });
-    paymentMessage.value = type === "refund" ? "退款申请已提交，管理员会在后台处理。" : "工单已提交，管理员会在后台处理。";
+    await paperpilotApi.createPaymentTicket({
+      type: ticketForm.value.type,
+      orderNo: ticketForm.value.orderNo,
+      subject: ticketForm.value.subject,
+      detail: ticketForm.value.detail,
+    });
+    paymentMessage.value = ticketForm.value.type === "refund" ? "退款申请已提交，管理员会在后台处理。" : "工单已提交，管理员会在后台处理。";
     paymentStatus.value = "";
     await loadPaymentOrders();
+    showTicketDialog.value = false;
   } catch (error) {
     paymentStatus.value = "failed";
-    paymentMessage.value = error?.response?.data?.message || "工单提交失败，请稍后重试。";
+    ticketError.value = error?.response?.data?.message || "工单提交失败，请稍后重试。";
+  } finally {
+    ticketSubmitting.value = false;
   }
 }
 
@@ -456,6 +580,8 @@ function statusLabel(status) {
     pending_payment: "待支付",
     paid: "已支付",
     open: "处理中",
+    processed: "已处理",
+    rejected: "已驳回",
     closed: "已关闭",
   }[status] || "处理中";
 }
@@ -974,7 +1100,10 @@ button:disabled {
 }
 
 .recharge-page-card {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(320px, .78fr) minmax(420px, 1fr);
+  gap: 28px;
+  align-items: stretch;
   max-width: 1560px;
   margin: 0 auto 18px;
   border: 1px solid #e4eaf2;
@@ -986,11 +1115,67 @@ button:disabled {
   box-shadow: 0 8px 18px rgba(18, 31, 53, .04);
 }
 
+.recharge-account-panel {
+  display: grid;
+  align-content: space-between;
+  gap: 22px;
+  min-height: 330px;
+  border: 1px solid #dbe7fb;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #f8fbff 0%, #eef6ff 100%);
+  padding: 24px;
+}
+
+.account-balance-line {
+  display: grid;
+  gap: 8px;
+}
+
+.account-balance-line span,
+.account-mini-grid small {
+  color: #526075;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.account-balance-line strong {
+  color: #101828;
+  font-size: 38px;
+  line-height: 1;
+}
+
+.account-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.account-mini-grid div {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #dce8f8;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .72);
+  padding: 14px;
+}
+
+.account-mini-grid b {
+  color: #1f5be3;
+  font-size: 22px;
+}
+
+.recharge-account-panel p {
+  max-width: 62ch;
+  margin: 0;
+  color: #46566e;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
 .amount-panel {
   display: grid;
   gap: 16px;
-  max-width: 680px;
-  margin-left: auto;
+  max-width: none;
 }
 
 .amount-panel label {
@@ -1272,29 +1457,205 @@ button:disabled {
   line-height: 1.7;
 }
 
-.ticket-strip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+.ticket-list {
   margin-top: 18px;
   border-top: 1px solid #edf2f7;
   padding-top: 16px;
 }
 
-.ticket-strip strong {
-  color: #1f2937;
-  font-size: 13px;
+.ticket-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
-.ticket-strip span {
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  background: #f8fafc;
+.ticket-list-head strong {
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.ticket-list-head span {
   color: #526075;
-  padding: 7px 10px;
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 800;
+}
+
+.ticket-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 240px);
+  gap: 16px;
+  border: 1px solid #dfe7f2;
+  border-radius: 13px;
+  background: #fbfdff;
+  padding: 14px 16px;
+}
+
+.ticket-card + .ticket-card {
+  margin-top: 10px;
+}
+
+.ticket-card span,
+.ticket-card small {
+  color: #63728a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ticket-card strong {
+  display: block;
+  margin: 5px 0;
+  color: #182235;
+  font-size: 15px;
+}
+
+.ticket-card p {
+  margin: 0 0 8px;
+  color: #40506a;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ticket-card aside {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  border-radius: 10px;
+  background: #f3f7fc;
+  padding: 12px;
+}
+
+.ticket-card aside b {
+  color: #1f5be3;
+  font-size: 14px;
+}
+
+.ticket-card aside em {
+  color: #718096;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.ticket-card.ticket-processed {
+  border-color: #bbf7d0;
+  background: #f3fff8;
+}
+
+.ticket-card.ticket-processed aside {
+  background: #e9fbf0;
+}
+
+.ticket-card.ticket-processed aside b {
+  color: #15803d;
+}
+
+.ticket-card.ticket-rejected {
+  border-color: #fecaca;
+  background: #fff8f8;
+}
+
+.ticket-card.ticket-rejected aside {
+  background: #fff1f2;
+}
+
+.ticket-card.ticket-rejected aside b {
+  color: #b42318;
+}
+
+.order-empty.compact {
+  min-height: 96px;
+}
+
+.ticket-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, .34);
+  padding: 24px;
+}
+
+.ticket-dialog {
+  width: min(620px, 100%);
+  border: 1px solid #dce5f2;
+  border-radius: 16px;
+  background: #fff;
+  padding: 22px;
+  box-shadow: 0 22px 56px rgba(15, 23, 42, .18);
+}
+
+.ticket-dialog header,
+.ticket-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ticket-dialog header {
+  margin-bottom: 18px;
+}
+
+.ticket-dialog header span {
+  color: #1f5be3;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ticket-dialog h3 {
+  margin: 4px 0 0;
+  color: #111827;
+  font-size: 22px;
+}
+
+.ticket-dialog header button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d9e1ec;
+  border-radius: 10px;
+  background: #fff;
+  color: #475569;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ticket-dialog label {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: #344158;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.ticket-dialog input,
+.ticket-dialog select,
+.ticket-dialog textarea {
+  width: 100%;
+  border: 1px solid #dce4ef;
+  border-radius: 11px;
+  background: #fff;
+  color: #111827;
+  padding: 11px 12px;
+  font: inherit;
+}
+
+.ticket-dialog textarea {
+  min-height: 130px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.ticket-error {
+  margin: 0 0 12px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fff7f7;
+  color: #b42318;
+  padding: 10px 12px;
+  font-size: 13px;
 }
 
 @media (max-width: 1120px) {
@@ -1305,11 +1666,6 @@ button:disabled {
 
   .recharge-page-card {
     grid-template-columns: 1fr;
-  }
-
-  .amount-panel {
-    margin-left: 0;
-    max-width: none;
   }
 
   .order-grid {
@@ -1379,6 +1735,16 @@ button:disabled {
 
   .order-grid {
     grid-template-columns: 1fr;
+  }
+
+  .account-mini-grid,
+  .ticket-card {
+    grid-template-columns: 1fr;
+  }
+
+  .ticket-dialog-backdrop {
+    align-items: end;
+    padding: 12px;
   }
 
   .bar-chart {

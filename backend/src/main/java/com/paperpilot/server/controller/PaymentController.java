@@ -38,7 +38,10 @@ public class PaymentController {
         Long userId = currentUserService.getOrCreateDefaultUserId();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("orders", orderRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId).stream().map(this::orderToMap).toList());
-        result.put("tickets", ticketRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId).stream().map(this::ticketToMap).toList());
+        result.put("tickets", ticketRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId).stream()
+            .filter(this::isUsableTicket)
+            .map(this::ticketToMap)
+            .toList());
         return result;
     }
 
@@ -76,11 +79,29 @@ public class PaymentController {
         if (!List.of("support", "refund").contains(type)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "工单类型仅支持 support 或 refund");
         }
+        String orderNo = String.valueOf(body.getOrDefault("orderNo", "")).trim();
+        String subject = String.valueOf(body.getOrDefault("subject", type.equals("refund") ? "退款申请" : "支付工单")).trim();
+        String detail = String.valueOf(body.getOrDefault("detail", "")).trim();
+        if (subject.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写工单标题");
+        }
+        if (detail.length() < 6) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写更具体的问题说明");
+        }
+        if (orderNo.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "售后申请必须选择一笔充值订单");
+        }
+        PaymentOrderEntity order = orderRepository.findById(orderNo)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "充值订单不存在"));
+        if (!userId.equals(order.getUserId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "不能为其他用户订单提交售后");
+        }
         PaymentTicketEntity ticket = new PaymentTicketEntity();
         ticket.setUserId(userId);
         ticket.setType(type);
-        ticket.setOrderNo(String.valueOf(body.getOrDefault("orderNo", "")).trim());
-        ticket.setSubject(type.equals("refund") ? "退款申请" : "支付工单");
+        ticket.setOrderNo(orderNo);
+        ticket.setSubject(subject);
+        ticket.setDetail(detail);
         ticket.setStatus("open");
         return ticketToMap(ticketRepository.save(ticket));
     }
@@ -116,8 +137,16 @@ public class PaymentController {
         row.put("type", ticket.getType());
         row.put("orderNo", ticket.getOrderNo());
         row.put("subject", ticket.getSubject());
+        row.put("detail", ticket.getDetail());
         row.put("status", ticket.getStatus());
+        row.put("adminNote", ticket.getAdminNote());
         row.put("createdAt", ticket.getCreatedAt());
+        row.put("processedAt", ticket.getProcessedAt());
         return row;
+    }
+
+    private boolean isUsableTicket(PaymentTicketEntity ticket) {
+        return ticket.getDetail() != null && !ticket.getDetail().isBlank()
+            && ticket.getOrderNo() != null && !ticket.getOrderNo().isBlank();
     }
 }
