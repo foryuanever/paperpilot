@@ -5,65 +5,180 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PaperSolver Capture</title>
     <style>
-      body {
-        width: 320px;
-        margin: 0;
-        padding: 16px;
+      * {
         box-sizing: border-box;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        color: #172033;
       }
-      h1 { margin: 0 0 6px; font-size: 17px; }
-      h1 small { color: #667085; font-size: 12px; font-weight: 700; }
-      p { margin: 0 0 14px; color: #667085; font-size: 12.5px; line-height: 1.55; }
-      label { display: grid; gap: 6px; color: #344054; font-size: 12px; font-weight: 800; }
-      .account {
-        margin: 10px 0 12px;
-        padding: 9px 10px;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        background: #f8fafc;
-        color: #475467;
+
+      body {
+        width: 360px;
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #111827;
+        background: #f8fbff;
+      }
+
+      .shell {
+        padding: 16px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 15px;
+        border: 1px solid rgba(148, 163, 184, .22);
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
+      }
+
+      .mark {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #2563eb, #14b8a6);
+        color: #fff;
+        font-size: 20px;
+        font-weight: 900;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.2;
+      }
+
+      #version {
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #eff6ff;
+        color: #2563eb;
+        font-size: 11px;
+        font-weight: 900;
+      }
+
+      .subtitle {
+        grid-column: 1 / -1;
+        margin: 2px 0 0;
+        color: #64748b;
         font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .account {
+        margin: 12px 0;
+        padding: 11px 12px;
+        border: 1px solid rgba(20, 184, 166, .2);
+        border-radius: 13px;
+        background: #f0fdfa;
+        color: #0f766e;
+        font-size: 12px;
+        font-weight: 800;
         line-height: 1.45;
       }
-      input {
-        height: 38px;
-        padding: 0 10px;
-        border: 1px solid #d0d7e2;
-        border-radius: 10px;
-        font: inherit;
+
+      label {
+        display: grid;
+        gap: 8px;
+        color: #344054;
+        font-size: 12px;
+        font-weight: 900;
       }
-      button {
-        width: 100%;
-        height: 38px;
+
+      input {
+        height: 42px;
+        padding: 0 12px;
+        border: 1px solid rgba(148, 163, 184, .42);
+        border-radius: 12px;
+        background: #fff;
+        color: #111827;
+        font: inherit;
+        outline: none;
+      }
+
+      input:focus {
+        border-color: rgba(37, 99, 235, .8);
+        box-shadow: 0 0 0 4px rgba(37, 99, 235, .1);
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
         margin-top: 12px;
+      }
+
+      button {
+        height: 40px;
         border: 0;
-        border-radius: 10px;
-        background: #2563eb;
+        border-radius: 11px;
         color: #fff;
         font: inherit;
         font-weight: 900;
         cursor: pointer;
       }
-      button.secondary {
-        background: #111827;
+
+      #save {
+        background: #2563eb;
       }
-      .status { min-height: 18px; margin-top: 10px; color: #079455; font-size: 12px; }
-      .status.error { color: #dc2626; }
+
+      #test {
+        border: 1px solid rgba(148, 163, 184, .3);
+        background: #fff;
+        color: #344054;
+      }
+
+      .status {
+        min-height: 18px;
+        margin-top: 10px;
+        color: #047857;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.4;
+      }
+
+      .status.error {
+        color: #dc2626;
+      }
+
+      .hint {
+        margin: 10px 0 0;
+        color: #94a3b8;
+        font-size: 11px;
+        line-height: 1.5;
+      }
     </style>
   </head>
   <body>
-    <h1>PaperSolver Capture <small id="version"></small></h1>
-    <p>在官网论文详情页或 PDF 页面自动识别文献信息，并导入本地 PaperSolver。</p>
-    <div id="account" class="account">尚未绑定 PaperSolver 登录账号。请先打开一次 PaperSolver 页面。</div>
-    <label>
-      PaperSolver 后端地址
-      <input id="apiBase" placeholder="http://127.0.0.1:8080" />
-    </label>
-    <button id="save">保存配置</button>
-    <button id="test" class="secondary">测试连接与账号</button>
-    <div id="status" class="status"></div>
+    <main class="shell">
+      <section class="hero">
+        <div class="mark">P</div>
+        <div>
+          <h1>PaperSolver Capture</h1>
+        </div>
+        <small id="version"></small>
+        <p class="subtitle">只在明确论文详情页、PDF 页或已知学术来源中提示导入。</p>
+      </section>
+
+      <div id="account" class="account">尚未绑定账号。请先打开一次 PaperSolver 页面。</div>
+
+      <label>
+        PaperSolver 后端地址
+        <input id="apiBase" placeholder="http://127.0.0.1:8080" />
+      </label>
+
+      <div class="actions">
+        <button id="save">保存配置</button>
+        <button id="test">测试连接</button>
+      </div>
+
+      <div id="status" class="status"></div>
+      <p class="hint">插件不会在普通网页主动弹出；若官网无法读取 PDF，可先导入题录，再在文献库补传文件。</p>
+    </main>
     <script src="popup.js"></script>
   </body>
 </html>

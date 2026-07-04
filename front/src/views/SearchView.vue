@@ -3,207 +3,124 @@
     <section class="plugin-experience">
       <div class="plugin-page-shell">
 
-        <!-- Hero -->
-        <div class="plugin-hero" data-reveal="left">
-          <div class="plugin-hero-copy">
-            <span class="plugin-badge">PaperSolver Capture · 浏览器插件</span>
-            <h1>从官网到文献库，<br/>一次完成。</h1>
-            <p>
-              适配 Chrome 与 Microsoft Edge。在 ScienceDirect、PubMed、知网、Semantic Scholar 等官网检索时，插件自动识别题名、作者、来源与 PDF，并一键导入 PaperSolver。
-            </p>
-            <div class="plugin-channel-grid">
-              <a class="plugin-channel-card" href="/downloads/papersolver-capture-chrome-v0.2.4.zip" download>
-                <span class="browser-logo chrome-logo"></span>
-                <strong>Chrome 下载</strong>
-                <small>v0.2.4 · 开发者模式加载</small>
-              </a>
-              <a class="plugin-channel-card" href="/downloads/papersolver-capture-edge-v0.2.4.zip" download>
-                <span class="browser-logo edge-logo"></span>
-                <strong>Edge 下载</strong>
-                <small>v0.2.4 · 开发者模式加载</small>
-              </a>
+        <section class="search-workbench" data-reveal>
+          <div class="workbench-copy">
+            <span class="plugin-badge">Academic Search Desk</span>
+            <h1>从官网检索，到文献入库。</h1>
+            <p>先选择真实学术来源，再打开官网结果页。插件只在明确的论文详情页或 PDF 页安静提示导入，不再打扰普通网页。</p>
+          </div>
+
+          <div class="search-console-panel">
+            <div class="console-field">
+              <label>检索词</label>
+              <input v-model="query" placeholder="关键词、DOI、题名或作者" @keyup.enter="runSearch" />
+            </div>
+            <div class="console-field">
+              <label>作者筛选</label>
+              <input v-model="author" placeholder="可选" @keyup.enter="runSearch" />
+            </div>
+            <div class="console-field">
+              <label>默认来源</label>
+              <select v-model="activeEngineId">
+                <option v-for="source in searchEnginePresets" :key="source.id" :value="source.id">
+                  {{ source.name }}
+                </option>
+              </select>
+            </div>
+            <button class="console-primary" type="button" @click="runSearch">打开官网检索</button>
+            <div class="quick-terms">
+              <button v-for="sug in searchSuggestions" :key="sug" type="button" @click="applySuggestion(sug)">
+                {{ sug }}
+              </button>
             </div>
           </div>
 
-          <div class="plugin-demo" data-reveal="right">
-            <div class="plugin-demo-window">
-              <div class="plugin-demo-bar">
-                <span></span><span></span><span></span>
-                <b>sciencedirect.com / article</b>
-              </div>
-              <div class="plugin-demo-stage">
-                <div class="plugin-demo-paper">
-                  <small>Article page</small>
-                  <strong>Semantic frameworks to support implementation of the EU AI Act</strong>
-                  <span class="scan-line"></span>
-                  <span class="scan-line short"></span>
-                </div>
-                <div class="plugin-demo-toast">
-                  <i>P</i>
-                  <div>
-                    <strong>发现可导入文献</strong>
-                    <span>标题、作者、PDF 与 DOI 已识别</span>
-                  </div>
-                  <button>导入</button>
-                </div>
-              </div>
+          <aside class="capture-status-panel">
+            <div class="capture-status-top">
+              <span class="capture-dot"></span>
+              <strong>PaperSolver Capture</strong>
+              <small>v0.2.5</small>
             </div>
-            <div class="plugin-demo-caption">
-              <span>官网页面</span>
-              <span class="arrow">→</span>
-              <span>PaperSolver 文献库</span>
+            <p>新版改为低打扰识别：仅在 DOI、citation 元数据、PDF 或已知学术域名命中时出现。</p>
+            <div class="download-row">
+              <a href="/downloads/papersolver-capture-chrome-v0.2.5.zip" download>Chrome 下载</a>
+              <a href="/downloads/papersolver-capture-edge-v0.2.5.zip" download>Edge 下载</a>
             </div>
-          </div>
-        </div>
-
-        <!-- Feature cards -->
-        <section class="plugin-features" data-reveal>
-          <div class="plugin-features-head">
-            <span class="plugin-badge">Core features</span>
-            <h2>插件能力一览</h2>
-          </div>
-          <div class="plugin-feature-grid">
-            <article v-for="f in pluginFeatures" :key="f.title" class="plugin-feature-card">
-              <span class="plugin-feature-icon" :class="'icon-' + f.icon"></span>
-              <strong>{{ f.title }}</strong>
-              <p>{{ f.desc }}</p>
-            </article>
-          </div>
+          </aside>
         </section>
 
-        <!-- Why choose -->
-        <section class="plugin-why" data-reveal>
-          <div class="plugin-why-head">
-            <span class="plugin-badge">Why PaperSolver Capture</span>
-            <h2>为什么用插件导入文献</h2>
-            <p>手动复制题录费时、易错，PDF 链接常散落在不同页面。插件在官网详情页直接完成识别与入库。</p>
-          </div>
-          <div class="plugin-why-grid">
-            <article v-for="item in pluginWhyChoose" :key="item.title" class="plugin-why-card">
-              <span class="plugin-why-num"></span>
-              <strong>{{ item.title }}</strong>
-              <p>{{ item.desc }}</p>
-            </article>
-          </div>
-        </section>
-
-        <!-- Install tutorial -->
-        <section class="plugin-install" data-reveal>
-          <div class="plugin-install-copy">
-            <span class="plugin-badge">Browser tutorial</span>
-            <h2>浏览器安装教学，按动画做就行。</h2>
-            <p>Chrome 与 Edge 步骤一致：下载、解压、打开扩展管理页、开启开发者模式、加载解压目录。</p>
-          </div>
-          <div class="plugin-install-window">
-            <div class="extension-window">
-              <div class="extension-address">
-                <span class="browser-logo chrome-logo"></span>
-                <strong>chrome://extensions</strong>
-              </div>
-              <div class="extension-toggle-row">
-                <span>开发者模式</span>
-                <b></b>
-              </div>
-              <div class="extension-action-row">
-                <button>加载已解压的扩展程序</button>
-                <button>打包扩展</button>
-              </div>
-              <div class="folder-drop">
-                <i>P</i>
-                <span>papersolver-capture-v0.2.4</span>
-              </div>
-              <div class="pin-extension">
-                <span>固定到工具栏</span>
-                <b>P</b>
-              </div>
-            </div>
-          </div>
-          <div class="plugin-install-steps">
-            <article v-for="lesson in browserLessons" :key="lesson.title">
-              <i>{{ lesson.step }}</i>
-              <strong>{{ lesson.title }}</strong>
-              <span>{{ lesson.desc }}</span>
-            </article>
-          </div>
-        </section>
-
-        <!-- Source launcher -->
-        <section class="plugin-sources" data-reveal>
-          <div class="plugin-sources-head">
+        <section class="source-directory" data-reveal>
+          <div class="directory-head">
             <div>
-              <span class="plugin-badge">Official source launcher</span>
-              <h2>丰富搜索源，一键跳转官网。</h2>
-              <p>这里不做站内伪搜索。输入关键词后选择来源，直接打开对应官网结果页，插件负责后续捕获。</p>
+              <span class="plugin-badge">Official Sources</span>
+              <h2>搜索源目录</h2>
             </div>
-            <div class="plugin-search-box">
-              <input v-model="query" placeholder="输入关键词、DOI、题名或作者..." @keyup.enter="runSearch" />
-              <input v-model="author" placeholder="作者筛选，可选" @keyup.enter="runSearch" />
-            </div>
+            <span>点击一行打开官网；插件负责捕获论文详情。</span>
           </div>
-
-          <div class="plugin-term-chips">
-            <span class="chips-label">热搜词</span>
-            <button
-              v-for="sug in searchSuggestions"
-              :key="sug"
-              class="term-chip"
-              @click="applySuggestion(sug)"
-            >
-              {{ sug }}
-            </button>
-          </div>
-
-          <div class="source-galaxy">
+          <div class="source-table" role="table" aria-label="学术搜索源目录">
             <button
               v-for="source in sourceLaunchers"
               :key="source.id"
-              class="source-orbit-card"
-              :class="source.tone"
               type="button"
+              class="source-table-row"
               @click="openSourceLauncher(source)"
             >
-              <i class="source-site-icon">
-                <img
-                  :src="source.icon"
-                  :alt="`${source.name} logo`"
-                  loading="lazy"
-                  @error="$event.currentTarget.closest('.source-site-icon')?.classList.add('icon-failed')"
-                />
-                <b>{{ source.initial }}</b>
-              </i>
-              <strong>{{ source.name }}</strong>
+              <span class="source-name">
+                <img :src="source.icon" :alt="`${source.name} logo`" loading="lazy" />
+                <strong>{{ source.name }}</strong>
+              </span>
               <span>{{ source.desc }}</span>
               <small>{{ source.region }}</small>
+              <b>打开</b>
             </button>
           </div>
+        </section>
 
-          <div class="url-direct-import source-url-import">
-            <div class="url-import-header">
-              <span class="pulse-dot"></span>
-              <span>已有论文详情页 URL？直接解析导入</span>
-            </div>
-            <div class="url-import-input-group">
-              <input
-                v-model="importUrl"
-                class="url-import-input"
-                placeholder="粘贴 ScienceDirect、arXiv、Nature、ACL 等论文详情页 URL..."
-                @keyup.enter="importByUrl"
-              />
-              <button
-                class="spatial-btn"
-                :class="importUrl.trim() ? 'spatial-btn-ghost-glow' : 'spatial-btn-disabled'"
-                :disabled="urlImporting || !importUrl.trim()"
-                @click="importByUrl"
-              >
-                <svg v-if="urlImporting" class="spinner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2v4"/>
-                </svg>
-                <span>{{ urlImporting ? '解析并导入...' : '直接导入' }}</span>
-              </button>
-            </div>
-            <div v-if="urlImportMsg" :class="['url-import-msg-badge', urlImportOk ? 'ok' : 'err']">
-              {{ urlImportMsg }}
-            </div>
+        <section class="capture-rulebook" data-reveal>
+          <div class="rulebook-main">
+            <span class="plugin-badge">Capture Rules</span>
+            <h2>插件现在更克制。</h2>
+            <p>识别到疑似论文时先显示一条安静提示，用户点击后才展开导入操作。普通网页、新闻页、后台页面不会因为一点点标题信息就弹出。</p>
+          </div>
+          <div class="rulebook-rows">
+            <article v-for="f in pluginFeatures" :key="f.title">
+              <strong>{{ f.title }}</strong>
+              <span>{{ f.desc }}</span>
+            </article>
+          </div>
+        </section>
+
+        <section class="install-strip" data-reveal>
+          <article v-for="lesson in browserLessons" :key="lesson.title">
+            <i>{{ lesson.step }}</i>
+            <strong>{{ lesson.title }}</strong>
+            <span>{{ lesson.desc }}</span>
+          </article>
+        </section>
+
+        <section class="url-import-desk" data-reveal>
+          <div>
+            <span class="plugin-badge">Direct URL</span>
+            <h2>已有论文链接？</h2>
+          </div>
+          <div class="url-import-input-group">
+            <input
+              v-model="importUrl"
+              class="url-import-input"
+              placeholder="粘贴 ScienceDirect、arXiv、Nature、ACL 等论文详情页 URL..."
+              @keyup.enter="importByUrl"
+            />
+            <button
+              class="spatial-btn"
+              :class="importUrl.trim() ? 'spatial-btn-ghost-glow' : 'spatial-btn-disabled'"
+              :disabled="urlImporting || !importUrl.trim()"
+              @click="importByUrl"
+            >
+              <span>{{ urlImporting ? '解析并导入...' : '直接导入' }}</span>
+            </button>
+          </div>
+          <div v-if="urlImportMsg" :class="['url-import-msg-badge', urlImportOk ? 'ok' : 'err']">
+            {{ urlImportMsg }}
           </div>
         </section>
 
@@ -3735,7 +3652,428 @@ async function importByUrl() {
 
 .plugin-copyright { text-align:center; color:#94a3b8; font-size:13px; padding-top:24px; border-top:1px solid rgba(15,23,42,.08); }
 
+/* Academic search desk redesign */
+.plugin-page-shell {
+  max-width: 1380px;
+  gap: 24px;
+  padding: 32px 24px 80px;
+}
+
+.search-workbench,
+.source-directory,
+.capture-rulebook,
+.install-strip,
+.url-import-desk {
+  border: 1px solid rgba(148, 163, 184, .24);
+  background: rgba(255, 255, 255, .86);
+  box-shadow: 0 18px 56px rgba(15, 23, 42, .08);
+  backdrop-filter: blur(18px);
+}
+
+.search-workbench {
+  display: grid;
+  grid-template-columns: minmax(260px, .85fr) minmax(520px, 1.55fr) minmax(280px, .72fr);
+  gap: 0;
+  align-items: stretch;
+  min-height: 360px;
+  overflow: hidden;
+  border-radius: 22px;
+}
+
+.workbench-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 48px 42px;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, .12), rgba(20, 184, 166, .08)),
+    #f8fbff;
+}
+
+.workbench-copy h1 {
+  margin: 18px 0 18px;
+  color: #101828;
+  font-size: 46px;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.workbench-copy p {
+  max-width: 430px;
+  margin: 0;
+  color: #475467;
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.search-console-panel {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 16px;
+  align-content: center;
+  padding: 38px;
+  border-left: 1px solid rgba(148, 163, 184, .2);
+  border-right: 1px solid rgba(148, 163, 184, .2);
+  background: #fff;
+}
+
+.console-field {
+  display: grid;
+  gap: 8px;
+}
+
+.console-field:first-child {
+  grid-column: 1 / -1;
+}
+
+.console-field label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.console-field input,
+.console-field select,
+.url-import-input {
+  width: 100%;
+  height: 46px;
+  border: 1px solid rgba(148, 163, 184, .42);
+  border-radius: 12px;
+  background: #fff;
+  color: #101828;
+  font: inherit;
+  outline: none;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+.console-field input,
+.url-import-input {
+  padding: 0 15px;
+}
+
+.console-field select {
+  padding: 0 12px;
+}
+
+.console-field input:focus,
+.console-field select:focus,
+.url-import-input:focus {
+  border-color: rgba(37, 99, 235, .8);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, .1);
+}
+
+.console-primary {
+  align-self: end;
+  height: 46px;
+  border: 0;
+  border-radius: 12px;
+  background: #1d4ed8;
+  color: #fff;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, .2);
+}
+
+.quick-terms {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.quick-terms button {
+  border: 1px solid rgba(37, 99, 235, .14);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #344054;
+  padding: 8px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.capture-status-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  padding: 34px 30px;
+  background: linear-gradient(180deg, #f8fbff, #eef7ff);
+}
+
+.capture-status-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.capture-status-top strong {
+  font-size: 16px;
+}
+
+.capture-status-top small {
+  margin-left: auto;
+  color: #64748b;
+  font-weight: 800;
+}
+
+.capture-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #16a34a;
+  box-shadow: 0 0 0 5px rgba(22, 163, 74, .12);
+}
+
+.capture-status-panel p {
+  margin: 0;
+  color: #53657d;
+  line-height: 1.7;
+}
+
+.download-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.download-row a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  border: 1px solid rgba(37, 99, 235, .2);
+  border-radius: 11px;
+  background: #fff;
+  color: #1d4ed8;
+  text-decoration: none;
+  font-weight: 900;
+}
+
+.source-directory,
+.capture-rulebook,
+.url-import-desk {
+  border-radius: 20px;
+  padding: 26px;
+}
+
+.directory-head,
+.plugin-related-head,
+.plugin-faq-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.directory-head h2,
+.capture-rulebook h2,
+.url-import-desk h2 {
+  margin: 6px 0 0;
+  color: #101828;
+  font-size: 26px;
+  letter-spacing: 0;
+}
+
+.directory-head > span {
+  color: #64748b;
+}
+
+.source-table {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.source-table-row {
+  display: grid;
+  grid-template-columns: 270px minmax(300px, 1fr) 150px 84px;
+  gap: 20px;
+  align-items: center;
+  min-height: 68px;
+  border: 0;
+  border-bottom: 1px solid rgba(226, 232, 240, .9);
+  background: #fff;
+  color: #344054;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.source-table-row:last-child {
+  border-bottom: 0;
+}
+
+.source-table-row:hover {
+  background: #f8fbff;
+}
+
+.source-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 18px;
+  color: #101828;
+}
+
+.source-name img {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.source-table-row small {
+  color: #667085;
+}
+
+.source-table-row b {
+  justify-self: end;
+  margin-right: 18px;
+  color: #2563eb;
+  font-size: 13px;
+}
+
+.capture-rulebook {
+  display: grid;
+  grid-template-columns: .86fr 1.14fr;
+  gap: 26px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .95), rgba(239, 246, 255, .82));
+}
+
+.rulebook-main p {
+  margin: 12px 0 0;
+  color: #53657d;
+  line-height: 1.75;
+}
+
+.rulebook-rows {
+  display: grid;
+  gap: 10px;
+}
+
+.rulebook-rows article {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, .88);
+}
+
+.rulebook-rows strong {
+  color: #111827;
+}
+
+.rulebook-rows span {
+  color: #64748b;
+  line-height: 1.55;
+}
+
+.install-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.install-strip article {
+  display: grid;
+  gap: 6px;
+  padding: 20px 22px;
+  border-right: 1px solid rgba(148, 163, 184, .2);
+  background: #fff;
+}
+
+.install-strip article:last-child {
+  border-right: 0;
+}
+
+.install-strip i {
+  color: #2563eb;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.install-strip strong {
+  color: #101828;
+}
+
+.install-strip span {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.url-import-desk {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+}
+
+.url-import-input-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 12px;
+}
+
+.url-import-msg-badge {
+  grid-column: 2;
+  padding: 10px 12px;
+  border-radius: 11px;
+  font-weight: 800;
+}
+
+.url-import-msg-badge.ok {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.url-import-msg-badge.err {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
 @media (max-width: 960px) {
+  .search-workbench,
+  .capture-rulebook,
+  .url-import-desk {
+    grid-template-columns: 1fr;
+  }
+
+  .search-console-panel {
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .source-table-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 16px 18px;
+  }
+
+  .source-name {
+    padding-left: 0;
+  }
+
+  .source-table-row b {
+    justify-self: start;
+    margin-right: 0;
+  }
+
+  .install-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .plugin-hero { grid-template-columns:1fr; }
   .plugin-feature-grid, .plugin-related-grid { grid-template-columns:repeat(2,1fr); }
   .plugin-why-grid { grid-template-columns:1fr; }
@@ -3744,6 +4082,33 @@ async function importByUrl() {
   .plugin-sources-head { flex-direction:column; align-items:flex-start; }
 }
 @media (max-width: 600px) {
+  .plugin-page-shell {
+    padding: 20px 12px 60px;
+  }
+
+  .workbench-copy,
+  .search-console-panel,
+  .capture-status-panel {
+    padding: 24px;
+  }
+
+  .workbench-copy h1 {
+    font-size: 34px;
+  }
+
+  .search-console-panel,
+  .url-import-input-group {
+    grid-template-columns: 1fr;
+  }
+
+  .install-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .rulebook-rows article {
+    grid-template-columns: 1fr;
+  }
+
   .plugin-hero-copy h1 { font-size:34px; }
   .plugin-feature-grid, .plugin-related-grid, .plugin-install-steps { grid-template-columns:1fr; }
 }

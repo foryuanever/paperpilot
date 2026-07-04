@@ -11,7 +11,7 @@
   checkPendingPdfCapture().then((handled) => {
     if (handled) return;
     const paper = detectPaper();
-    if (!paper || (!paper.doi && !paper.pdfUrl && !hasCitationMeta() && !looksLikePaperPage())) return;
+    if (!shouldOfferCapture(paper)) return;
     showPrompt(paper);
   });
 
@@ -133,18 +133,18 @@
     const root = document.createElement("div");
     root.id = "papersolver-capture-root";
     root.innerHTML = `
-      <div class="ps-card">
-        <div class="ps-mark">P</div>
+      <div class="ps-card ps-quiet">
+        <button type="button" class="ps-close" aria-label="关闭 PaperSolver Capture">×</button>
+        <div class="ps-mark" aria-hidden="true">P</div>
         <div class="ps-main">
-          <strong>发现可导入文献</strong>
+          <strong>可导入 PaperSolver</strong>
           <span>${escapeHtml(paper.title || "当前论文页面")}</span>
           <small>${escapeHtml(importHint(paper))}</small>
           <em class="ps-status" hidden></em>
         </div>
         <div class="ps-actions">
           ${isCurrentPdfDocument() && paper.detailUrl ? `<a class="ps-detail" href="${escapeHtml(paper.detailUrl)}" target="_blank" rel="noopener">打开详情页</a>` : ""}
-          <button type="button" class="ps-import">${isCurrentPdfDocument() ? "补传 PDF" : "导入题录和PDF"}</button>
-          <button type="button" class="ps-close">×</button>
+          <button type="button" class="ps-import">${isCurrentPdfDocument() ? "补传 PDF" : "导入"}</button>
         </div>
       </div>
     `;
@@ -278,8 +278,9 @@
     const root = document.createElement("div");
     root.id = "papersolver-capture-root";
     root.innerHTML = `
-      <div class="ps-card">
-        <div class="ps-mark">P</div>
+      <div class="ps-card ps-quiet">
+        <button type="button" class="ps-close" aria-label="关闭 PaperSolver Capture">×</button>
+        <div class="ps-mark" aria-hidden="true">P</div>
         <div class="ps-main">
           <strong>补传 PDF 到 PaperSolver</strong>
           <span>${escapeHtml(pending.title || "当前论文")}</span>
@@ -288,7 +289,6 @@
         </div>
         <div class="ps-actions">
           <button type="button" class="ps-import">补传 PDF</button>
-          <button type="button" class="ps-close">×</button>
         </div>
       </div>
     `;
@@ -465,11 +465,32 @@
     return /(supplement|supporting|appendix|附件|补充材料|附录)/i.test(text + " " + href);
   }
 
-  function looksLikePaperPage() {
-    return Boolean(
-      document.querySelector('meta[name^="citation_"]') ||
-      /doi\.org|sciencedirect|semanticscholar|pubmed|webofscience|cnki|wanfang|arxiv|aclanthology|springer|nature|ieee|acm/i.test(location.hostname + location.pathname)
-    );
+  function shouldOfferCapture(paper) {
+    if (!paper || isPaperSolverAppHost() || shouldSilenceForThisUrl()) return false;
+    const title = clean(paper.title);
+    const academicHost = isAcademicHost();
+    const hasUsefulTitle = title.length >= 18 && !/^(home|search|login|sign in|settings|dashboard|results|文献搜索|学术搜索)$/i.test(title);
+    const obviousArticlePath = /\/(science\/article\/pii|article|articles|document|abs|paper|pubmed|doi|content\/pdf)\//i.test(location.pathname)
+      || location.search.includes("arnumber=");
+    let score = 0;
+    if (academicHost) score += 1;
+    if (hasCitationMeta()) score += 3;
+    if (paper.doi && (/^10\.\d{4,9}\//i.test(paper.doi) || /^S[A-Z0-9]{15,30}$/i.test(paper.doi))) score += 3;
+    if (paper.pdfUrl || isCurrentPdfDocument()) score += 2;
+    if (paper.abstractText) score += 1;
+    if (hasUsefulTitle) score += 1;
+    if (obviousArticlePath) score += 1;
+    return score >= 4 && (academicHost || hasCitationMeta() || isCurrentPdfDocument());
+  }
+
+  function shouldSilenceForThisUrl() {
+    if (isCurrentPdfDocument() || hasCitationMeta()) return false;
+    return /\/(login|signin|signup|account|settings|dashboard|admin|search|results?|home|profile)\b/i.test(location.pathname);
+  }
+
+  function isAcademicHost() {
+    return /doi\.org|sciencedirect|sciencedirectassets|semanticscholar|pubmed|ncbi\.nlm\.nih|webofscience|cnki|wanfang|researchrabbit|connectedpapers|scholar\.google|arxiv|aclanthology|springer|nature|ieeexplore|ieee|dl\.acm/i
+      .test(location.hostname + location.pathname);
   }
 
   function hasCitationMeta() {

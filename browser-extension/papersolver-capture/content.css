@@ -1,35 +1,46 @@
 #papersolver-capture-root {
   position: fixed;
-  right: 22px;
-  bottom: 22px;
+  right: 18px;
+  bottom: 18px;
   z-index: 2147483647;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 #papersolver-capture-root .ps-card {
-  width: min(380px, calc(100vw - 44px));
+  position: relative;
+  width: min(358px, calc(100vw - 28px));
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 11px;
   align-items: center;
-  padding: 14px;
-  border: 1px solid rgba(37, 99, 235, .18);
-  border-radius: 16px;
+  padding: 13px 14px;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 14px;
   background: rgba(255, 255, 255, .96);
-  box-shadow: 0 22px 60px rgba(15, 23, 42, .22);
+  box-shadow: 0 14px 40px rgba(15, 23, 42, .16);
   color: #172033;
+  backdrop-filter: blur(14px);
+}
+
+#papersolver-capture-root .ps-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 14px 0 0 14px;
+  background: linear-gradient(180deg, #2563eb, #14b8a6);
 }
 
 #papersolver-capture-root .ps-mark {
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
-  background: #2563eb;
-  color: #fff;
+  border-radius: 11px;
+  background: #eef6ff;
+  color: #1d4ed8;
   font-weight: 900;
-  font-size: 20px;
+  font-size: 18px;
 }
 
 #papersolver-capture-root .ps-main {
@@ -39,7 +50,8 @@
 }
 
 #papersolver-capture-root strong {
-  font-size: 14px;
+  color: #111827;
+  font-size: 13px;
   line-height: 1.2;
 }
 
@@ -48,25 +60,27 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   color: #4b5563;
-  font-size: 12.5px;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 #papersolver-capture-root small {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: #2563eb;
+  color: #64748b;
   font-size: 11px;
+  line-height: 1.35;
 }
 
 #papersolver-capture-root .ps-status {
   display: block;
   overflow: hidden;
   white-space: normal;
-  color: #dc2626;
+  color: #b45309;
   font-size: 11px;
   font-style: normal;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 #papersolver-capture-root .ps-status[hidden] {
@@ -90,23 +104,29 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 11px;
-  border-radius: 999px;
-  background: #eff6ff;
+  min-width: 74px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid rgba(37, 99, 235, .16);
+  border-radius: 9px;
+  background: #fff;
   color: #2563eb;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   text-decoration: none;
   white-space: nowrap;
 }
 
 #papersolver-capture-root .ps-import {
-  padding: 9px 12px;
-  border-radius: 999px;
-  background: #111827;
+  min-width: 74px;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: 9px;
+  background: #1d4ed8;
   color: #fff;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, .2);
 }
 
 #papersolver-capture-root .ps-import:disabled {
@@ -115,19 +135,56 @@
 }
 
 #papersolver-capture-root .ps-close {
+  position: absolute;
+  top: -9px;
+  right: -9px;
   width: 24px;
   height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, .26);
   border-radius: 999px;
-  background: #eef2f7;
+  background: #fff;
   color: #64748b;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, .12);
 }
 
 #papersolver-capture-root.ps-success .ps-card {
   border-color: rgba(16, 185, 129, .32);
 }
 
+#papersolver-capture-root.ps-success .ps-card::before {
+  background: #10b981;
+}
+
 #papersolver-capture-root.ps-error .ps-card {
   border-color: rgba(239, 68, 68, .32);
+}
+
+#papersolver-capture-root.ps-error .ps-card::before {
+  background: #ef4444;
+}
+
+@media (max-width: 520px) {
+  #papersolver-capture-root {
+    right: 14px;
+    bottom: 14px;
+  }
+
+  #papersolver-capture-root .ps-card {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  #papersolver-capture-root .ps-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
+    justify-items: stretch;
+  }
+
+  #papersolver-capture-root .ps-import,
+  #papersolver-capture-root .ps-detail {
+    width: 100%;
+  }
 }
