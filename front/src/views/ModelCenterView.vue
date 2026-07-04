@@ -14,13 +14,19 @@
       </div>
     </header>
 
+    <nav class="usage-subnav" aria-label="用量页面导航">
+      <button type="button" :class="{ active: activeSubTab === 'usage' }" @click="activeSubTab = 'usage'">用量明细</button>
+      <button type="button" :class="{ active: activeSubTab === 'recharge' }" @click="activeSubTab = 'recharge'">余额充值</button>
+    </nav>
+
+    <template v-if="activeSubTab === 'usage'">
     <section class="metric-strip" aria-label="用量概览">
       <article class="metric-card pink">
         <span class="metric-icon">₮</span>
         <div>
-          <small>当前 Token 余额</small>
-          <strong>{{ formatTokens(usageStore.tokenRemaining) }}</strong>
-          <em>已用 {{ usageStore.usagePercent }}%</em>
+          <small>现金余额</small>
+          <strong>{{ formatCny(usageStore.state.balanceAmount || 0) }}</strong>
+          <em>充值后按调用扣费</em>
         </div>
       </article>
       <article class="metric-card teal">
@@ -64,7 +70,7 @@
           <strong>{{ totalRequestsDisplay }}</strong>
           <p>总请求数</p>
         </div>
-        <button type="button" class="recharge-entry" @click="openRecharge">充值</button>
+        <button type="button" class="recharge-entry" @click="activeSubTab = 'recharge'">充值</button>
       </article>
 
       <article class="day-card cyan">
@@ -110,14 +116,6 @@
         </div>
       </div>
       <p v-else class="empty-text">暂无可统计的调用记录。</p>
-    </section>
-
-    <section class="cost-formula-card" aria-label="费用计算">
-      <div>
-        <p>费用计算</p>
-        <strong>费用 = Token 用量 × {{ formatMoney(TOKEN_UNIT_PRICE) }} / 1K</strong>
-      </div>
-      <span>每条记录按输入 Token 与输出 Token 合计计算；页面只展示费用结果，不暴露底层调用配置。</span>
     </section>
 
     <section class="ledger-panel">
@@ -180,34 +178,30 @@
         <span>组会 PPT 完成后会写入本页账单。由于执行器只返回材料、提示词和日志规模，系统按同一 Token 口径入账，用户侧不展示底层调用配置。</span>
       </aside>
     </section>
+    </template>
 
-    <div v-if="showRecharge" class="recharge-backdrop" @click.self="closeRecharge">
-      <section class="recharge-dialog" role="dialog" aria-modal="true" aria-label="额度充值">
-        <header>
-          <div>
-            <p>额度充值</p>
-            <h2>选择套餐与支付方式</h2>
+    <section v-else class="recharge-page-card" aria-label="余额充值">
+      <div class="recharge-copy">
+        <p>余额充值</p>
+        <h2>充值金额，调用时自动扣费</h2>
+        <span>充值后形成账户余额。每次 AI 调用完成后，系统按管理员设置的规则从余额扣除。</span>
+      </div>
+
+      <div class="amount-panel">
+        <label>
+          充值金额
+          <div class="amount-input">
+            <span>¥</span>
+            <input v-model.number="rechargeAmount" type="number" min="1" step="1" placeholder="输入金额" />
           </div>
-          <button type="button" class="dialog-close" aria-label="关闭" @click="closeRecharge">×</button>
-        </header>
+        </label>
+        <div class="quick-amounts">
+          <button v-for="amount in quickAmounts" :key="amount" type="button" :class="{ active: rechargeAmount === amount }" @click="rechargeAmount = amount">
+            ¥{{ amount }}
+          </button>
+        </div>
 
-        <div class="recharge-body">
-          <div class="plan-picker">
-            <button
-              v-for="plan in rechargePlans"
-              :key="plan.id"
-              type="button"
-              class="plan-option"
-              :class="{ active: selectedPlanId === plan.id, recommended: plan.highlight }"
-              @click="selectedPlanId = plan.id"
-            >
-              <span>{{ plan.name }}</span>
-              <strong>{{ plan.price }}<small>{{ plan.period }}</small></strong>
-              <em>{{ formatTokens(plan.tokenQuota) }} Token</em>
-            </button>
-          </div>
-
-          <div class="payment-picker">
+        <div class="payment-picker">
             <button
               type="button"
               class="pay-option alipay"
@@ -226,26 +220,22 @@
               <i>微</i>
               <span>微信支付</span>
             </button>
-          </div>
-
-          <div class="payment-summary">
-            <span>应付金额</span>
-            <strong>{{ selectedPlan?.price || "-" }}</strong>
-          </div>
-
-          <p v-if="paymentMessage" class="payment-message" :class="{ warning: paymentStatus === 'config_required' }">
-            {{ paymentMessage }}
-          </p>
         </div>
 
-        <footer>
-          <button type="button" class="ghost-action" @click="closeRecharge">取消</button>
-          <button type="button" class="primary-action" :disabled="paying || !selectedPlan" @click="createRechargeOrder">
-            {{ paying ? "创建订单中" : `去${selectedProvider === "alipay" ? "支付宝" : "微信"}支付` }}
-          </button>
-        </footer>
-      </section>
-    </div>
+        <div class="payment-summary">
+          <span>应付金额</span>
+          <strong>{{ formatCny(rechargeAmount || 0) }}</strong>
+        </div>
+
+        <p v-if="paymentMessage" class="payment-message" :class="{ warning: paymentStatus === 'config_required' }">
+          {{ paymentMessage }}
+        </p>
+
+        <button type="button" class="primary-action pay-submit" :disabled="paying || !validRechargeAmount" @click="createRechargeOrder">
+          {{ paying ? "创建订单中" : `去${selectedProvider === "alipay" ? "支付宝" : "微信"}支付` }}
+        </button>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -253,26 +243,24 @@
 import { computed, onMounted, ref } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useUsageStore } from "../stores/usage";
-import { billingPlans } from "../constants/pages";
 import { paperpilotApi } from "../services/paperpilotApi";
 
 const usageStore = useUsageStore();
 const authStore = useAuthStore();
 
 const loading = ref(false);
+const activeSubTab = ref("usage");
 const activeChart = ref("cost");
 const activeLogTab = ref("all");
 const selectedScene = ref("");
 const TOKEN_UNIT_PRICE = 0.02;
-const showRecharge = ref(false);
-const selectedPlanId = ref("monthly-pro");
 const selectedProvider = ref("alipay");
 const paying = ref(false);
 const paymentMessage = ref("");
 const paymentStatus = ref("");
-
-const rechargePlans = computed(() => billingPlans.filter((plan) => ["monthly-basic", "monthly-pro", "quarterly-pro", "yearly-pro"].includes(plan.id)));
-const selectedPlan = computed(() => rechargePlans.value.find((plan) => plan.id === selectedPlanId.value) || rechargePlans.value[0]);
+const rechargeAmount = ref(50);
+const quickAmounts = [20, 50, 100, 200, 500];
+const validRechargeAmount = computed(() => Number(rechargeAmount.value || 0) > 0);
 
 const sceneOptions = computed(() => [
   ...new Set(usageStore.state.recentCalls.map((row) => row.action).filter(Boolean)),
@@ -345,30 +333,16 @@ async function refreshUsage() {
   }
 }
 
-function openRecharge() {
-  paymentMessage.value = "";
-  paymentStatus.value = "";
-  if (!selectedPlan.value && rechargePlans.value.length) {
-    selectedPlanId.value = rechargePlans.value[0].id;
-  }
-  showRecharge.value = true;
-}
-
-function closeRecharge() {
-  if (paying.value) return;
-  showRecharge.value = false;
-}
-
 async function createRechargeOrder() {
-  if (!selectedPlan.value) return;
+  if (!validRechargeAmount.value) return;
   paying.value = true;
   paymentMessage.value = "";
   paymentStatus.value = "";
   try {
     const order = await paperpilotApi.createPaymentOrder({
-      planId: selectedPlan.value.id,
+      planId: "custom-recharge",
       provider: selectedProvider.value,
-      amount: selectedPlan.value.price,
+      amount: Number(rechargeAmount.value || 0),
     });
     paymentStatus.value = order.status || "";
     paymentMessage.value = order.message || "订单已创建。";
@@ -396,6 +370,10 @@ function formatTokens(value) {
 
 function formatMoney(value) {
   return `$${Number(value || 0).toFixed(4)}`;
+}
+
+function formatCny(value) {
+  return `¥${Number(value || 0).toFixed(2)}`;
 }
 
 function rowCost(row) {
@@ -475,6 +453,36 @@ function cleanActionName(value) {
   gap: 10px;
 }
 
+.usage-subnav {
+  display: flex;
+  gap: 6px;
+  max-width: 1560px;
+  margin: 0 auto 18px;
+  padding: 6px;
+  border: 1px solid #e4eaf2;
+  border-radius: 13px;
+  background: #fff;
+  width: fit-content;
+}
+
+.usage-subnav button {
+  min-width: 98px;
+  height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #526075;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.usage-subnav button.active {
+  background: #1f5be3;
+  color: #fff;
+}
+
 .scope-pill,
 .refresh-button,
 .icon-button {
@@ -518,7 +526,6 @@ button:disabled {
 
 .metric-strip,
 .summary-grid,
-.cost-formula-card,
 .chart-panel,
 .ledger-panel {
   max-width: 1560px;
@@ -536,7 +543,6 @@ button:disabled {
 .metric-card,
 .balance-card,
 .day-card,
-.cost-formula-card,
 .chart-panel,
 .ledger-panel {
   border: 1px solid #e4eaf2;
@@ -770,35 +776,6 @@ button:disabled {
   overflow: hidden;
 }
 
-.cost-formula-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  margin-top: 18px;
-  padding: 18px 22px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-}
-
-.cost-formula-card p {
-  margin: 0 0 5px;
-  color: #526075;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.cost-formula-card strong {
-  color: #182234;
-  font-size: 18px;
-}
-
-.cost-formula-card span {
-  max-width: 620px;
-  color: #667085;
-  font-size: 13px;
-  line-height: 1.55;
-}
-
 .ledger-toolbar {
   padding-bottom: 18px;
   border-bottom: 1px solid #edf1f6;
@@ -903,128 +880,118 @@ button:disabled {
   color: #1b4eb6;
 }
 
-.recharge-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
+.recharge-page-card {
   display: grid;
-  place-items: center;
-  padding: 24px;
-  background: rgba(15, 23, 42, .42);
-}
-
-.recharge-dialog {
-  width: min(760px, calc(100vw - 32px));
-  max-height: calc(100vh - 48px);
-  overflow: auto;
-  border: 1px solid #dce5f2;
-  border-radius: 18px;
+  grid-template-columns: minmax(0, .9fr) minmax(360px, .7fr);
+  gap: 28px;
+  max-width: 1560px;
+  margin: 0 auto;
+  border: 1px solid #e4eaf2;
+  border-radius: 16px;
   background: #fff;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, .22);
+  padding: 30px;
+  box-shadow: 0 8px 18px rgba(18, 31, 53, .04);
 }
 
-.recharge-dialog header {
+.recharge-copy {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 24px 26px 18px;
-  border-bottom: 1px solid #edf1f6;
+  min-height: 360px;
+  flex-direction: column;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fbff 62%, #f0fdfa 100%);
+  padding: 34px;
 }
 
-.recharge-dialog header p {
-  margin: 0 0 6px;
+.recharge-copy p {
+  margin: 0 0 10px;
   color: #2357d6;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
 }
 
-.recharge-dialog h2 {
+.recharge-copy h2 {
+  max-width: 520px;
   margin: 0;
-  color: #172033;
-  font-size: 24px;
-  line-height: 1.2;
+  color: #162033;
+  font-size: 34px;
+  line-height: 1.15;
 }
 
-.dialog-close {
-  width: 34px;
-  height: 34px;
-  border: 1px solid #dce4ef;
-  border-radius: 50%;
-  background: #fff;
+.recharge-copy span {
+  max-width: 600px;
+  margin-top: 16px;
   color: #526075;
-  font-size: 24px;
-  line-height: 1;
-  cursor: pointer;
+  font-size: 15px;
+  line-height: 1.75;
 }
 
-.recharge-body {
+.amount-panel {
   display: grid;
-  gap: 18px;
-  padding: 22px 26px;
+  align-content: center;
+  gap: 16px;
 }
 
-.plan-picker {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.plan-option {
-  position: relative;
+.amount-panel label {
   display: grid;
   gap: 8px;
-  min-height: 112px;
-  border: 1px solid #dfe7f2;
-  border-radius: 14px;
-  background: #fbfdff;
-  padding: 16px;
-  color: #1f2937;
-  text-align: left;
+  color: #344158;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.amount-input {
+  display: flex;
+  align-items: center;
+  height: 58px;
+  border: 1px solid #dce4ef;
+  border-radius: 13px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.amount-input span {
+  padding-left: 16px;
+  color: #64748b;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.amount-input input {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  padding: 0 16px 0 8px;
+  color: #111827;
+  font: inherit;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.quick-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-amounts button {
+  height: 36px;
+  border: 1px solid #d9e1ec;
+  border-radius: 999px;
+  background: #fff;
+  color: #40506a;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
   cursor: pointer;
 }
 
-.plan-option.recommended::after {
-  content: "推荐";
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  border-radius: 999px;
-  background: #e8f1ff;
-  color: #2357d6;
-  padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.plan-option.active {
-  border-color: #2d63df;
-  background: #f5f8ff;
-}
-
-.plan-option span {
-  color: #475569;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.plan-option strong {
-  color: #111827;
-  font-size: 26px;
-  line-height: 1;
-}
-
-.plan-option small {
-  margin-left: 2px;
-  color: #64748b;
-  font-size: 13px;
-}
-
-.plan-option em {
-  color: #667085;
-  font-size: 13px;
-  font-style: normal;
-  font-weight: 800;
+.quick-amounts button.active {
+  border-color: #1f5be3;
+  background: #edf4ff;
+  color: #1f5be3;
 }
 
 .payment-picker {
@@ -1104,15 +1071,6 @@ button:disabled {
   color: #9a3412;
 }
 
-.recharge-dialog footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 18px 26px 24px;
-  border-top: 1px solid #edf1f6;
-}
-
-.ghost-action,
 .primary-action {
   min-width: 112px;
   height: 42px;
@@ -1137,9 +1095,12 @@ button:disabled {
 
 @media (max-width: 1120px) {
   .metric-strip,
-  .summary-grid,
-  .cost-formula-card {
+  .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recharge-page-card {
+    grid-template-columns: 1fr;
   }
 
   .balance-card {
@@ -1163,16 +1124,18 @@ button:disabled {
     flex-direction: column;
   }
 
-  .metric-strip,
-  .summary-grid,
-  .cost-formula-card,
-  .balance-card {
-    grid-template-columns: 1fr;
+  .usage-subnav {
+    width: 100%;
   }
 
-  .cost-formula-card {
-    align-items: flex-start;
-    flex-direction: column;
+  .usage-subnav button {
+    flex: 1;
+  }
+
+  .metric-strip,
+  .summary-grid,
+  .balance-card {
+    grid-template-columns: 1fr;
   }
 
   .balance-card div:not(:first-child) {
@@ -1187,6 +1150,19 @@ button:disabled {
   .plan-picker,
   .payment-picker {
     grid-template-columns: 1fr;
+  }
+
+  .recharge-page-card {
+    padding: 16px;
+  }
+
+  .recharge-copy {
+    min-height: 0;
+    padding: 22px;
+  }
+
+  .recharge-copy h2 {
+    font-size: 25px;
   }
 
   .bar-chart {

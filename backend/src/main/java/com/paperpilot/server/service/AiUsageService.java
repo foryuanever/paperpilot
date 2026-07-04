@@ -26,17 +26,20 @@ public class AiUsageService {
     private final AppUserRepository appUserRepository;
     private final ModelConfigRepository modelConfigRepository;
     private final CurrentUserService currentUserService;
+    private final BillingService billingService;
 
     public AiUsageService(
         AiUsageRecordRepository repository,
         AppUserRepository appUserRepository,
         ModelConfigRepository modelConfigRepository,
-        CurrentUserService currentUserService
+        CurrentUserService currentUserService,
+        BillingService billingService
     ) {
         this.repository = repository;
         this.appUserRepository = appUserRepository;
         this.modelConfigRepository = modelConfigRepository;
         this.currentUserService = currentUserService;
+        this.billingService = billingService;
     }
 
     public void record(
@@ -58,6 +61,9 @@ public class AiUsageService {
         entity.setPromptTokens(promptTokens);
         entity.setCompletionTokens(completionTokens);
         entity.setTotalTokens(totalTokens);
+        entity.setUnitPrice(billingService.unitPrice());
+        entity.setBillingMultiplier(billingService.multiplier());
+        entity.setChargeAmount(billingService.calculateCharge(totalTokens));
         repository.save(entity);
     }
 
@@ -72,9 +78,12 @@ public class AiUsageService {
         long totalTokens
     ) {
         if (userId == null || totalTokens <= 0) return;
+        double charge = billingService.calculateCharge(totalTokens);
         appUserRepository.findById(userId).ifPresent(user -> {
             long current = user.getTokenUsed() == null ? 0L : user.getTokenUsed();
             user.setTokenUsed(current + totalTokens);
+            double balance = user.getBalanceAmount() == null ? 0.0D : user.getBalanceAmount();
+            user.setBalanceAmount(Math.max(0.0D, balance - charge));
             appUserRepository.save(user);
         });
         record(userId, modelName, scene, action, paperTitle, promptTokens, completionTokens, totalTokens);
@@ -117,18 +126,21 @@ public class AiUsageService {
         result.put("tokenQuota", safe(user.getTokenLimit()));
         result.put("tokenUsed", safe(user.getTokenUsed()));
         result.put("tokenRemaining", Math.max(0L, safe(user.getTokenLimit()) - safe(user.getTokenUsed())));
+        result.put("balanceAmount", money(user.getBalanceAmount()));
         result.put("resetAt", LocalDate.now().plusMonths(1).withDayOfMonth(1).toString());
         result.put("promptTokens", promptTokens);
         result.put("completionTokens", completionTokens);
         result.put("weekTokens", weekTokens);
-        result.put("estimatedCost", ((double) totalTokens / 1000D) * 0.02D);
+        result.put("estimatedCost", recent.stream().mapToDouble(this::chargeOf).sum());
+        result.put("unitPrice", billingService.unitPrice());
+        result.put("billingMultiplier", billingService.multiplier());
         result.put("totalRequests", totalRequests);
         result.put("todayRequests", todayRequests);
         result.put("todayTokens", todayTokens);
         result.put("rpm", minuteRecords.size());
         result.put("tpm", minuteTokens);
-        result.put("mpm", ((double) minuteTokens / 1000D) * 0.02D);
-        result.put("currentMinuteCost", ((double) minuteTokens / 1000D) * 0.02D);
+        result.put("mpm", minuteRecords.stream().mapToDouble(this::chargeOf).sum());
+        result.put("currentMinuteCost", minuteRecords.stream().mapToDouble(this::chargeOf).sum());
         result.put("usageScope", showingAllUsers ? "all" : "current");
         result.put("dailyUsage", buildDailyUsage(recent));
         result.put("modelBreakdown", buildBreakdown(recent, "model"));
@@ -257,6 +269,9 @@ public class AiUsageService {
             row.put("tokens", safe(record.getTotalTokens()));
             row.put("promptTokens", safe(record.getPromptTokens()));
             row.put("completionTokens", safe(record.getCompletionTokens()));
+            row.put("cost", chargeOf(record));
+            row.put("unitPrice", unitPriceOf(record));
+            row.put("billingMultiplier", multiplierOf(record));
             return row;
         }).toList();
     }
@@ -267,6 +282,26 @@ public class AiUsageService {
 
     private String blankTo(String text, String fallback) {
         return text == null || text.isBlank() ? fallback : text;
+    }
+
+    private double money(Double value) {
+        return value == null ? 0.0D : value;
+    }
+
+    private double chargeOf(AiUsageRecordEntity record) {
+        double saved = money(record.getChargeAmount());
+        if (saved > 0) return saved;
+        return billingService.calculateCharge(safe(record.getTotalTokens()));
+    }
+
+    private double unitPriceOf(AiUsageRecordEntity record) {
+        double saved = money(record.getUnitPrice());
+        return saved > 0 ? saved : billingService.unitPrice();
+    }
+
+    private double multiplierOf(AiUsageRecordEntity record) {
+        double saved = money(record.getBillingMultiplier());
+        return saved > 0 ? saved : billingService.multiplier();
     }
 
     private String inferPlanId(long tokenLimit) {

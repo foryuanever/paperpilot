@@ -42,6 +42,15 @@ public class AiUsageRecordEntity {
     @Column(name = "total_tokens", nullable = false)
     private Long totalTokens = 0L;
 
+    @Column(name = "charge_amount", nullable = false)
+    private Double chargeAmount = 0.0;
+
+    @Column(name = "unit_price", nullable = false)
+    private Double unitPrice = 0.02;
+
+    @Column(name = "billing_multiplier", nullable = false)
+    private Double billingMultiplier = 1.0;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -69,6 +78,12 @@ public class AiUsageRecordEntity {
     public void setCompletionTokens(Long completionTokens) { this.completionTokens = completionTokens; }
     public Long getTotalTokens() { return totalTokens; }
     public void setTotalTokens(Long totalTokens) { this.totalTokens = totalTokens; }
+    public Double getChargeAmount() { return chargeAmount; }
+    public void setChargeAmount(Double chargeAmount) { this.chargeAmount = chargeAmount; }
+    public Double getUnitPrice() { return unitPrice; }
+    public void setUnitPrice(Double unitPrice) { this.unitPrice = unitPrice; }
+    public Double getBillingMultiplier() { return billingMultiplier; }
+    public void setBillingMultiplier(Double billingMultiplier) { this.billingMultiplier = billingMultiplier; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

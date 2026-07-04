@@ -51,7 +51,7 @@
           <div class="stat-info">
             <span class="stat-label">站内充值总计</span>
             <strong class="stat-value">¥{{ formatMoney(globalStats.totalRechargeAmount) }}</strong>
-            <span class="stat-sub">累计 {{ globalStats.rechargeCount || 0 }} 笔 · 发放 {{ formatTokens(globalStats.totalRechargeTokens) }} Token</span>
+            <span class="stat-sub">累计 {{ globalStats.rechargeCount || 0 }} 笔 · 当前余额 ¥{{ formatMoney(globalStats.totalBalanceAmount || 0) }}</span>
           </div>
         </div>
       </div>
@@ -72,7 +72,14 @@
             :class="{ active: activeTab === 'recharges' }"
             @click="activeTab = 'recharges'"
           >
-            充值发放记录
+            充值入账记录
+          </button>
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'billing' }"
+            @click="activeTab = 'billing'"
+          >
+            计费规则
           </button>
           <button
             class="tab-btn"
@@ -137,7 +144,7 @@
                   <th>IP 地址</th>
                   <th>当前角色</th>
                   <th>明文密码</th>
-                  <th>Token 限额</th>
+                  <th>余额 / Token消耗</th>
                   <th>注册时间</th>
                   <th style="text-align: right;">管理操作</th>
                 </tr>
@@ -164,7 +171,7 @@
                       {{ user.password }}
                     </code>
                   </td>
-                  <td>{{ formatTokens(user.tokenLimit) }}</td>
+                  <td>¥{{ formatMoney(user.balanceAmount) }} / {{ formatTokens(user.tokenUsed) }}</td>
                   <td>{{ user.createdTime }}</td>
                   <td style="text-align: right;">
                     <div class="table-actions">
@@ -185,8 +192,8 @@
         <!-- Tab Content: Recharges -->
         <div v-if="activeTab === 'recharges'" class="tab-pane">
           <div class="pane-header-row">
-            <h3>充值发放记录</h3>
-            <button class="spatial-btn spatial-btn-accent compact-btn" @click="showAddRechargeModal = true">新建发放</button>
+            <h3>充值入账记录</h3>
+            <button class="spatial-btn spatial-btn-accent compact-btn" @click="showAddRechargeModal = true">手动入账</button>
           </div>
 
           <!-- Search toolbar -->
@@ -196,11 +203,75 @@
 
           <div class="table-container spatial-glass-panel">
             <table class="admin-table">
-              <thead><tr><th>邮箱</th><th>金额</th><th>Token</th><th>时间</th></tr></thead>
+              <thead><tr><th>邮箱</th><th>入账金额</th><th>入账方式</th><th>时间</th></tr></thead>
               <tbody>
-                <tr v-for="r in filteredRecharges" :key="r.id"><td>{{ r.email }}</td><td>¥{{ r.amount }}</td><td>{{ formatTokens(r.tokens) }}</td><td>{{ r.time }}</td></tr>
+                <tr v-for="r in filteredRecharges" :key="r.id"><td>{{ r.email }}</td><td>¥{{ formatMoney(r.amount) }}</td><td>余额充值</td><td>{{ r.time }}</td></tr>
                 <tr v-if="filteredRecharges.length === 0">
                   <td colspan="4" style="text-align: center; color: #64748b; padding: 32px 0;">暂无充值发放记录</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div v-if="activeTab === 'billing'" class="tab-pane">
+          <div class="pane-header-row">
+            <div>
+              <h3>计费规则与扣费明细</h3>
+              <p class="pane-description">这里是管理员可见的计费口径。用户侧只看到余额、充值入口和扣费结果。</p>
+            </div>
+          </div>
+
+          <div class="billing-rule-grid">
+            <article class="billing-rule-card spatial-glass-panel">
+              <span>基础单价</span>
+              <input v-model.number="billingForm.unitPrice" type="number" min="0.0001" step="0.0001" />
+              <p>每 1000 Token，当前 ¥{{ formatMoney(billingSettings.unitPrice) }}</p>
+            </article>
+            <article class="billing-rule-card spatial-glass-panel">
+              <span>当前倍率</span>
+              <input v-model.number="billingForm.multiplier" type="number" min="0.01" step="0.01" />
+              <p>当前 {{ Number(billingSettings.multiplier || 1).toFixed(2) }}x</p>
+            </article>
+            <article class="billing-rule-card spatial-glass-panel wide">
+              <span>扣费公式</span>
+              <strong>{{ billingSettings.formula }}</strong>
+              <p>调用完成后按实际入账 Token 从用户余额扣除。</p>
+              <button class="spatial-btn spatial-btn-accent compact-btn billing-save-btn" :disabled="billingSaving" @click="saveBillingSettings">
+                {{ billingSaving ? "保存中..." : "保存计费规则" }}
+              </button>
+            </article>
+          </div>
+
+          <div class="table-container spatial-glass-panel">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>功能</th>
+                  <th>论文 / 任务</th>
+                  <th>输入</th>
+                  <th>输出</th>
+                  <th>Token</th>
+                  <th>单价</th>
+                  <th>倍率</th>
+                  <th>扣费</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in billingCharges" :key="`${row.time}-${row.paper}-${row.tokens}`">
+                  <td>{{ row.time || "—" }}</td>
+                  <td>{{ cleanActionName(row.action) }}</td>
+                  <td>{{ row.paper || "当前论文" }}</td>
+                  <td>{{ formatTokens(row.promptTokens) }}</td>
+                  <td>{{ formatTokens(row.completionTokens) }}</td>
+                  <td>{{ formatTokens(row.tokens) }}</td>
+                  <td>¥{{ formatMoney(row.unitPrice) }}</td>
+                  <td>{{ Number(row.billingMultiplier || 1).toFixed(2) }}x</td>
+                  <td>¥{{ formatMoney(row.chargeAmount) }}</td>
+                </tr>
+                <tr v-if="!billingCharges.length">
+                  <td colspan="9" style="text-align: center; color: #64748b; padding: 32px 0;">暂无扣费明细</td>
                 </tr>
               </tbody>
             </table>
@@ -539,7 +610,7 @@
     <Transition name="fade">
       <div v-if="showAddRechargeModal" class="admin-modal-overlay" @click="showAddRechargeModal = false">
         <div class="admin-modal-card spatial-glass-panel" @click.stop>
-          <h4>发放配额 / 充值</h4>
+          <h4>手动充值入账</h4>
           <div class="form-group" style="margin-top: 12px;">
             <label>用户邮箱</label>
             <input id="recharge-email" name="recharge-email" v-model="newRecharge.email" placeholder="e.g. student@paperslover.app" />
@@ -548,13 +619,10 @@
             <label>充值金额 (¥)</label>
             <input id="recharge-amount" name="recharge-amount" v-model.number="newRecharge.amount" type="number" placeholder="100" />
           </div>
-          <div class="form-group" style="margin-top: 12px;">
-            <label>赠送 Token 配额</label>
-            <input id="recharge-tokens" name="recharge-tokens" v-model.number="newRecharge.tokens" type="number" placeholder="5000000" />
-          </div>
+          <p class="form-hint" style="margin-top: 12px;">入账后会增加用户现金余额，后续 AI 调用按后台计费规则自动扣除。</p>
           <div class="modal-actions" style="margin-top: 24px;">
             <button class="spatial-btn spatial-btn-ghost" @click="showAddRechargeModal = false">取消</button>
-            <button class="spatial-btn spatial-btn-accent" @click="addRecharge">确认发放</button>
+            <button class="spatial-btn spatial-btn-accent" @click="addRecharge">确认入账</button>
           </div>
         </div>
       </div>
@@ -683,7 +751,6 @@ const newUser = ref({
 const newRecharge = ref({
   email: "",
   amount: 100,
-  tokens: 5000000,
 });
 
 const newTeam = ref({
@@ -700,6 +767,15 @@ const systemLogs = ref([]);
 const translationProviders = ref([]);
 const siteMessages = ref([]);
 const modelPool = ref([]);
+const billingSettings = ref({
+  unitPrice: 0.02,
+  multiplier: 1,
+  formula: "费用 = Token 用量 × 单价 × 倍率 / 1000",
+  currency: "CNY",
+});
+const billingForm = ref({ unitPrice: 0.02, multiplier: 1 });
+const billingCharges = ref([]);
+const billingSaving = ref(false);
 const modelPoolRefreshing = ref(false);
 const modelPoolSeeding = ref(false);
 const modelPoolCleaning = ref(false);
@@ -728,6 +804,7 @@ const globalStats = ref({
   totalTokensLimit: 10000000,
   usagePercentage: 0.0,
   totalRechargeAmount: 0,
+  totalBalanceAmount: 0,
   totalRechargeTokens: 0,
   rechargeCount: 0,
   averageLatencyMs: 0,
@@ -902,6 +979,8 @@ async function fetchAllData() {
       role: u.role || "学生",
       password: u.plainPassword || "—",
       tokenLimit: u.tokenLimit || 5000000,
+      tokenUsed: u.tokenUsed || 0,
+      balanceAmount: u.balanceAmount || 0,
       createdTime: formatDate(u.createdAt),
     }));
 
@@ -936,6 +1015,14 @@ async function fetchAllData() {
     // 5. Fetch Global Stats
     const statsData = await paperpilotApi.getAdminStats();
     globalStats.value = statsData;
+
+    const billingData = await paperpilotApi.getBillingSettings();
+    billingSettings.value = billingData;
+    billingForm.value = {
+      unitPrice: Number(billingData.unitPrice || 0.02),
+      multiplier: Number(billingData.multiplier || 1),
+    };
+    billingCharges.value = billingData.recentCharges || [];
 
     // 6. Fetch Translation Providers Configuration Status
     const providersData = await paperpilotApi.getTranslationProviders();
@@ -1187,15 +1274,39 @@ async function addRecharge() {
     await paperpilotApi.addRechargeRecord({
       email: newRecharge.value.email,
       amount: newRecharge.value.amount || 0,
-      tokens: newRecharge.value.tokens || 0,
     });
     showAddRechargeModal.value = false;
-    newRecharge.value = { email: "", amount: 100, tokens: 5000000 };
+    newRecharge.value = { email: "", amount: 100 };
     await fetchAllData();
   } catch (error) {
     console.error("Failed to distribute quota:", error);
-    dialogStore.alert("发放配额失败，可能是邮箱对应的用户不存在");
+    dialogStore.alert("充值入账失败，可能是邮箱对应的用户不存在");
   }
+}
+
+async function saveBillingSettings() {
+  if (Number(billingForm.value.unitPrice || 0) <= 0 || Number(billingForm.value.multiplier || 0) <= 0) {
+    dialogStore.alert("单价和倍率必须大于 0");
+    return;
+  }
+  billingSaving.value = true;
+  try {
+    billingSettings.value = await paperpilotApi.updateBillingSettings({
+      unitPrice: Number(billingForm.value.unitPrice),
+      multiplier: Number(billingForm.value.multiplier),
+    });
+    const refreshed = await paperpilotApi.getBillingSettings();
+    billingSettings.value = refreshed;
+    billingCharges.value = refreshed.recentCharges || [];
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "计费规则保存失败");
+  } finally {
+    billingSaving.value = false;
+  }
+}
+
+function cleanActionName(value) {
+  return String(value || "-").replace(/（[^）]*）/g, "");
 }
 
 async function addTeam() {
@@ -1481,6 +1592,61 @@ async function removeSiteMessage(message) {
   font-weight: 600;
   color: #0f172a;
   letter-spacing: -0.01em;
+}
+
+.billing-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.billing-rule-card {
+  display: grid;
+  gap: 8px;
+  padding: 20px;
+  border-radius: 14px;
+}
+
+.billing-rule-card.wide {
+  grid-column: span 2;
+}
+
+.billing-rule-card span {
+  color: #64748b;
+  font-size: .82rem;
+  font-weight: 700;
+}
+
+.billing-rule-card strong {
+  color: #0f172a;
+  font-size: 1.2rem;
+  line-height: 1.35;
+}
+
+.billing-rule-card input {
+  width: 100%;
+  height: 40px;
+  border: 1px solid rgba(15, 23, 42, .1);
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 700;
+}
+
+.billing-save-btn {
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.billing-rule-card p,
+.form-hint {
+  margin: 0;
+  color: #64748b;
+  font-size: .82rem;
+  line-height: 1.6;
 }
 
 /* User Table */

@@ -128,6 +128,17 @@ public class AppUserEntity {
         this.tokenUsed = tokenUsed;
     }
 
+    @Column(name = "balance_amount")
+    private Double balanceAmount = 0.0;
+
+    public Double getBalanceAmount() {
+        return balanceAmount;
+    }
+
+    public void setBalanceAmount(Double balanceAmount) {
+        this.balanceAmount = balanceAmount;
+    }
+
     @Column(name = "last_ip", length = 128)
     private String lastIp;
 

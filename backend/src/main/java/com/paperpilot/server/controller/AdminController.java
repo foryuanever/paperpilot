@@ -1,12 +1,14 @@
 package com.paperpilot.server.controller;
 
 import com.paperpilot.server.entity.AppUserEntity;
+import com.paperpilot.server.entity.AiUsageRecordEntity;
 import com.paperpilot.server.entity.RechargeRecordEntity;
 import com.paperpilot.server.entity.TeamEntity;
 import com.paperpilot.server.entity.SystemLogEntity;
 import com.paperpilot.server.entity.SiteMessageEntity;
 import com.paperpilot.server.entity.TranslationRecordEntity;
 import com.paperpilot.server.repository.AppUserRepository;
+import com.paperpilot.server.repository.AiUsageRecordRepository;
 import com.paperpilot.server.repository.RechargeRecordRepository;
 import com.paperpilot.server.repository.TeamRepository;
 import com.paperpilot.server.repository.SystemLogRepository;
@@ -14,6 +16,7 @@ import com.paperpilot.server.repository.SiteMessageRepository;
 import com.paperpilot.server.repository.PaperRepository;
 import com.paperpilot.server.repository.TranslationRecordRepository;
 import com.paperpilot.server.service.AuthService;
+import com.paperpilot.server.service.BillingService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -21,12 +24,14 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import java.time.format.DateTimeFormatter;
 
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
 
     private final AppUserRepository appUserRepository;
+    private final AiUsageRecordRepository aiUsageRecordRepository;
     private final RechargeRecordRepository rechargeRecordRepository;
     private final TeamRepository teamRepository;
     private final SystemLogRepository systemLogRepository;
@@ -34,18 +39,22 @@ public class AdminController {
     private final TranslationRecordRepository translationRecordRepository;
     private final AuthService authService;
     private final SiteMessageRepository siteMessageRepository;
+    private final BillingService billingService;
 
     public AdminController(
         AppUserRepository appUserRepository,
+        AiUsageRecordRepository aiUsageRecordRepository,
         RechargeRecordRepository rechargeRecordRepository,
         TeamRepository teamRepository,
         SystemLogRepository systemLogRepository,
         PaperRepository paperRepository,
         TranslationRecordRepository translationRecordRepository,
         AuthService authService,
-        SiteMessageRepository siteMessageRepository
+        SiteMessageRepository siteMessageRepository,
+        BillingService billingService
     ) {
         this.appUserRepository = appUserRepository;
+        this.aiUsageRecordRepository = aiUsageRecordRepository;
         this.rechargeRecordRepository = rechargeRecordRepository;
         this.teamRepository = teamRepository;
         this.systemLogRepository = systemLogRepository;
@@ -53,6 +62,7 @@ public class AdminController {
         this.translationRecordRepository = translationRecordRepository;
         this.authService = authService;
         this.siteMessageRepository = siteMessageRepository;
+        this.billingService = billingService;
     }
 
     // --- Dynamic Global Statistics ---
@@ -79,6 +89,9 @@ public class AdminController {
         List<RechargeRecordEntity> rechargeRecords = rechargeRecordRepository.findAll();
         double totalRechargeAmount = rechargeRecords.stream()
             .mapToDouble(record -> record.getAmount() != null ? record.getAmount() : 0.0)
+            .sum();
+        double totalBalanceAmount = allUsers.stream()
+            .mapToDouble(user -> user.getBalanceAmount() != null ? user.getBalanceAmount() : 0.0)
             .sum();
         long totalRechargeTokens = rechargeRecords.stream()
             .mapToLong(record -> record.getTokens() != null ? record.getTokens() : 0L)
@@ -112,6 +125,7 @@ public class AdminController {
         stats.put("totalTokensLimit", totalTokensLimit);
         stats.put("usagePercentage", usagePercentage);
         stats.put("totalRechargeAmount", totalRechargeAmount);
+        stats.put("totalBalanceAmount", totalBalanceAmount);
         stats.put("totalRechargeTokens", totalRechargeTokens);
         stats.put("rechargeCount", rechargeRecords.size());
         stats.put("averageLatencyMs", Math.round(averageLatencyMs));
@@ -172,19 +186,60 @@ public class AdminController {
         return rechargeRecordRepository.findAll();
     }
 
+    @GetMapping("/billing")
+    public Map<String, Object> getBillingSettings() {
+        Map<String, Object> result = new java.util.LinkedHashMap<>(billingService.settings());
+        List<AiUsageRecordEntity> records = aiUsageRecordRepository.findTop240ByOrderByCreatedAtDesc();
+        result.put("recentCharges", records.stream().limit(60).map(record -> {
+            Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("time", record.getCreatedAt() == null ? "" : record.getCreatedAt().format(DateTimeFormatter.ofPattern("MM-dd HH:mm")));
+            row.put("action", record.getAction());
+            row.put("paper", record.getPaperTitle());
+            row.put("tokens", record.getTotalTokens());
+            row.put("promptTokens", record.getPromptTokens());
+            row.put("completionTokens", record.getCompletionTokens());
+            double unitPrice = record.getUnitPrice() != null && record.getUnitPrice() > 0 ? record.getUnitPrice() : billingService.unitPrice();
+            double multiplier = record.getBillingMultiplier() != null && record.getBillingMultiplier() > 0 ? record.getBillingMultiplier() : billingService.multiplier();
+            double chargeAmount = record.getChargeAmount() != null && record.getChargeAmount() > 0
+                ? record.getChargeAmount()
+                : billingService.calculateCharge(record.getTotalTokens() == null ? 0L : record.getTotalTokens());
+            row.put("chargeAmount", chargeAmount);
+            row.put("unitPrice", unitPrice);
+            row.put("billingMultiplier", multiplier);
+            return row;
+        }).toList());
+        return result;
+    }
+
+    @PatchMapping("/billing")
+    public Map<String, Object> updateBillingSettings(@RequestBody Map<String, Object> body, HttpServletRequest request) {
+        double unitPrice = Double.parseDouble(String.valueOf(body.getOrDefault("unitPrice", billingService.unitPrice())));
+        double multiplier = Double.parseDouble(String.valueOf(body.getOrDefault("multiplier", billingService.multiplier())));
+        try {
+            Map<String, Object> result = billingService.update(unitPrice, multiplier);
+            authService.logAction("更新计费规则: 单价 ¥" + unitPrice + " / 1K Token, 倍率 " + multiplier + "x", "info", getClientIp(request));
+            return result;
+        } catch (IllegalArgumentException error) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, error.getMessage());
+        }
+    }
+
     @PostMapping("/recharges")
     public RechargeRecordEntity createRecharge(@RequestBody Map<String, Object> body, HttpServletRequest request) {
         String email = (String) body.get("email");
         Double amount = Double.valueOf(body.get("amount").toString());
-        Long tokens = Long.valueOf(body.get("tokens").toString());
+        Long tokens = body.get("tokens") == null ? 0L : Long.valueOf(body.get("tokens").toString());
         String ip = getClientIp(request);
+        if (amount <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "充值金额必须大于 0");
+        }
 
         // Find user by email and update limit
         AppUserEntity user = appUserRepository.findByEmail(email)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "该邮箱对应的用户不存在"));
 
-        Long oldLimit = user.getTokenLimit();
-        user.setTokenLimit(oldLimit + tokens);
+        double oldBalance = user.getBalanceAmount() == null ? 0.0D : user.getBalanceAmount();
+        user.setBalanceAmount(oldBalance + amount);
         appUserRepository.save(user);
 
         // Create recharge record
@@ -195,7 +250,7 @@ public class AdminController {
         RechargeRecordEntity saved = rechargeRecordRepository.save(record);
 
         // Log recharge
-        authService.logAction("发放配额成功: 用户 " + user.getUsername() + " (" + email + ") 充值 ¥" + amount + ", 增加 Token: " + tokens + " (总配额: " + user.getTokenLimit() + ")", "info", ip);
+        authService.logAction("充值入账成功: 用户 " + user.getUsername() + " (" + email + ") 充值 ¥" + amount + " (余额: ¥" + user.getBalanceAmount() + ")", "info", ip);
 
         return saved;
     }
