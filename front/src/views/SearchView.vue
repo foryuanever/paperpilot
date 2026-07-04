@@ -3,50 +3,49 @@
     <section class="plugin-experience">
       <div class="plugin-page-shell">
 
-        <section class="search-workbench" data-reveal>
-          <div class="workbench-copy">
-            <span class="plugin-badge">Academic Search Desk</span>
-            <h1>从官网检索，到文献入库。</h1>
-            <p>先选择真实学术来源，再打开官网结果页。插件只在明确的论文详情页或 PDF 页安静提示导入，不再打扰普通网页。</p>
+        <section class="capture-flow-hero" data-reveal>
+          <div class="flow-head">
+            <span class="plugin-badge">PaperSolver Capture · v0.2.5</span>
+            <h1>官网文献捕获流程</h1>
+            <p>从搜索源进入官网，插件只在明确论文页安静出现，确认后把题录与 PDF 送回文献库。</p>
           </div>
-
-          <div class="search-console-panel">
-            <div class="console-field">
-              <label>检索词</label>
-              <input v-model="query" placeholder="关键词、DOI、题名或作者" @keyup.enter="runSearch" />
-            </div>
-            <div class="console-field">
-              <label>作者筛选</label>
-              <input v-model="author" placeholder="可选" @keyup.enter="runSearch" />
-            </div>
-            <div class="console-field">
-              <label>默认来源</label>
-              <select v-model="activeEngineId">
-                <option v-for="source in searchEnginePresets" :key="source.id" :value="source.id">
-                  {{ source.name }}
-                </option>
-              </select>
-            </div>
-            <button class="console-primary" type="button" @click="runSearch">打开官网检索</button>
-            <div class="quick-terms">
-              <button v-for="sug in searchSuggestions" :key="sug" type="button" @click="applySuggestion(sug)">
-                {{ sug }}
-              </button>
-            </div>
+          <div class="flow-diagram" aria-label="插件导入流程">
+            <article class="flow-node">
+              <i class="flow-icon icon-source"></i>
+              <strong>选择搜索源</strong>
+              <span>ScienceDirect / PubMed / arXiv</span>
+            </article>
+            <span class="flow-link"></span>
+            <article class="flow-node">
+              <i class="flow-icon icon-detect"></i>
+              <strong>识别论文页</strong>
+              <span>DOI、题名、作者、PDF 信号</span>
+            </article>
+            <span class="flow-link"></span>
+            <article class="flow-node">
+              <i class="flow-icon icon-confirm"></i>
+              <strong>点击导入</strong>
+              <span>低打扰浮层，不再乱弹</span>
+            </article>
+            <span class="flow-link"></span>
+            <article class="flow-node">
+              <i class="flow-icon icon-library"></i>
+              <strong>进入文献库</strong>
+              <span>题录与 PDF 自动归档</span>
+            </article>
           </div>
-
-          <aside class="capture-status-panel">
-            <div class="capture-status-top">
-              <span class="capture-dot"></span>
-              <strong>PaperSolver Capture</strong>
-              <small>v0.2.5</small>
-            </div>
-            <p>新版改为低打扰识别：仅在 DOI、citation 元数据、PDF 或已知学术域名命中时出现。</p>
-            <div class="download-row">
-              <a href="/downloads/papersolver-capture-chrome-v0.2.5.zip" download>Chrome 下载</a>
-              <a href="/downloads/papersolver-capture-edge-v0.2.5.zip" download>Edge 下载</a>
-            </div>
-          </aside>
+          <div class="browser-downloads">
+            <a class="browser-download-btn" href="/downloads/papersolver-capture-chrome-v0.2.5.zip" download>
+              <span class="browser-logo chrome-logo"></span>
+              <strong>Chrome 下载</strong>
+              <small>开发者模式加载</small>
+            </a>
+            <a class="browser-download-btn" href="/downloads/papersolver-capture-edge-v0.2.5.zip" download>
+              <span class="browser-logo edge-logo"></span>
+              <strong>Edge 下载</strong>
+              <small>开发者模式加载</small>
+            </a>
+          </div>
         </section>
 
         <section class="source-directory" data-reveal>
@@ -57,70 +56,23 @@
             </div>
             <span>点击一行打开官网；插件负责捕获论文详情。</span>
           </div>
-          <div class="source-table" role="table" aria-label="学术搜索源目录">
+          <div class="source-card-grid" aria-label="学术搜索源目录">
             <button
               v-for="source in sourceLaunchers"
               :key="source.id"
               type="button"
-              class="source-table-row"
+              class="source-square-card"
+              :class="source.tone"
               @click="openSourceLauncher(source)"
             >
-              <span class="source-name">
+              <i class="source-site-icon">
                 <img :src="source.icon" :alt="`${source.name} logo`" loading="lazy" />
-                <strong>{{ source.name }}</strong>
-              </span>
+                <b>{{ source.initial }}</b>
+              </i>
+              <strong>{{ source.name }}</strong>
               <span>{{ source.desc }}</span>
               <small>{{ source.region }}</small>
-              <b>打开</b>
             </button>
-          </div>
-        </section>
-
-        <section class="capture-rulebook" data-reveal>
-          <div class="rulebook-main">
-            <span class="plugin-badge">Capture Rules</span>
-            <h2>插件现在更克制。</h2>
-            <p>识别到疑似论文时先显示一条安静提示，用户点击后才展开导入操作。普通网页、新闻页、后台页面不会因为一点点标题信息就弹出。</p>
-          </div>
-          <div class="rulebook-rows">
-            <article v-for="f in pluginFeatures" :key="f.title">
-              <strong>{{ f.title }}</strong>
-              <span>{{ f.desc }}</span>
-            </article>
-          </div>
-        </section>
-
-        <section class="install-strip" data-reveal>
-          <article v-for="lesson in browserLessons" :key="lesson.title">
-            <i>{{ lesson.step }}</i>
-            <strong>{{ lesson.title }}</strong>
-            <span>{{ lesson.desc }}</span>
-          </article>
-        </section>
-
-        <section class="url-import-desk" data-reveal>
-          <div>
-            <span class="plugin-badge">Direct URL</span>
-            <h2>已有论文链接？</h2>
-          </div>
-          <div class="url-import-input-group">
-            <input
-              v-model="importUrl"
-              class="url-import-input"
-              placeholder="粘贴 ScienceDirect、arXiv、Nature、ACL 等论文详情页 URL..."
-              @keyup.enter="importByUrl"
-            />
-            <button
-              class="spatial-btn"
-              :class="importUrl.trim() ? 'spatial-btn-ghost-glow' : 'spatial-btn-disabled'"
-              :disabled="urlImporting || !importUrl.trim()"
-              @click="importByUrl"
-            >
-              <span>{{ urlImporting ? '解析并导入...' : '直接导入' }}</span>
-            </button>
-          </div>
-          <div v-if="urlImportMsg" :class="['url-import-msg-badge', urlImportOk ? 'ok' : 'err']">
-            {{ urlImportMsg }}
           </div>
         </section>
 
@@ -138,28 +90,6 @@
           </div>
         </section>
 
-        <!-- Related tools -->
-        <section class="plugin-related" data-reveal>
-          <div class="plugin-related-head">
-            <span class="plugin-badge">More in PaperSolver</span>
-            <h2>更多相关工具</h2>
-          </div>
-          <div class="plugin-related-grid">
-            <router-link
-              v-for="tool in pluginRelatedTools"
-              :key="tool.to"
-              :to="tool.to"
-              class="plugin-related-card"
-            >
-              <strong>{{ tool.name }}</strong>
-              <span>{{ tool.desc }}</span>
-            </router-link>
-          </div>
-        </section>
-
-        <footer class="plugin-copyright">
-          © 2026 PaperSolver Capture · Designed for official academic sources · yuan
-        </footer>
       </div>
     </section>
 
@@ -4111,5 +4041,390 @@ async function importByUrl() {
 
   .plugin-hero-copy h1 { font-size:34px; }
   .plugin-feature-grid, .plugin-related-grid, .plugin-install-steps { grid-template-columns:1fr; }
+}
+
+/* Final academic search layout */
+.plugin-page-shell {
+  max-width: 1320px;
+  gap: 24px;
+}
+
+.capture-flow-hero {
+  padding: 34px 34px 30px;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 20% 12%, rgba(37, 99, 235, .12), transparent 28%),
+    radial-gradient(circle at 84% 18%, rgba(20, 184, 166, .12), transparent 30%),
+    #fff;
+}
+
+.flow-head {
+  max-width: 720px;
+  margin: 0 auto 30px;
+  text-align: center;
+}
+
+.flow-head h1 {
+  margin: 12px 0 10px;
+  color: #101828;
+  font-size: 34px;
+  line-height: 1.18;
+  letter-spacing: 0;
+}
+
+.flow-head p {
+  margin: 0 auto;
+  max-width: 680px;
+  color: #475467;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.flow-diagram {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 22px;
+  align-items: center;
+  padding: 20px 0 24px;
+}
+
+.flow-node {
+  position: relative;
+  min-height: 158px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 18px 14px;
+  border: 1px solid rgba(148, 163, 184, .25);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .92);
+  text-align: center;
+}
+
+.flow-node strong {
+  color: #111827;
+  font-size: 15px;
+}
+
+.flow-node span {
+  max-width: 150px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.flow-icon {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: #eef6ff;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, .12);
+}
+
+.flow-icon::before,
+.flow-icon::after {
+  content: "";
+  position: absolute;
+}
+
+.icon-source::before {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #2563eb;
+  border-radius: 7px;
+}
+
+.icon-source::after {
+  width: 16px;
+  height: 2px;
+  background: #2563eb;
+  transform: translateY(13px);
+}
+
+.icon-detect::before {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #0f766e;
+  border-radius: 999px;
+}
+
+.icon-detect::after {
+  width: 12px;
+  height: 2px;
+  border-radius: 999px;
+  background: #0f766e;
+  transform: translate(13px, 13px) rotate(45deg);
+}
+
+.icon-confirm::before {
+  width: 25px;
+  height: 17px;
+  border: 2px solid #7c3aed;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+}
+
+.icon-confirm::after {
+  width: 14px;
+  height: 8px;
+  border-left: 2px solid #7c3aed;
+  border-bottom: 2px solid #7c3aed;
+  transform: rotate(-45deg) translate(1px, -2px);
+}
+
+.icon-library::before {
+  width: 24px;
+  height: 28px;
+  border: 2px solid #ea580c;
+  border-radius: 5px;
+}
+
+.icon-library::after {
+  width: 14px;
+  height: 2px;
+  background: #ea580c;
+  box-shadow: 0 7px 0 #ea580c, 0 14px 0 #ea580c;
+}
+
+.flow-link {
+  position: absolute;
+  top: 50%;
+  width: calc(25% - 60px);
+  height: 2px;
+  overflow: hidden;
+  background: linear-gradient(90deg, rgba(37, 99, 235, .16), rgba(20, 184, 166, .28));
+  transform: translateY(-50%);
+}
+
+.flow-link:nth-of-type(1) { left: calc(25% - 14px); }
+.flow-link:nth-of-type(2) { left: calc(50% - 14px); }
+.flow-link:nth-of-type(3) { left: calc(75% - 14px); }
+
+.flow-link::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -30%;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, #2563eb, transparent);
+  animation: flowPulse 2.7s ease-out infinite;
+}
+
+.browser-downloads {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+
+.browser-download-btn {
+  min-width: 210px;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 2px 12px;
+  align-items: center;
+  padding: 10px 14px;
+  border: 1px solid rgba(37, 99, 235, .22);
+  border-radius: 13px;
+  background: #fff;
+  color: #111827;
+  text-decoration: none;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+
+.browser-download-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(37, 99, 235, .48);
+  background: #f8fbff;
+}
+
+.browser-download-btn .browser-logo {
+  grid-row: 1 / span 2;
+  width: 34px;
+  height: 34px;
+}
+
+.browser-download-btn strong {
+  align-self: end;
+  font-size: 14px;
+}
+
+.browser-download-btn small {
+  align-self: start;
+  color: #667085;
+  font-size: 12px;
+}
+
+.source-directory {
+  padding: 28px;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.directory-head {
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.directory-head h2 {
+  margin: 8px 0 0;
+  font-size: 26px;
+}
+
+.source-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  gap: 14px;
+}
+
+.source-square-card {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #e1e8f2;
+  border-radius: 14px;
+  background: #fbfdff;
+  color: #172033;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+
+.source-square-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(37, 99, 235, .36);
+  background: #fff;
+}
+
+.source-square-card .source-site-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e8eef7;
+  border-radius: 12px;
+  background: #fff;
+  font-style: normal;
+  overflow: hidden;
+}
+
+.source-square-card .source-site-icon img {
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+}
+
+.source-square-card .source-site-icon b {
+  display: none;
+  color: #2563eb;
+  font-size: 15px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.source-square-card strong {
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.source-square-card span {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.source-square-card small {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.plugin-faq {
+  padding: 28px;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.plugin-faq-head {
+  margin-bottom: 18px;
+}
+
+.plugin-faq-list {
+  max-width: none;
+}
+
+.plugin-faq-item {
+  border-color: #e1e8f2;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+@keyframes flowPulse {
+  0% { transform: translateX(0); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translateX(430%); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-link::after,
+  .browser-download-btn,
+  .source-square-card {
+    animation: none;
+    transition: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .flow-diagram {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .flow-link {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .capture-flow-hero,
+  .source-directory,
+  .plugin-faq {
+    padding: 20px;
+  }
+
+  .flow-head h1 {
+    font-size: 28px;
+  }
+
+  .flow-diagram {
+    grid-template-columns: 1fr;
+  }
+
+  .browser-download-btn {
+    width: 100%;
+  }
+
+  .directory-head {
+    display: grid;
+    gap: 8px;
+  }
 }
 </style>
