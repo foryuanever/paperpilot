@@ -25,7 +25,7 @@
           <span class="plus-icon">+</span>
           我已知晓，去发帖
         </button>
-        <button class="hero-manage-button" @click="showMyPostsManager = !showMyPostsManager">
+        <button class="hero-manage-button" @click="showMyPostsManager = true">
           管理帖子
         </button>
       </div>
@@ -108,7 +108,20 @@
                 <button class="discipline-label" @click="activeDirection = post.direction">{{ post.direction }}</button>
                 <span v-if="post.resolved" class="resolved-label">已解决</span>
               </div>
-              <time>{{ post.time }}</time>
+              <div class="post-meta-stack">
+                <time>{{ post.time }}</time>
+                <div v-if="replyAvatars(post).length" class="reply-avatar-strip">
+                  <span
+                    v-for="avatar in replyAvatars(post)"
+                    :key="`${post.id}-${avatar.key}`"
+                    class="reply-mini-avatar"
+                    :title="avatar.name"
+                  >
+                    <img v-if="avatar.url" :src="avatar.url" :alt="avatar.name" />
+                    <b v-else>{{ avatar.text }}</b>
+                  </span>
+                </div>
+              </div>
             </header>
 
             <div class="post-author-row">
@@ -135,19 +148,6 @@
               <span v-if="isHotPost(post)" class="title-icon">🔥</span>
               {{ post.title }}
             </h2>
-            <p class="post-content markdown-text">{{ post.content }}</p>
-
-            <div v-if="replyAvatars(post).length" class="reply-avatar-strip">
-              <span
-                v-for="avatar in replyAvatars(post)"
-                :key="`${post.id}-${avatar.key}`"
-                class="reply-mini-avatar"
-                :title="avatar.name"
-              >
-                <img v-if="avatar.url" :src="avatar.url" :alt="avatar.name" />
-                <b v-else>{{ avatar.text }}</b>
-              </span>
-            </div>
 
             <div v-if="post.images?.length" class="post-image-grid">
               <button v-for="(image, index) in post.images" :key="`${post.id}-image-${index}`" @click="previewImage = image">
@@ -253,25 +253,14 @@
             </span>
             <b>›</b>
           </button>
-          <button class="manage-posts-entry" @click="showMyPostsManager = !showMyPostsManager">
+          <button class="manage-posts-entry" @click="showMyPostsManager = true">
             <span class="research">管</span>
             <span>
               <strong>管理帖子</strong>
               <small>编辑或删除我发布的主题</small>
             </span>
-            <b>{{ showMyPostsManager ? "−" : "›" }}</b>
+            <b>›</b>
           </button>
-          <div v-if="showMyPostsManager" class="my-post-manager">
-            <article v-for="post in myPosts" :key="post.id">
-              <strong>{{ post.title }}</strong>
-              <span>{{ post.direction }} · {{ post.time }}</span>
-              <div>
-                <button @click="openPost(post.id)">查看</button>
-                <button class="danger" @click="removeMyPost(post)">删除</button>
-              </div>
-            </article>
-            <p v-if="!myPosts.length">还没有发布过帖子。</p>
-          </div>
         </section>
 
         <section class="sidebar-card">
@@ -303,6 +292,45 @@
           </ol>
         </section>
       </aside>
+    </div>
+
+    <div v-if="showMyPostsManager" class="modal-overlay" @click.self="showMyPostsManager = false">
+      <section class="post-manager-modal">
+        <header>
+          <div>
+            <span>MY TOPICS</span>
+            <h2>管理我发布的帖子</h2>
+            <p>查看、进入或删除你在学术论坛发布过的主题。</p>
+          </div>
+          <button class="modal-close" @click="showMyPostsManager = false">×</button>
+        </header>
+        <div v-if="myPosts.length" class="post-manager-list">
+          <article v-for="post in myPosts" :key="post.id">
+            <div class="manager-post-icon" :class="typeClass(post.postType)">{{ post.avatar || "帖" }}</div>
+            <div class="manager-post-copy">
+              <div>
+                <span>{{ post.postType }}</span>
+                <span>{{ post.direction }}</span>
+                <time>{{ post.time }}</time>
+              </div>
+              <strong>{{ post.title }}</strong>
+            </div>
+            <div class="manager-post-stats">
+              <span>{{ post.likes }} 赞</span>
+              <span>{{ post.replies?.length || 0 }} 回复</span>
+            </div>
+            <div class="manager-post-actions">
+              <button @click="openPost(post.id)">查看</button>
+              <button class="danger" @click="removeMyPost(post)">删除</button>
+            </div>
+          </article>
+        </div>
+        <div v-else class="post-manager-empty">
+          <strong>还没有发布过帖子</strong>
+          <p>发布后的主题会在这里集中管理。</p>
+          <button @click="showMyPostsManager = false; openCreateModal()">去发帖</button>
+        </div>
+      </section>
     </div>
 
     <div v-if="showCreateModal" class="modal-overlay" @click.self="closeCreateModal">
@@ -358,27 +386,46 @@
           <div class="form-section">
             <h3><span>3</span> 填写主题内容</h3>
             <label class="wide-field">
-              <span>主题标题</span>
-              <input v-model="form.title" maxlength="120" placeholder="用一句话说明问题、资源或推荐价值" />
-            </label>
-            <label class="wide-field">
               <span>详细内容</span>
               <div class="markdown-editor">
+                <input class="markdown-title-input" v-model="form.title" maxlength="120" placeholder="请输入标题" />
+                <div class="markdown-tabbar">
+                  <button type="button" class="active">内容</button>
+                  <button type="button" @click="showMarkdownPreview = true">预览</button>
+                  <button type="button">对照</button>
+                  <span>支持 markdown 语法</span>
+                  <button type="button" class="icon-tool" @click="insertMarkdown('- ', '')" title="列表">☷</button>
+                  <button type="button" class="icon-tool" @click="insertMarkdown('`', '`')" title="代码">▣</button>
+                  <button type="button" class="icon-tool" title="全屏">⛶</button>
+                </div>
                 <div class="markdown-toolbar">
                   <button type="button" @click="insertMarkdown('**', '**')">B</button>
-                  <button type="button" @click="insertMarkdown('- ', '')">列表</button>
-                  <button type="button" @click="insertMarkdown('> ', '')">引用</button>
-                  <button type="button" @click="insertMarkdown('`', '`')">代码</button>
-                  <button type="button" @click="insertMarkdown('[链接文字](', ')')">链接</button>
+                  <button type="button" @click="insertMarkdown('*', '*')">I</button>
+                  <button type="button" @click="insertMarkdown('~~', '~~')">S</button>
+                  <button type="button" @click="insertMarkdown('# ', '')">H</button>
+                  <button type="button" @click="insertMarkdown('- ', '')">•</button>
+                  <button type="button" @click="insertMarkdown('1. ', '')">≡</button>
+                  <button type="button" @click="insertMarkdown('> ', '')">“</button>
+                  <button type="button" @click="insertMarkdown('[链接文字](', ')')">🔗</button>
+                  <button type="button" @click="insertMarkdown('![图片说明](', ')')">▧</button>
+                  <button type="button" @click="insertMarkdown('`', '`')">&lt;/&gt;</button>
+                  <button type="button" @click="insertMarkdown('\\n| 列 | 列 |\\n| --- | --- |\\n| 内容 | 内容 |\\n', '')">▦</button>
+                  <button type="button" @click="insertMarkdown('\\n---\\n', '')">—</button>
+                  <button type="button">↶</button>
+                  <button type="button">↷</button>
+                  <button type="button">⌫</button>
                 </div>
-                <textarea
-                  ref="contentEditor"
-                  v-model="form.content"
-                  rows="7"
-                  placeholder="支持 Markdown：列出背景、已尝试方法、数据条件、希望别人回答的关键点"
-                ></textarea>
+                <div class="markdown-body">
+                  <div class="markdown-line-number">1</div>
+                  <textarea
+                    ref="contentEditor"
+                    v-model="form.content"
+                    rows="10"
+                    placeholder="鼓励友善发言，禁止人身攻击"
+                  ></textarea>
+                </div>
                 <div class="markdown-hints">
-                  <span>支持 **加粗**、列表、引用、链接、代码片段</span>
+                  <span>可使用加粗、列表、引用、链接、代码块和表格整理你的问题。</span>
                   <button type="button" @click="showMarkdownPreview = !showMarkdownPreview">
                     {{ showMarkdownPreview ? "收起预览" : "预览" }}
                   </button>
@@ -1427,6 +1474,312 @@ button { cursor: pointer; }
   color: #b4233a;
 }
 
+.post-list {
+  gap: 10px;
+}
+
+.research-post {
+  min-height: auto;
+  padding: 13px 20px 12px;
+  padding-right: 20px;
+  border-radius: 16px;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.research-post:hover {
+  border-color: #cbd8ed;
+  box-shadow: 0 10px 22px rgba(38, 57, 91, .055);
+  transform: translateY(-1px);
+}
+
+.post-label-row {
+  align-items: flex-start;
+}
+
+.post-meta-stack {
+  min-width: 118px;
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+  padding-top: 1px;
+}
+
+.post-meta-stack time {
+  justify-self: end;
+  width: 100%;
+  text-align: right;
+}
+
+.post-meta-stack .reply-avatar-strip {
+  position: static;
+  transform: none;
+  justify-self: start;
+  margin-top: 0;
+  padding-left: 1px;
+}
+
+.post-author-row {
+  margin-top: 8px;
+}
+
+.research-post h2 {
+  margin: 8px 0 0;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.post-footer {
+  margin-top: 9px;
+  padding-top: 8px;
+}
+
+.post-manager-modal {
+  width: min(900px, calc(100vw - 36px));
+  max-height: min(720px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 26px 70px rgba(13, 25, 46, .26);
+}
+
+.post-manager-modal > header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid #e9edf4;
+}
+
+.post-manager-modal > header span {
+  color: #075ee5;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.post-manager-modal h2 {
+  margin: 6px 0 5px;
+  color: #172033;
+  font-size: 22px;
+}
+
+.post-manager-modal p {
+  margin: 0;
+  color: #68758a;
+  font-size: 13px;
+}
+
+.post-manager-list {
+  display: grid;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 16px 18px 20px;
+}
+
+.post-manager-list article {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid #e5ebf4;
+  border-radius: 14px;
+  background: #fbfdff;
+}
+
+.manager-post-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.manager-post-copy {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.manager-post-copy > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.manager-post-copy span,
+.manager-post-copy time,
+.manager-post-stats span {
+  color: #718098;
+  font-size: 11px;
+}
+
+.manager-post-copy span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #eef3fb;
+  font-weight: 800;
+}
+
+.manager-post-copy strong {
+  overflow: hidden;
+  color: #18233a;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manager-post-stats {
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.manager-post-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.manager-post-actions button,
+.post-manager-empty button {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid #cfddf1;
+  border-radius: 10px;
+  background: #fff;
+  color: #075ee5;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.manager-post-actions button.danger {
+  border-color: #f1c5ce;
+  color: #b4233a;
+}
+
+.post-manager-empty {
+  display: grid;
+  place-items: center;
+  gap: 9px;
+  min-height: 260px;
+  padding: 30px;
+  text-align: center;
+}
+
+.post-manager-empty strong {
+  color: #18233a;
+  font-size: 18px;
+}
+
+.markdown-editor {
+  border-radius: 8px;
+  border-color: #dfe4ec;
+  background: #fff;
+}
+
+.markdown-title-input {
+  width: 100%;
+  height: 42px !important;
+  border: 0 !important;
+  border-bottom: 1px solid #e7ebf2 !important;
+  border-radius: 0 !important;
+  padding: 0 16px !important;
+  font-size: 15px;
+  font-weight: 800;
+  box-shadow: none !important;
+}
+
+.markdown-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-bottom: 1px solid #e7ebf2;
+  background: #fbfcfe;
+}
+
+.markdown-tabbar button {
+  height: 30px;
+  min-width: 34px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #59657a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.markdown-tabbar button.active {
+  color: #18233a;
+  background: #eef3fb;
+}
+
+.markdown-tabbar span {
+  margin-left: auto;
+  color: #68758a;
+  font-size: 12px;
+}
+
+.markdown-tabbar .icon-tool {
+  min-width: 28px;
+  color: #526177;
+  background: #f0f2f6;
+}
+
+.markdown-toolbar {
+  gap: 0;
+  padding: 0 12px;
+  min-height: 36px;
+  border-bottom: 1px solid #e7ebf2;
+  background: #fff;
+}
+
+.markdown-toolbar button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #5c6778;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.markdown-toolbar button:hover {
+  color: #075ee5;
+  background: #eef4ff;
+}
+
+.markdown-body {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  min-height: 260px;
+  background: #fff;
+}
+
+.markdown-line-number {
+  padding-top: 11px;
+  border-right: 1px solid #edf0f4;
+  color: #a5adba;
+  text-align: center;
+  font-size: 13px;
+  user-select: none;
+}
+
+.markdown-editor textarea {
+  min-height: 260px;
+  padding: 11px 14px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
 @media (max-width: 760px) {
   .filter-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1451,6 +1804,25 @@ button { cursor: pointer; }
     position: static;
     transform: none;
     margin-top: 10px;
+  }
+
+  .post-manager-list article {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .manager-post-stats,
+  .manager-post-actions {
+    grid-column: 2;
+  }
+
+  .markdown-tabbar {
+    flex-wrap: wrap;
+    padding: 6px 10px;
+  }
+
+  .markdown-tabbar span {
+    width: 100%;
+    margin-left: 0;
   }
 
   .admin-post-actions {
