@@ -1166,7 +1166,7 @@ function configurePoolRoute(route) {
     baseUrl: route.baseUrl || "",
     apiKey: "",
     modelName: route.modelName === "待填写" ? "" : route.modelName || "",
-    apiFormat: route.apiFormat === "gemini" ? "openai_chat" : route.apiFormat || "openai_chat",
+    apiFormat: modelScene.value === "meeting_deck" ? "openai_responses" : route.apiFormat === "gemini" ? "openai_chat" : route.apiFormat || "openai_chat",
     authType: route.authType || "bearer",
     fullUrl: Boolean(route.fullUrl),
     modelsUrl: route.modelsUrl || "",

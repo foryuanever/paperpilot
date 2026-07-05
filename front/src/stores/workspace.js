@@ -346,6 +346,8 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     const inferredFormat = /\/codex(?:\/v\d+)?$/.test(baseUrl) || baseUrl.endsWith("/responses")
       ? "openai_responses"
       : modelConfig.apiFormat || "openai_chat";
+    const scene = modelConfig.scene || "general";
+    const apiFormat = scene === "meeting_deck" ? "openai_responses" : inferredFormat;
     const modelName =
       modelConfig.providerName === "9Router OpenCode Free"
         ? nineRouterModelAliases[modelConfig.modelName] ||
@@ -357,12 +359,12 @@ export const useWorkspaceStore = defineStore("workspace", () => {
       baseUrl: modelConfig.baseUrl,
       apiKey: modelConfig.apiKey,
       modelName,
-      apiFormat: inferredFormat,
+      apiFormat,
       authType: modelConfig.authType || "bearer",
       fullUrl: Boolean(modelConfig.fullUrl),
       modelsUrl: modelConfig.modelsUrl || "",
       customUserAgent: modelConfig.customUserAgent || "",
-      scene: modelConfig.scene,
+      scene,
     };
   }
 
@@ -553,7 +555,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
         providerName: normalizedProviderName,
         baseUrl: active.baseUrl,
         modelName: activeModelName,
-        apiFormat: isNineRouterConfig ? "openai_chat" : active.apiFormat || "openai_chat",
+        apiFormat: scene === "meeting_deck" ? "openai_responses" : isNineRouterConfig ? "openai_chat" : active.apiFormat || "openai_chat",
         authType: isNineRouterConfig ? "bearer" : active.authType || "bearer",
         fullUrl: Boolean(active.fullUrl),
         modelsUrl: active.modelsUrl || "",

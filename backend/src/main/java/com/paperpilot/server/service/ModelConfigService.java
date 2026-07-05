@@ -65,8 +65,8 @@ public class ModelConfigService {
         entity.setApiKey(resolvedApiKey);
         entity.setApiKeyMasked(maskApiKey(resolvedApiKey));
         entity.setModelName(resolveModelName(request));
-        entity.setApiFormat(resolveFormat(request));
-        entity.setAuthType(normalizeAuthType(request.getAuthType(), request.getApiFormat()));
+        entity.setApiFormat(resolveFormat(request, scene));
+        entity.setAuthType(normalizeAuthType(request.getAuthType(), entity.getApiFormat()));
         entity.setFullUrl(request.isFullUrl());
         entity.setModelsUrl(trimToNull(request.getModelsUrl()));
         entity.setCustomUserAgent(trimToNull(request.getCustomUserAgent()));
@@ -461,7 +461,7 @@ public class ModelConfigService {
                 request.getBaseUrl(),
                 request.getApiKey(),
                 resolveModelName(request),
-                resolveFormat(request),
+                resolveFormat(request, normalizeScene(request.getScene())),
                 normalizeAuthType(request.getAuthType(), request.getApiFormat()),
                 request.isFullUrl(),
                 request.getCustomUserAgent()
@@ -486,7 +486,7 @@ public class ModelConfigService {
             List<AiChatService.ModelInfo> models = aiChatService.fetchModels(
                 request.getBaseUrl(),
                 request.getApiKey(),
-                resolveFormat(request),
+                resolveFormat(request, normalizeScene(request.getScene())),
                 normalizeAuthType(request.getAuthType(), request.getApiFormat()),
                 request.isFullUrl(),
                 request.getModelsUrl(),
@@ -518,7 +518,7 @@ public class ModelConfigService {
                 request.getBaseUrl(),
                 request.getApiKey(),
                 resolveModelName(request),
-                resolveFormat(request),
+                resolveFormat(request, normalizeScene(request.getScene())),
                 normalizeAuthType(request.getAuthType(), request.getApiFormat()),
                 request.isFullUrl(),
                 request.getCustomUserAgent(),
@@ -554,6 +554,13 @@ public class ModelConfigService {
     }
 
     private String resolveFormat(ModelConfigRequest request) {
+        return resolveFormat(request, normalizeScene(request.getScene()));
+    }
+
+    private String resolveFormat(ModelConfigRequest request, String scene) {
+        if (SCENE_MEETING_DECK.equals(normalizeScene(scene))) {
+            return "openai_responses";
+        }
         String baseUrl = request.getBaseUrl() == null ? "" : request.getBaseUrl().toLowerCase();
         if (baseUrl.matches(".*/codex(?:/v\\d+)?/?$") || baseUrl.endsWith("/responses")) {
             return "openai_responses";
