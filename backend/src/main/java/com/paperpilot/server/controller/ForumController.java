@@ -178,8 +178,8 @@ public class ForumController {
         forumPostRepository.save(post);
         if (post.getUserId() != null) {
             notificationService.create(post.getUserId(), actor.getId(), "forum_pin", post.getId(),
-                post.isPinned() ? "你的帖子已被置顶" : "你的帖子已取消置顶",
-                "管理员" + (post.isPinned() ? "置顶了" : "取消置顶了") + "《" + post.getTitle() + "》");
+                post.isPinned() ? "你的帖子已被置顶" : "你的帖子已被降级",
+                "管理员" + (post.isPinned() ? "置顶了" : "取消置顶并降级了") + "《" + post.getTitle() + "》");
         }
         return Map.of("pinned", post.isPinned());
     }

@@ -320,6 +320,7 @@
               <span>{{ post.replies?.length || 0 }} 回复</span>
             </div>
             <div class="manager-post-actions">
+              <button @click="openEditPost(post)">编辑</button>
               <button @click="openPost(post.id)">查看</button>
               <button class="danger" @click="removeMyPost(post)">删除</button>
             </div>
@@ -337,8 +338,8 @@
       <section class="publish-modal">
         <header>
           <div>
-            <span>CREATE RESEARCH TOPIC</span>
-            <h2>发布研究主题</h2>
+            <span>{{ editingPost ? "EDIT RESEARCH TOPIC" : "CREATE RESEARCH TOPIC" }}</span>
+            <h2>{{ editingPost ? "编辑研究主题" : "发布研究主题" }}</h2>
           </div>
           <button class="modal-close" @click="closeCreateModal">×</button>
         </header>
@@ -390,8 +391,8 @@
               <div class="markdown-editor">
                 <input class="markdown-title-input" v-model="form.title" maxlength="120" placeholder="请输入标题" />
                 <div class="markdown-tabbar">
-                  <button type="button" class="active">内容</button>
-                  <button type="button" @click="showMarkdownPreview = true">预览</button>
+                  <button type="button" :class="{ active: markdownMode === 'edit' }" @click="markdownMode = 'edit'">内容</button>
+                  <button type="button" :class="{ active: markdownMode === 'preview' }" @click="markdownMode = 'preview'">预览</button>
                   <button type="button">对照</button>
                   <span>支持 markdown 语法</span>
                   <button type="button" class="icon-tool" @click="insertMarkdown('- ', '')" title="列表">☷</button>
@@ -415,7 +416,7 @@
                   <button type="button">↷</button>
                   <button type="button">⌫</button>
                 </div>
-                <div class="markdown-body">
+                <div v-if="markdownMode === 'edit'" class="markdown-body">
                   <div class="markdown-line-number">1</div>
                   <textarea
                     ref="contentEditor"
@@ -424,13 +425,13 @@
                     placeholder="鼓励友善发言，禁止人身攻击"
                   ></textarea>
                 </div>
+                <div v-else class="markdown-rendered" v-html="renderedMarkdown"></div>
                 <div class="markdown-hints">
                   <span>可使用加粗、列表、引用、链接、代码块和表格整理你的问题。</span>
-                  <button type="button" @click="showMarkdownPreview = !showMarkdownPreview">
-                    {{ showMarkdownPreview ? "收起预览" : "预览" }}
+                  <button type="button" @click="markdownMode = markdownMode === 'preview' ? 'edit' : 'preview'">
+                    {{ markdownMode === "preview" ? "继续编辑" : "预览" }}
                   </button>
                 </div>
-                <div v-if="showMarkdownPreview" class="markdown-preview markdown-text">{{ form.content || "预览会显示在这里。" }}</div>
               </div>
             </label>
             <div class="upload-grid">
@@ -503,11 +504,11 @@
         </div>
 
         <footer>
-          <span>{{ publishing ? "AI 正在审核帖子内容，请稍候..." : "审核通过后将立即公开发布" }}</span>
+          <span>{{ publishing ? "AI 正在审核帖子内容，请稍候..." : editingPost ? "保存后会重新进行内容审核" : "审核通过后将立即公开发布" }}</span>
           <div>
             <button class="cancel-button" @click="closeCreateModal">取消</button>
             <button class="submit-button" :disabled="!canSubmit || publishing" @click="submitPost">
-              {{ publishing ? "AI 审核中..." : "审核并发布" }}
+              {{ publishing ? "AI 审核中..." : editingPost ? "保存修改" : "审核并发布" }}
             </button>
           </div>
         </footer>
@@ -527,6 +528,7 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
+import MarkdownIt from "markdown-it";
 import { useAuthStore } from "../stores/auth";
 import { useForumStore } from "../stores/forum";
 import { useLibraryStore } from "../stores/library";
@@ -576,7 +578,14 @@ const directionQuery = ref("人工智能");
 const directionPickerOpen = ref(false);
 const contentEditor = ref(null);
 const showMarkdownPreview = ref(false);
+const markdownMode = ref("edit");
+const editingPost = ref(null);
 const moderationBusy = reactive({});
+const markdown = new MarkdownIt({
+  html: false,
+  linkify: true,
+  breaks: true
+});
 
 const blankForm = () => ({
   postType: "数据集求助",
@@ -643,6 +652,10 @@ const popularTags = computed(() => {
 
 const selectedPaper = computed(() => libraryStore.state.documents.find(doc => String(doc.id) === String(form.paperId)));
 const canSubmit = computed(() => form.title.trim() && form.content.trim().length > 5 && form.postType && form.direction);
+const renderedMarkdown = computed(() => {
+  const source = form.content?.trim() || "_预览会显示在这里。_";
+  return markdown.render(source);
+});
 
 function typeClass(type) {
   return postModules.find(item => item.value === type)?.className || "research";
@@ -673,9 +686,11 @@ function normalizeLink(value) {
 
 function openCreateModal(type = "") {
   Object.assign(form, blankForm());
+  editingPost.value = null;
   directionQuery.value = form.direction;
   directionPickerOpen.value = false;
   showMarkdownPreview.value = false;
+  markdownMode.value = "edit";
   moderationError.value = "";
   if (type) form.postType = type;
   showCreateModal.value = true;
@@ -690,27 +705,33 @@ async function submitPost() {
   publishing.value = true;
   moderationError.value = "";
   const tags = [form.direction, form.postType, ...form.title.split(/[\s,，#：:]+/)].map(tag => tag.trim()).filter(Boolean).slice(0, 8);
+  const payload = {
+    title: form.title.trim(),
+    content: form.content.trim(),
+    author: authStore.profile.name,
+    postType: form.postType,
+    direction: form.direction,
+    tags,
+    paperTitle: selectedPaper.value?.title || form.paperTitle || "",
+    publishYear: selectedPaper.value?.publishYear || selectedPaper.value?.year || form.publishYear || "",
+    venueName: form.venueName.trim(),
+    venueLevel: form.venueLevel,
+    resourceLink: "",
+    images: form.images,
+    attachments: form.attachments
+  };
   try {
-    const result = await forumStore.addPost({
-      title: form.title.trim(),
-      content: form.content.trim(),
-      author: authStore.profile.name,
-      postType: form.postType,
-      direction: form.direction,
-      tags,
-      paperTitle: selectedPaper.value?.title || "",
-      publishYear: selectedPaper.value?.publishYear || selectedPaper.value?.year || "",
-      venueName: form.venueName.trim(),
-      venueLevel: form.venueLevel,
-      resourceLink: "",
-      images: form.images,
-      attachments: form.attachments
-    });
+    if (editingPost.value) {
+      await forumStore.updatePost(editingPost.value.id, payload);
+    } else {
+      await forumStore.addPost(payload);
+    }
     closeCreateModal();
     authStore.addNotification({
-      title: "研究主题发布成功",
-      desc: `《${form.title.slice(0, 18)}》已通过自动审核并发布。`
+      title: editingPost.value ? "研究主题已更新" : "研究主题发布成功",
+      desc: `《${form.title.slice(0, 18)}》已通过自动审核并${editingPost.value ? "保存" : "发布"}。`
     });
+    window.dispatchEvent(new Event("paperpilot:forum-posts-changed"));
   } catch (error) {
     moderationError.value = error?.response?.data?.message
       || error?.response?.data?.detail
@@ -724,6 +745,27 @@ function chooseDirection(item) {
   form.direction = item;
   directionQuery.value = item;
   directionPickerOpen.value = false;
+}
+
+function openEditPost(post) {
+  editingPost.value = post;
+  Object.assign(form, blankForm(), {
+    postType: post.postType || "数据集求助",
+    direction: post.direction || "人工智能",
+    title: post.title || "",
+    content: post.content || "",
+    tagsRaw: (post.tags || []).join(" "),
+    venueName: post.venueName || "",
+    venueLevel: post.venueLevel || "",
+    resourceLink: post.resourceLink || "",
+    images: Array.isArray(post.images) ? [...post.images] : [],
+    attachments: Array.isArray(post.attachments) ? [...post.attachments] : []
+  });
+  directionQuery.value = form.direction;
+  markdownMode.value = "edit";
+  moderationError.value = "";
+  showMyPostsManager.value = false;
+  showCreateModal.value = true;
 }
 
 async function insertMarkdown(before, after = "") {
@@ -750,6 +792,7 @@ function isMine(post) {
 async function removeMyPost(post) {
   if (!window.confirm(`确定删除“${post.title}”吗？`)) return;
   await forumStore.deletePost(post.id);
+  window.dispatchEvent(new Event("paperpilot:forum-posts-changed"));
 }
 
 async function toggleModeration(post, action) {
@@ -1497,9 +1540,9 @@ button { cursor: pointer; }
 }
 
 .post-meta-stack {
-  min-width: 118px;
+  min-width: 176px;
   display: grid;
-  justify-items: start;
+  justify-items: center;
   gap: 7px;
   padding-top: 1px;
 }
@@ -1513,9 +1556,9 @@ button { cursor: pointer; }
 .post-meta-stack .reply-avatar-strip {
   position: static;
   transform: none;
-  justify-self: start;
+  justify-self: center;
   margin-top: 0;
-  padding-left: 1px;
+  padding-left: 0;
 }
 
 .post-author-row {
@@ -1778,6 +1821,74 @@ button { cursor: pointer; }
   padding: 11px 14px;
   font-size: 14px;
   line-height: 1.8;
+}
+
+.markdown-rendered {
+  min-height: 260px;
+  padding: 18px 22px;
+  color: #243048;
+  background: #fff;
+  line-height: 1.75;
+  font-size: 14px;
+}
+
+.markdown-rendered :deep(h1),
+.markdown-rendered :deep(h2),
+.markdown-rendered :deep(h3) {
+  margin: 0 0 12px;
+  color: #172033;
+  line-height: 1.35;
+}
+
+.markdown-rendered :deep(p) {
+  margin: 0 0 12px;
+}
+
+.markdown-rendered :deep(ul),
+.markdown-rendered :deep(ol) {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+
+.markdown-rendered :deep(blockquote) {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-left: 3px solid #8bb5f6;
+  color: #46546b;
+  background: #f4f8ff;
+}
+
+.markdown-rendered :deep(code) {
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: #eef2f7;
+  color: #17345f;
+}
+
+.markdown-rendered :deep(pre) {
+  overflow-x: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: #111827;
+  color: #f8fafc;
+}
+
+.markdown-rendered :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 12px;
+}
+
+.markdown-rendered :deep(th),
+.markdown-rendered :deep(td) {
+  padding: 8px 10px;
+  border: 1px solid #dfe6f0;
+  text-align: left;
+}
+
+.markdown-rendered :deep(a) {
+  color: #075ee5;
+  font-weight: 800;
 }
 
 @media (max-width: 760px) {

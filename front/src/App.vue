@@ -15,6 +15,7 @@
           :class="{ active: route.path === item.to }"
         >
           {{ item.label }}
+          <span v-if="item.to === '/forum' && forumUnreadCount" class="nav-forum-alert">{{ forumUnreadCount }}</span>
         </router-link>
       </nav>
 
@@ -231,7 +232,7 @@ const navItems = computed(() => {
       { to: "/reading", label: "文献阅读" },
       { to: "/meeting-report", label: "组会汇报" },
       { to: "/search", label: "检索" },
-      { to: "/forum", label: "社区" },
+      { to: "/forum", label: "学术论坛" },
       { to: "/models", label: "用量" },
       { to: "/referral", label: "邀请" },
       { to: "/team", label: "团队" }
@@ -265,6 +266,8 @@ const chromeIcons = {
 };
 
 const messageUnreadCount = ref(0);
+const forumUnreadCount = ref(0);
+const latestForumSignature = ref("");
 
 document.documentElement.removeAttribute("data-theme");
 localStorage.removeItem("papersolver-theme");
@@ -282,6 +285,35 @@ async function refreshMessageUnread() {
     messageUnreadCount.value = (result.unreadCount || 0) + (friendRequests.pendingCount || 0);
   } catch {
     messageUnreadCount.value = 0;
+  }
+}
+
+function forumSeenKey() {
+  const userId = authStore.session.user?.userId || authStore.profile.email || "guest";
+  return `paperpilot-forum-seen:${userId}`;
+}
+
+function markForumSeen() {
+  if (!latestForumSignature.value) return;
+  localStorage.setItem(forumSeenKey(), latestForumSignature.value);
+  forumUnreadCount.value = 0;
+}
+
+async function refreshForumNavSignal() {
+  if (!authStore.session.isAuthenticated) {
+    forumUnreadCount.value = 0;
+    latestForumSignature.value = "";
+    return;
+  }
+  try {
+    const posts = await paperpilotApi.getForumPosts();
+    const latest = [...(posts || [])].sort((a, b) => String(b.time || "").localeCompare(String(a.time || "")))[0];
+    latestForumSignature.value = latest ? `${latest.id}:${latest.time || ""}` : "";
+    const seen = localStorage.getItem(forumSeenKey()) || "";
+    forumUnreadCount.value = latestForumSignature.value && latestForumSignature.value !== seen ? 1 : 0;
+    if (route.path.startsWith("/forum")) markForumSeen();
+  } catch {
+    forumUnreadCount.value = 0;
   }
 }
 
@@ -459,6 +491,7 @@ onMounted(() => {
   window.addEventListener("click", resetActivityTimer);
   window.addEventListener("scroll", resetActivityTimer);
   window.addEventListener("paperpilot:site-messages-changed", refreshSiteMessages);
+  window.addEventListener("paperpilot:forum-posts-changed", refreshForumNavSignal);
   document.addEventListener("click", handleUserAvatarClick);
 
   activityTimer = setInterval(() => {
@@ -485,10 +518,12 @@ onMounted(() => {
   }, 1000);
   authStore.refreshNotifications().catch(() => {});
   refreshMessageUnread();
+  refreshForumNavSignal();
   refreshSiteMessages();
   notificationTimer = setInterval(() => {
     authStore.refreshNotifications().catch(() => {});
     refreshMessageUnread();
+    refreshForumNavSignal();
   }, 15000);
   siteMessageTimer = setInterval(refreshSiteMessages, 15000);
 });
@@ -499,11 +534,19 @@ onUnmounted(() => {
   window.removeEventListener("click", resetActivityTimer);
   window.removeEventListener("scroll", resetActivityTimer);
   window.removeEventListener("paperpilot:site-messages-changed", refreshSiteMessages);
+  window.removeEventListener("paperpilot:forum-posts-changed", refreshForumNavSignal);
   document.removeEventListener("click", handleUserAvatarClick);
   if (activityTimer) clearInterval(activityTimer);
   if (notificationTimer) clearInterval(notificationTimer);
   if (siteMessageTimer) clearInterval(siteMessageTimer);
 });
+
+watch(
+  () => route.path,
+  (path) => {
+    if (path.startsWith("/forum")) markForumSeen();
+  },
+);
 
 // Password change state
 const showPasswordModal = ref(false);
@@ -635,9 +678,29 @@ async function submitPasswordChange() {
 }
 
 .spatial-nav-link {
+  position: relative;
   flex: 0 0 auto;
   padding-inline: 11px;
   white-space: nowrap;
+}
+
+.nav-forum-alert {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  min-width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  color: #fff;
+  background: #e11d48;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  transform: translate(55%, -45%);
 }
 
 .spatial-nav-actions {

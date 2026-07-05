@@ -35,7 +35,7 @@
               <button v-if="post.authorUserId" class="message-author" @click="messageAuthor">私信作者</button>
             </div>
 
-            <div class="article-content">{{ post.content }}</div>
+            <div class="article-content markdown-rendered" v-html="renderMarkdown(post.content)"></div>
 
             <div v-if="post.images?.length" class="article-images">
               <button v-for="image in post.images" :key="image.name" @click="previewImage = image.data">
@@ -110,7 +110,7 @@
                     <button @click="setReplyTarget(reply)">回复</button>
                   </header>
                   <small v-if="reply.replyToAuthor" class="reply-to-note">回复 {{ reply.replyToAuthor }}</small>
-                  <p>{{ reply.content }}</p>
+                  <div class="comment-content markdown-rendered" v-html="renderMarkdown(reply.content)"></div>
                 </div>
               </article>
             </div>
@@ -147,6 +147,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import MarkdownIt from "markdown-it";
 import { useAuthStore } from "../stores/auth";
 import { useForumStore } from "../stores/forum";
 
@@ -158,6 +159,7 @@ const replyContent = ref("");
 const submitting = ref(false);
 const previewImage = ref("");
 const replyTarget = ref(null);
+const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
 
 const post = computed(() => forumStore.state.posts.find(item => item.id === route.params.id));
 
@@ -177,6 +179,10 @@ function typeClass(type) {
 
 function normalizeLink(value) {
   return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+}
+
+function renderMarkdown(value) {
+  return markdown.render(String(value || "").trim() || "_暂无内容_");
 }
 
 function messageAuthor() {
@@ -243,7 +249,27 @@ button, textarea { font: inherit; }
 .author-row strong { font-size: 13px; }
 .author-row small { color: #96a0b0; }
 .message-author { margin-left: auto; padding: 7px 12px; border: 1px solid #cfe0fb; border-radius: 8px; color: #0865ee; background: #f4f8ff; font-size: 11px; font-weight: 800; cursor: pointer; }
-.article-content { padding: 24px 0; color: #445166; font-size: 15px; line-height: 2; white-space: pre-wrap; }
+.article-content { padding: 24px 0; color: #445166; font-size: 15px; line-height: 2; }
+.markdown-rendered :deep(h1),
+.markdown-rendered :deep(h2),
+.markdown-rendered :deep(h3) { margin: 18px 0 10px; color: #172033; line-height: 1.35; letter-spacing: 0; }
+.markdown-rendered :deep(h1) { font-size: 24px; }
+.markdown-rendered :deep(h2) { font-size: 19px; }
+.markdown-rendered :deep(h3) { font-size: 16px; }
+.markdown-rendered :deep(p) { margin: 0 0 12px; }
+.markdown-rendered :deep(p:last-child) { margin-bottom: 0; }
+.markdown-rendered :deep(ul),
+.markdown-rendered :deep(ol) { margin: 10px 0 14px; padding-left: 22px; }
+.markdown-rendered :deep(li) { margin: 6px 0; }
+.markdown-rendered :deep(blockquote) { margin: 12px 0; padding: 10px 14px; border-left: 4px solid #2f6fec; border-radius: 0 10px 10px 0; color: #3a4960; background: #f3f7ff; }
+.markdown-rendered :deep(code) { padding: 2px 5px; border-radius: 5px; color: #0f4fb7; background: #eef4ff; font-size: .92em; }
+.markdown-rendered :deep(pre) { overflow: auto; margin: 12px 0; padding: 13px; border-radius: 12px; color: #dbe7ff; background: #121b2e; }
+.markdown-rendered :deep(pre code) { padding: 0; color: inherit; background: transparent; }
+.markdown-rendered :deep(a) { color: #075ee5; font-weight: 800; text-decoration: none; }
+.markdown-rendered :deep(table) { width: 100%; margin: 12px 0; border-collapse: collapse; font-size: 13px; }
+.markdown-rendered :deep(th),
+.markdown-rendered :deep(td) { padding: 9px 10px; border: 1px solid #dfe7f2; text-align: left; }
+.markdown-rendered :deep(th) { color: #172033; background: #f3f6fb; }
 .article-images { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 18px; }
 .article-images button { padding: 0; overflow: hidden; aspect-ratio: 4 / 3; border: 1px solid #e0e7f1; border-radius: 12px; background: #f5f7fa; cursor: zoom-in; }
 .article-images img { width: 100%; height: 100%; object-fit: cover; }
@@ -289,7 +315,7 @@ button, textarea { font: inherit; }
 .comment-item button + button { margin-left: 0; }
 .comment-item button.active { color: #0865ee; }
 .reply-to-note { display: inline-block; margin-top: 7px; padding: 4px 8px; border-radius: 999px; color: #075ee5; background: #edf4ff; font-size: 10px; font-weight: 800; }
-.comment-item p { margin: 8px 0 0; color: #4e5b70; font-size: 12px; line-height: 1.75; white-space: pre-wrap; }
+.comment-content { margin-top: 8px; color: #4e5b70; font-size: 12px; line-height: 1.75; }
 .empty-comments { padding: 40px; text-align: center; color: #929cac; background: #f8fafc; border-radius: 13px; font-size: 12px; }
 aside { position: sticky; top: 116px; display: flex; flex-direction: column; gap: 14px; }
 .side-card { padding: 20px; }
