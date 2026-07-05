@@ -15,7 +15,7 @@
           :class="{ active: route.path === item.to }"
         >
           {{ item.label }}
-          <span v-if="item.to === '/forum' && forumUnreadCount" class="nav-forum-alert">{{ forumUnreadCount }}</span>
+          <span v-if="item.to === '/forum' && forumUnreadCount" class="nav-forum-alert" aria-label="学术论坛有新动态"></span>
         </router-link>
       </nav>
 
@@ -680,27 +680,25 @@ async function submitPasswordChange() {
 .spatial-nav-link {
   position: relative;
   flex: 0 0 auto;
-  padding-inline: 11px;
+  padding-inline: 12px;
   white-space: nowrap;
 }
 
 .nav-forum-alert {
   position: absolute;
-  top: 2px;
-  right: 3px;
-  min-width: 15px;
-  height: 15px;
+  top: 7px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
   display: grid;
   place-items: center;
-  padding: 0 4px;
+  padding: 0;
   border: 2px solid #fff;
   border-radius: 999px;
-  color: #fff;
   background: #e11d48;
-  font-size: 9px;
-  font-weight: 900;
-  line-height: 1;
-  transform: translate(55%, -45%);
+  box-shadow: 0 0 0 2px rgba(225, 29, 72, .14);
+  transform: translate(70%, -65%);
+  pointer-events: none;
 }
 
 .spatial-nav-actions {

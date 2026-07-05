@@ -14,6 +14,15 @@ public class NotificationService {
 
     public void create(Long recipientId, Long actorId, String type, Long referenceId, String title, String description) {
         if (recipientId == null || recipientId.equals(actorId)) return;
+        createInternal(recipientId, actorId, type, referenceId, title, description);
+    }
+
+    public void createSystemNotice(Long recipientId, Long actorId, String type, Long referenceId, String title, String description) {
+        if (recipientId == null) return;
+        createInternal(recipientId, actorId, type, referenceId, title, description);
+    }
+
+    private void createInternal(Long recipientId, Long actorId, String type, Long referenceId, String title, String description) {
         UserNotificationEntity notification = new UserNotificationEntity();
         notification.setUserId(recipientId);
         notification.setType(type);

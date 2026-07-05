@@ -108,21 +108,20 @@
                 <button class="discipline-label" @click="activeDirection = post.direction">{{ post.direction }}</button>
                 <span v-if="post.resolved" class="resolved-label">已解决</span>
               </div>
-              <div class="post-meta-stack">
-                <time>{{ post.time }}</time>
-                <div v-if="replyAvatars(post).length" class="reply-avatar-strip">
-                  <span
-                    v-for="avatar in replyAvatars(post)"
-                    :key="`${post.id}-${avatar.key}`"
-                    class="reply-mini-avatar"
-                    :title="avatar.name"
-                  >
-                    <img v-if="avatar.url" :src="avatar.url" :alt="avatar.name" />
-                    <b v-else>{{ avatar.text }}</b>
-                  </span>
-                </div>
-              </div>
+              <time class="post-time">{{ post.time }}</time>
             </header>
+
+            <div v-if="replyAvatars(post).length" class="reply-avatar-strip" aria-label="评论参与者">
+              <span
+                v-for="avatar in replyAvatars(post)"
+                :key="`${post.id}-${avatar.key}`"
+                class="reply-mini-avatar"
+                :title="avatar.name"
+              >
+                <img v-if="avatar.url" :src="avatar.url" :alt="avatar.name" />
+                <b v-else>{{ avatar.text }}</b>
+              </span>
+            </div>
 
             <div class="post-author-row">
               <div class="post-author-main" :data-user-id="post.authorUserId" title="查看个人卡片">
@@ -801,6 +800,8 @@ async function toggleModeration(post, action) {
   try {
     if (action === "pin") await forumStore.togglePin(post.id);
     else await forumStore.toggleBan(post.id);
+    await authStore.refreshNotifications().catch(() => {});
+    window.dispatchEvent(new Event("paperpilot:site-messages-changed"));
   } finally {
     moderationBusy[post.id] = false;
   }
@@ -1011,7 +1012,7 @@ button { cursor: pointer; }
 .research-post:hover { border-color: #cbd8ed; box-shadow: 0 13px 36px rgba(38, 57, 91, .08); }
 .post-label-row, .post-footer, .reply-head, .sidebar-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .primary-labels { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
-.post-label-row time { color: #9aa4b5; font-size: 11px; white-space: nowrap; }
+.post-time { margin-left: auto; color: #9aa4b5; font-size: 11px; white-space: nowrap; }
 .type-label, .discipline-label, .area-label, .resolved-label {
   padding: 5px 9px;
   border-radius: 7px;
@@ -1300,9 +1301,9 @@ button { cursor: pointer; }
 
 .reply-avatar-strip {
   position: absolute;
-  top: 50%;
-  right: 28px;
-  transform: translateY(-50%);
+  top: 88px;
+  right: 48px;
+  transform: none;
   display: flex;
   align-items: center;
   gap: 0;
@@ -1537,28 +1538,6 @@ button { cursor: pointer; }
 
 .post-label-row {
   align-items: flex-start;
-}
-
-.post-meta-stack {
-  min-width: 176px;
-  display: grid;
-  justify-items: center;
-  gap: 7px;
-  padding-top: 1px;
-}
-
-.post-meta-stack time {
-  justify-self: end;
-  width: 100%;
-  text-align: right;
-}
-
-.post-meta-stack .reply-avatar-strip {
-  position: static;
-  transform: none;
-  justify-self: center;
-  margin-top: 0;
-  padding-left: 0;
 }
 
 .post-author-row {

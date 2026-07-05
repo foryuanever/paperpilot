@@ -177,7 +177,7 @@ public class ForumController {
         post.setPinned(!post.isPinned());
         forumPostRepository.save(post);
         if (post.getUserId() != null) {
-            notificationService.create(post.getUserId(), actor.getId(), "forum_pin", post.getId(),
+            notificationService.createSystemNotice(post.getUserId(), actor.getId(), "forum_pin", post.getId(),
                 post.isPinned() ? "你的帖子已被置顶" : "你的帖子已被降级",
                 "管理员" + (post.isPinned() ? "置顶了" : "取消置顶并降级了") + "《" + post.getTitle() + "》");
         }
@@ -192,7 +192,7 @@ public class ForumController {
         post.setBanned(!post.isBanned());
         forumPostRepository.save(post);
         if (post.getUserId() != null) {
-            notificationService.create(post.getUserId(), actor.getId(), "forum_ban", post.getId(),
+            notificationService.createSystemNotice(post.getUserId(), actor.getId(), "forum_ban", post.getId(),
                 post.isBanned() ? "你的帖子已被封禁" : "你的帖子已解除封禁",
                 "管理员" + (post.isBanned() ? "封禁了" : "解除封禁了") + "《" + post.getTitle() + "》");
         }
