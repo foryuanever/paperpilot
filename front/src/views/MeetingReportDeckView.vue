@@ -119,6 +119,15 @@
                   </div>
                   <div class="deck-action-row">
                     <a
+                      v-if="deckJobs[meeting.id]?.confirmUrl && isDeckBusy(meeting)"
+                      class="confirm-link-button"
+                      :href="deckJobs[meeting.id].confirmUrl"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      打开参数页
+                    </a>
+                    <a
                       v-if="deckJobs[meeting.id]?.downloadUrl"
                       class="download-button"
                       :href="absoluteApiUrl(deckJobs[meeting.id].downloadUrl)"
@@ -136,15 +145,6 @@
                     >
                       {{ deckJobs[meeting.id]?.status === "failed" ? "重新生成 PPT" : isDeckBusy(meeting) ? "执行中" : "生成汇报 PPT" }}
                     </button>
-                    <a
-                      v-if="deckJobs[meeting.id]?.confirmUrl && isDeckBusy(meeting)"
-                      class="confirm-link-button"
-                      :href="deckJobs[meeting.id].confirmUrl"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      参数页
-                    </a>
                   </div>
                 </div>
               </div>
@@ -308,6 +308,7 @@ let toastTimer = null;
 const deckTimers = new Map();
 const reviewTimers = new Map();
 const confirmOpened = ref("");
+let pendingConfirmWindow = null;
 
 const sortedMeetings = computed(() => [...meetings.value].sort((a, b) => new Date(b.meetingTime) - new Date(a.meetingTime)));
 
@@ -843,6 +844,7 @@ async function copyReviewSection(section) {
 async function makePpt(meeting) {
   const paper = primaryPaper(meeting);
   if (!paper || !hasPdf(paper) || isDeckBusy(meeting)) return;
+  pendingConfirmWindow = openPendingConfirmWindow();
   activeMeetingId.value = meeting.id;
   deckJobs[meeting.id] = {
     status: "running",
@@ -874,6 +876,7 @@ async function makePpt(meeting) {
       showToast("PPT 已生成，可以下载");
     }
   } catch (error) {
+    closePendingConfirmWindow();
     deckJobs[meeting.id] = {
       ...deckJobs[meeting.id],
       status: "failed",
@@ -882,6 +885,39 @@ async function makePpt(meeting) {
       message: error?.response?.data?.message || "PPT 制作失败",
     };
     showToast(deckJobs[meeting.id].message);
+  }
+}
+
+function openPendingConfirmWindow() {
+  try {
+    const win = window.open("about:blank", "_blank");
+    if (!win) return null;
+    win.document.write(`
+      <!doctype html>
+      <html lang="zh-CN">
+        <head><meta charset="utf-8"><title>PPT Master 参数页准备中</title></head>
+        <body style="margin:0;display:grid;place-items:center;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;color:#172033;background:#f6f9ff;">
+          <main style="width:min(520px,calc(100vw - 48px));padding:28px;border:1px solid #d8e5f8;border-radius:18px;background:#fff;box-shadow:0 18px 45px rgba(31,57,95,.12)">
+            <strong style="display:block;font-size:18px;margin-bottom:10px;">PPT Master 参数页准备中</strong>
+            <p style="margin:0;color:#52637a;line-height:1.7;">正在等待后端启动官方参数确认页，请不要关闭此窗口。</p>
+          </main>
+        </body>
+      </html>
+    `);
+    win.document.close();
+    return win;
+  } catch {
+    return null;
+  }
+}
+
+function closePendingConfirmWindow() {
+  try {
+    if (pendingConfirmWindow && !pendingConfirmWindow.closed) pendingConfirmWindow.close();
+  } catch {
+    // Ignore popup cleanup failures.
+  } finally {
+    pendingConfirmWindow = null;
   }
 }
 
@@ -928,8 +964,15 @@ function applyDeckJob(meeting, payload = {}, paper = {}) {
   if (deckJobs[meeting.id].downloadUrl) deckJobs[meeting.id].status = "generated";
   if (deckJobs[meeting.id].confirmUrl && confirmOpened.value !== deckJobs[meeting.id].confirmUrl) {
     confirmOpened.value = deckJobs[meeting.id].confirmUrl;
-    window.open(deckJobs[meeting.id].confirmUrl, "_blank");
+    if (pendingConfirmWindow && !pendingConfirmWindow.closed) {
+      pendingConfirmWindow.location.href = deckJobs[meeting.id].confirmUrl;
+      pendingConfirmWindow.focus();
+      pendingConfirmWindow = null;
+    } else {
+      showToast("请点击“打开参数页”完成 PPT Master 参数确认");
+    }
   }
+  if (deckJobs[meeting.id].downloadUrl || deckJobs[meeting.id].status === "failed") closePendingConfirmWindow();
   persistDeckJobs();
 }
 
@@ -1464,7 +1507,7 @@ button:disabled {
 }
 
 .deck-action-row:has(.confirm-link-button) {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .generation-action button,
@@ -1479,13 +1522,19 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 64px;
-  border: 1px solid #c7d8ef;
-  background: #f8fbff;
-  color: #194fbf;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid #2563eb;
+  background: #eff6ff;
+  color: #1746b8;
   text-decoration: none;
-  font-size: 12px;
-  font-weight: 850;
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, .14);
+}
+
+.confirm-link-button:hover {
+  background: #dbeafe;
 }
 
 .generation-action .soft-button {

@@ -2163,11 +2163,10 @@ public class MeetingReportService {
         try {
             Path confirmDir = projectDir.resolve("confirm_ui");
             Files.createDirectories(confirmDir);
+            Map<String, Object> recommendations = buildConfirmRecommendations(materialPath, reportPaperPath, slideCount, audience);
             Files.writeString(
                 confirmDir.resolve("recommendations.json"),
-                objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(
-                    buildConfirmRecommendations(materialPath, reportPaperPath, slideCount, audience)
-                )
+                objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(recommendations)
             );
             List<String> command = List.of(
                 pythonPath.get(),
@@ -2194,7 +2193,7 @@ public class MeetingReportService {
             job.progress(24, "已打开 PPT Master 官方参数确认页，请完成确认后继续生成");
 
             Path resultPath = confirmDir.resolve("result.json");
-            long deadline = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(12);
+            long deadline = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(18);
             while (System.currentTimeMillis() < deadline) {
                 if (Files.isRegularFile(resultPath)) {
                     Map<String, Object> result = objectMapper.readValue(Files.readString(resultPath), new TypeReference<>() {});
@@ -2210,12 +2209,73 @@ public class MeetingReportService {
                 Thread.sleep(1000);
             }
             shutdownPptMasterConfirmUi(projectDir, skillDir, pythonPath.get());
-            throw new ResponseStatusException(HttpStatus.REQUEST_TIMEOUT, "等待 PPT Master 参数确认超时，请重新点击生成并确认参数页");
+            Map<String, Object> fallback = buildDefaultConfirmResult(recommendations, "参数页未在等待时间内确认，已按 PPT Master 推荐参数自动继续。");
+            Files.writeString(resultPath, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(fallback), StandardCharsets.UTF_8);
+            job.result().put("confirmResultPath", resultPath.toAbsolutePath().toString());
+            job.result().put("confirmFallback", true);
+            job.progress(28, "参数页未确认，已按推荐参数自动继续生成");
+            return fallback;
         } catch (ResponseStatusException error) {
             throw error;
         } catch (Exception error) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "PPT Master 参数确认页异常：" + readableError(error));
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> buildDefaultConfirmResult(Map<String, Object> recommendations, String note) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        Map<String, Object> recommend = (Map<String, Object>) recommendations.getOrDefault("recommend", Map.of());
+        result.put("canvas", recommend.getOrDefault("canvas", "ppt169"));
+        result.put("audience", nestedValue(recommendations.get("audience"), "导师与课题组"));
+        result.put("content_divergence", nestedValue(recommendations.get("content_divergence"), "忠实论文事实，但允许按组会汇报逻辑重组叙事。"));
+        result.put("mode", recommend.getOrDefault("mode", "pyramid"));
+        result.put("visual_style", recommend.getOrDefault("visual_style", "editorial"));
+        result.put("delivery_purpose", recommend.getOrDefault("delivery_purpose", "balanced"));
+        result.put("page_count", nestedValue(recommendations.get("page_count"), "10-12"));
+        result.put("color", selectedCandidate(recommendations.get("color"), Map.of("name", "深海学术蓝")));
+        result.put("icons", recommend.getOrDefault("icons", "tabler-outline"));
+        result.put("typography", selectedCandidate(recommendations.get("typography"), Map.of("name", "思源黑体学术版")));
+        result.put("formula_policy", recommend.getOrDefault("formula_policy", "mixed"));
+        result.put("image_usage", recommend.getOrDefault("image_usage", List.of("provided", "ai")));
+        result.put("image_notes", nestedValue(recommendations.get("image_notes"), "优先使用论文 PDF 中的图、表、公式和流程图。"));
+        result.put("image_ai_path", recommend.getOrDefault("image_ai_path", "auto"));
+        result.put("generation_mode", recommend.getOrDefault("generation_mode", "continuous"));
+        result.put("refine_spec", nestedBoolean(recommendations.get("refine_spec"), false));
+        result.put("image_strategy", selectedCandidate(recommendations.get("image_strategy"), Map.of("name", "论文资产优先")));
+        result.put("stage", "final");
+        result.put("status", "confirmed");
+        result.put("auto_confirmed", true);
+        result.put("note", note);
+        result.put("confirmed_at", java.time.LocalDateTime.now().toString());
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object selectedCandidate(Object section, Object fallback) {
+        if (!(section instanceof Map<?, ?> raw)) return fallback;
+        Map<String, Object> map = (Map<String, Object>) raw;
+        Object candidates = map.get("candidates");
+        int selected = Number.class.isInstance(map.get("selected")) ? ((Number) map.get("selected")).intValue() : 0;
+        if (candidates instanceof List<?> list && !list.isEmpty()) {
+            return list.get(Math.max(0, Math.min(selected, list.size() - 1)));
+        }
+        return fallback;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object nestedValue(Object section, Object fallback) {
+        if (section instanceof Map<?, ?> raw) {
+            Object value = ((Map<String, Object>) raw).get("value");
+            return value == null ? fallback : value;
+        }
+        return section == null ? fallback : section;
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean nestedBoolean(Object section, boolean fallback) {
+        Object value = section instanceof Map<?, ?> raw ? ((Map<String, Object>) raw).get("value") : section;
+        return value == null ? fallback : Boolean.parseBoolean(String.valueOf(value));
     }
 
     private Map<String, Object> buildConfirmRecommendations(Path materialPath, Path reportPaperPath, String slideCount, String audience) {
