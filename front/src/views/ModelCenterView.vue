@@ -108,9 +108,22 @@
       </div>
 
       <div v-if="usageStore.state.dailyUsage.length" class="bar-chart" :style="{ '--max': maxDailyValue }">
-        <div v-for="item in chartRows" :key="item.label" class="bar-column">
+        <div
+          v-for="item in chartRows"
+          :key="item.label"
+          class="bar-column"
+          tabindex="0"
+          :aria-label="chartTooltipText(item)"
+        >
           <div class="bar-rail">
-            <i :style="{ height: `${barHeight(item.value)}%` }"></i>
+            <i :style="{ height: `${barHeight(item.value)}%` }">
+              <span class="bar-tooltip" role="tooltip">
+                <strong>{{ item.label }}</strong>
+                <em>{{ chartMetricLabel }}：{{ formatChartValue(item.value) }}</em>
+                <small>费用 {{ formatMoney(item.cost) }}</small>
+                <small>调用 {{ item.calls }} 次 · Token {{ formatTokens(item.tokens) }}</small>
+              </span>
+            </i>
           </div>
           <span>{{ item.label }}</span>
         </div>
@@ -427,6 +440,12 @@ const chartRows = computed(() => (usageStore.state.dailyUsage || []).map((item) 
 
 const maxDailyValue = computed(() => Math.max(...chartRows.value.map((row) => Number(row.value || 0)), 1));
 
+const chartMetricLabel = computed(() => {
+  if (activeChart.value === "cost") return "费用";
+  if (activeChart.value === "calls") return "调用次数";
+  return "Token 用量";
+});
+
 const chartTotalLabel = computed(() => {
   const total = chartRows.value.reduce((sum, row) => sum + Number(row.value || 0), 0);
   if (activeChart.value === "cost") return formatMoney(total);
@@ -553,6 +572,16 @@ async function submitTicket() {
 
 function barHeight(value) {
   return Math.max(Number(value || 0) > 0 ? 4 : 0, Math.round((Number(value || 0) / maxDailyValue.value) * 100));
+}
+
+function formatChartValue(value) {
+  if (activeChart.value === "cost") return formatMoney(value);
+  if (activeChart.value === "calls") return `${Number(value || 0)} 次`;
+  return formatTokens(value);
+}
+
+function chartTooltipText(item) {
+  return `${item.label}，${chartMetricLabel.value} ${formatChartValue(item.value)}，费用 ${formatMoney(item.cost)}，调用 ${item.calls} 次，Token ${formatTokens(item.tokens)}`;
 }
 
 function formatTokens(value) {
@@ -963,12 +992,14 @@ button:disabled {
 }
 
 .bar-column {
+  position: relative;
   display: grid;
   grid-template-rows: 1fr auto;
   gap: 10px;
   min-width: 0;
   height: 100%;
   text-align: center;
+  outline: none;
 }
 
 .bar-rail {
@@ -978,11 +1009,77 @@ button:disabled {
 }
 
 .bar-rail i {
+  position: relative;
   display: block;
   width: 100%;
   min-height: 0;
   background: #5868f6;
-  transition: height .22s ease;
+  transition: height .22s ease, filter .18s ease, transform .18s ease;
+}
+
+.bar-column:hover .bar-rail i,
+.bar-column:focus-visible .bar-rail i {
+  filter: drop-shadow(0 10px 18px rgba(88, 104, 246, .22));
+  transform: translateY(-2px);
+}
+
+.bar-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 12px);
+  z-index: 5;
+  display: grid;
+  min-width: 172px;
+  gap: 5px;
+  padding: 11px 12px;
+  border: 1px solid rgba(207, 218, 237, .92);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 18px 38px rgba(20, 31, 51, .14);
+  color: #1d2636;
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  transition: opacity .16s ease, transform .16s ease;
+}
+
+.bar-tooltip::after {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid rgba(207, 218, 237, .92);
+  border-bottom: 1px solid rgba(207, 218, 237, .92);
+  background: rgba(255, 255, 255, .97);
+  content: "";
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.bar-tooltip strong {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.bar-tooltip em {
+  color: #3154df;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.bar-tooltip small {
+  color: #657085;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bar-column:hover .bar-tooltip,
+.bar-column:focus-visible .bar-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .bar-column span {
