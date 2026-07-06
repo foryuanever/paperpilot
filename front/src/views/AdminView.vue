@@ -277,7 +277,7 @@
             <article class="billing-rule-card spatial-glass-panel">
               <span>基础单价</span>
               <input v-model.number="billingForm.unitPrice" type="number" min="0.0001" step="0.0001" />
-              <p>每 1000 Token，当前 ¥{{ formatMoney(billingSettings.unitPrice) }}</p>
+              <p>每 1000 Token 的用户售价，当前 ¥{{ formatMoney(billingSettings.unitPrice) }}</p>
             </article>
             <article class="billing-rule-card spatial-glass-panel">
               <span>当前倍率</span>
@@ -287,7 +287,7 @@
             <article class="billing-rule-card spatial-glass-panel wide">
               <span>扣费公式</span>
               <strong>{{ billingSettings.formula }}</strong>
-              <p>调用完成后按实际入账 Token 从用户余额扣除。</p>
+              <p>这里不是中转站实时成本；建议按中转站成本价加 10%-30% 毛利设置。</p>
               <button class="spatial-btn spatial-btn-accent compact-btn billing-save-btn" :disabled="billingSaving" @click="saveBillingSettings">
                 {{ billingSaving ? "保存中..." : "保存计费规则" }}
               </button>
@@ -846,12 +846,12 @@ const translationProviders = ref([]);
 const siteMessages = ref([]);
 const modelPool = ref([]);
 const billingSettings = ref({
-  unitPrice: 0.02,
+  unitPrice: 0.01,
   multiplier: 1,
-  formula: "费用 = Token 用量 × 单价 × 倍率 / 1000",
+  formula: "用户扣费 = Token 用量 × 站内单价 × 倍率 / 1000",
   currency: "CNY",
 });
-const billingForm = ref({ unitPrice: 0.02, multiplier: 1 });
+const billingForm = ref({ unitPrice: 0.01, multiplier: 1 });
 const billingCharges = ref([]);
 const billingSaving = ref(false);
 const modelPoolRefreshing = ref(false);
@@ -1100,7 +1100,7 @@ async function fetchAllData() {
     const billingData = await paperpilotApi.getBillingSettings();
     billingSettings.value = billingData;
     billingForm.value = {
-      unitPrice: Number(billingData.unitPrice || 0.02),
+      unitPrice: Number(billingData.unitPrice || 0.01),
       multiplier: Number(billingData.multiplier || 1),
     };
     billingCharges.value = billingData.recentCharges || [];

@@ -13,7 +13,7 @@ import java.util.Map;
 public class BillingService {
     private static final String KEY_UNIT_PRICE = "unit_price";
     private static final String KEY_MULTIPLIER = "multiplier";
-    private static final double DEFAULT_UNIT_PRICE = 0.02D;
+    private static final double DEFAULT_UNIT_PRICE = 0.01D;
     private static final double DEFAULT_MULTIPLIER = 1.0D;
 
     private final BillingSettingRepository repository;
@@ -43,7 +43,7 @@ public class BillingService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("unitPrice", unitPrice());
         result.put("multiplier", multiplier());
-        result.put("formula", "费用 = Token 用量 × 单价 × 倍率 / 1000");
+        result.put("formula", "用户扣费 = Token 用量 × 站内单价 × 倍率 / 1000");
         result.put("currency", "CNY");
         return result;
     }
