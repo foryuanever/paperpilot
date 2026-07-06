@@ -135,6 +135,21 @@
             </div>
           </div>
 
+          <div class="user-quota-summary-grid">
+            <article>
+              <span>用户余额总计</span>
+              <strong>¥{{ formatMoney(totalUserBalance) }}</strong>
+            </article>
+            <article>
+              <span>Token 总额度</span>
+              <strong>{{ formatTokens(totalUserTokenLimit) }}</strong>
+            </article>
+            <article>
+              <span>已消耗 Token</span>
+              <strong>{{ formatTokens(totalUserTokenUsed) }}</strong>
+            </article>
+          </div>
+
           <div class="table-container spatial-glass-panel">
             <table class="admin-table">
               <thead>
@@ -144,13 +159,15 @@
                   <th>IP 地址</th>
                   <th>当前角色</th>
                   <th>明文密码</th>
-                  <th>余额 / Token额度</th>
+                  <th>账户余额</th>
+                  <th>Token 额度</th>
+                  <th>已用 Token</th>
                   <th>注册时间</th>
                   <th style="text-align: right;">管理操作</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="user in filteredUsers" :key="user.email">
+                <tr v-for="user in paginatedUsers" :key="user.email">
                   <td>
                     <div class="user-name-cell">
                       <span class="user-avatar" :data-user-id="user.id" :data-user-email="user.email" title="查看个人卡片" :style="{ backgroundColor: getAvatarColor(user.role) }">
@@ -171,21 +188,36 @@
                       {{ user.password }}
                     </code>
                   </td>
-                  <td>¥{{ formatMoney(user.balanceAmount) }} / {{ formatTokens(user.tokenLimit) }}</td>
+                  <td><strong class="quota-money-cell">¥{{ formatMoney(user.balanceAmount) }}</strong></td>
+                  <td><span class="quota-limit-pill">{{ formatTokens(user.tokenLimit) }}</span></td>
+                  <td><span class="quota-used-text">{{ formatTokens(user.tokenUsed) }}</span></td>
                   <td>{{ user.createdTime }}</td>
                   <td style="text-align: right;">
                     <div class="table-actions">
-                      <button class="action-btn text-btn" @click="editUserQuota(user)">额度</button>
+                      <button class="quota-edit-btn" @click="editUserQuota(user)">调整额度</button>
                       <button class="action-btn text-btn" @click="toggleUserRole(user)">切角色</button>
                       <button class="action-btn text-danger-btn" @click="deleteUser(user)">移除</button>
                     </div>
                   </td>
                 </tr>
                 <tr v-if="filteredUsers.length === 0">
-                  <td colspan="8" style="text-align: center; color: #64748b; padding: 32px 0;">未搜索到符合条件的用户</td>
+                  <td colspan="10" style="text-align: center; color: #64748b; padding: 32px 0;">未搜索到符合条件的用户</td>
                 </tr>
               </tbody>
             </table>
+            <div v-if="filteredUsers.length" class="admin-pagination">
+              <span>{{ paginationText(filteredUsers.length, userPage, userPageSize) }}</span>
+              <div>
+                <select v-model.number="userPageSize" class="pagination-size-select">
+                  <option :value="8">8 条/页</option>
+                  <option :value="12">12 条/页</option>
+                  <option :value="20">20 条/页</option>
+                </select>
+                <button :disabled="userPage <= 1" @click="userPage -= 1">上一页</button>
+                <strong>{{ userPage }} / {{ userPageCount }}</strong>
+                <button :disabled="userPage >= userPageCount" @click="userPage += 1">下一页</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -208,7 +240,7 @@
                 </div>
                 <button class="action-btn text-btn" @click="fetchAllData">刷新</button>
               </div>
-              <article v-for="ticket in paymentTickets" :key="ticket.id" class="payment-ticket-admin" :class="`status-${ticket.status}`">
+              <article v-for="ticket in paginatedPaymentTickets" :key="ticket.id" class="payment-ticket-admin" :class="`status-${ticket.status}`">
                 <header>
                   <div>
                     <span>{{ ticket.type === "refund" ? "退款申请" : "支付工单" }} #{{ ticket.id }}</span>
@@ -226,6 +258,14 @@
                 </div>
               </article>
               <div v-if="!paymentTickets.length" class="payment-empty">暂无支付工单或退款申请。</div>
+              <div v-else class="admin-pagination compact-pagination">
+                <span>{{ paginationText(paymentTickets.length, ticketPage, ticketPageSize) }}</span>
+                <div>
+                  <button :disabled="ticketPage <= 1" @click="ticketPage -= 1">上一页</button>
+                  <strong>{{ ticketPage }} / {{ ticketPageCount }}</strong>
+                  <button :disabled="ticketPage >= ticketPageCount" @click="ticketPage += 1">下一页</button>
+                </div>
+              </div>
             </section>
 
             <section class="payment-work-card spatial-glass-panel">
@@ -235,7 +275,7 @@
                   <strong>{{ paymentOrders.length }} 笔</strong>
                 </div>
               </div>
-              <article v-for="order in paymentOrders" :key="order.orderNo" class="payment-order-admin">
+              <article v-for="order in paginatedPaymentOrders" :key="order.orderNo" class="payment-order-admin">
                 <div>
                   <strong>¥{{ formatMoney(order.amount) }}</strong>
                   <span>{{ providerLabel(order.provider) }} · {{ paymentStatusLabel(order.status) }}</span>
@@ -244,6 +284,14 @@
                 <code>{{ order.orderNo }}</code>
               </article>
               <div v-if="!paymentOrders.length" class="payment-empty">暂无用户创建的支付订单。</div>
+              <div v-else class="admin-pagination compact-pagination">
+                <span>{{ paginationText(paymentOrders.length, orderPage, orderPageSize) }}</span>
+                <div>
+                  <button :disabled="orderPage <= 1" @click="orderPage -= 1">上一页</button>
+                  <strong>{{ orderPage }} / {{ orderPageCount }}</strong>
+                  <button :disabled="orderPage >= orderPageCount" @click="orderPage += 1">下一页</button>
+                </div>
+              </div>
             </section>
           </div>
 
@@ -256,12 +304,25 @@
             <table class="admin-table">
               <thead><tr><th>邮箱</th><th>入账金额</th><th>入账方式</th><th>时间</th></tr></thead>
               <tbody>
-                <tr v-for="r in filteredRecharges" :key="r.id"><td>{{ r.email }}</td><td>¥{{ formatMoney(r.amount) }}</td><td>余额充值</td><td>{{ r.time }}</td></tr>
+                <tr v-for="r in paginatedRecharges" :key="r.id"><td>{{ r.email }}</td><td>¥{{ formatMoney(r.amount) }}</td><td>余额充值</td><td>{{ r.time }}</td></tr>
                 <tr v-if="filteredRecharges.length === 0">
                   <td colspan="4" style="text-align: center; color: #64748b; padding: 32px 0;">暂无充值发放记录</td>
                 </tr>
               </tbody>
             </table>
+            <div v-if="filteredRecharges.length" class="admin-pagination">
+              <span>{{ paginationText(filteredRecharges.length, rechargePage, rechargePageSize) }}</span>
+              <div>
+                <select v-model.number="rechargePageSize" class="pagination-size-select">
+                  <option :value="8">8 条/页</option>
+                  <option :value="12">12 条/页</option>
+                  <option :value="20">20 条/页</option>
+                </select>
+                <button :disabled="rechargePage <= 1" @click="rechargePage -= 1">上一页</button>
+                <strong>{{ rechargePage }} / {{ rechargePageCount }}</strong>
+                <button :disabled="rechargePage >= rechargePageCount" @click="rechargePage += 1">下一页</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -310,7 +371,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="row in billingCharges" :key="`${row.time}-${row.paper}-${row.tokens}`">
+                <tr v-for="row in paginatedBillingCharges" :key="`${row.time}-${row.paper}-${row.tokens}`">
                   <td>{{ row.time || "—" }}</td>
                   <td>{{ cleanActionName(row.action) }}</td>
                   <td>{{ row.paper || "当前论文" }}</td>
@@ -326,6 +387,19 @@
                 </tr>
               </tbody>
             </table>
+            <div v-if="billingCharges.length" class="admin-pagination">
+              <span>{{ paginationText(billingCharges.length, billingPage, billingPageSize) }}</span>
+              <div>
+                <select v-model.number="billingPageSize" class="pagination-size-select">
+                  <option :value="8">8 条/页</option>
+                  <option :value="12">12 条/页</option>
+                  <option :value="20">20 条/页</option>
+                </select>
+                <button :disabled="billingPage <= 1" @click="billingPage -= 1">上一页</button>
+                <strong>{{ billingPage }} / {{ billingPageCount }}</strong>
+                <button :disabled="billingPage >= billingPageCount" @click="billingPage += 1">下一页</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -539,10 +613,23 @@
           </div>
           <div class="log-console-container spatial-glass-panel">
             <div class="console-body">
-              <div v-for="log in systemLogs" :key="log.time" class="log-line">
+              <div v-for="log in paginatedSystemLogs" :key="log.time" class="log-line">
                 <span class="log-time">[{{ log.time }}]</span>
                 <span class="log-tag" :class="log.level">{{ log.level.toUpperCase() }}</span>
                 <span class="log-msg">{{ log.message }}</span>
+              </div>
+            </div>
+            <div v-if="systemLogs.length" class="admin-pagination log-pagination">
+              <span>{{ paginationText(systemLogs.length, logPage, logPageSize) }}</span>
+              <div>
+                <select v-model.number="logPageSize" class="pagination-size-select">
+                  <option :value="20">20 条/页</option>
+                  <option :value="40">40 条/页</option>
+                  <option :value="80">80 条/页</option>
+                </select>
+                <button :disabled="logPage <= 1" @click="logPage -= 1">上一页</button>
+                <strong>{{ logPage }} / {{ logPageCount }}</strong>
+                <button :disabled="logPage >= logPageCount" @click="logPage += 1">下一页</button>
               </div>
             </div>
           </div>
@@ -581,7 +668,7 @@
                 <h4>历史消息</h4>
                 <span>{{ siteMessages.length }} 条</span>
               </div>
-              <article v-for="message in siteMessages" :key="message.id" class="site-message-row">
+              <article v-for="message in paginatedSiteMessages" :key="message.id" class="site-message-row">
                 <div>
                   <div class="site-message-title-row">
                     <strong>{{ message.title }}</strong>
@@ -600,6 +687,14 @@
                 </div>
               </article>
               <div v-if="siteMessages.length === 0" class="site-message-empty">暂无站内消息，发布后顶部滚动条才会出现。</div>
+              <div v-else class="admin-pagination compact-pagination">
+                <span>{{ paginationText(siteMessages.length, siteMessagePage, siteMessagePageSize) }}</span>
+                <div>
+                  <button :disabled="siteMessagePage <= 1" @click="siteMessagePage -= 1">上一页</button>
+                  <strong>{{ siteMessagePage }} / {{ siteMessagePageCount }}</strong>
+                  <button :disabled="siteMessagePage >= siteMessagePageCount" @click="siteMessagePage += 1">下一页</button>
+                </div>
+              </div>
             </section>
           </div>
         </div>
@@ -612,6 +707,16 @@
         <div class="admin-modal-card spatial-glass-panel" @click.stop>
           <h4>调整用户额度</h4>
           <p>更新 {{ selectedUser?.username }} 的余额与 Token 使用上限</p>
+          <div class="quota-modal-snapshot">
+            <div>
+              <span>当前余额</span>
+              <strong>¥{{ formatMoney(selectedUser?.balanceAmount) }}</strong>
+            </div>
+            <div>
+              <span>已用 Token</span>
+              <strong>{{ formatTokens(selectedUser?.tokenUsed) }}</strong>
+            </div>
+          </div>
           <div class="form-group" style="margin-top: 16px;">
             <label>Token 共享包限制</label>
             <input id="quota" name="quota" v-model.number="selectedUserQuota" type="number" placeholder="5000000" />
@@ -797,6 +902,20 @@ const searchQuery = ref("");
 const roleFilter = ref("全部");
 const rechargeQuery = ref("");
 const teamQuery = ref("");
+const userPage = ref(1);
+const userPageSize = ref(8);
+const ticketPage = ref(1);
+const ticketPageSize = ref(4);
+const orderPage = ref(1);
+const orderPageSize = ref(5);
+const rechargePage = ref(1);
+const rechargePageSize = ref(8);
+const billingPage = ref(1);
+const billingPageSize = ref(8);
+const logPage = ref(1);
+const logPageSize = ref(20);
+const siteMessagePage = ref(1);
+const siteMessagePageSize = ref(5);
 
 
 // Initialize scroll reveal animations
@@ -905,10 +1024,11 @@ const adminIcons = {
 // Filtered data computeds
 const filteredUsers = computed(() => {
   return systemUsers.value.filter(u => {
+    const query = searchQuery.value.toLowerCase();
     const matchesSearch = 
-      u.username.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      u.ip.toLowerCase().includes(searchQuery.value.toLowerCase());
+      String(u.username || "").toLowerCase().includes(query) ||
+      String(u.email || "").toLowerCase().includes(query) ||
+      String(u.ip || "").toLowerCase().includes(query);
     const matchesRole = roleFilter.value === "全部" || u.role === roleFilter.value;
     return matchesSearch && matchesRole;
   });
@@ -926,6 +1046,68 @@ const filteredTeams = computed(() => {
     return t.name.toLowerCase().includes(query) || t.identifier.toLowerCase().includes(query);
   });
 });
+
+function paginateRows(rows, page, pageSize) {
+  const safePage = Math.max(1, Number(page) || 1);
+  const safeSize = Math.max(1, Number(pageSize) || 10);
+  const start = (safePage - 1) * safeSize;
+  return rows.slice(start, start + safeSize);
+}
+
+function getPageCount(total, pageSize) {
+  return Math.max(1, Math.ceil((Number(total) || 0) / Math.max(1, Number(pageSize) || 10)));
+}
+
+function paginationText(total, page, pageSize) {
+  if (!total) return "暂无记录";
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(total, page * pageSize);
+  return `显示 ${start}-${end} 条，共 ${total} 条`;
+}
+
+function keepPageInRange(pageRef, countRef) {
+  if (pageRef.value > countRef.value) pageRef.value = countRef.value;
+  if (pageRef.value < 1) pageRef.value = 1;
+}
+
+const totalUserBalance = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.balanceAmount) || 0), 0));
+const totalUserTokenLimit = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.tokenLimit) || 0), 0));
+const totalUserTokenUsed = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.tokenUsed) || 0), 0));
+const userPageCount = computed(() => getPageCount(filteredUsers.value.length, userPageSize.value));
+const ticketPageCount = computed(() => getPageCount(paymentTickets.value.length, ticketPageSize.value));
+const orderPageCount = computed(() => getPageCount(paymentOrders.value.length, orderPageSize.value));
+const rechargePageCount = computed(() => getPageCount(filteredRecharges.value.length, rechargePageSize.value));
+const billingPageCount = computed(() => getPageCount(billingCharges.value.length, billingPageSize.value));
+const logPageCount = computed(() => getPageCount(systemLogs.value.length, logPageSize.value));
+const siteMessagePageCount = computed(() => getPageCount(siteMessages.value.length, siteMessagePageSize.value));
+const paginatedUsers = computed(() => paginateRows(filteredUsers.value, userPage.value, userPageSize.value));
+const paginatedPaymentTickets = computed(() => paginateRows(paymentTickets.value, ticketPage.value, ticketPageSize.value));
+const paginatedPaymentOrders = computed(() => paginateRows(paymentOrders.value, orderPage.value, orderPageSize.value));
+const paginatedRecharges = computed(() => paginateRows(filteredRecharges.value, rechargePage.value, rechargePageSize.value));
+const paginatedBillingCharges = computed(() => paginateRows(billingCharges.value, billingPage.value, billingPageSize.value));
+const paginatedSystemLogs = computed(() => paginateRows(systemLogs.value, logPage.value, logPageSize.value));
+const paginatedSiteMessages = computed(() => paginateRows(siteMessages.value, siteMessagePage.value, siteMessagePageSize.value));
+
+watch([searchQuery, roleFilter, userPageSize], () => {
+  userPage.value = 1;
+});
+watch([rechargeQuery, rechargePageSize], () => {
+  rechargePage.value = 1;
+});
+watch([ticketPageSize, orderPageSize, billingPageSize, logPageSize, siteMessagePageSize], () => {
+  ticketPage.value = 1;
+  orderPage.value = 1;
+  billingPage.value = 1;
+  logPage.value = 1;
+  siteMessagePage.value = 1;
+});
+watch(userPageCount, () => keepPageInRange(userPage, userPageCount));
+watch(ticketPageCount, () => keepPageInRange(ticketPage, ticketPageCount));
+watch(orderPageCount, () => keepPageInRange(orderPage, orderPageCount));
+watch(rechargePageCount, () => keepPageInRange(rechargePage, rechargePageCount));
+watch(billingPageCount, () => keepPageInRange(billingPage, billingPageCount));
+watch(logPageCount, () => keepPageInRange(logPage, logPageCount));
+watch(siteMessagePageCount, () => keepPageInRange(siteMessagePage, siteMessagePageCount));
 
 const engineUsageTrends = computed(() => {
   const stats = globalStats.value.engineStats || {};
@@ -1967,6 +2149,127 @@ async function removeSiteMessage(message) {
   background-color: rgba(0, 102, 255, 0.015);
 }
 
+.user-quota-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.user-quota-summary-grid article {
+  min-height: 86px;
+  padding: 18px 20px;
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.78));
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.04);
+}
+
+.user-quota-summary-grid span,
+.quota-modal-snapshot span {
+  display: block;
+  margin-bottom: 8px;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.user-quota-summary-grid strong {
+  color: #0f172a;
+  font-size: 1.35rem;
+  letter-spacing: 0;
+}
+
+.quota-money-cell {
+  color: #0f766e;
+  font-size: 0.98rem;
+}
+
+.quota-limit-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  font-weight: 700;
+}
+
+.quota-used-text {
+  color: #475569;
+  font-weight: 700;
+}
+
+.quota-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 82px;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.quota-edit-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.22);
+}
+
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+.admin-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-pagination button,
+.admin-pagination select {
+  height: 34px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.admin-pagination button {
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.admin-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.pagination-size-select {
+  padding: 0 10px;
+}
+
+.compact-pagination {
+  padding: 12px 0 0;
+  border-top: none;
+}
+
 .user-name-cell {
   display: flex;
   align-items: center;
@@ -2583,6 +2886,19 @@ async function removeSiteMessage(message) {
   color: #e2e8f0;
 }
 
+.log-pagination {
+  margin-top: 18px;
+  border-top-color: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+
+.log-pagination button,
+.log-pagination select {
+  background: rgba(15, 23, 42, 0.95);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
 /* Modals */
 .admin-modal-overlay {
   position: fixed;
@@ -2781,10 +3097,41 @@ async function removeSiteMessage(message) {
 .site-message-actions { align-self: center; gap: 12px; }
 .site-message-empty { padding: 46px 20px; color: #94a3b8; font-size: 0.84rem; text-align: center; }
 
+.quota-modal-snapshot {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.quota-modal-snapshot > div {
+  padding: 14px 16px;
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.quota-modal-snapshot strong {
+  color: #0f172a;
+  font-size: 1.05rem;
+}
+
 @media (max-width: 900px) {
   .site-message-admin-grid,
   .payment-admin-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  .user-quota-summary-grid,
+  .quota-modal-snapshot {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-pagination {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>
