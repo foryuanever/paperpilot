@@ -91,12 +91,10 @@ public class AiUsageService {
 
     public Map<String, Object> summary() {
         AppUserEntity user = currentUserService.getOrCreateDefaultUser();
-        List<AiUsageRecordEntity> recent = repository.findTop240ByUserIdOrderByCreatedAtDesc(user.getId());
-        boolean showingAllUsers = false;
-        if (recent.isEmpty()) {
-            recent = repository.findTop240ByOrderByCreatedAtDesc();
-            showingAllUsers = !recent.isEmpty();
-        }
+        boolean showingAllUsers = "管理员".equals(user.getRole());
+        List<AiUsageRecordEntity> recent = showingAllUsers
+            ? repository.findTop240ByOrderByCreatedAtDesc()
+            : repository.findTop240ByUserIdOrderByCreatedAtDesc(user.getId());
         long promptTokens = recent.stream().mapToLong(r -> safe(r.getPromptTokens())).sum();
         long completionTokens = recent.stream().mapToLong(r -> safe(r.getCompletionTokens())).sum();
         long totalTokens = recent.stream().mapToLong(r -> safe(r.getTotalTokens())).sum();
