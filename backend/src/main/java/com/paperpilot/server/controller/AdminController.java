@@ -164,10 +164,11 @@ public class AdminController {
     }
 
     @PatchMapping("/users/{id}/quota")
-    public void updateUserQuota(@PathVariable("id") Long id, @RequestBody Map<String, Long> body, HttpServletRequest request) {
-        Long quota = body.get("tokenLimit");
+    public void updateUserQuota(@PathVariable("id") Long id, @RequestBody Map<String, Object> body, HttpServletRequest request) {
+        Long quota = body.get("tokenLimit") == null ? null : Long.valueOf(String.valueOf(body.get("tokenLimit")));
+        Double balanceAmount = body.get("balanceAmount") == null ? null : Double.valueOf(String.valueOf(body.get("balanceAmount")));
         String ip = getClientIp(request);
-        authService.adminChangeQuota(id, quota, ip);
+        authService.adminChangeQuota(id, quota, balanceAmount, ip);
     }
 
     @PatchMapping("/users/{id}/role")

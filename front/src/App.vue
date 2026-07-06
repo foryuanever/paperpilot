@@ -143,15 +143,31 @@
         <div v-if="activeSiteMessage" class="announcement-backdrop" @click.self="markSiteMessageRead">
           <section class="announcement-dialog" role="dialog" aria-modal="true" aria-labelledby="site-announcement-title">
             <header>
-              <span>系统公告</span>
+              <span>系统公告（{{ activeSiteMessageIndex + 1 }}/{{ unreadSiteMessages.length }}）</span>
               <button type="button" aria-label="关闭系统公告" @click="markSiteMessageRead">×</button>
             </header>
             <div class="announcement-content">
+              <div v-if="unreadSiteMessages.length > 1" class="announcement-switcher" aria-label="公告列表">
+                <button
+                  v-for="(message, index) in unreadSiteMessages"
+                  :key="message.id"
+                  type="button"
+                  :class="{ active: message.id === activeSiteMessage.id }"
+                  @click="activeSiteMessage = message"
+                >
+                  {{ index + 1 }}
+                </button>
+              </div>
               <h2 id="site-announcement-title">{{ activeSiteMessage.title }}</h2>
               <time>{{ formatSiteMessageTime(activeSiteMessage.createdAt) }}</time>
               <p>{{ activeSiteMessage.content }}</p>
             </div>
-            <footer><button type="button" @click="markSiteMessageRead">已阅读</button></footer>
+            <footer>
+              <button v-if="unreadSiteMessages.length > 1" type="button" class="announcement-ghost" @click="showPreviousSiteMessage">上一条</button>
+              <button v-if="unreadSiteMessages.length > 1" type="button" class="announcement-ghost" @click="showNextSiteMessage">下一条</button>
+              <button v-if="unreadSiteMessages.length > 1" type="button" class="announcement-ghost" @click="markAllSiteMessagesRead">全部已读</button>
+              <button type="button" @click="markSiteMessageRead">本条已读</button>
+            </footer>
           </section>
         </div>
       </Transition>
@@ -406,6 +422,15 @@ let siteMessageTimer = null;
 const siteMessages = ref([]);
 const activeSiteMessage = ref(null);
 
+const unreadSiteMessages = computed(() => siteMessages.value.filter(
+  message => sessionStorage.getItem(siteMessageReadKey(message)) !== "read",
+));
+
+const activeSiteMessageIndex = computed(() => {
+  if (!activeSiteMessage.value) return 0;
+  return Math.max(0, unreadSiteMessages.value.findIndex(message => message.id === activeSiteMessage.value.id));
+});
+
 function siteMessageReadKey(message) {
   const userId = authStore.session.user?.userId || authStore.profile.email || "guest";
   const loginSerial = authStore.session.loginSerial || "current";
@@ -413,9 +438,7 @@ function siteMessageReadKey(message) {
 }
 
 function chooseUnreadSiteMessage() {
-  activeSiteMessage.value = siteMessages.value.find(
-    message => sessionStorage.getItem(siteMessageReadKey(message)) !== "read",
-  ) || null;
+  activeSiteMessage.value = unreadSiteMessages.value[0] || null;
 }
 
 function markSiteMessageRead() {
@@ -423,6 +446,27 @@ function markSiteMessageRead() {
   sessionStorage.setItem(siteMessageReadKey(activeSiteMessage.value), "read");
   activeSiteMessage.value = null;
   chooseUnreadSiteMessage();
+}
+
+function markAllSiteMessagesRead() {
+  unreadSiteMessages.value.forEach(message => {
+    sessionStorage.setItem(siteMessageReadKey(message), "read");
+  });
+  activeSiteMessage.value = null;
+}
+
+function showPreviousSiteMessage() {
+  const items = unreadSiteMessages.value;
+  if (!items.length) return;
+  const previous = (activeSiteMessageIndex.value - 1 + items.length) % items.length;
+  activeSiteMessage.value = items[previous];
+}
+
+function showNextSiteMessage() {
+  const items = unreadSiteMessages.value;
+  if (!items.length) return;
+  const next = (activeSiteMessageIndex.value + 1) % items.length;
+  activeSiteMessage.value = items[next];
 }
 
 function formatSiteMessageTime(value) {
@@ -887,6 +931,31 @@ async function submitPasswordChange() {
   padding: 22px 24px 26px;
 }
 
+.announcement-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 16px;
+}
+
+.announcement-switcher button {
+  width: 26px;
+  height: 26px;
+  border: 1px solid #dbe4ef;
+  border-radius: 50%;
+  color: #53627a;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.announcement-switcher button.active {
+  border-color: #0066ff;
+  color: #fff;
+  background: #0066ff;
+}
+
 .announcement-content h2 { margin: 0 0 10px; color: #171b24; font-size: 17px; line-height: 1.45; }
 .announcement-content time { color: #8a94a3; font-size: 12px; }
 .announcement-content p {
@@ -900,6 +969,8 @@ async function submitPasswordChange() {
 
 .announcement-dialog > footer {
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   justify-content: flex-end;
   padding: 12px 24px 18px;
   border-top: 1px solid #edf0f3;
@@ -914,6 +985,11 @@ async function submitPasswordChange() {
   background: #128b70;
   font-weight: 700;
   cursor: pointer;
+}
+
+.announcement-dialog > footer .announcement-ghost {
+  color: #334155;
+  background: #eef3f8;
 }
 
 .announcement-modal-enter-active,

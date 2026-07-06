@@ -144,7 +144,7 @@
                   <th>IP 地址</th>
                   <th>当前角色</th>
                   <th>明文密码</th>
-                  <th>余额 / Token消耗</th>
+                  <th>余额 / Token额度</th>
                   <th>注册时间</th>
                   <th style="text-align: right;">管理操作</th>
                 </tr>
@@ -171,11 +171,11 @@
                       {{ user.password }}
                     </code>
                   </td>
-                  <td>¥{{ formatMoney(user.balanceAmount) }} / {{ formatTokens(user.tokenUsed) }}</td>
+                  <td>¥{{ formatMoney(user.balanceAmount) }} / {{ formatTokens(user.tokenLimit) }}</td>
                   <td>{{ user.createdTime }}</td>
                   <td style="text-align: right;">
                     <div class="table-actions">
-                      <button class="action-btn text-btn" @click="editUserQuota(user)">配额</button>
+                      <button class="action-btn text-btn" @click="editUserQuota(user)">额度</button>
                       <button class="action-btn text-btn" @click="toggleUserRole(user)">切角色</button>
                       <button class="action-btn text-danger-btn" @click="deleteUser(user)">移除</button>
                     </div>
@@ -610,11 +610,15 @@
     <Transition name="fade">
       <div v-if="showQuotaModal" class="admin-modal-overlay" @click="showQuotaModal = false">
         <div class="admin-modal-card spatial-glass-panel" @click.stop>
-          <h4>调整 Token 配额</h4>
-          <p>更新 {{ selectedUser?.username }} 的 Token 消耗限额</p>
+          <h4>调整用户额度</h4>
+          <p>更新 {{ selectedUser?.username }} 的余额与 Token 使用上限</p>
           <div class="form-group" style="margin-top: 16px;">
             <label>Token 共享包限制</label>
             <input id="quota" name="quota" v-model.number="selectedUserQuota" type="number" placeholder="5000000" />
+          </div>
+          <div class="form-group" style="margin-top: 12px;">
+            <label>账户余额（元）</label>
+            <input id="balance" name="balance" v-model.number="selectedUserBalance" type="number" min="0" step="0.01" placeholder="50.00" />
           </div>
           <div class="modal-actions" style="margin-top: 24px;">
             <button class="spatial-btn spatial-btn-ghost" @click="showQuotaModal = false">取消</button>
@@ -809,6 +813,7 @@ const siteMessagePublishing = ref(false);
 
 const selectedUser = ref(null);
 const selectedUserQuota = ref(5000000);
+const selectedUserBalance = ref(0);
 const selectedTeam = ref(null);
 const selectedTeamMembers = ref([]);
 const teamMembersLoading = ref(false);
@@ -1295,13 +1300,17 @@ function getQuotaPercent(member) {
 function editUserQuota(user) {
   selectedUser.value = user;
   selectedUserQuota.value = user.tokenLimit;
+  selectedUserBalance.value = user.balanceAmount || 0;
   showQuotaModal.value = true;
 }
 
 async function saveUserQuota() {
   if (selectedUser.value) {
     try {
-      await paperpilotApi.updateUserQuota(selectedUser.value.id, selectedUserQuota.value);
+      await paperpilotApi.updateUserQuota(selectedUser.value.id, {
+        tokenLimit: selectedUserQuota.value,
+        balanceAmount: selectedUserBalance.value,
+      });
       showQuotaModal.value = false;
       await fetchAllData();
     } catch (error) {
@@ -1428,7 +1437,10 @@ async function saveBillingSettings() {
 }
 
 function cleanActionName(value) {
-  return String(value || "-").replace(/（[^）]*）/g, "");
+  const text = String(value || "-");
+  if (text.includes("PPT") || text.includes("Agent")) return "组会PPT Agent执行";
+  if (text.includes("综述") || text.includes("汇报") || text.includes("组会")) return "论文综述生成";
+  return "AI文章对话";
 }
 
 async function addTeam() {

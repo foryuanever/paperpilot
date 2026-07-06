@@ -185,14 +185,26 @@ public class AuthService {
     }
 
     @Transactional
-    public void adminChangeQuota(Long userId, Long tokenLimit, String ip) {
+    public void adminChangeQuota(Long userId, Long tokenLimit, Double balanceAmount, String ip) {
         AppUserEntity user = appUserRepository.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
         Long oldLimit = user.getTokenLimit();
-        user.setTokenLimit(tokenLimit);
+        Double oldBalance = user.getBalanceAmount();
+        if (tokenLimit != null) {
+            user.setTokenLimit(tokenLimit);
+        }
+        if (balanceAmount != null) {
+            user.setBalanceAmount(Math.max(0.0D, balanceAmount));
+        }
         appUserRepository.save(user);
 
-        logAction("管理员更新用户 " + user.getUsername() + " Token 限额为 " + tokenLimit + " (原限额: " + oldLimit + ")", "info", ip);
+        logAction(
+            "管理员更新用户 " + user.getUsername()
+                + " Token 限额 " + oldLimit + " → " + user.getTokenLimit()
+                + "，余额 ¥" + (oldBalance == null ? 0.0D : oldBalance) + " → ¥" + user.getBalanceAmount(),
+            "info",
+            ip
+        );
     }
 
     @Transactional

@@ -260,11 +260,16 @@ public class AiUsageService {
     }
 
     private List<Map<String, Object>> buildRecentCalls(List<AiUsageRecordEntity> recent) {
+        String fallbackPaperTitle = recent.stream()
+            .map(AiUsageRecordEntity::getPaperTitle)
+            .filter(this::isSpecificPaperTitle)
+            .findFirst()
+            .orElse("未关联论文标题");
         return recent.stream().limit(12).map(record -> {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("time", record.getCreatedAt() == null ? "" : record.getCreatedAt().format(TIME_LABEL));
-            row.put("action", blankTo(record.getAction(), "论文解析"));
-            row.put("paper", blankTo(record.getPaperTitle(), "当前论文"));
+            row.put("action", normalizeAction(record.getAction()));
+            row.put("paper", displayPaperTitle(record.getPaperTitle(), fallbackPaperTitle));
             row.put("model", blankTo(record.getModelName(), "unknown-model"));
             row.put("tokens", safe(record.getTotalTokens()));
             row.put("promptTokens", safe(record.getPromptTokens()));
@@ -274,6 +279,27 @@ public class AiUsageService {
             row.put("billingMultiplier", multiplierOf(record));
             return row;
         }).toList();
+    }
+
+    private String normalizeAction(String action) {
+        String value = blankTo(action, "");
+        if (value.contains("PPT") || value.contains("Agent")) return "组会PPT Agent执行";
+        if (value.contains("综述") || value.contains("汇报") || value.contains("组会")) return "论文综述生成";
+        return "AI文章对话";
+    }
+
+    private String displayPaperTitle(String paperTitle, String fallback) {
+        if (isSpecificPaperTitle(paperTitle)) return paperTitle.trim();
+        return fallback;
+    }
+
+    private boolean isSpecificPaperTitle(String paperTitle) {
+        if (paperTitle == null || paperTitle.isBlank()) return false;
+        String title = paperTitle.trim();
+        return !"当前论文".equals(title)
+            && !"未命名论文".equals(title)
+            && !"当前任务".equals(title)
+            && !"-".equals(title);
     }
 
     private long safe(Long value) {

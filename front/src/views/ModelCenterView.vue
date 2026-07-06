@@ -135,9 +135,9 @@
       <div class="panel-toolbar ledger-toolbar">
         <nav class="soft-tabs" aria-label="调用记录筛选">
           <button type="button" :class="{ active: activeLogTab === 'all' }" @click="activeLogTab = 'all'">全部</button>
-          <button type="button" :class="{ active: activeLogTab === 'report' }" @click="activeLogTab = 'report'">组会</button>
-          <button type="button" :class="{ active: activeLogTab === 'translate' }" @click="activeLogTab = 'translate'">翻译</button>
-          <button type="button" :class="{ active: activeLogTab === 'qa' }" @click="activeLogTab = 'qa'">问答</button>
+          <button type="button" :class="{ active: activeLogTab === 'ppt' }" @click="activeLogTab = 'ppt'">组会PPT</button>
+          <button type="button" :class="{ active: activeLogTab === 'review' }" @click="activeLogTab = 'review'">论文综述</button>
+          <button type="button" :class="{ active: activeLogTab === 'chat' }" @click="activeLogTab = 'chat'">AI对话</button>
         </nav>
         <button type="button" class="icon-button" :disabled="loading" title="刷新" @click="refreshUsage">↻</button>
       </div>
@@ -145,11 +145,11 @@
       <div class="ledger-filters">
         <label>
           开始
-          <input :value="dateRange.start" type="text" readonly>
+          <input v-model="dateFilterStart" type="date">
         </label>
         <label>
           结束
-          <input :value="dateRange.end" type="text" readonly>
+          <input v-model="dateFilterEnd" type="date">
         </label>
         <label>
           调用类型
@@ -375,6 +375,8 @@ const activeSubTab = ref("usage");
 const activeChart = ref("cost");
 const activeLogTab = ref("all");
 const selectedScene = ref("");
+const dateFilterStart = ref("");
+const dateFilterEnd = ref("");
 const selectedProvider = ref("alipay");
 const paying = ref(false);
 const paymentMessage = ref("");
@@ -399,15 +401,18 @@ const pendingOrderCount = computed(() => paymentOrders.value.filter((order) => [
 const openTicketCount = computed(() => paymentTickets.value.filter((ticket) => ticket.status === "open").length);
 const processedTicketCount = computed(() => paymentTickets.value.filter((ticket) => ["processed", "rejected", "closed"].includes(ticket.status)).length);
 
-const sceneOptions = computed(() => [
-  ...new Set(usageStore.state.recentCalls.map((row) => row.action).filter(Boolean)),
-]);
+const sceneOptions = computed(() => ["组会PPT Agent执行", "论文综述生成", "AI文章对话"]);
 
 const filteredCalls = computed(() => usageStore.state.recentCalls.filter((row) => {
   if (selectedScene.value && row.action !== selectedScene.value) return false;
-  if (activeLogTab.value === "report") return /组会|汇报|综述/.test(String(row.action || ""));
-  if (activeLogTab.value === "translate") return /翻译/.test(String(row.action || ""));
-  if (activeLogTab.value === "qa") return /问答|提问/.test(String(row.action || ""));
+  if (dateFilterStart.value || dateFilterEnd.value) {
+    const rowDate = rowDateValue(row.time);
+    if (dateFilterStart.value && rowDate && rowDate < dateFilterStart.value) return false;
+    if (dateFilterEnd.value && rowDate && rowDate > dateFilterEnd.value) return false;
+  }
+  if (activeLogTab.value === "ppt") return row.action === "组会PPT Agent执行";
+  if (activeLogTab.value === "review") return row.action === "论文综述生成";
+  if (activeLogTab.value === "chat") return row.action === "AI文章对话";
   return true;
 }));
 
@@ -419,8 +424,8 @@ const totalRequestsDisplay = computed(() => {
 const dateRange = computed(() => {
   const rows = usageStore.state.dailyUsage || [];
   return {
-    start: rows[0]?.label || "-",
-    end: rows[rows.length - 1]?.label || "-",
+    start: dateFilterStart.value || rows[0]?.label || "-",
+    end: dateFilterEnd.value || rows[rows.length - 1]?.label || "-",
   };
 });
 
@@ -471,6 +476,7 @@ async function refreshUsage() {
   loading.value = true;
   try {
     await usageStore.fetchSummary();
+    hydrateDateFilters();
   } catch (error) {
     authStore.addNotification({
       title: "用量加载失败",
@@ -479,6 +485,26 @@ async function refreshUsage() {
   } finally {
     loading.value = false;
   }
+}
+
+function hydrateDateFilters() {
+  const rows = usageStore.state.dailyUsage || [];
+  if (!dateFilterStart.value && rows[0]?.label) dateFilterStart.value = labelToDateInput(rows[0].label);
+  if (!dateFilterEnd.value && rows[rows.length - 1]?.label) dateFilterEnd.value = labelToDateInput(rows[rows.length - 1].label);
+}
+
+function labelToDateInput(label) {
+  const year = new Date().getFullYear();
+  const [month, day] = String(label || "").split("-");
+  if (!month || !day) return "";
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+}
+
+function rowDateValue(value) {
+  const [datePart] = String(value || "").split(" ");
+  const [month, day] = datePart.split("-");
+  if (!month || !day) return "";
+  return `${new Date().getFullYear()}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 }
 
 async function createRechargeOrder() {

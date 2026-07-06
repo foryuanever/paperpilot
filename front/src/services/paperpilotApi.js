@@ -281,7 +281,8 @@ export const paperpilotApi = {
     return data;
   },
   async updateUserQuota(userId, tokenLimit) {
-    const { data } = await apiClient.patch(`/api/admin/users/${userId}/quota`, { tokenLimit });
+    const payload = typeof tokenLimit === "object" ? tokenLimit : { tokenLimit };
+    const { data } = await apiClient.patch(`/api/admin/users/${userId}/quota`, payload);
     return data;
   },
   async updateUserRole(userId, role) {
