@@ -207,16 +207,19 @@ public class AiUsageService {
     private List<Map<String, Object>> buildDailyUsage(List<AiUsageRecordEntity> recent) {
         Map<LocalDate, Long> daily = new LinkedHashMap<>();
         Map<LocalDate, Long> calls = new LinkedHashMap<>();
+        Map<LocalDate, Double> costs = new LinkedHashMap<>();
         for (int i = 6; i >= 0; i--) {
             LocalDate day = LocalDate.now().minusDays(i);
             daily.put(day, 0L);
             calls.put(day, 0L);
+            costs.put(day, 0.0D);
         }
         for (AiUsageRecordEntity record : recent) {
             LocalDate day = record.getCreatedAt() == null ? null : record.getCreatedAt().toLocalDate();
             if (day != null && daily.containsKey(day)) {
                 daily.put(day, daily.get(day) + safe(record.getTotalTokens()));
                 calls.put(day, calls.get(day) + 1L);
+                costs.put(day, costs.get(day) + chargeOf(record));
             }
         }
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -224,7 +227,8 @@ public class AiUsageService {
             rows.add(Map.of(
                 "label", entry.getKey().format(DAY_LABEL),
                 "tokens", entry.getValue(),
-                "calls", calls.getOrDefault(entry.getKey(), 0L)
+                "calls", calls.getOrDefault(entry.getKey(), 0L),
+                "cost", money(costs.getOrDefault(entry.getKey(), 0.0D))
             ));
         }
         return rows;

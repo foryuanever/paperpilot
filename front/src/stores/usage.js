@@ -32,6 +32,8 @@ const defaultState = {
   tpm: 0,
   mpm: 0,
   currentMinuteCost: 0,
+  unitPrice: 0,
+  billingMultiplier: 1,
   dailyUsage: [],
   modelBreakdown: [],
   sceneBreakdown: [],

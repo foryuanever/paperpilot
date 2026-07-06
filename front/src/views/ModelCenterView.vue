@@ -375,7 +375,6 @@ const activeSubTab = ref("usage");
 const activeChart = ref("cost");
 const activeLogTab = ref("all");
 const selectedScene = ref("");
-const TOKEN_UNIT_PRICE = 0.02;
 const selectedProvider = ref("alipay");
 const paying = ref(false);
 const paymentMessage = ref("");
@@ -428,7 +427,9 @@ const dateRange = computed(() => {
 const chartRows = computed(() => (usageStore.state.dailyUsage || []).map((item) => {
   const tokens = Number(item.tokens || 0);
   const calls = Number(item.calls || 0);
-  const cost = tokens * TOKEN_UNIT_PRICE / 1000;
+  const cost = item.cost !== undefined && item.cost !== null
+    ? Number(item.cost || 0)
+    : tokens * Number(usageStore.state.unitPrice || 0) * Number(usageStore.state.billingMultiplier || 1) / 1000;
   return {
     label: item.label,
     tokens,
@@ -592,7 +593,7 @@ function formatTokens(value) {
 }
 
 function formatMoney(value) {
-  return `$${Number(value || 0).toFixed(4)}`;
+  return `¥${Number(value || 0).toFixed(4)}`;
 }
 
 function formatCny(value) {
@@ -626,7 +627,7 @@ function formatDateTime(value) {
 
 function rowCost(row) {
   if (row?.cost !== undefined && row?.cost !== null) return Number(row.cost || 0);
-  return Number(row?.tokens || 0) * TOKEN_UNIT_PRICE / 1000;
+  return Number(row?.tokens || 0) * Number(usageStore.state.unitPrice || 0) * Number(usageStore.state.billingMultiplier || 1) / 1000;
 }
 
 const sceneMap = {
