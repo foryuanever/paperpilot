@@ -393,26 +393,14 @@
                   <button type="button" :class="{ active: markdownMode === 'edit' }" title="只显示正文编辑区" @click="markdownMode = 'edit'">内容</button>
                   <button type="button" :class="{ active: markdownMode === 'preview' }" title="只显示发布后的预览效果" @click="markdownMode = 'preview'">预览</button>
                   <button type="button" :class="{ active: markdownMode === 'split' }" title="左边编辑，右边实时预览" @click="markdownMode = 'split'">对照</button>
-                  <button type="button" class="icon-tool" @click="insertMarkdown('- ', '')" title="插入无序列表">☷</button>
-                  <button type="button" class="icon-tool" @click="insertMarkdown('`', '`')" title="插入行内代码">▣</button>
-                  <button type="button" class="icon-tool" title="展开编辑器">⛶</button>
                 </div>
                 <div class="markdown-toolbar">
                   <button type="button" title="加粗：**文字**" @click="insertMarkdown('**', '**')">B</button>
-                  <button type="button" title="斜体：*文字*" @click="insertMarkdown('*', '*')">I</button>
-                  <button type="button" title="删除线：~~文字~~" @click="insertMarkdown('~~', '~~')">S</button>
                   <button type="button" title="标题：# 标题" @click="insertMarkdown('# ', '')">H</button>
                   <button type="button" title="无序列表" @click="insertMarkdown('- ', '')">•</button>
-                  <button type="button" title="有序列表" @click="insertMarkdown('1. ', '')">≡</button>
                   <button type="button" title="引用块，适合放重点说明" @click="insertMarkdown('> ', '')">“</button>
                   <button type="button" title="插入链接" @click="insertMarkdown('[链接文字](', ')')">🔗</button>
-                  <button type="button" title="插入图片 Markdown" @click="insertMarkdown('![图片说明](', ')')">▧</button>
-                  <button type="button" title="行内代码" @click="insertMarkdown('`', '`')">&lt;/&gt;</button>
-                  <button type="button" title="插入表格" @click="insertMarkdown('\\n| 列 | 列 |\\n| --- | --- |\\n| 内容 | 内容 |\\n', '')">▦</button>
-                  <button type="button" title="分割线" @click="insertMarkdown('\\n---\\n', '')">—</button>
                   <button type="button" title="插入公告式发帖模板" @click="insertAnnouncementTemplate">模板</button>
-                  <button type="button" title="撤销暂未开放">↶</button>
-                  <button type="button" title="重做暂未开放">↷</button>
                   <button type="button" title="清空正文" @click="clearMarkdownContent">⌫</button>
                 </div>
                 <div v-if="markdownMode === 'edit'" class="markdown-body">
@@ -424,6 +412,7 @@
                     v-model="form.content"
                     rows="12"
                     placeholder="第一段写核心信息。\n\n第二段写补充说明。\n\n> 引用块适合放价格、步骤、实验条件或重点列表。\n\n官网：[链接文字](https://example.com)"
+                    @paste="handleEditorPaste"
                   ></textarea>
                 </div>
                 <div v-else-if="markdownMode === 'split'" class="markdown-split">
@@ -436,6 +425,7 @@
                       v-model="form.content"
                       rows="12"
                       placeholder="第一段写核心信息。"
+                      @paste="handleEditorPaste"
                     ></textarea>
                   </div>
                   <div class="markdown-rendered" v-html="renderedMarkdown"></div>
@@ -451,24 +441,11 @@
             </label>
             <div class="upload-grid">
               <label class="upload-card">
-                <input type="file" accept="image/*" multiple @change="handleImageUpload" />
-                <span class="upload-card-icon">图</span>
-                <strong>上传并插入图片</strong>
-                <small>自动插入到正文光标处，单张不超过 4MB</small>
-              </label>
-              <label class="upload-card">
                 <input type="file" multiple @change="handleAttachmentUpload" />
                 <span class="upload-card-icon file">附</span>
                 <strong>上传并插入附件</strong>
-                <small>自动插入下载链接，支持文档、表格、压缩包</small>
+                <small>图片请直接粘贴到正文；这里仅上传文档、表格、压缩包等附件。</small>
               </label>
-            </div>
-            <div v-if="form.images.length" class="upload-preview-grid">
-              <div v-for="(image, index) in form.images" :key="`${image.name}-${index}`">
-                <img :src="image.data" :alt="image.name" />
-                <span>{{ image.name }}</span>
-                <button @click="form.images.splice(index, 1)">×</button>
-              </div>
             </div>
             <div v-if="form.attachments.length" class="upload-file-list">
               <div v-for="(file, index) in form.attachments" :key="`${file.name}-${index}`">
@@ -832,6 +809,23 @@ function clearMarkdownContent() {
   }
 }
 
+async function handleEditorPaste(event) {
+  const items = Array.from(event.clipboardData?.items || []);
+  const imageItems = items.filter(item => item.type?.startsWith("image/"));
+  if (!imageItems.length) return;
+  event.preventDefault();
+  for (const item of imageItems) {
+    const file = item.getAsFile();
+    if (!file) continue;
+    if (file.size > 4 * 1024 * 1024) {
+      moderationError.value = "粘贴的图片超过 4MB，请压缩后再粘贴。";
+      continue;
+    }
+    const image = await readFile(file);
+    await insertMarkdown(`\n\n![${escapeMarkdownText(image.name || "粘贴图片")}](${image.data})\n\n`, "");
+  }
+}
+
 function isMine(post) {
   return String(post.authorUserId || "") === String(authStore.profile.userId || "")
     || post.author === authStore.profile.name;
@@ -880,20 +874,6 @@ function replyAvatars(post) {
 
 function isHotPost(post) {
   return Number(post.likes || 0) + Number(post.replies?.length || 0) >= 50;
-}
-
-async function handleImageUpload(event) {
-  const files = Array.from(event.target.files || []);
-  for (const file of files) {
-    if (file.size > 4 * 1024 * 1024) {
-      moderationError.value = `图片 ${file.name} 超过 4MB`;
-      continue;
-    }
-    const image = await readFile(file);
-    form.images.push(image);
-    await insertMarkdown(`\n\n![${escapeMarkdownText(image.name)}](${image.data})\n\n`, "");
-  }
-  event.target.value = "";
 }
 
 async function handleAttachmentUpload(event) {
@@ -1191,7 +1171,7 @@ button { cursor: pointer; }
 .publish-form textarea { padding: 12px; resize: vertical; line-height: 1.6; box-sizing: border-box; }
 .publish-form input:focus, .publish-form select:focus, .publish-form textarea:focus { border-color: #75a6f6; box-shadow: 0 0 0 3px #edf4ff; }
 .wide-field + .wide-field { margin-top: 12px; }
-.upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.upload-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 14px; }
 .upload-card { min-height: 82px; display: flex !important; flex-direction: row !important; align-items: center; gap: 12px !important; padding: 13px; border: 1px dashed #bfd0ea; border-radius: 12px; background: #f8fbff; cursor: pointer; }
 .upload-card:hover { border-color: #6fa0ee; background: #f2f7ff; }
 .upload-card input { display: none; }
@@ -1199,11 +1179,6 @@ button { cursor: pointer; }
 .upload-card-icon.file { color: #6752d6; background: #efebff; }
 .upload-card strong { color: #344158; font-size: 12px; }
 .upload-card small { color: #8d98aa; font-size: 10px; font-weight: 400; }
-.upload-preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 9px; margin-top: 11px; }
-.upload-preview-grid > div { position: relative; overflow: hidden; aspect-ratio: 4 / 3; border: 1px solid #dfe6f0; border-radius: 10px; background: #f4f7fb; }
-.upload-preview-grid img { width: 100%; height: 100%; object-fit: cover; }
-.upload-preview-grid > div > span { position: absolute; inset: auto 0 0; overflow: hidden; padding: 18px 8px 7px; color: #fff; background: linear-gradient(transparent, rgba(18, 27, 43, .72)); text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
-.upload-preview-grid button { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border: 0; border-radius: 50%; color: #fff; background: rgba(24, 32, 47, .72); }
 .upload-file-list { display: flex; flex-direction: column; gap: 7px; margin-top: 10px; }
 .upload-file-list > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid #e1e7f0; border-radius: 10px; }
 .upload-file-list > div > span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
