@@ -69,6 +69,17 @@ export const paperpilotApi = {
     const { data } = await apiClient.post("/api/papers/import", payload);
     return data;
   },
+  async importZoteroFile(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const { data } = await apiClient.post("/api/papers/import-zotero", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 180000,
+    });
+    return data;
+  },
   async getDashboardSummary() {
     const { data } = await apiClient.get("/api/dashboard/summary");
     return data;

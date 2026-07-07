@@ -222,9 +222,43 @@
         <header>
           <div>
             <h2>添加个人文献</h2>
-            <p>手动补充题录，可同时上传本地 PDF；导入后会直接进入当前账号文献库。</p>
+            <p>支持从 Zotero 批量导入题录，也可以手动补充单篇论文并上传本地 PDF。</p>
           </div>
         </header>
+        <section class="zotero-import-panel">
+          <div class="zotero-copy">
+            <span>Zotero 导入</span>
+            <h3>把 Zotero 文件夹批量带进文献库</h3>
+            <p>在 Zotero 里选择条目或文件夹，导出为 BibTeX、RIS 或 CSL JSON 后上传。系统会读取标题、作者、年份、期刊、DOI/URL，并自动合并重复文献。</p>
+            <div class="zotero-format-row">
+              <b>BibTeX</b>
+              <b>RIS</b>
+              <b>CSL JSON</b>
+            </div>
+          </div>
+          <div class="zotero-action-box">
+            <label class="zotero-file-drop">
+              <input type="file" accept=".bib,.ris,.json,application/json,text/plain" @change="selectZoteroFile" />
+              <strong>{{ zoteroFile?.name || "选择 Zotero 导出文件" }}</strong>
+              <small>{{ zoteroFile ? formatFileSize(zoteroFile.size) : "从 Zotero 导出的 .bib / .ris / .json" }}</small>
+            </label>
+            <button class="spatial-btn spatial-btn-accent" type="button" :disabled="zoteroImporting || !zoteroFile" @click="submitZoteroImport">
+              {{ zoteroImporting ? "导入中…" : "从 Zotero 导入" }}
+            </button>
+            <div v-if="zoteroResult" class="zotero-result" :class="{ partial: zoteroResult.failed > 0 }">
+              <strong>识别 {{ zoteroResult.detected }} 篇，已导入 {{ zoteroResult.imported }} 篇</strong>
+              <span v-if="zoteroResult.failed">失败 {{ zoteroResult.failed }} 篇，可能触发每日导入额度或缺少标题。</span>
+              <span v-else>导入完成，文献已进入当前账号文献库。</span>
+            </div>
+            <details v-if="zoteroFailedItems.length" class="zotero-failed-details">
+              <summary>查看失败明细</summary>
+              <p v-for="item in zoteroFailedItems" :key="item.title">
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.message }}</span>
+              </p>
+            </details>
+          </div>
+        </section>
         <form class="personal-paper-form" @submit.prevent="submitPersonalPaper">
           <label class="field-wide">
             <span>论文标题 *</span>
@@ -507,6 +541,9 @@ const personalPaper = reactive({
 });
 const personalPdf = ref(null);
 const personalImporting = ref(false);
+const zoteroFile = ref(null);
+const zoteroImporting = ref(false);
+const zoteroResult = ref(null);
 const uploadingWorkspace = ref("");
 const syncingLibrary = ref(false);
 const lastSyncAt = ref(null);
@@ -908,6 +945,41 @@ function selectPersonalPdf(event) {
   personalPdf.value = event.target.files?.[0] || null;
 }
 
+function selectZoteroFile(event) {
+  zoteroFile.value = event.target.files?.[0] || null;
+  zoteroResult.value = null;
+}
+
+const zoteroFailedItems = computed(() =>
+  (zoteroResult.value?.items || []).filter((item) => item.status === "failed").slice(0, 8),
+);
+
+function formatFileSize(size) {
+  const value = Number(size || 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+async function submitZoteroImport() {
+  if (!zoteroFile.value || zoteroImporting.value) return;
+  zoteroImporting.value = true;
+  zoteroResult.value = null;
+  try {
+    const result = await paperpilotApi.importZoteroFile(zoteroFile.value);
+    zoteroResult.value = result;
+    await refreshLibraryFromBackend();
+    refreshFilterOptions();
+    showToast(`Zotero 已导入 ${result.imported || 0} 篇文献`);
+    if (result.imported > 0) selectTab("papers");
+  } catch (error) {
+    console.error("zotero import failed", error);
+    showToast(error?.response?.data?.message || "Zotero 导入失败，请检查导出文件格式");
+  } finally {
+    zoteroImporting.value = false;
+  }
+}
+
 function resetPersonalPaper() {
   Object.assign(personalPaper, {
     title: "",
@@ -1163,6 +1235,151 @@ onUnmounted(() => {
 
 .library-management-panel h2 { margin: 0; color: var(--spatial-graphite); font-size: 20px; }
 .library-management-panel header p { max-width: 70ch; margin: 7px 0 0; color: var(--spatial-gray); font-size: 13px; line-height: 1.6; }
+
+.zotero-import-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 20px;
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid #d8e5f6;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f8fbff 0%, #ffffff 58%, #f7fff9 100%);
+}
+
+.zotero-copy {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+}
+
+.zotero-copy > span {
+  width: max-content;
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: #0f766e;
+  background: #dffcf3;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.zotero-copy h3 {
+  margin: 0;
+  color: var(--spatial-graphite);
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.zotero-copy p {
+  max-width: 68ch;
+  margin: 0;
+  color: #53647a;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.zotero-format-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.zotero-format-row b {
+  padding: 5px 9px;
+  border: 1px solid #d5e0ee;
+  border-radius: 999px;
+  color: #36506f;
+  background: #ffffff;
+  font-size: 11px;
+}
+
+.zotero-action-box {
+  display: grid;
+  gap: 10px;
+}
+
+.zotero-file-drop {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-height: 88px;
+  align-content: center;
+  padding: 15px 16px;
+  border: 1px dashed #91b3df;
+  border-radius: 12px;
+  color: #244a7b;
+  background: #f4f8ff;
+  cursor: pointer;
+}
+
+.zotero-file-drop input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.zotero-file-drop strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.zotero-file-drop small {
+  color: #6c7e93;
+  font-size: 11px;
+}
+
+.zotero-result {
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid #a9efd2;
+  border-radius: 11px;
+  color: #047857;
+  background: #edfff7;
+}
+
+.zotero-result.partial {
+  border-color: #fed7aa;
+  color: #9a3412;
+  background: #fff7ed;
+}
+
+.zotero-result strong,
+.zotero-result span {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.zotero-failed-details {
+  padding: 10px 12px;
+  border: 1px solid #e5edf6;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.zotero-failed-details summary {
+  color: #36506f;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.zotero-failed-details p {
+  display: grid;
+  gap: 2px;
+  margin: 9px 0 0;
+  color: #6b7280;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.zotero-failed-details strong {
+  color: #26364d;
+}
 
 .personal-paper-form {
   display: grid;
@@ -2094,6 +2311,7 @@ onUnmounted(() => {
 
   .library-subnav { overflow-x: auto; }
   .library-subnav button { min-width: 138px; }
+  .zotero-import-panel { grid-template-columns: 1fr; }
   .personal-paper-form { grid-template-columns: 1fr; }
   .field-wide { grid-column: auto; }
   .sync-facts { grid-template-columns: 1fr; }

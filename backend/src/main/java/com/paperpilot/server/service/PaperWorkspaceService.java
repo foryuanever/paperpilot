@@ -322,6 +322,9 @@ public class PaperWorkspaceService {
     }
 
     private SearchPaperVO enrichImport(PaperImportRequest request) {
+        if ("Zotero".equalsIgnoreCase(firstNonBlank(request.getImportSource()))) {
+            return null;
+        }
         String titleCandidate = shouldTrustRequestMetadata(request) ? firstNonBlank(request.getTitle()) : "";
         List<String> candidates = List.of(
             firstNonBlank(request.getPaperId()),

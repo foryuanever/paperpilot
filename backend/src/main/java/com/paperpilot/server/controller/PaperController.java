@@ -5,6 +5,7 @@ import com.paperpilot.server.dto.PaperImportByUrlRequest;
 import com.paperpilot.server.service.ExternalSearchService;
 import com.paperpilot.server.vo.SearchPaperVO;
 import com.paperpilot.server.service.PaperWorkspaceService;
+import com.paperpilot.server.service.ZoteroImportService;
 import com.paperpilot.server.vo.PaperWorkspaceVO;
 import com.paperpilot.server.vo.LibraryPaperVO;
 import jakarta.validation.Valid;
@@ -31,16 +32,19 @@ import java.net.http.HttpResponse;
 public class PaperController {
 
     private final PaperWorkspaceService paperWorkspaceService;
+    private final ZoteroImportService zoteroImportService;
     private final ExternalSearchService externalSearchService;
     private final com.paperpilot.server.service.ResearchDataService researchDataService;
     private final HttpClient httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.ALWAYS).build();
 
     public PaperController(
             PaperWorkspaceService paperWorkspaceService,
+            ZoteroImportService zoteroImportService,
             ExternalSearchService externalSearchService,
             com.paperpilot.server.service.ResearchDataService researchDataService
     ) {
         this.paperWorkspaceService = paperWorkspaceService;
+        this.zoteroImportService = zoteroImportService;
         this.externalSearchService = externalSearchService;
         this.researchDataService = researchDataService;
     }
@@ -48,6 +52,11 @@ public class PaperController {
     @PostMapping("/import")
     public PaperWorkspaceVO importPaper(@Valid @RequestBody PaperImportRequest request) {
         return paperWorkspaceService.importPaper(request);
+    }
+
+    @PostMapping(value = "/import-zotero", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public java.util.Map<String, Object> importZotero(@RequestParam("file") MultipartFile file) throws IOException {
+        return zoteroImportService.importFile(file);
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
