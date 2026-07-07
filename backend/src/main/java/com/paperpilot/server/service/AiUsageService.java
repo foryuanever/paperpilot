@@ -63,7 +63,7 @@ public class AiUsageService {
         entity.setTotalTokens(totalTokens);
         entity.setUnitPrice(billingService.unitPrice());
         entity.setBillingMultiplier(billingService.multiplier());
-        entity.setChargeAmount(billingService.calculateCharge(totalTokens));
+        entity.setChargeAmount(billingService.calculateCharge(action, totalTokens));
         repository.save(entity);
     }
 
@@ -78,7 +78,7 @@ public class AiUsageService {
         long totalTokens
     ) {
         if (userId == null || totalTokens <= 0) return;
-        double charge = billingService.calculateCharge(totalTokens);
+        double charge = billingService.calculateCharge(action, totalTokens);
         appUserRepository.findById(userId).ifPresent(user -> {
             long current = user.getTokenUsed() == null ? 0L : user.getTokenUsed();
             user.setTokenUsed(current + totalTokens);
@@ -316,8 +316,10 @@ public class AiUsageService {
 
     private double chargeOf(AiUsageRecordEntity record) {
         double saved = money(record.getChargeAmount());
+        double calculated = billingService.calculateCharge(record.getAction(), safe(record.getTotalTokens()));
+        if (billingService.isPptAgentAction(record.getAction())) return Math.max(saved, calculated);
         if (saved > 0) return saved;
-        return billingService.calculateCharge(safe(record.getTotalTokens()));
+        return calculated;
     }
 
     private double unitPriceOf(AiUsageRecordEntity record) {

@@ -212,9 +212,16 @@ public class AdminController {
             row.put("completionTokens", record.getCompletionTokens());
             double unitPrice = record.getUnitPrice() != null && record.getUnitPrice() > 0 ? record.getUnitPrice() : billingService.unitPrice();
             double multiplier = record.getBillingMultiplier() != null && record.getBillingMultiplier() > 0 ? record.getBillingMultiplier() : billingService.multiplier();
-            double chargeAmount = record.getChargeAmount() != null && record.getChargeAmount() > 0
+            double savedChargeAmount = record.getChargeAmount() != null && record.getChargeAmount() > 0
                 ? record.getChargeAmount()
-                : billingService.calculateCharge(record.getTotalTokens() == null ? 0L : record.getTotalTokens());
+                : 0.0D;
+            double calculatedChargeAmount = billingService.calculateCharge(
+                record.getAction(),
+                record.getTotalTokens() == null ? 0L : record.getTotalTokens()
+            );
+            double chargeAmount = billingService.isPptAgentAction(record.getAction())
+                ? Math.max(savedChargeAmount, calculatedChargeAmount)
+                : (savedChargeAmount > 0 ? savedChargeAmount : calculatedChargeAmount);
             row.put("chargeAmount", chargeAmount);
             row.put("unitPrice", unitPrice);
             row.put("billingMultiplier", multiplier);
@@ -227,9 +234,10 @@ public class AdminController {
     public Map<String, Object> updateBillingSettings(@RequestBody Map<String, Object> body, HttpServletRequest request) {
         double unitPrice = Double.parseDouble(String.valueOf(body.getOrDefault("unitPrice", billingService.unitPrice())));
         double multiplier = Double.parseDouble(String.valueOf(body.getOrDefault("multiplier", billingService.multiplier())));
+        double pptAgentMinCharge = Double.parseDouble(String.valueOf(body.getOrDefault("pptAgentMinCharge", billingService.pptAgentMinCharge())));
         try {
-            Map<String, Object> result = billingService.update(unitPrice, multiplier);
-            authService.logAction("更新计费规则: 单价 ¥" + unitPrice + " / 1K Token, 倍率 " + multiplier + "x", "info", getClientIp(request));
+            Map<String, Object> result = billingService.update(unitPrice, multiplier, pptAgentMinCharge);
+            authService.logAction("更新计费规则: 单价 ¥" + unitPrice + " / 1K Token, 倍率 " + multiplier + "x, PPT Agent最低扣费 ¥" + pptAgentMinCharge, "info", getClientIp(request));
             return result;
         } catch (IllegalArgumentException error) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, error.getMessage());
