@@ -222,76 +222,79 @@
         <header>
           <div>
             <h2>添加个人文献</h2>
-            <p>支持从 Zotero 批量导入题录，也可以手动补充单篇论文并上传本地 PDF。</p>
+            <p>左侧手动补充单篇论文，右侧从 Zotero 批量导入题录。</p>
           </div>
         </header>
-        <section class="zotero-import-panel">
-          <div class="zotero-copy">
-            <span>Zotero 导入</span>
-            <h3>把 Zotero 文件夹批量带进文献库</h3>
-            <p>在 Zotero 里选择条目或文件夹，导出为 BibTeX、RIS 或 CSL JSON 后上传。系统会读取标题、作者、年份、期刊、DOI/URL，并自动合并重复文献。</p>
-            <div class="zotero-format-row">
-              <b>BibTeX</b>
-              <b>RIS</b>
-              <b>CSL JSON</b>
-            </div>
-          </div>
-          <div class="zotero-action-box">
-            <label class="zotero-file-drop">
-              <input type="file" accept=".bib,.ris,.json,application/json,text/plain" @change="selectZoteroFile" />
-              <strong>{{ zoteroFile?.name || "选择 Zotero 导出文件" }}</strong>
-              <small>{{ zoteroFile ? formatFileSize(zoteroFile.size) : "从 Zotero 导出的 .bib / .ris / .json" }}</small>
+        <div class="library-add-layout">
+          <form class="personal-paper-form" @submit.prevent="submitPersonalPaper">
+            <label class="field-wide">
+              <span>论文标题 *</span>
+              <input v-model="personalPaper.title" required placeholder="输入完整论文标题" />
             </label>
-            <button class="spatial-btn spatial-btn-accent" type="button" :disabled="zoteroImporting || !zoteroFile" @click="submitZoteroImport">
-              {{ zoteroImporting ? "导入中…" : "从 Zotero 导入" }}
-            </button>
-            <div v-if="zoteroResult" class="zotero-result" :class="{ partial: zoteroResult.failed > 0 }">
-              <strong>识别 {{ zoteroResult.detected }} 篇，已导入 {{ zoteroResult.imported }} 篇</strong>
-              <span v-if="zoteroResult.failed">失败 {{ zoteroResult.failed }} 篇，可能触发每日导入额度或缺少标题。</span>
-              <span v-else>导入完成，文献已进入当前账号文献库。</span>
+            <label>
+              <span>作者</span>
+              <input v-model="personalPaper.authors" placeholder="作者之间用逗号分隔" />
+            </label>
+            <label>
+              <span>发表年份</span>
+              <input v-model="personalPaper.publishYear" inputmode="numeric" placeholder="2026" />
+            </label>
+            <label class="field-wide">
+              <span>来源 / 期刊</span>
+              <input v-model="personalPaper.source" placeholder="个人文献、期刊或会议名称" />
+            </label>
+            <label class="field-wide">
+              <span>摘要</span>
+              <textarea v-model="personalPaper.abstractText" rows="5" placeholder="可选：粘贴论文摘要，便于后续 AI 分析"></textarea>
+            </label>
+            <label class="file-drop field-wide">
+              <input type="file" accept="application/pdf,.pdf" @change="selectPersonalPdf" />
+              <strong>{{ personalPdf?.name || "选择本地 PDF" }}</strong>
+              <small>上传后由 PaperSolver 储存，并可直接进入双栏或逐段翻译。</small>
+            </label>
+            <footer class="field-wide">
+              <button type="button" class="spatial-btn spatial-btn-ghost" @click="resetPersonalPaper">清空</button>
+              <button type="submit" class="spatial-btn spatial-btn-accent" :disabled="personalImporting">
+                {{ personalImporting ? "正在添加…" : "添加到个人文献库" }}
+              </button>
+            </footer>
+          </form>
+
+          <aside class="zotero-import-panel">
+            <div class="zotero-copy">
+              <span>Zotero 导入</span>
+              <h3>从 Zotero 批量导入</h3>
+              <p>在 Zotero 里选择条目或文件夹，导出为 BibTeX、RIS 或 CSL JSON 后上传。系统会读取标题、作者、年份、期刊、DOI/URL，并自动合并重复文献。</p>
+              <div class="zotero-format-row">
+                <b>BibTeX</b>
+                <b>RIS</b>
+                <b>CSL JSON</b>
+              </div>
             </div>
-            <details v-if="zoteroFailedItems.length" class="zotero-failed-details">
-              <summary>查看失败明细</summary>
-              <p v-for="item in zoteroFailedItems" :key="item.title">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.message }}</span>
-              </p>
-            </details>
-          </div>
-        </section>
-        <form class="personal-paper-form" @submit.prevent="submitPersonalPaper">
-          <label class="field-wide">
-            <span>论文标题 *</span>
-            <input v-model="personalPaper.title" required placeholder="输入完整论文标题" />
-          </label>
-          <label>
-            <span>作者</span>
-            <input v-model="personalPaper.authors" placeholder="作者之间用逗号分隔" />
-          </label>
-          <label>
-            <span>发表年份</span>
-            <input v-model="personalPaper.publishYear" inputmode="numeric" placeholder="2026" />
-          </label>
-          <label class="field-wide">
-            <span>来源 / 期刊</span>
-            <input v-model="personalPaper.source" placeholder="个人文献、期刊或会议名称" />
-          </label>
-          <label class="field-wide">
-            <span>摘要</span>
-            <textarea v-model="personalPaper.abstractText" rows="5" placeholder="可选：粘贴论文摘要，便于后续 AI 分析"></textarea>
-          </label>
-          <label class="file-drop field-wide">
-            <input type="file" accept="application/pdf,.pdf" @change="selectPersonalPdf" />
-            <strong>{{ personalPdf?.name || "选择本地 PDF" }}</strong>
-            <small>上传后由 PaperSolver 储存，并可直接进入双栏或逐段翻译。</small>
-          </label>
-          <footer class="field-wide">
-            <button type="button" class="spatial-btn spatial-btn-ghost" @click="resetPersonalPaper">清空</button>
-            <button type="submit" class="spatial-btn spatial-btn-accent" :disabled="personalImporting">
-              {{ personalImporting ? "正在添加…" : "添加到个人文献库" }}
-            </button>
-          </footer>
-        </form>
+            <div class="zotero-action-box">
+              <label class="zotero-file-drop">
+                <input type="file" accept=".bib,.ris,.json,application/json,text/plain" @change="selectZoteroFile" />
+                <strong>{{ zoteroFile?.name || "选择 Zotero 导出文件" }}</strong>
+                <small>{{ zoteroFile ? formatFileSize(zoteroFile.size) : "从 Zotero 导出的 .bib / .ris / .json" }}</small>
+              </label>
+              <button class="spatial-btn spatial-btn-accent" type="button" :disabled="zoteroImporting || !zoteroFile" @click="submitZoteroImport">
+                {{ zoteroImporting ? "导入中…" : "从 Zotero 导入" }}
+              </button>
+              <div v-if="zoteroResult" class="zotero-result" :class="{ partial: zoteroResult.failed > 0 }">
+                <strong>识别 {{ zoteroResult.detected }} 篇，已导入 {{ zoteroResult.imported }} 篇</strong>
+                <span v-if="zoteroResult.failed">失败 {{ zoteroResult.failed }} 篇，可能触发每日导入额度或缺少标题。</span>
+                <span v-else>导入完成，文献已进入当前账号文献库。</span>
+              </div>
+              <details v-if="zoteroFailedItems.length" class="zotero-failed-details">
+                <summary>查看失败明细</summary>
+                <p v-for="item in zoteroFailedItems" :key="item.title">
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.message }}</span>
+                </p>
+              </details>
+            </div>
+          </aside>
+        </div>
       </section>
 
       <section v-else-if="activeTab === 'storage'" class="library-management-panel">
@@ -319,22 +322,6 @@
         </div>
       </section>
 
-      <section v-else class="library-management-panel sync-panel">
-        <header>
-          <div>
-            <h2>同步与更新</h2>
-            <p>从后端重新获取题录、PDF 状态、阅读进度和笔记，所有文献维护都集中在这里。</p>
-          </div>
-          <button class="spatial-btn spatial-btn-accent" :disabled="syncingLibrary" @click="manualSync">
-            {{ syncingLibrary ? "同步中…" : "立即同步文献库" }}
-          </button>
-        </header>
-        <div class="sync-facts">
-          <div><strong>{{ libraryStore.state.documents.length }}</strong><span>账号文献</span></div>
-          <div><strong>{{ readableCount }}</strong><span>PDF 可用</span></div>
-          <div><strong>{{ lastSyncLabel }}</strong><span>最近同步</span></div>
-        </div>
-      </section>
     </section>
 
     <!-- Custom Slide Up Toast -->
@@ -528,7 +515,6 @@ const libraryTabs = [
   { id: "papers", label: "全部文献", description: "阅读、翻译与分析" },
   { id: "add", label: "个人文献添加", description: "题录与本地 PDF" },
   { id: "storage", label: "上传与储存", description: "文件管理与替换" },
-  { id: "sync", label: "同步更新", description: "进度、笔记与题录" },
 ];
 const validTabs = new Set(libraryTabs.map(item => item.id));
 const activeTab = ref(validTabs.has(String(route.query.tab)) ? String(route.query.tab) : "papers");
@@ -545,8 +531,6 @@ const zoteroFile = ref(null);
 const zoteroImporting = ref(false);
 const zoteroResult = ref(null);
 const uploadingWorkspace = ref("");
-const syncingLibrary = ref(false);
-const lastSyncAt = ref(null);
 let toastTimer = null;
 
 function progressBucket(paper) {
@@ -646,11 +630,6 @@ const notesCount = computed(() => libraryStore.state.documents.filter((paper) =>
 const storedCount = computed(() => libraryStore.state.documents.filter((paper) =>
   String(paper.paperUrl || "").includes("/api/papers/uploads/"),
 ).length);
-const lastSyncLabel = computed(() => lastSyncAt.value
-  ? lastSyncAt.value.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
-  : "尚未同步"
-);
-
 watch(() => route.query.tab, (tab) => {
   activeTab.value = validTabs.has(String(tab)) ? String(tab) : "papers";
 });
@@ -1039,17 +1018,6 @@ async function uploadReplacementPdf(paper, event) {
   }
 }
 
-async function manualSync() {
-  syncingLibrary.value = true;
-  try {
-    await refreshLibraryFromBackend();
-    lastSyncAt.value = new Date();
-    showToast("文献库已同步到最新状态");
-  } finally {
-    syncingLibrary.value = false;
-  }
-}
-
 function openNoteEditor(paper) {
   noteEditor.value = {
     open: true,
@@ -1236,12 +1204,19 @@ onUnmounted(() => {
 .library-management-panel h2 { margin: 0; color: var(--spatial-graphite); font-size: 20px; }
 .library-management-panel header p { max-width: 70ch; margin: 7px 0 0; color: var(--spatial-gray); font-size: 13px; line-height: 1.6; }
 
+.library-add-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  gap: 22px;
+  align-items: start;
+  margin-top: 22px;
+}
+
 .zotero-import-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
-  gap: 20px;
-  margin-top: 22px;
-  padding: 18px;
+  gap: 18px;
+  min-height: 100%;
+  padding: 20px;
   border: 1px solid #d8e5f6;
   border-radius: 14px;
   background: linear-gradient(135deg, #f8fbff 0%, #ffffff 58%, #f7fff9 100%);
@@ -1385,7 +1360,7 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  margin-top: 22px;
+  margin-top: 0;
 }
 
 .personal-paper-form label { display: grid; gap: 7px; }
@@ -2311,7 +2286,7 @@ onUnmounted(() => {
 
   .library-subnav { overflow-x: auto; }
   .library-subnav button { min-width: 138px; }
-  .zotero-import-panel { grid-template-columns: 1fr; }
+  .library-add-layout { grid-template-columns: 1fr; }
   .personal-paper-form { grid-template-columns: 1fr; }
   .field-wide { grid-column: auto; }
   .sync-facts { grid-template-columns: 1fr; }
