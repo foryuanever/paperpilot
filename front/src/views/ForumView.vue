@@ -392,8 +392,7 @@
                 <div class="markdown-tabbar">
                   <button type="button" :class="{ active: markdownMode === 'edit' }" @click="markdownMode = 'edit'">内容</button>
                   <button type="button" :class="{ active: markdownMode === 'preview' }" @click="markdownMode = 'preview'">预览</button>
-                  <button type="button">对照</button>
-                  <span>支持 markdown 语法</span>
+                  <button type="button" :class="{ active: markdownMode === 'split' }" @click="markdownMode = 'split'">对照</button>
                   <button type="button" class="icon-tool" @click="insertMarkdown('- ', '')" title="列表">☷</button>
                   <button type="button" class="icon-tool" @click="insertMarkdown('`', '`')" title="代码">▣</button>
                   <button type="button" class="icon-tool" title="全屏">⛶</button>
@@ -411,24 +410,41 @@
                   <button type="button" @click="insertMarkdown('`', '`')">&lt;/&gt;</button>
                   <button type="button" @click="insertMarkdown('\\n| 列 | 列 |\\n| --- | --- |\\n| 内容 | 内容 |\\n', '')">▦</button>
                   <button type="button" @click="insertMarkdown('\\n---\\n', '')">—</button>
+                  <button type="button" @click="insertAnnouncementTemplate">模板</button>
                   <button type="button">↶</button>
                   <button type="button">↷</button>
                   <button type="button">⌫</button>
                 </div>
                 <div v-if="markdownMode === 'edit'" class="markdown-body">
-                  <div class="markdown-line-number">1</div>
+                  <div class="markdown-line-number">
+                    <span v-for="line in editorLineNumbers" :key="line">{{ line }}</span>
+                  </div>
                   <textarea
                     ref="contentEditor"
                     v-model="form.content"
-                    rows="10"
-                    placeholder="鼓励友善发言，禁止人身攻击"
+                    rows="12"
+                    placeholder="第一段写核心信息。\n\n第二段写补充说明。\n\n> 引用块适合放价格、步骤、实验条件或重点列表。\n\n官网：[链接文字](https://example.com)"
                   ></textarea>
+                </div>
+                <div v-else-if="markdownMode === 'split'" class="markdown-split">
+                  <div class="markdown-body">
+                    <div class="markdown-line-number">
+                      <span v-for="line in editorLineNumbers" :key="line">{{ line }}</span>
+                    </div>
+                    <textarea
+                      ref="contentEditor"
+                      v-model="form.content"
+                      rows="12"
+                      placeholder="第一段写核心信息。"
+                    ></textarea>
+                  </div>
+                  <div class="markdown-rendered" v-html="renderedMarkdown"></div>
                 </div>
                 <div v-else class="markdown-rendered" v-html="renderedMarkdown"></div>
                 <div class="markdown-hints">
-                  <span>可使用加粗、列表、引用、链接、代码块和表格整理你的问题。</span>
-                  <button type="button" @click="markdownMode = markdownMode === 'preview' ? 'edit' : 'preview'">
-                    {{ markdownMode === "preview" ? "继续编辑" : "预览" }}
+                  <span>{{ form.content.length }} 字符 · {{ editorLineNumbers.length }} 行</span>
+                  <button type="button" @click="markdownMode = markdownMode === 'preview' ? 'split' : 'preview'">
+                    {{ markdownMode === "preview" ? "对照编辑" : "预览正文" }}
                   </button>
                 </div>
               </div>
@@ -576,7 +592,6 @@ const showMyPostsManager = ref(false);
 const directionQuery = ref("人工智能");
 const directionPickerOpen = ref(false);
 const contentEditor = ref(null);
-const showMarkdownPreview = ref(false);
 const markdownMode = ref("edit");
 const editingPost = ref(null);
 const moderationBusy = reactive({});
@@ -651,6 +666,10 @@ const popularTags = computed(() => {
 
 const selectedPaper = computed(() => libraryStore.state.documents.find(doc => String(doc.id) === String(form.paperId)));
 const canSubmit = computed(() => form.title.trim() && form.content.trim().length > 5 && form.postType && form.direction);
+const editorLineNumbers = computed(() => {
+  const count = Math.max(1, String(form.content || "").split("\n").length);
+  return Array.from({ length: count }, (_, index) => index + 1);
+});
 const renderedMarkdown = computed(() => {
   const source = form.content?.trim() || "_预览会显示在这里。_";
   return markdown.render(source);
@@ -688,7 +707,6 @@ function openCreateModal(type = "") {
   editingPost.value = null;
   directionQuery.value = form.direction;
   directionPickerOpen.value = false;
-  showMarkdownPreview.value = false;
   markdownMode.value = "edit";
   moderationError.value = "";
   if (type) form.postType = type;
@@ -781,6 +799,27 @@ async function insertMarkdown(before, after = "") {
   const cursor = start + before.length + selected.length + after.length;
   textarea.focus();
   textarea.setSelectionRange(cursor, cursor);
+}
+
+async function insertAnnouncementTemplate() {
+  const template = [
+    "一句话写清楚这次分享、求助或讨论的核心信息。",
+    "",
+    "补充背景：这里写你已经确认的信息、限制条件、适用范围或当前进展。",
+    "",
+    "官网 / 资料：[链接文字](https://example.com)",
+    "",
+    "> 重点一：用引用块承载价格、步骤、实验条件或关键结论。",
+    "> 重点二：多行内容会保持成一个视觉块，发布后更接近公告式排版。",
+    "",
+    "## 社群 / 补充",
+    "",
+    "这里放联系方式、数据说明、复现实验条件或后续更新。"
+  ].join("\n");
+  if (form.content.trim() && !window.confirm("当前正文已有内容，确定追加公告模板吗？")) return;
+  form.content = form.content.trim() ? `${form.content.trim()}\n\n${template}` : template;
+  await nextTick();
+  contentEditor.value?.focus();
 }
 
 function isMine(post) {
@@ -1699,7 +1738,8 @@ button { cursor: pointer; }
 }
 
 .markdown-editor {
-  border-radius: 8px;
+  overflow: hidden;
+  border-radius: 10px;
   border-color: #dfe4ec;
   background: #fff;
 }
@@ -1719,7 +1759,7 @@ button { cursor: pointer; }
 .markdown-tabbar {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   min-height: 38px;
   padding: 0 14px;
   border-bottom: 1px solid #e7ebf2;
@@ -1755,22 +1795,22 @@ button { cursor: pointer; }
 }
 
 .markdown-toolbar {
-  gap: 0;
-  padding: 0 12px;
-  min-height: 36px;
+  gap: 3px;
+  padding: 5px 12px;
+  min-height: 40px;
   border-bottom: 1px solid #e7ebf2;
   background: #fff;
 }
 
 .markdown-toolbar button {
-  width: 28px;
+  min-width: 28px;
   height: 28px;
-  padding: 0;
+  padding: 0 8px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: #5c6778;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -1781,60 +1821,103 @@ button { cursor: pointer; }
 
 .markdown-body {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  min-height: 260px;
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: 320px;
   background: #fff;
 }
 
 .markdown-line-number {
-  padding-top: 11px;
+  padding-top: 13px;
   border-right: 1px solid #edf0f4;
   color: #a5adba;
   text-align: center;
   font-size: 13px;
+  line-height: 1.8;
   user-select: none;
 }
 
+.markdown-line-number span {
+  display: block;
+}
+
 .markdown-editor textarea {
-  min-height: 260px;
-  padding: 11px 14px;
+  min-height: 320px;
+  padding: 13px 16px;
   font-size: 14px;
-  line-height: 1.8;
+  line-height: 1.85;
+  white-space: pre-wrap;
 }
 
 .markdown-rendered {
-  min-height: 260px;
-  padding: 18px 22px;
-  color: #243048;
+  min-height: 320px;
+  padding: 26px 32px;
+  color: #202938;
   background: #fff;
-  line-height: 1.75;
-  font-size: 14px;
+  line-height: 1.9;
+  font-size: 15px;
+  text-wrap: pretty;
+}
+
+.markdown-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 320px;
+}
+
+.markdown-split .markdown-body,
+.markdown-split .markdown-rendered {
+  min-height: 320px;
+}
+
+.markdown-split .markdown-rendered {
+  border-left: 1px solid #e7ebf2;
+  background: #fbfcfe;
 }
 
 .markdown-rendered :deep(h1),
 .markdown-rendered :deep(h2),
 .markdown-rendered :deep(h3) {
-  margin: 0 0 12px;
+  margin: 22px 0 12px;
   color: #172033;
   line-height: 1.35;
 }
 
+.markdown-rendered :deep(h1:first-child),
+.markdown-rendered :deep(h2:first-child),
+.markdown-rendered :deep(h3:first-child) {
+  margin-top: 0;
+}
+
 .markdown-rendered :deep(p) {
-  margin: 0 0 12px;
+  margin: 0 0 16px;
 }
 
 .markdown-rendered :deep(ul),
 .markdown-rendered :deep(ol) {
-  margin: 0 0 12px;
+  margin: 0 0 16px;
   padding-left: 22px;
 }
 
 .markdown-rendered :deep(blockquote) {
-  margin: 0 0 12px;
-  padding: 8px 12px;
-  border-left: 3px solid #8bb5f6;
-  color: #46546b;
-  background: #f4f8ff;
+  margin: 18px 0 20px;
+  padding: 16px 20px;
+  border: 1px solid #e6e9ef;
+  border-left-width: 1px;
+  color: #252d3b;
+  background: #f6f6f7;
+  box-shadow: inset 1px 0 0 #c7ccd5;
+}
+
+.markdown-rendered :deep(blockquote p) {
+  margin-bottom: 8px;
+}
+
+.markdown-rendered :deep(img) {
+  max-width: min(360px, 100%);
+  display: block;
+  margin: 18px 0;
+  border-radius: 10px;
+  border: 1px solid #e6ebf2;
 }
 
 .markdown-rendered :deep(code) {
@@ -1868,6 +1951,11 @@ button { cursor: pointer; }
 .markdown-rendered :deep(a) {
   color: #075ee5;
   font-weight: 800;
+  text-decoration: none;
+}
+
+.markdown-rendered :deep(a:hover) {
+  text-decoration: underline;
 }
 
 @media (max-width: 760px) {

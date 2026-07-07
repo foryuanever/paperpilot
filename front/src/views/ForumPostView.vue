@@ -14,27 +14,29 @@
       <div class="detail-layout">
         <main>
           <article class="post-article">
-            <div class="label-row">
-              <span class="type-label" :class="typeClass(post.postType)">{{ post.postType }}</span>
-              <span v-if="post.pinned" class="state-badge pin-badge">📌 置顶</span>
-              <span v-if="post.banned" class="state-badge ban-badge">已封禁</span>
-              <span>{{ post.direction }}</span>
-              <time>{{ post.time }}</time>
-            </div>
-
-            <h1>{{ post.title }}</h1>
             <div class="author-row">
               <div class="author-profile-trigger" :data-user-id="post.authorUserId" title="查看个人卡片">
                 <img v-if="avatarUrlFor(post)" :src="avatarUrlFor(post)" class="avatar-img" :alt="post.author" />
                 <span v-else class="avatar">{{ post.avatar }}</span>
                 <div>
                   <strong>{{ post.author }}</strong>
-                  <small>发布于 {{ post.direction }}</small>
+                  <small>
+                    <span class="type-label" :class="typeClass(post.postType)">{{ post.postType }}</span>
+                    <span>{{ post.direction }}</span>
+                  </small>
                 </div>
               </div>
-              <button v-if="post.authorUserId" class="message-author" @click="messageAuthor">私信作者</button>
+              <div class="article-meta-stack">
+                <div>
+                  <span v-if="post.pinned" class="state-badge pin-badge">📌 置顶</span>
+                  <span v-if="post.banned" class="state-badge ban-badge">已封禁</span>
+                  <time>{{ post.time }}</time>
+                </div>
+                <button v-if="post.authorUserId" class="message-author" @click="messageAuthor">私信作者</button>
+              </div>
             </div>
 
+            <h1>{{ post.title }}</h1>
             <div class="article-content markdown-rendered" v-html="renderMarkdown(post.content)"></div>
 
             <div v-if="post.images?.length" class="article-images">
@@ -221,51 +223,57 @@ function avatarUrlFor(postOrReply) {
 </script>
 
 <style scoped>
-.post-detail-page { width: min(1320px, calc(100vw - 48px)); margin: 0 auto; padding: 28px 0 80px; color: #172033; font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+.post-detail-page { width: min(1240px, calc(100vw - 48px)); margin: 0 auto; padding: 28px 0 80px; color: #172033; font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
 button, textarea { font: inherit; }
 .back-button { margin-bottom: 16px; padding: 8px 12px; border: 0; border-radius: 9px; color: #526077; background: #fff; cursor: pointer; }
 .back-button:hover { color: #0865ee; }
-.detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 18px; align-items: start; }
+.detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 18px; align-items: start; }
 .post-article, .comments-card, .side-card, .detail-status { background: #fff; border: 1px solid #e5eaf1; border-radius: 20px; box-shadow: 0 10px 32px rgba(36, 57, 94, .05); }
-.post-article { padding: 28px 30px 22px; }
+.post-article { padding: 26px 34px 24px; }
 .label-row { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; color: #59667b; font-size: 11px; }
 .label-row > span { padding: 5px 9px; border-radius: 7px; background: #eef2f7; font-weight: 700; }
-.label-row .type-label.dataset { color: #1267e8; background: #e7f0ff; }
-.label-row .type-label.benefit { color: #b86500; background: #fff1d8; }
-.label-row .type-label.paper { color: #6554d9; background: #eeeaff; }
-.label-row .type-label.research { color: #087d5e; background: #ddf7ef; }
-.label-row .type-label.competition { color: #c83e5d; background: #ffe8ee; }
+.type-label { display: inline-flex; align-items: center; padding: 3px 7px; border-radius: 6px; font-size: 11px; font-weight: 900; }
+.type-label.dataset { color: #1267e8; background: #e7f0ff; }
+.type-label.benefit { color: #b86500; background: #fff1d8; }
+.type-label.paper { color: #6554d9; background: #eeeaff; }
+.type-label.research { color: #087d5e; background: #ddf7ef; }
+.type-label.competition { color: #c83e5d; background: #ffe8ee; }
 .state-badge { padding: 5px 9px; border-radius: 7px; font-size: 11px; font-weight: 900; }
 .pin-badge { color: #075ee5; background: #eaf2ff; }
 .ban-badge { color: #b4233a; background: #fff0f2; }
 .label-row time { margin-left: auto; color: #97a1b1; }
-.post-article h1 { margin: 20px 0 14px; font-size: clamp(25px, 3vw, 36px); line-height: 1.35; letter-spacing: -.025em; }
-.author-row { display: flex; align-items: center; gap: 10px; padding-bottom: 20px; border-bottom: 1px solid #edf0f4; }
+.post-article h1 { max-width: 760px; margin: 22px 0 18px 56px; font-size: 24px; line-height: 1.45; letter-spacing: 0; text-wrap: balance; }
+.author-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 14px; border-bottom: 1px solid #edf0f4; }
 .author-profile-trigger { display: flex; align-items: center; gap: 10px; margin-left: -4px; padding: 4px 8px 4px 4px; border-radius: 11px; transition: color .18s ease, background-color .18s ease; }
 .author-profile-trigger[data-user-id]:hover { color: #075ee5; background: #f1f6ff; }
-.avatar, .comment-avatar { width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; color: #fff; background: linear-gradient(135deg, #176ce4, #643bd4); font-size: 11px; font-weight: 800; }
-.avatar-img, .comment-avatar-img { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; }
+.avatar, .comment-avatar { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; color: #fff; background: linear-gradient(135deg, #176ce4, #643bd4); font-size: 11px; font-weight: 800; }
+.avatar-img, .comment-avatar-img { width: 42px; height: 42px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; }
 .author-profile-trigger > div { display: flex; flex-direction: column; gap: 3px; }
-.author-row strong { font-size: 13px; }
-.author-row small { color: #96a0b0; }
-.message-author { margin-left: auto; padding: 7px 12px; border: 1px solid #cfe0fb; border-radius: 8px; color: #0865ee; background: #f4f8ff; font-size: 11px; font-weight: 800; cursor: pointer; }
-.article-content { padding: 24px 0; color: #445166; font-size: 15px; line-height: 2; }
+.author-row strong { font-size: 14px; }
+.author-row small { display: flex; align-items: center; gap: 7px; color: #96a0b0; }
+.article-meta-stack { display: grid; justify-items: end; gap: 8px; color: #929dae; font-size: 12px; }
+.article-meta-stack > div { display: flex; align-items: center; gap: 8px; }
+.message-author { padding: 7px 12px; border: 1px solid #cfe0fb; border-radius: 8px; color: #0865ee; background: #f4f8ff; font-size: 11px; font-weight: 800; cursor: pointer; }
+.article-content { max-width: 820px; padding: 2px 0 26px 56px; color: #1f2937; font-size: 16px; line-height: 2; }
 .markdown-rendered :deep(h1),
 .markdown-rendered :deep(h2),
 .markdown-rendered :deep(h3) { margin: 18px 0 10px; color: #172033; line-height: 1.35; letter-spacing: 0; }
 .markdown-rendered :deep(h1) { font-size: 24px; }
 .markdown-rendered :deep(h2) { font-size: 19px; }
 .markdown-rendered :deep(h3) { font-size: 16px; }
-.markdown-rendered :deep(p) { margin: 0 0 12px; }
+.markdown-rendered :deep(p) { margin: 0 0 18px; }
 .markdown-rendered :deep(p:last-child) { margin-bottom: 0; }
 .markdown-rendered :deep(ul),
 .markdown-rendered :deep(ol) { margin: 10px 0 14px; padding-left: 22px; }
 .markdown-rendered :deep(li) { margin: 6px 0; }
-.markdown-rendered :deep(blockquote) { margin: 12px 0; padding: 10px 14px; border-left: 4px solid #2f6fec; border-radius: 0 10px 10px 0; color: #3a4960; background: #f3f7ff; }
+.markdown-rendered :deep(blockquote) { margin: 20px 0 22px; padding: 18px 22px; border: 1px solid #e5e7eb; color: #2b313d; background: #f6f6f7; box-shadow: inset 1px 0 0 #c5cbd4; }
+.markdown-rendered :deep(blockquote p) { margin-bottom: 8px; }
 .markdown-rendered :deep(code) { padding: 2px 5px; border-radius: 5px; color: #0f4fb7; background: #eef4ff; font-size: .92em; }
 .markdown-rendered :deep(pre) { overflow: auto; margin: 12px 0; padding: 13px; border-radius: 12px; color: #dbe7ff; background: #121b2e; }
 .markdown-rendered :deep(pre code) { padding: 0; color: inherit; background: transparent; }
 .markdown-rendered :deep(a) { color: #075ee5; font-weight: 800; text-decoration: none; }
+.markdown-rendered :deep(a:hover) { text-decoration: underline; }
+.markdown-rendered :deep(img) { max-width: min(360px, 100%); display: block; margin: 20px 0; border: 1px solid #e4e9f1; border-radius: 10px; }
 .markdown-rendered :deep(table) { width: 100%; margin: 12px 0; border-collapse: collapse; font-size: 13px; }
 .markdown-rendered :deep(th),
 .markdown-rendered :deep(td) { padding: 9px 10px; border: 1px solid #dfe7f2; text-align: left; }
