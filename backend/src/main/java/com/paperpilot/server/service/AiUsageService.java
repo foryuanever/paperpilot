@@ -162,7 +162,7 @@ public class AiUsageService {
             "组会 PPT Agent",
             "PPT 专用中转站",
             "gpt-5.5",
-            "PPT 生成完成后按日志与材料估算入账"
+            "PPT 生成完成后按日志与材料入账"
         );
         addActiveModel(
             rows,
@@ -317,7 +317,7 @@ public class AiUsageService {
     private double chargeOf(AiUsageRecordEntity record) {
         double saved = money(record.getChargeAmount());
         double calculated = billingService.calculateCharge(record.getAction(), safe(record.getTotalTokens()));
-        if (billingService.isPptAgentAction(record.getAction())) return Math.max(saved, calculated);
+        if (billingService.isPptAgentAction(record.getAction())) return calculated;
         if (saved > 0) return saved;
         return calculated;
     }

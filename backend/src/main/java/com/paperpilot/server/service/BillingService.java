@@ -16,7 +16,7 @@ public class BillingService {
     private static final String KEY_PPT_AGENT_MIN_CHARGE = "ppt_agent_min_charge";
     private static final double DEFAULT_UNIT_PRICE = 0.01D;
     private static final double DEFAULT_MULTIPLIER = 1.0D;
-    private static final double DEFAULT_PPT_AGENT_MIN_CHARGE = 1.30D;
+    private static final double DEFAULT_PPT_AGENT_MIN_CHARGE = 0.0D;
 
     private final BillingSettingRepository repository;
 
@@ -46,13 +46,7 @@ public class BillingService {
     }
 
     public double calculateCharge(String action, long totalTokens) {
-        double tokenCharge = calculateCharge(totalTokens);
-        if (isPptAgentAction(action)) {
-            return BigDecimal.valueOf(Math.max(tokenCharge, pptAgentMinCharge()))
-                .setScale(6, RoundingMode.HALF_UP)
-                .doubleValue();
-        }
-        return tokenCharge;
+        return calculateCharge(totalTokens);
     }
 
     public Map<String, Object> settings() {
@@ -60,7 +54,7 @@ public class BillingService {
         result.put("unitPrice", unitPrice());
         result.put("multiplier", multiplier());
         result.put("pptAgentMinCharge", pptAgentMinCharge());
-        result.put("formula", "普通调用 = Token 用量 × 站内单价 × 倍率 / 1000；组会 PPT Agent = max(普通公式, PPT Agent 单次任务最低扣费)");
+        result.put("formula", "所有调用 = Token 用量 × 站内单价 × 倍率 / 1000；组会 PPT Agent 不再叠加单次最低扣费");
         result.put("currency", "CNY");
         return result;
     }

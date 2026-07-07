@@ -205,7 +205,7 @@ public class AdminController {
         result.put("recentCharges", records.stream().limit(60).map(record -> {
             Map<String, Object> row = new java.util.LinkedHashMap<>();
             row.put("time", record.getCreatedAt() == null ? "" : record.getCreatedAt().format(DateTimeFormatter.ofPattern("MM-dd HH:mm")));
-            row.put("action", record.getAction());
+            row.put("action", normalizeBillingAction(record.getAction()));
             row.put("paper", record.getPaperTitle());
             row.put("tokens", record.getTotalTokens());
             row.put("promptTokens", record.getPromptTokens());
@@ -220,7 +220,7 @@ public class AdminController {
                 record.getTotalTokens() == null ? 0L : record.getTotalTokens()
             );
             double chargeAmount = billingService.isPptAgentAction(record.getAction())
-                ? Math.max(savedChargeAmount, calculatedChargeAmount)
+                ? calculatedChargeAmount
                 : (savedChargeAmount > 0 ? savedChargeAmount : calculatedChargeAmount);
             row.put("chargeAmount", chargeAmount);
             row.put("unitPrice", unitPrice);
@@ -234,10 +234,10 @@ public class AdminController {
     public Map<String, Object> updateBillingSettings(@RequestBody Map<String, Object> body, HttpServletRequest request) {
         double unitPrice = Double.parseDouble(String.valueOf(body.getOrDefault("unitPrice", billingService.unitPrice())));
         double multiplier = Double.parseDouble(String.valueOf(body.getOrDefault("multiplier", billingService.multiplier())));
-        double pptAgentMinCharge = Double.parseDouble(String.valueOf(body.getOrDefault("pptAgentMinCharge", billingService.pptAgentMinCharge())));
+        double pptAgentMinCharge = Double.parseDouble(String.valueOf(body.getOrDefault("pptAgentMinCharge", 0.0D)));
         try {
             Map<String, Object> result = billingService.update(unitPrice, multiplier, pptAgentMinCharge);
-            authService.logAction("更新计费规则: 单价 ¥" + unitPrice + " / 1K Token, 倍率 " + multiplier + "x, PPT Agent最低扣费 ¥" + pptAgentMinCharge, "info", getClientIp(request));
+            authService.logAction("更新计费规则: 单价 ¥" + unitPrice + " / 1K Token, 倍率 " + multiplier + "x", "info", getClientIp(request));
             return result;
         } catch (IllegalArgumentException error) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, error.getMessage());
@@ -450,6 +450,13 @@ public class AdminController {
             return "127.0.0.1";
         }
         return ip;
+    }
+
+    private String normalizeBillingAction(String action) {
+        String value = action == null ? "" : action;
+        if (value.contains("PPT") || value.contains("Agent")) return "组会PPT Agent执行";
+        if (value.contains("综述") || value.contains("汇报") || value.contains("组会")) return "论文综述生成";
+        return "AI文章对话";
     }
 
     private String getLevelTitle(int level) {

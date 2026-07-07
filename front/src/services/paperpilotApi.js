@@ -382,15 +382,15 @@ export const paperpilotApi = {
 
   // Forum API
   async getForumPosts() {
-    const { data } = await apiClient.get("/api/forum/posts");
+    const { data } = await apiClient.get("/api/forum/posts", { timeout: 15000 });
     return data;
   },
   async createForumPost(payload) {
-    const { data } = await apiClient.post("/api/forum/posts", payload);
+    const { data } = await apiClient.post("/api/forum/posts", payload, { timeout: 15000 });
     return data;
   },
   async updateForumPost(id, payload) {
-    const { data } = await apiClient.patch(`/api/forum/posts/${id}`, payload);
+    const { data } = await apiClient.patch(`/api/forum/posts/${id}`, payload, { timeout: 15000 });
     return data;
   },
   async deleteForumPost(id) {

@@ -26,6 +26,11 @@ public class SchemaMaintenanceConfig {
             } catch (Exception ignored) {
                 // Column already exists or table is not ready yet.
             }
+            try {
+                jdbcTemplate.execute("ALTER TABLE forum_post MODIFY content LONGTEXT");
+            } catch (Exception ignored) {
+                // Existing databases may already have a large enough content column.
+            }
         };
     }
 }

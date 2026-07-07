@@ -747,6 +747,7 @@ async function submitPost() {
   } catch (error) {
     moderationError.value = error?.response?.data?.message
       || error?.response?.data?.detail
+      || (error?.code === "ECONNABORTED" ? "保存超时：请确认后端已启动，或减少正文里的大图后重试。" : "")
       || "帖子保存失败，请稍后重试。";
   } finally {
     publishing.value = false;

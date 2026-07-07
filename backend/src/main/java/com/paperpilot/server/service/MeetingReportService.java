@@ -1970,7 +1970,7 @@ public class MeetingReportService {
                 job.userId(),
                 modelName,
                 "report",
-                "组会PPT Agent执行（估算）",
+                "组会PPT Agent执行",
                 job.paperTitle(),
                 promptTokens,
                 completionTokens,

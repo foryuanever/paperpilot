@@ -345,15 +345,10 @@
               <input v-model.number="billingForm.multiplier" type="number" min="0.01" step="0.01" />
               <p>当前 {{ Number(billingSettings.multiplier || 1).toFixed(2) }}x</p>
             </article>
-            <article class="billing-rule-card spatial-glass-panel">
-              <span>PPT Agent 单次最低扣费</span>
-              <input v-model.number="billingForm.pptAgentMinCharge" type="number" min="0" step="0.01" />
-              <p>当前 ¥{{ formatMoney(billingSettings.pptAgentMinCharge || 0) }}，用于覆盖中转站多轮 Agent 成本</p>
-            </article>
             <article class="billing-rule-card spatial-glass-panel wide">
               <span>扣费公式</span>
               <strong>{{ billingSettings.formula }}</strong>
-              <p>普通对话按 Token 扣费；PPT Agent 按 Token 公式和单次最低扣费二者取高，避免多轮 Agent 成本被低估。</p>
+              <p>所有功能按同一 Token 口径入账；管理员可通过基础单价和倍率控制用户侧售价。</p>
               <button class="spatial-btn spatial-btn-accent compact-btn billing-save-btn" :disabled="billingSaving" @click="saveBillingSettings">
                 {{ billingSaving ? "保存中..." : "保存计费规则" }}
               </button>
@@ -977,11 +972,11 @@ const modelPool = ref([]);
 const billingSettings = ref({
   unitPrice: 0.01,
   multiplier: 1,
-  pptAgentMinCharge: 1.3,
-  formula: "普通调用 = Token 用量 × 站内单价 × 倍率 / 1000；组会 PPT Agent = max(普通公式, PPT Agent 单次任务最低扣费)",
+  pptAgentMinCharge: 0,
+  formula: "所有调用 = Token 用量 × 站内单价 × 倍率 / 1000",
   currency: "CNY",
 });
-const billingForm = ref({ unitPrice: 0.01, multiplier: 1, pptAgentMinCharge: 1.3 });
+const billingForm = ref({ unitPrice: 0.01, multiplier: 1 });
 const billingCharges = ref([]);
 const billingSaving = ref(false);
 const modelPoolRefreshing = ref(false);
@@ -1295,7 +1290,6 @@ async function fetchAllData() {
     billingForm.value = {
       unitPrice: Number(billingData.unitPrice || 0.01),
       multiplier: Number(billingData.multiplier || 1),
-      pptAgentMinCharge: Number(billingData.pptAgentMinCharge ?? 1.3),
     };
     billingCharges.value = billingData.recentCharges || [];
 
@@ -1609,16 +1603,12 @@ async function saveBillingSettings() {
     dialogStore.alert("单价和倍率必须大于 0");
     return;
   }
-  if (Number(billingForm.value.pptAgentMinCharge || 0) < 0) {
-    dialogStore.alert("PPT Agent 单次最低扣费不能小于 0");
-    return;
-  }
   billingSaving.value = true;
   try {
     billingSettings.value = await paperpilotApi.updateBillingSettings({
       unitPrice: Number(billingForm.value.unitPrice),
       multiplier: Number(billingForm.value.multiplier),
-      pptAgentMinCharge: Number(billingForm.value.pptAgentMinCharge || 0),
+      pptAgentMinCharge: 0,
     });
     const refreshed = await paperpilotApi.getBillingSettings();
     billingSettings.value = refreshed;
