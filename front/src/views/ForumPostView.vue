@@ -162,6 +162,8 @@ const submitting = ref(false);
 const previewImage = ref("");
 const replyTarget = ref(null);
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
+const defaultValidateLink = markdown.validateLink;
+markdown.validateLink = (url) => /^data:(image|application|text)\//i.test(url) || defaultValidateLink(url);
 
 const post = computed(() => forumStore.state.posts.find(item => item.id === route.params.id));
 

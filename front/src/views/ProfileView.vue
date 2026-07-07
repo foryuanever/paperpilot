@@ -305,11 +305,11 @@
           <textarea v-model="editForm.content" rows="8"></textarea>
         </label>
         <footer>
-          <small>保存时会再次调用当前配置的 AI 模型审核。</small>
+          <small>保存后会立即同步到学术论坛。</small>
           <div>
             <button @click="editingPost = null">取消</button>
             <button class="save-edit" :disabled="savingPost || editForm.content.trim().length <= 5" @click="savePostEdit">
-              {{ savingPost ? "审核保存中..." : "审核并保存" }}
+              {{ savingPost ? "保存中..." : "保存修改" }}
             </button>
           </div>
         </footer>
@@ -347,9 +347,9 @@ const savingPost = ref(false);
 const contributionYear = ref(2026);
 const editForm = ref({ title: "", direction: "", content: "" });
 const directions = [
-  "人工智能", "自然语言处理", "计算机视觉", "多模态学习", "机器学习", "数据科学",
-  "医学人工智能", "临床医学", "生物信息学", "材料科学", "化学", "数学", "物理学",
-  "电子信息", "机械工程", "土木工程", "环境科学", "农业科学", "经济管理", "教育与社会科学",
+  "计算机", "人工智能", "软件工程", "自动化", "电气工程", "电子信息", "通信工程",
+  "机械工程", "土木建筑", "材料化学", "数学", "物理", "医学", "生物医药",
+  "经济管理", "法学", "教育", "文学艺术", "农业", "环境科学",
 ];
 
 const userInitial = computed(() => (authStore.profile.name || "U").slice(0, 1).toUpperCase());
@@ -615,9 +615,9 @@ async function savePostEdit() {
       content: editForm.value.content.trim(),
     });
     editingPost.value = null;
-    flash(profileSuccess, "帖子已通过 AI 审核并保存");
+    flash(profileSuccess, "帖子已保存");
   } catch (error) {
-    dialogStore.alert(error.response?.data?.message || "AI 审核或保存失败，请联系管理员检查全站模型路由");
+    dialogStore.alert(error.response?.data?.message || "帖子保存失败，请稍后重试");
   } finally {
     savingPost.value = false;
   }

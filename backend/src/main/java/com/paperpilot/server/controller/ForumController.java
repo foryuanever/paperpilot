@@ -9,7 +9,6 @@ import com.paperpilot.server.repository.AppUserRepository;
 import com.paperpilot.server.repository.ForumPostRepository;
 import com.paperpilot.server.repository.ForumReplyRepository;
 import com.paperpilot.server.service.CurrentUserService;
-import com.paperpilot.server.service.ForumModerationService;
 import com.paperpilot.server.service.NotificationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +27,6 @@ public class ForumController {
     private final ForumPostRepository forumPostRepository;
     private final ForumReplyRepository forumReplyRepository;
     private final AppUserRepository appUserRepository;
-    private final ForumModerationService moderationService;
     private final CurrentUserService currentUserService;
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
@@ -37,7 +35,6 @@ public class ForumController {
         ForumPostRepository forumPostRepository,
         ForumReplyRepository forumReplyRepository,
         AppUserRepository appUserRepository,
-        ForumModerationService moderationService,
         CurrentUserService currentUserService,
         NotificationService notificationService,
         ObjectMapper objectMapper
@@ -45,7 +42,6 @@ public class ForumController {
         this.forumPostRepository = forumPostRepository;
         this.forumReplyRepository = forumReplyRepository;
         this.appUserRepository = appUserRepository;
-        this.moderationService = moderationService;
         this.currentUserService = currentUserService;
         this.notificationService = notificationService;
         this.objectMapper = objectMapper;
@@ -63,10 +59,6 @@ public class ForumController {
 
     @PostMapping("/posts")
     public Map<String, Object> createPost(@RequestBody Map<String, Object> body) {
-        ForumModerationService.ModerationResult moderation = moderationService.review(body);
-        if (!moderation.approved()) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, moderation.reason());
-        }
         AppUserEntity currentUser = currentUserService.getOrCreateDefaultUser();
         ForumPostEntity post = new ForumPostEntity();
         applyPostFields(post, body);
@@ -77,7 +69,7 @@ public class ForumController {
         return Map.of(
             "id", "post-" + saved.getId(),
             "title", saved.getTitle(),
-            "moderation", Map.of("approved", true, "reason", moderation.reason(), "reviewer", moderation.reviewer())
+            "message", "帖子已发布"
         );
     }
 
@@ -86,13 +78,9 @@ public class ForumController {
         AppUserEntity currentUser = currentUserService.getOrCreateDefaultUser();
         ForumPostEntity post = findPost(id);
         ensureOwner(post, currentUser);
-        ForumModerationService.ModerationResult moderation = moderationService.review(body);
-        if (!moderation.approved()) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, moderation.reason());
-        }
         applyPostFields(post, body);
         forumPostRepository.save(post);
-        return Map.of("message", "帖子已更新", "reviewer", moderation.reviewer());
+        return Map.of("message", "帖子已更新");
     }
 
     @DeleteMapping("/posts/{id}")
@@ -107,8 +95,7 @@ public class ForumController {
 
     @PostMapping("/posts/review")
     public Map<String, Object> reviewPost(@RequestBody Map<String, Object> body) {
-        ForumModerationService.ModerationResult moderation = moderationService.review(body);
-        return Map.of("approved", moderation.approved(), "reason", moderation.reason(), "reviewer", moderation.reviewer());
+        return Map.of("approved", true, "reason", "论坛审核已暂时关闭", "reviewer", "local");
     }
 
     @PostMapping("/posts/{id}/like")

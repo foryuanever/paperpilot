@@ -365,7 +365,7 @@
               <span>所属方向</span>
               <input
                 v-model="directionQuery"
-                placeholder="输入关键词搜索方向，例如 人工智能 / 临床 / 金融"
+                placeholder="输入关键词搜索方向，例如 计算机 / 人工智能 / 自动化"
                 @focus="directionPickerOpen = true"
               />
               <div v-if="directionPickerOpen" class="direction-suggestion-panel">
@@ -390,30 +390,30 @@
               <div class="markdown-editor">
                 <input class="markdown-title-input" v-model="form.title" maxlength="120" placeholder="请输入标题" />
                 <div class="markdown-tabbar">
-                  <button type="button" :class="{ active: markdownMode === 'edit' }" @click="markdownMode = 'edit'">内容</button>
-                  <button type="button" :class="{ active: markdownMode === 'preview' }" @click="markdownMode = 'preview'">预览</button>
-                  <button type="button" :class="{ active: markdownMode === 'split' }" @click="markdownMode = 'split'">对照</button>
-                  <button type="button" class="icon-tool" @click="insertMarkdown('- ', '')" title="列表">☷</button>
-                  <button type="button" class="icon-tool" @click="insertMarkdown('`', '`')" title="代码">▣</button>
-                  <button type="button" class="icon-tool" title="全屏">⛶</button>
+                  <button type="button" :class="{ active: markdownMode === 'edit' }" title="只显示正文编辑区" @click="markdownMode = 'edit'">内容</button>
+                  <button type="button" :class="{ active: markdownMode === 'preview' }" title="只显示发布后的预览效果" @click="markdownMode = 'preview'">预览</button>
+                  <button type="button" :class="{ active: markdownMode === 'split' }" title="左边编辑，右边实时预览" @click="markdownMode = 'split'">对照</button>
+                  <button type="button" class="icon-tool" @click="insertMarkdown('- ', '')" title="插入无序列表">☷</button>
+                  <button type="button" class="icon-tool" @click="insertMarkdown('`', '`')" title="插入行内代码">▣</button>
+                  <button type="button" class="icon-tool" title="展开编辑器">⛶</button>
                 </div>
                 <div class="markdown-toolbar">
-                  <button type="button" @click="insertMarkdown('**', '**')">B</button>
-                  <button type="button" @click="insertMarkdown('*', '*')">I</button>
-                  <button type="button" @click="insertMarkdown('~~', '~~')">S</button>
-                  <button type="button" @click="insertMarkdown('# ', '')">H</button>
-                  <button type="button" @click="insertMarkdown('- ', '')">•</button>
-                  <button type="button" @click="insertMarkdown('1. ', '')">≡</button>
-                  <button type="button" @click="insertMarkdown('> ', '')">“</button>
-                  <button type="button" @click="insertMarkdown('[链接文字](', ')')">🔗</button>
-                  <button type="button" @click="insertMarkdown('![图片说明](', ')')">▧</button>
-                  <button type="button" @click="insertMarkdown('`', '`')">&lt;/&gt;</button>
-                  <button type="button" @click="insertMarkdown('\\n| 列 | 列 |\\n| --- | --- |\\n| 内容 | 内容 |\\n', '')">▦</button>
-                  <button type="button" @click="insertMarkdown('\\n---\\n', '')">—</button>
-                  <button type="button" @click="insertAnnouncementTemplate">模板</button>
-                  <button type="button">↶</button>
-                  <button type="button">↷</button>
-                  <button type="button">⌫</button>
+                  <button type="button" title="加粗：**文字**" @click="insertMarkdown('**', '**')">B</button>
+                  <button type="button" title="斜体：*文字*" @click="insertMarkdown('*', '*')">I</button>
+                  <button type="button" title="删除线：~~文字~~" @click="insertMarkdown('~~', '~~')">S</button>
+                  <button type="button" title="标题：# 标题" @click="insertMarkdown('# ', '')">H</button>
+                  <button type="button" title="无序列表" @click="insertMarkdown('- ', '')">•</button>
+                  <button type="button" title="有序列表" @click="insertMarkdown('1. ', '')">≡</button>
+                  <button type="button" title="引用块，适合放重点说明" @click="insertMarkdown('> ', '')">“</button>
+                  <button type="button" title="插入链接" @click="insertMarkdown('[链接文字](', ')')">🔗</button>
+                  <button type="button" title="插入图片 Markdown" @click="insertMarkdown('![图片说明](', ')')">▧</button>
+                  <button type="button" title="行内代码" @click="insertMarkdown('`', '`')">&lt;/&gt;</button>
+                  <button type="button" title="插入表格" @click="insertMarkdown('\\n| 列 | 列 |\\n| --- | --- |\\n| 内容 | 内容 |\\n', '')">▦</button>
+                  <button type="button" title="分割线" @click="insertMarkdown('\\n---\\n', '')">—</button>
+                  <button type="button" title="插入公告式发帖模板" @click="insertAnnouncementTemplate">模板</button>
+                  <button type="button" title="撤销暂未开放">↶</button>
+                  <button type="button" title="重做暂未开放">↷</button>
+                  <button type="button" title="清空正文" @click="clearMarkdownContent">⌫</button>
                 </div>
                 <div v-if="markdownMode === 'edit'" class="markdown-body">
                   <div class="markdown-line-number">
@@ -453,14 +453,14 @@
               <label class="upload-card">
                 <input type="file" accept="image/*" multiple @change="handleImageUpload" />
                 <span class="upload-card-icon">图</span>
-                <strong>上传图片</strong>
-                <small>支持多张图片，单张不超过 4MB</small>
+                <strong>上传并插入图片</strong>
+                <small>自动插入到正文光标处，单张不超过 4MB</small>
               </label>
               <label class="upload-card">
                 <input type="file" multiple @change="handleAttachmentUpload" />
                 <span class="upload-card-icon file">附</span>
-                <strong>上传附件</strong>
-                <small>支持文档、表格、压缩包等文件</small>
+                <strong>上传并插入附件</strong>
+                <small>自动插入下载链接，支持文档、表格、压缩包</small>
               </label>
             </div>
             <div v-if="form.images.length" class="upload-preview-grid">
@@ -509,21 +509,17 @@
             </div>
           </div>
 
-          <div class="ai-review-note" :class="{ rejected: moderationError }">
-            <span class="ai-review-icon">AI</span>
-            <div>
-              <strong>{{ moderationError ? "AI 审核未通过" : "发布前自动审核" }}</strong>
-              <p>{{ moderationError || "系统将自动检查学术相关性、真实性风险、违规内容和交易引流。" }}</p>
-            </div>
+          <div v-if="moderationError" class="publish-error-note">
+            {{ moderationError }}
           </div>
         </div>
 
         <footer>
-          <span>{{ publishing ? "AI 正在审核帖子内容，请稍候..." : editingPost ? "保存后会重新进行内容审核" : "审核通过后将立即公开发布" }}</span>
+          <span>{{ publishing ? "正在保存帖子..." : editingPost ? "保存后立即更新帖子" : "发布后立即公开展示" }}</span>
           <div>
             <button class="cancel-button" @click="closeCreateModal">取消</button>
             <button class="submit-button" :disabled="!canSubmit || publishing" @click="submitPost">
-              {{ publishing ? "AI 审核中..." : editingPost ? "保存修改" : "审核并发布" }}
+              {{ publishing ? "保存中..." : editingPost ? "保存修改" : "发布帖子" }}
             </button>
           </div>
         </footer>
@@ -561,24 +557,44 @@ const postModules = [
   { value: "比赛组队", label: "比赛组队", short: "赛", description: "科研竞赛与建模组队", action: "寻找比赛队友", className: "competition" }
 ];
 
-const researchAreaMap = {
-  "计算机科学": ["人工智能", "自然语言处理", "计算机视觉", "多模态学习", "数据科学", "数据挖掘", "网络安全", "软件工程", "人机交互"],
-  "医学与生命科学": ["基础医学", "临床医学", "医学人工智能", "公共卫生", "护理学", "生物信息学", "神经科学", "药学与药物研发"],
-  "数学与物理": ["基础数学", "应用数学", "概率论", "统计学", "运筹学", "计算数学", "凝聚态物理", "粒子与核物理", "光学", "量子信息", "天体物理", "计算物理"],
-  "材料与化学": ["有机化学", "无机化学", "分析化学", "催化化学", "高分子材料", "新能源材料", "计算材料学"],
-  "电子与通信": ["信号处理", "通信工程", "集成电路", "微电子", "控制科学", "机器人"],
-  "机械与制造": ["机械设计", "智能制造", "车辆工程", "航空航天", "能源动力", "工业工程"],
-  "土木建筑": ["结构工程", "岩土工程", "交通工程", "建筑学", "城乡规划", "工程管理"],
-  "环境与地球科学": ["环境科学", "生态学", "地理信息", "地质学", "海洋科学", "气象学"],
-  "农业与食品": ["作物科学", "植物保护", "动物科学", "林学", "食品科学", "智慧农业"],
-  "经济与管理": ["理论经济学", "应用经济学", "计量经济学", "金融科技", "工商管理", "会计学", "公共管理"],
-  "教育与社会科学": ["教育学", "教育技术", "高等教育", "心理学", "认知科学", "社会学", "传播学", "体育科学"],
-  "法学与政治": ["法学", "知识产权", "国际关系", "政治学", "社会治理"],
-  "文学与语言": ["中国语言文学", "外国语言文学", "翻译学", "新闻传播", "数字人文"],
-  "历史哲学与艺术": ["历史学", "考古学", "哲学", "伦理学", "艺术设计", "音乐与影视"]
-};
+const directionOptions = [
+  "计算机",
+  "人工智能",
+  "软件工程",
+  "自动化",
+  "电气工程",
+  "电子信息",
+  "通信工程",
+  "机械工程",
+  "土木建筑",
+  "材料化学",
+  "数学",
+  "物理",
+  "医学",
+  "生物医药",
+  "经济管理",
+  "法学",
+  "教育",
+  "文学艺术",
+  "农业",
+  "环境科学"
+];
 
-const directions = ["全部方向", ...new Set(Object.values(researchAreaMap).flat())];
+const directions = ["全部方向", ...directionOptions];
+const announcementTemplate = [
+  "一句话写清楚这次分享、求助或讨论的核心信息。",
+  "",
+  "补充背景：这里写你已经确认的信息、限制条件、适用范围或当前进展。",
+  "",
+  "官网 / 资料：[链接文字](https://example.com)",
+  "",
+  "> 重点一：用引用块承载价格、步骤、实验条件或关键结论。",
+  "> 重点二：多行内容会保持成一个视觉块，发布后更接近公告式排版。",
+  "",
+  "## 社群 / 补充",
+  "",
+  "这里放联系方式、数据说明、复现实验条件或后续更新。"
+].join("\n");
 const searchQuery = ref("");
 const activeType = ref("");
 const activeDirection = ref("全部方向");
@@ -600,12 +616,14 @@ const markdown = new MarkdownIt({
   linkify: true,
   breaks: true
 });
+const defaultValidateLink = markdown.validateLink;
+markdown.validateLink = (url) => /^data:(image|application|text)\//i.test(url) || defaultValidateLink(url);
 
 const blankForm = () => ({
   postType: "数据集求助",
   direction: "人工智能",
   title: "",
-  content: "",
+  content: announcementTemplate,
   tagsRaw: "",
   paperId: "",
   venueName: "",
@@ -707,7 +725,7 @@ function openCreateModal(type = "") {
   editingPost.value = null;
   directionQuery.value = form.direction;
   directionPickerOpen.value = false;
-  markdownMode.value = "edit";
+  markdownMode.value = "split";
   moderationError.value = "";
   if (type) form.postType = type;
   showCreateModal.value = true;
@@ -746,13 +764,13 @@ async function submitPost() {
     closeCreateModal();
     authStore.addNotification({
       title: editingPost.value ? "研究主题已更新" : "研究主题发布成功",
-      desc: `《${form.title.slice(0, 18)}》已通过自动审核并${editingPost.value ? "保存" : "发布"}。`
+      desc: `《${form.title.slice(0, 18)}》已${editingPost.value ? "保存" : "发布"}。`
     });
     window.dispatchEvent(new Event("paperpilot:forum-posts-changed"));
   } catch (error) {
     moderationError.value = error?.response?.data?.message
       || error?.response?.data?.detail
-      || "自动审核未通过，请修改内容后重试。";
+      || "帖子保存失败，请稍后重试。";
   } finally {
     publishing.value = false;
   }
@@ -779,7 +797,7 @@ function openEditPost(post) {
     attachments: Array.isArray(post.attachments) ? [...post.attachments] : []
   });
   directionQuery.value = form.direction;
-  markdownMode.value = "edit";
+  markdownMode.value = "split";
   moderationError.value = "";
   showMyPostsManager.value = false;
   showCreateModal.value = true;
@@ -802,24 +820,16 @@ async function insertMarkdown(before, after = "") {
 }
 
 async function insertAnnouncementTemplate() {
-  const template = [
-    "一句话写清楚这次分享、求助或讨论的核心信息。",
-    "",
-    "补充背景：这里写你已经确认的信息、限制条件、适用范围或当前进展。",
-    "",
-    "官网 / 资料：[链接文字](https://example.com)",
-    "",
-    "> 重点一：用引用块承载价格、步骤、实验条件或关键结论。",
-    "> 重点二：多行内容会保持成一个视觉块，发布后更接近公告式排版。",
-    "",
-    "## 社群 / 补充",
-    "",
-    "这里放联系方式、数据说明、复现实验条件或后续更新。"
-  ].join("\n");
   if (form.content.trim() && !window.confirm("当前正文已有内容，确定追加公告模板吗？")) return;
-  form.content = form.content.trim() ? `${form.content.trim()}\n\n${template}` : template;
+  form.content = form.content.trim() ? `${form.content.trim()}\n\n${announcementTemplate}` : announcementTemplate;
   await nextTick();
   contentEditor.value?.focus();
+}
+
+function clearMarkdownContent() {
+  if (!form.content.trim() || window.confirm("确定清空正文内容吗？")) {
+    form.content = "";
+  }
 }
 
 function isMine(post) {
@@ -879,7 +889,9 @@ async function handleImageUpload(event) {
       moderationError.value = `图片 ${file.name} 超过 4MB`;
       continue;
     }
-    form.images.push(await readFile(file));
+    const image = await readFile(file);
+    form.images.push(image);
+    await insertMarkdown(`\n\n![${escapeMarkdownText(image.name)}](${image.data})\n\n`, "");
   }
   event.target.value = "";
 }
@@ -891,9 +903,15 @@ async function handleAttachmentUpload(event) {
       moderationError.value = `附件 ${file.name} 超过 8MB`;
       continue;
     }
-    form.attachments.push(await readFile(file));
+    const attachment = await readFile(file);
+    form.attachments.push(attachment);
+    await insertMarkdown(`\n\n[${escapeMarkdownText(attachment.name)}](${attachment.data})\n\n`, "");
   }
   event.target.value = "";
+}
+
+function escapeMarkdownText(value) {
+  return String(value || "附件").replace(/[[\]()]/g, "");
 }
 
 function readFile(file) {
@@ -1193,13 +1211,7 @@ button { cursor: pointer; }
 .upload-file-list small { color: #929dae; font-size: 10px; }
 .upload-file-list button { border: 0; color: #b04357; background: transparent; font-size: 11px; }
 .optional-section { padding: 18px !important; border: 1px solid #dce8fb !important; border-radius: 14px; background: #f8fbff; }
-.ai-review-note { margin-top: 18px; padding: 13px 15px; display: flex; align-items: flex-start; gap: 11px; border: 1px solid #cfe0fb; border-radius: 13px; background: #f4f8ff; }
-.ai-review-note.rejected { border-color: #f3c8cf; background: #fff5f6; }
-.ai-review-icon { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; color: #fff; background: linear-gradient(135deg, #0865ee, #6b45db); font-size: 10px; font-weight: 900; }
-.ai-review-note.rejected .ai-review-icon { background: #d74c63; }
-.ai-review-note strong { color: #2f3d54; font-size: 12px; }
-.ai-review-note p { margin: 4px 0 0; color: #748096; font-size: 10px; line-height: 1.6; }
-.ai-review-note.rejected p { color: #b13f53; }
+.publish-error-note { margin-top: 18px; padding: 12px 14px; border: 1px solid #f3c8cf; border-radius: 12px; color: #b13f53; background: #fff5f6; font-size: 12px; font-weight: 800; line-height: 1.6; }
 .publish-modal > footer { border-top: 1px solid #e8ecf2; color: #8b95a6; font-size: 10px; }
 .publish-modal > footer > div { display: flex; gap: 9px; }
 .cancel-button, .submit-button { height: 40px; padding: 0 18px; border-radius: 10px; font-weight: 700; font-size: 12px; }
