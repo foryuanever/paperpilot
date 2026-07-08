@@ -2007,8 +2007,8 @@ public class MeetingReportService {
         if (totalTokens > 0 && completionTokens > 0 && promptTokens <= 0) {
             promptTokens = Math.max(0L, totalTokens - completionTokens);
         }
-        if (totalTokens > 0 && (promptTokens <= 0 || completionTokens <= 0)) {
-            return new TokenUsage(0L, 0L, 0L);
+        if (totalTokens > 0 && promptTokens <= 0 && completionTokens <= 0) {
+            return new TokenUsage(0L, totalTokens, totalTokens);
         }
         return new TokenUsage(promptTokens, completionTokens, totalTokens);
     }

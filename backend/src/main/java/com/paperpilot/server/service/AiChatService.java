@@ -350,6 +350,25 @@ public class AiChatService {
         );
     }
 
+    public ChatResult chatForConfigTest(
+        String baseUrl,
+        String apiKey,
+        String model,
+        String apiFormat,
+        String authType,
+        boolean fullUrl,
+        String customUserAgent,
+        String userPrompt
+    ) throws Exception {
+        return send(
+            baseUrl, resolveKey(apiKey), normalizeOpenCodeFreeModel(model), apiFormat, authType, fullUrl, customUserAgent,
+            "You are a connection tester. Answer briefly.",
+            userPrompt,
+            1024,
+            false
+        );
+    }
+
     public List<ModelInfo> fetchModels(
         String baseUrl,
         String apiKey,
@@ -391,6 +410,22 @@ public class AiChatService {
         String userPrompt,
         int maxOutputTokens
     ) throws Exception {
+        return send(baseUrl, apiKey, model, apiFormat, authType, fullUrl, customUserAgent, systemPrompt, userPrompt, maxOutputTokens, true);
+    }
+
+    private ChatResult send(
+        String baseUrl,
+        String apiKey,
+        String model,
+        String apiFormat,
+        String authType,
+        boolean fullUrl,
+        String customUserAgent,
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        boolean accountUsage
+    ) throws Exception {
         if (!StringUtils.hasText(baseUrl)) throw new IllegalArgumentException("Base URL 不能为空");
         if (!StringUtils.hasText(model)) throw new IllegalArgumentException("模型名称不能为空");
         model = normalizeOpenCodeFreeModel(model);
@@ -408,7 +443,7 @@ public class AiChatService {
                     );
                     if (response.statusCode() >= 200 && response.statusCode() < 300) {
                         ChatResult parsed = parseChatResult(model, normalizeFormat(apiFormat), response.body());
-                        if (parsed.totalTokens() > 0) {
+                        if (accountUsage && parsed.totalTokens() > 0) {
                             recordUsage(parsed.modelName(), new UsageEstimate(
                                 parsed.promptTokens(),
                                 parsed.completionTokens(),

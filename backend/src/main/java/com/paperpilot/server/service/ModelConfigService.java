@@ -514,7 +514,7 @@ public class ModelConfigService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请输入测试问题");
         }
         try {
-            AiChatService.ChatResult result = aiChatService.chat(
+            AiChatService.ChatResult result = aiChatService.chatForConfigTest(
                 request.getBaseUrl(),
                 request.getApiKey(),
                 resolveModelName(request),
