@@ -348,7 +348,7 @@
             <article class="billing-rule-card spatial-glass-panel wide">
               <span>扣费公式</span>
               <strong>{{ billingSettings.formula }}</strong>
-              <p>所有功能按同一 Token 口径入账；管理员可通过基础单价和倍率控制用户侧售价。</p>
+              <p>Token 必须按供应商 usage 原值入账；管理员只通过基础单价和倍率控制用户侧售价。</p>
               <button class="spatial-btn spatial-btn-accent compact-btn billing-save-btn" :disabled="billingSaving" @click="saveBillingSettings">
                 {{ billingSaving ? "保存中..." : "保存计费规则" }}
               </button>
@@ -973,7 +973,7 @@ const billingSettings = ref({
   unitPrice: 0.01,
   multiplier: 1,
   pptAgentMinCharge: 0,
-  formula: "所有调用 = Token 用量 × 站内单价 × 倍率 / 1000",
+  formula: "Token 用量按供应商返回的 usage 原值记录；费用 = 真实 Token × 站内单价 × 收费倍率 / 1000",
   currency: "CNY",
 });
 const billingForm = ref({ unitPrice: 0.01, multiplier: 1 });

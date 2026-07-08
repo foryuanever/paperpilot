@@ -184,7 +184,7 @@
         当前筛选下没有调用记录。
       </p>
       <footer class="table-footer">
-        <span>显示最近 {{ filteredCalls.length }} 条已入账记录，Token 用量 = 输入 + 输出，费用按已入账 Token 统一计算。</span>
+        <span>显示最近 {{ filteredCalls.length }} 条已入账记录，Token 用量 = 供应商 usage 原值，费用 = 真实 Token × 站内单价 × 收费倍率。</span>
       </footer>
       <aside class="accounting-note">
         <strong>关于组会 PPT 用量</strong>

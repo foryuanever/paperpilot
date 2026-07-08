@@ -273,7 +273,7 @@ public class MeetingReportService {
             "promptTokens", promptTokens,
             "completionTokens", completionTokens,
             "totalTokens", totalTokens,
-            "estimated", true
+            "estimated", false
         );
         result.put("usage", usage);
         result.put("aiGenerated", aiSuccessCount > 0);
@@ -1952,16 +1952,12 @@ public class MeetingReportService {
     ) {
         if (job == null || !job.markUsageRecording()) return;
         try {
-            String material = readFileIfSmall(materialPath, 24000);
-            String finalMessage = readFileIfSmall(lastMessagePath, 12000);
             String logTail = readTail(logPath, 16000);
-            long promptTokens = estimateTokens(agentPrompt) + estimateTokens(material);
-            long completionTokens = estimateTokens(finalMessage) + Math.max(0L, estimateTokens(logTail) / 3L);
-            long loggedTotalTokens = parseLoggedTokenUsage(logTail);
-            long totalTokens = Math.max(1L, Math.max(loggedTotalTokens, promptTokens + completionTokens));
-            if (loggedTotalTokens > 0) {
-                promptTokens = Math.max(1L, Math.round(totalTokens * 0.65D));
-                completionTokens = Math.max(1L, totalTokens - promptTokens);
+            TokenUsage loggedUsage = parseLoggedTokenUsage(logTail);
+            if (loggedUsage.totalTokens() <= 0) {
+                job.result().put("usageAccounting", "unavailable");
+                job.result().put("usageAccountingNote", "PPT Master Agent 日志未返回供应商真实 token，本次不按估算入账");
+                return;
             }
             String modelName = modelConfig == null
                 ? Objects.toString(job.result().getOrDefault("modelName", "gpt-5.5"), "gpt-5.5")
@@ -1972,14 +1968,14 @@ public class MeetingReportService {
                 "report",
                 "组会PPT Agent执行",
                 job.paperTitle(),
-                promptTokens,
-                completionTokens,
-                totalTokens
+                loggedUsage.promptTokens(),
+                loggedUsage.completionTokens(),
+                loggedUsage.totalTokens()
             );
-            job.result().put("usageAccounting", "estimated");
-            job.result().put("usagePromptTokens", promptTokens);
-            job.result().put("usageCompletionTokens", completionTokens);
-            job.result().put("usageTotalTokens", totalTokens);
+            job.result().put("usageAccounting", "provider");
+            job.result().put("usagePromptTokens", loggedUsage.promptTokens());
+            job.result().put("usageCompletionTokens", loggedUsage.completionTokens());
+            job.result().put("usageTotalTokens", loggedUsage.totalTokens());
         } catch (Exception error) {
             job.unmarkUsageRecording();
             job.result().put("usageAccountingError", readableError(error));
@@ -1987,20 +1983,54 @@ public class MeetingReportService {
         }
     }
 
-    private long parseLoggedTokenUsage(String logTail) {
-        java.util.regex.Matcher matcher = java.util.regex.Pattern
-            .compile("tokens used\\s*\\R\\s*([0-9][0-9,]*)", java.util.regex.Pattern.CASE_INSENSITIVE)
-            .matcher(Objects.toString(logTail, ""));
-        long last = 0L;
-        while (matcher.find()) {
-            try {
-                last = Long.parseLong(matcher.group(1).replace(",", ""));
-            } catch (Exception ignored) {
-                // Keep scanning; malformed tool output should not block accounting.
+    private TokenUsage parseLoggedTokenUsage(String logTail) {
+        String text = Objects.toString(logTail, "");
+        long promptTokens = lastTokenNumber(text,
+            "(?:prompt|input)\\s*(?:tokens?)?\\s*[:=]\\s*([0-9][0-9,]*)",
+            "\"(?:prompt_tokens|input_tokens|promptTokens|inputTokens)\"\\s*:\\s*([0-9][0-9,]*)"
+        );
+        long completionTokens = lastTokenNumber(text,
+            "(?:completion|output)\\s*(?:tokens?)?\\s*[:=]\\s*([0-9][0-9,]*)",
+            "\"(?:completion_tokens|output_tokens|completionTokens|outputTokens)\"\\s*:\\s*([0-9][0-9,]*)"
+        );
+        long totalTokens = lastTokenNumber(text,
+            "(?:total\\s*)?tokens used\\s*\\R\\s*([0-9][0-9,]*)",
+            "(?:total|all)\\s*tokens?\\s*[:=]\\s*([0-9][0-9,]*)",
+            "\"(?:total_tokens|totalTokens)\"\\s*:\\s*([0-9][0-9,]*)"
+        );
+        if (totalTokens <= 0 && (promptTokens > 0 || completionTokens > 0)) {
+            totalTokens = promptTokens + completionTokens;
+        }
+        if (totalTokens > 0 && promptTokens > 0 && completionTokens <= 0) {
+            completionTokens = Math.max(0L, totalTokens - promptTokens);
+        }
+        if (totalTokens > 0 && completionTokens > 0 && promptTokens <= 0) {
+            promptTokens = Math.max(0L, totalTokens - completionTokens);
+        }
+        if (totalTokens > 0 && (promptTokens <= 0 || completionTokens <= 0)) {
+            return new TokenUsage(0L, 0L, 0L);
+        }
+        return new TokenUsage(promptTokens, completionTokens, totalTokens);
+    }
+
+    private long lastTokenNumber(String text, String... patterns) {
+        long value = 0L;
+        for (String pattern : patterns) {
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile(pattern, java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(text);
+            while (matcher.find()) {
+                try {
+                    value = Long.parseLong(matcher.group(1).replace(",", ""));
+                } catch (Exception ignored) {
+                    // Keep scanning; malformed tool output should not block accounting.
+                }
             }
         }
-        return last;
+        return value;
     }
+
+    private record TokenUsage(long promptTokens, long completionTokens, long totalTokens) {}
 
     private String readFileIfSmall(Path path, int maxChars) {
         try {

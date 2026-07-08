@@ -408,16 +408,14 @@ public class AiChatService {
                     );
                     if (response.statusCode() >= 200 && response.statusCode() < 300) {
                         ChatResult parsed = parseChatResult(model, normalizeFormat(apiFormat), response.body());
-                        UsageEstimate usage = estimateUsage(systemPrompt, userPrompt, parsed.content());
-                        recordUsage(parsed.modelName(), usage, systemPrompt, userPrompt);
-                        return new ChatResult(
-                            parsed.modelName(),
-                            parsed.content(),
-                            usage.promptTokens(),
-                            usage.completionTokens(),
-                            usage.totalTokens(),
-                            true
-                        );
+                        if (parsed.totalTokens() > 0) {
+                            recordUsage(parsed.modelName(), new UsageEstimate(
+                                parsed.promptTokens(),
+                                parsed.completionTokens(),
+                                parsed.totalTokens()
+                            ), systemPrompt, userPrompt);
+                        }
+                        return parsed;
                     }
                     lastError = responseError(response);
                     if (isTokenBudgetError(response, tokenBudget)) break;
@@ -498,9 +496,7 @@ public class AiChatService {
                     StringUtils.hasText(log) ? "Codex 调用失败：" + log : "Codex 模型返回为空"
                 );
             }
-            UsageEstimate usage = estimateUsage(systemPrompt, userPrompt, content);
-            recordUsage(model, usage, systemPrompt, userPrompt);
-            return new ChatResult(model, content, usage.promptTokens(), usage.completionTokens(), usage.totalTokens(), true);
+            return new ChatResult(model, content, 0L, 0L, 0L, false);
         } finally {
             Files.deleteIfExists(outputFile);
             Files.deleteIfExists(logFile);
@@ -608,11 +604,11 @@ public class AiChatService {
         String leadingBody = body.stripLeading();
         if ("openai_responses".equals(apiFormat)
             && (leadingBody.startsWith("event:") || leadingBody.startsWith("data:"))) {
-            return new ChatResult(model, parseResponsesStream(body));
+            return parseResponsesStreamResult(model, body);
         }
         if ("openai_chat".equals(apiFormat)
             && (leadingBody.startsWith("event:") || leadingBody.startsWith("data:"))) {
-            return new ChatResult(model, parseChatStream(body));
+            return parseChatStreamResult(model, body);
         }
         JsonNode root = objectMapper.readTree(stripMixedStreamTail(body));
         String content;
@@ -659,7 +655,59 @@ public class AiChatService {
         }
         content = content.trim().replaceFirst("^```(?:json)?\\s*", "").replaceFirst("\\s*```$", "");
         if (!StringUtils.hasText(content)) throw new IllegalStateException("模型返回为空");
-        return new ChatResult(model, content);
+        UsageEstimate usage = parseResponseUsage(root);
+        return new ChatResult(model, content, usage.promptTokens(), usage.completionTokens(), usage.totalTokens(), usage.totalTokens() <= 0);
+    }
+
+    private UsageEstimate parseResponseUsage(JsonNode root) {
+        JsonNode usage = root.path("usage");
+        long promptTokens = firstLong(
+            usage.path("prompt_tokens"),
+            usage.path("input_tokens"),
+            usage.path("promptTokens"),
+            usage.path("inputTokens")
+        );
+        long completionTokens = firstLong(
+            usage.path("completion_tokens"),
+            usage.path("output_tokens"),
+            usage.path("completionTokens"),
+            usage.path("outputTokens")
+        );
+        JsonNode completionDetails = usage.path("completion_tokens_details");
+        completionTokens += firstLong(
+            completionDetails.path("reasoning_tokens"),
+            completionDetails.path("accepted_prediction_tokens")
+        );
+        long totalTokens = firstLong(
+            usage.path("total_tokens"),
+            usage.path("totalTokens")
+        );
+        if (totalTokens <= 0 && (promptTokens > 0 || completionTokens > 0)) {
+            totalTokens = promptTokens + completionTokens;
+        }
+        if (totalTokens > 0 && completionTokens <= 0 && promptTokens > 0) {
+            completionTokens = Math.max(0L, totalTokens - promptTokens);
+        }
+        if (totalTokens > 0 && promptTokens <= 0 && completionTokens > 0) {
+            promptTokens = Math.max(0L, totalTokens - completionTokens);
+        }
+        return new UsageEstimate(promptTokens, completionTokens, totalTokens);
+    }
+
+    private long firstLong(JsonNode... nodes) {
+        for (JsonNode node : nodes) {
+            if (node == null || node.isMissingNode() || node.isNull()) continue;
+            if (node.isNumber()) return Math.max(0L, node.asLong());
+            String text = node.asText("");
+            if (StringUtils.hasText(text)) {
+                try {
+                    return Math.max(0L, Long.parseLong(text.replace(",", "").trim()));
+                } catch (Exception ignored) {
+                    // Try the next node.
+                }
+            }
+        }
+        return 0L;
     }
 
     private String stripMixedStreamTail(String body) {
@@ -672,14 +720,18 @@ public class AiChatService {
         return marker >= 0 ? trimmed.substring(0, marker).trim() : trimmed;
     }
 
-    private String parseResponsesStream(String body) throws Exception {
+    private ChatResult parseResponsesStreamResult(String model, String body) throws Exception {
         StringBuilder content = new StringBuilder();
         String completedText = "";
+        UsageEstimate usage = new UsageEstimate(0L, 0L, 0L);
         for (String line : body.split("\\R")) {
             if (!line.startsWith("data:")) continue;
             String data = line.substring(5).trim();
             if (data.isBlank() || "[DONE]".equals(data)) continue;
             JsonNode event = objectMapper.readTree(data);
+            UsageEstimate eventUsage = parseResponseUsage(event.path("response"));
+            if (eventUsage.totalTokens() <= 0) eventUsage = parseResponseUsage(event);
+            if (eventUsage.totalTokens() > 0) usage = eventUsage;
             String type = event.path("type").asText("");
             if ("response.output_text.delta".equals(type)) {
                 content.append(event.path("delta").asText(""));
@@ -695,16 +747,19 @@ public class AiChatService {
         String result = content.length() > 0 ? content.toString() : completedText;
         result = result.trim();
         if (!StringUtils.hasText(result)) throw new IllegalStateException("模型返回为空");
-        return result;
+        return new ChatResult(model, result, usage.promptTokens(), usage.completionTokens(), usage.totalTokens(), usage.totalTokens() <= 0);
     }
 
-    private String parseChatStream(String body) throws Exception {
+    private ChatResult parseChatStreamResult(String model, String body) throws Exception {
         StringBuilder content = new StringBuilder();
+        UsageEstimate usage = new UsageEstimate(0L, 0L, 0L);
         for (String line : body.split("\\R")) {
             if (!line.startsWith("data:")) continue;
             String data = line.substring(5).trim();
             if (data.isBlank() || "[DONE]".equals(data)) continue;
             JsonNode event = objectMapper.readTree(data);
+            UsageEstimate eventUsage = parseResponseUsage(event);
+            if (eventUsage.totalTokens() > 0) usage = eventUsage;
             JsonNode delta = event.path("choices").path(0).path("delta");
             String text = delta.path("content").asText("");
             if (StringUtils.hasText(text)) content.append(text);
@@ -715,7 +770,9 @@ public class AiChatService {
             String messageReasoning = event.path("choices").path(0).path("message").path("reasoning_content").asText("");
             if (!StringUtils.hasText(messageText) && StringUtils.hasText(messageReasoning)) content.append(messageReasoning);
         }
-        return content.toString().trim();
+        String result = content.toString().trim();
+        if (!StringUtils.hasText(result)) throw new IllegalStateException("模型返回为空");
+        return new ChatResult(model, result, usage.promptTokens(), usage.completionTokens(), usage.totalTokens(), usage.totalTokens() <= 0);
     }
 
     private String normalizeOpenCodeFreeModel(String model) {

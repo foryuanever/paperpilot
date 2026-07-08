@@ -54,7 +54,7 @@ public class BillingService {
         result.put("unitPrice", unitPrice());
         result.put("multiplier", multiplier());
         result.put("pptAgentMinCharge", pptAgentMinCharge());
-        result.put("formula", "所有调用 = Token 用量 × 站内单价 × 倍率 / 1000；组会 PPT Agent 不再叠加单次最低扣费");
+        result.put("formula", "Token 用量按供应商返回的 usage 原值记录；费用 = 真实 Token × 站内单价 × 收费倍率 / 1000");
         result.put("currency", "CNY");
         return result;
     }
