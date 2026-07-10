@@ -139,6 +139,52 @@ public class AppUserEntity {
         this.balanceAmount = balanceAmount;
     }
 
+    @Column(name = "membership_plan", length = 32)
+    private String membershipPlan = "free";
+
+    @Column(name = "membership_cycle", length = 16)
+    private String membershipCycle = "monthly";
+
+    @Column(name = "membership_expires_at")
+    private LocalDateTime membershipExpiresAt;
+
+    @Column(name = "review_quota")
+    private Integer reviewQuota = 0;
+
+    @Column(name = "review_used")
+    private Integer reviewUsed = 0;
+
+    @Column(name = "ppt_quota")
+    private Integer pptQuota = 0;
+
+    @Column(name = "ppt_used")
+    private Integer pptUsed = 0;
+
+    @Column(name = "chat_quota")
+    private Integer chatQuota = 0;
+
+    @Column(name = "chat_used")
+    private Integer chatUsed = 0;
+
+    public String getMembershipPlan() { return membershipPlan; }
+    public void setMembershipPlan(String membershipPlan) { this.membershipPlan = membershipPlan; }
+    public String getMembershipCycle() { return membershipCycle; }
+    public void setMembershipCycle(String membershipCycle) { this.membershipCycle = membershipCycle; }
+    public LocalDateTime getMembershipExpiresAt() { return membershipExpiresAt; }
+    public void setMembershipExpiresAt(LocalDateTime membershipExpiresAt) { this.membershipExpiresAt = membershipExpiresAt; }
+    public Integer getReviewQuota() { return reviewQuota; }
+    public void setReviewQuota(Integer reviewQuota) { this.reviewQuota = reviewQuota; }
+    public Integer getReviewUsed() { return reviewUsed; }
+    public void setReviewUsed(Integer reviewUsed) { this.reviewUsed = reviewUsed; }
+    public Integer getPptQuota() { return pptQuota; }
+    public void setPptQuota(Integer pptQuota) { this.pptQuota = pptQuota; }
+    public Integer getPptUsed() { return pptUsed; }
+    public void setPptUsed(Integer pptUsed) { this.pptUsed = pptUsed; }
+    public Integer getChatQuota() { return chatQuota; }
+    public void setChatQuota(Integer chatQuota) { this.chatQuota = chatQuota; }
+    public Integer getChatUsed() { return chatUsed; }
+    public void setChatUsed(Integer chatUsed) { this.chatUsed = chatUsed; }
+
     @Column(name = "last_ip", length = 128)
     private String lastIp;
 

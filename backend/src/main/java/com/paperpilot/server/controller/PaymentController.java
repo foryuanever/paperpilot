@@ -11,6 +11,7 @@ import com.paperpilot.server.repository.PaymentOrderRepository;
 import com.paperpilot.server.repository.PaymentTicketRepository;
 import com.paperpilot.server.repository.RechargeRecordRepository;
 import com.paperpilot.server.service.CurrentUserService;
+import com.paperpilot.server.service.MembershipService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -44,6 +45,7 @@ public class PaymentController {
     private final AppUserRepository appUserRepository;
     private final RechargeRecordRepository rechargeRecordRepository;
     private final ObjectMapper objectMapper;
+    private final MembershipService membershipService;
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @Value("${PAPERPILOT_ZHIFUFM_API_BASE_URL:${paperpilot.payment.zhifufm.api-base-url:}}")
@@ -76,7 +78,8 @@ public class PaymentController {
         PaymentTicketRepository ticketRepository,
         AppUserRepository appUserRepository,
         RechargeRecordRepository rechargeRecordRepository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        MembershipService membershipService
     ) {
         this.currentUserService = currentUserService;
         this.orderRepository = orderRepository;
@@ -84,6 +87,7 @@ public class PaymentController {
         this.appUserRepository = appUserRepository;
         this.rechargeRecordRepository = rechargeRecordRepository;
         this.objectMapper = objectMapper;
+        this.membershipService = membershipService;
     }
 
     @GetMapping("/orders")
@@ -102,7 +106,12 @@ public class PaymentController {
     public Map<String, Object> createOrder(@RequestBody Map<String, Object> body) {
         Long userId = currentUserService.getOrCreateDefaultUserId();
         String provider = String.valueOf(body.getOrDefault("provider", "")).trim().toLowerCase();
+        String planId = String.valueOf(body.getOrDefault("planId", "custom-recharge")).trim();
+        String planCycle = String.valueOf(body.getOrDefault("planCycle", "monthly")).trim();
         double amount = Double.parseDouble(String.valueOf(body.getOrDefault("amount", "0")).replace("¥", "").trim());
+        if (!"custom-recharge".equals(planId)) {
+            amount = membershipService.price(planId, planCycle);
+        }
         if (amount <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "充值金额必须大于 0");
         }
@@ -114,6 +123,8 @@ public class PaymentController {
         order.setOrderNo(orderNo);
         order.setUserId(userId);
         order.setProvider(provider);
+        order.setPlanId(planId);
+        order.setPlanCycle(planCycle);
         order.setAmount(normalizeMoney(amount).doubleValue());
         order.setStatus("created");
         order.setMessage("订单已创建，正在请求支付 FM。");
@@ -196,13 +207,17 @@ public class PaymentController {
         if (user == null) {
             return "fail";
         }
-        double rechargeAmount = normalizeMoney(order.getAmount()).doubleValue();
-        user.setBalanceAmount((user.getBalanceAmount() == null ? 0.0 : user.getBalanceAmount()) + rechargeAmount);
-        appUserRepository.save(user);
+        double paidAmount = normalizeMoney(order.getAmount()).doubleValue();
+        if (!"custom-recharge".equals(order.getPlanId())) {
+            membershipService.activate(user, order.getPlanId(), order.getPlanCycle());
+        } else {
+            user.setBalanceAmount((user.getBalanceAmount() == null ? 0.0 : user.getBalanceAmount()) + paidAmount);
+            appUserRepository.save(user);
+        }
 
         RechargeRecordEntity record = new RechargeRecordEntity();
         record.setEmail(user.getEmail());
-        record.setAmount(rechargeAmount);
+        record.setAmount(paidAmount);
         record.setTokens(0L);
         rechargeRecordRepository.save(record);
 
@@ -211,7 +226,7 @@ public class PaymentController {
         order.setPlatformOrderNo(params.getOrDefault("platformOrderNo", ""));
         order.setPaidAt(LocalDateTime.now());
         order.setNotifyPayload(params.toString());
-        order.setMessage("支付成功，余额已入账。");
+        order.setMessage("custom-recharge".equals(order.getPlanId()) ? "支付成功，余额已入账。" : "支付成功，会员套餐已生效，功能额度已重置。");
         orderRepository.save(order);
         return "success";
     }
@@ -220,6 +235,8 @@ public class PaymentController {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("orderNo", order.getOrderNo());
         row.put("provider", order.getProvider());
+        row.put("planId", order.getPlanId());
+        row.put("planCycle", order.getPlanCycle());
         row.put("amount", order.getAmount());
         row.put("actualPayAmount", order.getActualPayAmount());
         row.put("status", order.getStatus());

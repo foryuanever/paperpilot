@@ -116,6 +116,25 @@ public class AiChatService {
         int maxOutputTokens,
         List<String> fallbackModels
     ) throws Exception {
+        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, true);
+    }
+
+    public ChatResult chatJsonWithModelFallbackUnmetered(
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        List<String> fallbackModels
+    ) throws Exception {
+        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, false);
+    }
+
+    private ChatResult chatJsonWithModelFallback(
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        List<String> fallbackModels,
+        boolean accountUsage
+    ) throws Exception {
         ModelConfigEntity config = activeGeneralConfig();
         String baseUrl = config == null ? "https://api.openai.com/v1" : config.getBaseUrl();
         String apiKey = config == null ? "" : config.getApiKey();
@@ -153,7 +172,7 @@ public class AiChatService {
             String attemptKey = route.baseUrl() + " " + route.model();
             if (!attempted.add(attemptKey)) continue;
             try {
-                return send(route.baseUrl(), route.apiKey(), route.model(), route.apiFormat(), route.authType(), route.fullUrl(), route.customUserAgent(), systemPrompt, userPrompt, maxOutputTokens);
+                return send(route.baseUrl(), route.apiKey(), route.model(), route.apiFormat(), route.authType(), route.fullUrl(), route.customUserAgent(), systemPrompt, userPrompt, maxOutputTokens, accountUsage);
             } catch (Exception error) {
                 lastError = route.model() + "：" + error.getMessage();
             }
@@ -218,6 +237,25 @@ public class AiChatService {
         int maxOutputTokens,
         List<String> preferredModels
     ) throws Exception {
+        return chatJsonForDeckAgentStrict(systemPrompt, userPrompt, maxOutputTokens, preferredModels, true);
+    }
+
+    public ChatResult chatJsonForDeckAgentStrictUnmetered(
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        List<String> preferredModels
+    ) throws Exception {
+        return chatJsonForDeckAgentStrict(systemPrompt, userPrompt, maxOutputTokens, preferredModels, false);
+    }
+
+    private ChatResult chatJsonForDeckAgentStrict(
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        List<String> preferredModels,
+        boolean accountUsage
+    ) throws Exception {
         ModelConfigEntity active = modelConfigRepository.findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK).orElse(null);
         List<ModelConfigEntity> configs = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK);
         if (active != null
@@ -258,7 +296,7 @@ public class AiChatService {
             String attemptKey = route.baseUrl() + " " + route.model();
             if (!attempted.add(attemptKey)) continue;
             try {
-                return send(route.baseUrl(), route.apiKey(), route.model(), route.apiFormat(), route.authType(), route.fullUrl(), route.customUserAgent(), systemPrompt, userPrompt, maxOutputTokens);
+                return send(route.baseUrl(), route.apiKey(), route.model(), route.apiFormat(), route.authType(), route.fullUrl(), route.customUserAgent(), systemPrompt, userPrompt, maxOutputTokens, accountUsage);
             } catch (Exception error) {
                 lastError = route.model() + "：" + error.getMessage();
             }

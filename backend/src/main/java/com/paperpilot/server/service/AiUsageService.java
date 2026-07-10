@@ -27,19 +27,22 @@ public class AiUsageService {
     private final ModelConfigRepository modelConfigRepository;
     private final CurrentUserService currentUserService;
     private final BillingService billingService;
+    private final MembershipService membershipService;
 
     public AiUsageService(
         AiUsageRecordRepository repository,
         AppUserRepository appUserRepository,
         ModelConfigRepository modelConfigRepository,
         CurrentUserService currentUserService,
-        BillingService billingService
+        BillingService billingService,
+        MembershipService membershipService
     ) {
         this.repository = repository;
         this.appUserRepository = appUserRepository;
         this.modelConfigRepository = modelConfigRepository;
         this.currentUserService = currentUserService;
         this.billingService = billingService;
+        this.membershipService = membershipService;
     }
 
     public void record(
@@ -78,13 +81,11 @@ public class AiUsageService {
         long totalTokens
     ) {
         if (userId == null || totalTokens <= 0) return;
-        double charge = billingService.calculateCharge(action, totalTokens);
         appUserRepository.findById(userId).ifPresent(user -> {
             long current = user.getTokenUsed() == null ? 0L : user.getTokenUsed();
             user.setTokenUsed(current + totalTokens);
-            double balance = user.getBalanceAmount() == null ? 0.0D : user.getBalanceAmount();
-            user.setBalanceAmount(Math.max(0.0D, balance - charge));
             appUserRepository.save(user);
+            membershipService.consume(user, action);
         });
         record(userId, modelName, scene, action, paperTitle, promptTokens, completionTokens, totalTokens);
     }
@@ -117,27 +118,17 @@ public class AiUsageService {
             : repository.countByUserIdAndCreatedAtAfter(user.getId(), todayStart);
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("planId", inferPlanId(safe(user.getTokenLimit())));
-        result.put("planName", inferPlanName(safe(user.getTokenLimit())));
-        result.put("tokenQuota", safe(user.getTokenLimit()));
-        result.put("tokenUsed", safe(user.getTokenUsed()));
-        result.put("tokenRemaining", Math.max(0L, safe(user.getTokenLimit()) - safe(user.getTokenUsed())));
-        result.put("balanceAmount", money(user.getBalanceAmount()));
-        result.put("resetAt", LocalDate.now().plusMonths(1).withDayOfMonth(1).toString());
+        result.put("membership", membershipService.membership(user));
+        result.put("plans", membershipService.catalog());
         result.put("promptTokens", promptTokens);
         result.put("completionTokens", completionTokens);
         result.put("weekTokens", weekTokens);
-        result.put("estimatedCost", recent.stream().mapToDouble(this::chargeOf).sum());
-        result.put("unitPrice", billingService.unitPrice());
-        result.put("billingMultiplier", billingService.multiplier());
         result.put("totalRequests", totalRequests);
         result.put("todayRequests", todayRequests);
         result.put("todayTokens", todayTokens);
         result.put("rpm", minuteRecords.size());
         result.put("tpm", minuteTokens);
-        result.put("mpm", minuteRecords.stream().mapToDouble(this::chargeOf).sum());
-        result.put("currentMinuteCost", minuteRecords.stream().mapToDouble(this::chargeOf).sum());
-        result.put("usageScope", showingAllUsers ? "all" : "current");
+        result.put("usageScope", "current");
         result.put("dailyUsage", buildDailyUsage(recent));
         result.put("modelBreakdown", buildBreakdown(recent, "model"));
         result.put("sceneBreakdown", buildBreakdown(recent, "scene"));
@@ -274,9 +265,6 @@ public class AiUsageService {
             row.put("tokens", safe(record.getTotalTokens()));
             row.put("promptTokens", safe(record.getPromptTokens()));
             row.put("completionTokens", safe(record.getCompletionTokens()));
-            row.put("cost", chargeOf(record));
-            row.put("unitPrice", unitPriceOf(record));
-            row.put("billingMultiplier", multiplierOf(record));
             return row;
         }).toList();
     }

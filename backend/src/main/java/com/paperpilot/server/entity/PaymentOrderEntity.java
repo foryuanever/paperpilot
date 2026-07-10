@@ -24,6 +24,12 @@ public class PaymentOrderEntity {
     @Column(nullable = false, length = 32)
     private String provider = "";
 
+    @Column(name = "plan_id", length = 32)
+    private String planId = "custom-recharge";
+
+    @Column(name = "plan_cycle", length = 16)
+    private String planCycle = "";
+
     @Column(nullable = false, length = 32)
     private String status = "created";
 
@@ -61,6 +67,10 @@ public class PaymentOrderEntity {
     public void setAmount(Double amount) { this.amount = amount; }
     public String getProvider() { return provider; }
     public void setProvider(String provider) { this.provider = provider; }
+    public String getPlanId() { return planId; }
+    public void setPlanId(String planId) { this.planId = planId; }
+    public String getPlanCycle() { return planCycle; }
+    public void setPlanCycle(String planCycle) { this.planCycle = planCycle; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getPaymentUrl() { return paymentUrl; }

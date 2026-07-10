@@ -91,6 +91,7 @@ public class MeetingReportService {
     private final CurrentUserService currentUserService;
     private final AiChatService aiChatService;
     private final AiUsageService aiUsageService;
+    private final MembershipService membershipService;
     private final NotificationService notificationService;
     private final ExternalSearchService externalSearchService;
     private final ObjectMapper objectMapper;
@@ -123,6 +124,7 @@ public class MeetingReportService {
         CurrentUserService currentUserService,
         AiChatService aiChatService,
         AiUsageService aiUsageService,
+        MembershipService membershipService,
         NotificationService notificationService,
         ExternalSearchService externalSearchService,
         ObjectMapper objectMapper
@@ -133,6 +135,7 @@ public class MeetingReportService {
         this.currentUserService = currentUserService;
         this.aiChatService = aiChatService;
         this.aiUsageService = aiUsageService;
+        this.membershipService = membershipService;
         this.notificationService = notificationService;
         this.externalSearchService = externalSearchService;
         this.objectMapper = objectMapper;
@@ -153,6 +156,7 @@ public class MeetingReportService {
 
     public Map<String, Object> startGenerate(String workspaceId) {
         Long userId = currentUserService.getOrCreateDefaultUserId();
+        membershipService.assertAvailable(userId, "组会论文综述生成");
         requirePaper(workspaceId, userId);
         String key = jobKey(userId, workspaceId);
         ReportJob existing = jobs.get(key);
@@ -286,7 +290,7 @@ public class MeetingReportService {
     private AiChatService.ChatResult callSectionModel(String systemPrompt, String userPrompt) throws Exception {
         CompletableFuture<AiChatService.ChatResult> future = CompletableFuture.supplyAsync(() -> {
             try {
-                return aiChatService.chatJsonWithModelFallback(
+                return aiChatService.chatJsonWithModelFallbackUnmetered(
                     systemPrompt,
                     userPrompt,
                     4200,
@@ -378,7 +382,7 @@ public class MeetingReportService {
                 question
             );
         try {
-            AiChatService.ChatResult result = aiChatService.chatJsonWithModelFallback(
+            AiChatService.ChatResult result = aiChatService.chatJsonWithModelFallbackUnmetered(
                 systemPrompt,
                 userPrompt,
                 1000,
@@ -455,6 +459,7 @@ public class MeetingReportService {
     }
 
     private Map<String, Object> prepareDeckGeneration(Map<String, Object> body, MultipartFile reportPaper) {
+        membershipService.assertAvailable(currentUserService.getOrCreateDefaultUserId(), "组会PPT Agent执行");
         String jobId = "meeting-deck-" + UUID.randomUUID();
         DeckJob job = new DeckJob(jobId);
         job.userId(currentUserService.getOrCreateDefaultUserId());
@@ -670,7 +675,7 @@ public class MeetingReportService {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "论文对比材料整理失败");
         }
         try {
-            AiChatService.ChatResult result = aiChatService.chatJsonWithModelFallback(
+            AiChatService.ChatResult result = aiChatService.chatJsonWithModelFallbackUnmetered(
                 systemPrompt,
                 userPrompt,
                 5200,
@@ -1121,7 +1126,7 @@ public class MeetingReportService {
         int maxOutputTokens
     ) throws Exception {
         String userPrompt = objectMapper.writeValueAsString(promptPayload);
-        AiChatService.ChatResult result = aiChatService.chatJsonForDeckAgentStrict(
+        AiChatService.ChatResult result = aiChatService.chatJsonForDeckAgentStrictUnmetered(
             systemPrompt,
             userPrompt,
             maxOutputTokens,
@@ -1148,7 +1153,7 @@ public class MeetingReportService {
             if (repairInput.length() > 12000) {
                 repairInput = repairInput.substring(0, 12000);
             }
-            AiChatService.ChatResult fixed = aiChatService.chatJsonForDeckAgentStrict(
+            AiChatService.ChatResult fixed = aiChatService.chatJsonForDeckAgentStrictUnmetered(
                 repairPrompt,
                 repairInput,
                 1600,

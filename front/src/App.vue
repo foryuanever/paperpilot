@@ -74,6 +74,7 @@
                 <div class="profile-popover-name-row">
                   <strong class="profile-popover-name">{{ authStore.profile.name }}</strong>
                   <span class="profile-popover-role-badge" :class="getRoleClass(currentUserMember.role)">{{ currentUserMember.role }}</span>
+                  <span class="profile-popover-role-badge badge-vip">{{ membershipName }}</span>
                 </div>
                 <div class="profile-popover-email">{{ authStore.profile.email }}</div>
               </div>
@@ -103,16 +104,10 @@
             <!-- Token limit -->
             <div class="profile-popover-quota">
               <div class="quota-meta">
-                <span class="quota-title">Token 共享额度</span>
-                <span class="quota-usage">{{ formatTokens(currentUserMember.tokenUsed) }} / {{ formatTokens(currentUserMember.tokenLimit) }}</span>
+                <span class="quota-title">本期会员权益</span>
+                <span class="quota-usage">{{ membershipExpiry }}</span>
               </div>
-              <div class="quota-progress-bar">
-                <div 
-                  class="quota-progress-fill" 
-                  :class="getQuotaColorClass(currentUserMember.tokenUsed / currentUserMember.tokenLimit)"
-                  :style="{ width: Math.min(100, (currentUserMember.tokenUsed / currentUserMember.tokenLimit) * 100) + '%' }"
-                ></div>
-              </div>
+              <router-link class="membership-center-link" to="/models" @click="uiStore.closeOverlays">查看套餐与剩余次数</router-link>
             </div>
 
             <hr class="profile-popover-divider" />
@@ -227,6 +222,7 @@ import { pageNavItems } from "./constants/workspace";
 import { useAuthStore } from "./stores/auth";
 import { useUiStore } from "./stores/ui";
 import { useTeamStore } from "./stores/team";
+import { useUsageStore } from "./stores/usage";
 import { paperpilotApi } from "./services/paperpilotApi";
 import { useDialogStore } from "./stores/dialog";
 import AppDialog from "./components/AppDialog.vue";
@@ -236,6 +232,7 @@ import { useUserCardStore } from "./stores/userCard";
 const authStore = useAuthStore();
 const uiStore = useUiStore();
 const teamStore = useTeamStore();
+const usageStore = useUsageStore();
 const route = useRoute();
 const router = useRouter();
 const dialogStore = useDialogStore();
@@ -274,6 +271,13 @@ const mainClass = computed(() => {
 });
 
 const userInitial = computed(() => (authStore.profile.name || "U").slice(0, 1).toUpperCase());
+const membershipName = computed(() => usageStore.state.membership?.name || "基础版");
+const membershipExpiry = computed(() => {
+  const expiresAt = usageStore.state.membership?.expiresAt;
+  if (!usageStore.state.membership?.active) return "免费翻译与导入不限次";
+  if (Array.isArray(expiresAt)) return `有效至 ${expiresAt[0]}-${String(expiresAt[1]).padStart(2, "0")}-${String(expiresAt[2]).padStart(2, "0")}`;
+  return expiresAt ? `有效至 ${String(expiresAt).slice(0, 10)}` : "会员权益已开通";
+});
 
 const chromeIcons = {
   search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-3.5-3.5"/></svg>`,
@@ -561,6 +565,7 @@ onMounted(() => {
     }
   }, 1000);
   authStore.refreshNotifications().catch(() => {});
+  if (authStore.session.isAuthenticated) usageStore.fetchSummary().catch(() => {});
   refreshMessageUnread();
   refreshForumNavSignal();
   refreshSiteMessages();
@@ -1307,6 +1312,16 @@ async function submitPasswordChange() {
   font-size: 11px;
   color: #86868b;
 }
+
+.membership-center-link {
+  width: fit-content;
+  color: #1659d5;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.membership-center-link:hover { text-decoration: underline; }
 
 .quota-progress-bar {
   height: 6px;
