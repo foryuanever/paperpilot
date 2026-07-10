@@ -271,7 +271,7 @@ const mainClass = computed(() => {
 });
 
 const userInitial = computed(() => (authStore.profile.name || "U").slice(0, 1).toUpperCase());
-const membershipName = computed(() => usageStore.state.membership?.name || "基础版");
+const membershipName = computed(() => usageStore.state.membership?.name || "未开通会员");
 const membershipExpiry = computed(() => {
   const expiresAt = usageStore.state.membership?.expiresAt;
   if (!usageStore.state.membership?.active) return "免费翻译与导入不限次";

@@ -813,6 +813,19 @@ function clearMarkdownContent() {
 
 async function handleEditorPaste(event) {
   const items = Array.from(event.clipboardData?.items || []);
+  const pastedText = event.clipboardData?.getData("text/plain") || "";
+  const pastedHtml = event.clipboardData?.getData("text/html") || "";
+  const pastedImageDataUrl = extractImageDataUrl(pastedText) || extractImageDataUrl(pastedHtml);
+  if (pastedImageDataUrl) {
+    event.preventDefault();
+    await addPastedDataUrlImage(pastedImageDataUrl);
+    return;
+  }
+  if (looksLikeRawBase64(pastedText)) {
+    event.preventDefault();
+    moderationError.value = "检测到大段 base64 文本。请直接粘贴图片文件或上传附件，不要把 base64 原文放进帖子正文。";
+    return;
+  }
   const imageItems = items.filter(item => item.type?.startsWith("image/"));
   if (!imageItems.length) return;
   event.preventDefault();
@@ -824,8 +837,50 @@ async function handleEditorPaste(event) {
       continue;
     }
     const image = await readFile(file);
-    await insertMarkdown(`\n\n![${escapeMarkdownText(image.name || "粘贴图片")}](${image.data})\n\n`, "");
+    form.images.push(image);
+    await insertMarkdown(`\n\n图片：${escapeMarkdownText(image.name || "粘贴图片")}\n\n`, "");
   }
+}
+
+async function addPastedDataUrlImage(dataUrl) {
+  const parsed = parseImageDataUrl(dataUrl);
+  if (!parsed) {
+    moderationError.value = "无法识别粘贴的图片，请保存为图片文件后再粘贴或上传。";
+    return;
+  }
+  if (parsed.bytes > 4 * 1024 * 1024) {
+    moderationError.value = "粘贴的图片超过 4MB，请压缩后再粘贴。";
+    return;
+  }
+  const image = {
+    name: `粘贴图片-${Date.now()}.${parsed.ext}`,
+    type: parsed.mime,
+    size: formatFileSize(parsed.bytes),
+    data: dataUrl
+  };
+  form.images.push(image);
+  await insertMarkdown(`\n\n图片：${escapeMarkdownText(image.name)}\n\n`, "");
+}
+
+function extractImageDataUrl(value) {
+  const match = String(value || "").match(/data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\r\n]+/i);
+  return match ? match[0].replace(/\s+/g, "") : "";
+}
+
+function parseImageDataUrl(value) {
+  const match = String(value || "").match(/^data:(image\/(png|jpe?g|webp|gif));base64,([A-Za-z0-9+/=]+)$/i);
+  if (!match) return null;
+  const ext = match[2].toLowerCase().replace("jpeg", "jpg");
+  return {
+    mime: match[1],
+    ext,
+    bytes: Math.floor(match[3].length * 3 / 4)
+  };
+}
+
+function looksLikeRawBase64(value) {
+  const text = String(value || "").trim();
+  return text.length > 5000 && /^[A-Za-z0-9+/=\r\n]+$/.test(text);
 }
 
 function isMine(post) {

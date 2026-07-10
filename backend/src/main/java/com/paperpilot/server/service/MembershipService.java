@@ -131,5 +131,5 @@ public class MembershipService {
     private Map<String, Object> allowance(Integer quota, Integer used) { int q = number(quota); int u = number(used); return Map.of("quota", q, "used", u, "remaining", Math.max(0, q - u)); }
     private int number(Integer value) { return value == null ? 0 : value; }
     private String safe(String value, String fallback) { return value == null || value.isBlank() ? fallback : value; }
-    private String planName(String id) { return "light".equals(id) ? "轻享会员" : "study".equals(id) ? "研读会员" : "lab".equals(id) ? "课题会员" : "基础版"; }
+    private String planName(String id) { return "light".equals(id) ? "轻享会员" : "study".equals(id) ? "研读会员" : "lab".equals(id) ? "课题会员" : "未开通会员"; }
 }

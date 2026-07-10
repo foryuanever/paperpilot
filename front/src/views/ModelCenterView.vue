@@ -18,7 +18,7 @@
         <div>
           <small>{{ membership.active ? "当前会员" : "当前状态" }}</small>
           <strong>{{ membership.name }}</strong>
-          <p>{{ membership.active ? `有效至 ${formatDate(membership.expiresAt)} · ${cycleLabel(membership.cycle)}` : "免费导入、文献管理、基础翻译不限次" }}</p>
+          <p>{{ membership.active ? `有效至 ${formatDate(membership.expiresAt)} · ${cycleLabel(membership.cycle)}` : "当前未购买套餐，仅保留免费导入、文献管理、基础翻译" }}</p>
         </div>
       </div>
       <div class="entitlement-line">
@@ -83,14 +83,9 @@
             <p class="settlement-note">未使用次数到期清零，续费后重新获得当期权益。</p>
           </div>
 
-          <div class="plan-actions">
-            <button class="outline-buy" @click.stop="selectAndCheckout(plan.id)">
-              单独购买
-            </button>
-            <button class="solid-buy" @click.stop="selectAndCheckout(plan.id)">
-              立即开通
-            </button>
-          </div>
+          <button class="plan-buy-button" @click.stop="selectAndCheckout(plan.id)">
+            开通该套餐
+          </button>
         </article>
       </div>
     </section>
@@ -107,7 +102,7 @@
           <button :class="{ active: provider === 'wechat' }" @click="provider = 'wechat'"><i>微</i>微信支付</button>
         </div>
         <button class="primary-button" :disabled="paying" @click="checkout">
-          {{ paying ? "正在创建订单..." : `¥${planPrice(selectedPlanInfo)} 立即开通` }}
+          {{ paying ? "正在创建订单..." : `¥${planPrice(selectedPlanInfo)} 去支付` }}
         </button>
       </div>
       <p v-if="paymentMessage" class="payment-message">{{ paymentMessage }}</p>
@@ -178,7 +173,7 @@ const cycles = [
 
 const plans = computed(() => usageStore.state.plans || []);
 const displayPlans = computed(() => plans.value.filter((item) => item.id !== "free"));
-const membership = computed(() => usageStore.state.membership || { id: "free", name: "基础版", benefits: {} });
+const membership = computed(() => usageStore.state.membership || { id: "free", name: "未开通会员", benefits: {} });
 const selectedPlanInfo = computed(() => displayPlans.value.find((item) => item.id === selectedPlan.value) || displayPlans.value[0] || { name: "研读会员", monthlyPrice: 19.9, reviewQuota: 10, pptQuota: 2, chatQuota: 80 });
 const planInitial = computed(() => ({ free: "B", light: "L", study: "R", lab: "P" })[membership.value.id] || "B");
 const benefitItems = computed(() => {
@@ -563,9 +558,9 @@ button {
 }
 
 .plan-card {
-  --tier: #0b946f;
-  --tier-soft: #ecfbf5;
-  --tier-line: #a8ecd1;
+  --tier: #35725f;
+  --tier-soft: #f7fbf9;
+  --tier-line: #cfe1db;
   min-width: 0;
   padding: 20px;
   border: 1px solid var(--tier-line);
@@ -575,15 +570,15 @@ button {
 }
 
 .plan-card.study {
-  --tier: #2664ea;
-  --tier-soft: #f0f6ff;
-  --tier-line: #9cbfff;
+  --tier: #3f64ae;
+  --tier-soft: #f6f8fd;
+  --tier-line: #cbd7f2;
 }
 
 .plan-card.lab {
-  --tier: #7a2fe3;
-  --tier-soft: #f7f1ff;
-  --tier-line: #c8a9ff;
+  --tier: #6c5c9c;
+  --tier-soft: #f8f7fc;
+  --tier-line: #d8d2ea;
 }
 
 .plan-card:hover,
@@ -736,15 +731,7 @@ button {
   font-size: 12px;
 }
 
-.plan-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.outline-buy,
-.solid-buy,
+.plan-buy-button,
 .primary-button,
 .ticket-button {
   height: 38px;
@@ -753,13 +740,9 @@ button {
   font-weight: 850;
 }
 
-.outline-buy {
-  border: 1px solid var(--tier);
-  color: var(--tier);
-  background: #fff;
-}
-
-.solid-buy {
+.plan-buy-button {
+  width: 100%;
+  margin-top: 18px;
   color: #fff;
   background: var(--tier);
 }
@@ -1042,7 +1025,6 @@ button {
 
   .entitlement-line,
   .plan-cards,
-  .plan-actions,
   .order-item {
     grid-template-columns: 1fr;
   }
