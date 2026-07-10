@@ -492,11 +492,11 @@
         </div>
 
         <footer>
-          <span>{{ publishing ? "正在保存帖子..." : editingPost ? "保存后立即更新帖子" : "发布后立即公开展示" }}</span>
+          <span>{{ publishing ? "正在提交并同步列表..." : editingPost ? "保存后立即更新帖子" : "发布后立即公开展示" }}</span>
           <div>
             <button class="cancel-button" @click="closeCreateModal">取消</button>
             <button class="submit-button" :disabled="!canSubmit || publishing" @click="submitPost">
-              {{ publishing ? "保存中..." : editingPost ? "保存修改" : "发布帖子" }}
+              {{ publishing ? "提交中..." : editingPost ? "保存修改" : "发布帖子" }}
             </button>
           </div>
         </footer>
@@ -729,8 +729,8 @@ async function submitPost() {
     venueName: form.venueName.trim(),
     venueLevel: form.venueLevel,
     resourceLink: "",
-    images: form.images,
-    attachments: form.attachments
+    images: form.images.map(compactUploadFile),
+    attachments: form.attachments.map(compactUploadFile)
   };
   try {
     if (editingPost.value) {
@@ -745,6 +745,7 @@ async function submitPost() {
     });
     window.dispatchEvent(new Event("paperpilot:forum-posts-changed"));
   } catch (error) {
+    console.error("Failed to publish forum post:", error);
     moderationError.value = error?.response?.data?.message
       || error?.response?.data?.detail
       || (error?.code === "ECONNABORTED" ? "保存超时：请确认后端已启动，或减少正文里的大图后重试。" : "")
@@ -886,9 +887,18 @@ async function handleAttachmentUpload(event) {
     }
     const attachment = await readFile(file);
     form.attachments.push(attachment);
-    await insertMarkdown(`\n\n[${escapeMarkdownText(attachment.name)}](${attachment.data})\n\n`, "");
+    await insertMarkdown(`\n\n附件：${escapeMarkdownText(attachment.name)}\n\n`, "");
   }
   event.target.value = "";
+}
+
+function compactUploadFile(file) {
+  return {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    data: file.data
+  };
 }
 
 function escapeMarkdownText(value) {

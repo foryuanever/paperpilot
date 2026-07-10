@@ -24,13 +24,13 @@ export const useForumStore = defineStore("forum", () => {
 
   async function addPost(payload) {
     const result = await paperpilotApi.createForumPost(payload);
-    fetchPosts({ silent: true }).catch(error => console.error("Failed to refresh forum posts:", error));
+    await fetchPosts({ silent: true });
     return result;
   }
 
   async function updatePost(postId, payload) {
     const result = await paperpilotApi.updateForumPost(postId, payload);
-    fetchPosts({ silent: true }).catch(error => console.error("Failed to refresh forum posts:", error));
+    await fetchPosts({ silent: true });
     return result;
   }
 

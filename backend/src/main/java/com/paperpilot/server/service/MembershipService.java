@@ -112,11 +112,11 @@ public class MembershipService {
     private Map<String, Object> plan(String id) {
         Map<String, Object> item = new LinkedHashMap<>();
         if (PLAN_LIGHT.equals(id)) {
-            item.put("id", id); item.put("name", "轻享会员"); item.put("monthlyPrice", 9.9); item.put("reviewQuota", 0); item.put("pptQuota", 0); item.put("chatQuota", 0);
+            item.put("id", id); item.put("name", "轻享会员"); item.put("monthlyPrice", 9.9); item.put("reviewQuota", 3); item.put("pptQuota", 0); item.put("chatQuota", 20);
         } else if (PLAN_STUDY.equals(id)) {
-            item.put("id", id); item.put("name", "研读会员"); item.put("monthlyPrice", 19.9); item.put("reviewQuota", 8); item.put("pptQuota", 1); item.put("chatQuota", 30);
+            item.put("id", id); item.put("name", "研读会员"); item.put("monthlyPrice", 19.9); item.put("reviewQuota", 10); item.put("pptQuota", 2); item.put("chatQuota", 80);
         } else {
-            item.put("id", id); item.put("name", "课题会员"); item.put("monthlyPrice", 29.9); item.put("reviewQuota", 20); item.put("pptQuota", 4); item.put("chatQuota", 100);
+            item.put("id", id); item.put("name", "课题会员"); item.put("monthlyPrice", 29.9); item.put("reviewQuota", 25); item.put("pptQuota", 5); item.put("chatQuota", 180);
         }
         return item;
     }
