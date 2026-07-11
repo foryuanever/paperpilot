@@ -3391,6 +3391,524 @@ onUnmounted(() => {
 .slide-up-enter-from { opacity: 0; transform: translate(-50%, 12px); }
 .slide-up-leave-to { opacity: 0; transform: translate(-50%, -12px); }
 
+/* Frontend-design: Swiss laboratory board
+   White surface, hairline rules, asymmetric work columns. No stacked rounded cards. */
+.team-page {
+  --team-bg: #F7F7F8;
+  --team-surface: #FFFFFF;
+  --team-ink: #111111;
+  --team-muted: #5F6368;
+  --team-faint: #8B9098;
+  --team-line: #D8DADF;
+  --team-accent: #002FA7;
+  --team-alert: #E4002B;
+  padding: 0 28px 80px;
+  background: var(--team-bg);
+  color: var(--team-ink);
+  font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+}
+
+.team-shell {
+  max-width: 1640px;
+  gap: 0;
+  padding-top: 30px;
+}
+
+.team-seats-header,
+.student-glass-card,
+.admin-action-section,
+.members-cards-container,
+.team-resources-section,
+.spatial-glass-panel,
+.summary-metric-cards,
+.briefing-ann-card,
+.admin-item-card,
+.resource-card,
+.benefit-item,
+.research-rhythm-panel,
+.detail-item {
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.team-seats-header {
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 0;
+  padding: 0;
+  background: var(--team-surface);
+  border: 0;
+  border-top: 2px solid var(--team-ink);
+  border-bottom: 1px solid var(--team-ink);
+}
+
+.seats-left-container {
+  gap: 14px;
+  padding: 28px 32px 26px 0;
+}
+
+.seats-label-row {
+  align-items: baseline;
+  gap: 16px;
+}
+
+.seats-label-row h2 {
+  color: var(--team-ink);
+  font-size: 34px;
+  line-height: 0.95;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.seats-count-badge,
+.col-meta-pill,
+.task-count-indicator,
+.status-tag,
+.member-plan-pill,
+.role-badge,
+.role-pill {
+  border-radius: 0;
+  background: transparent;
+  border: 1px solid var(--team-line);
+  color: var(--team-accent);
+}
+
+.seats-count-badge {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.seats-helper-text {
+  max-width: 66ch;
+  margin: 0;
+  color: var(--team-muted);
+  font-size: 14px;
+}
+
+.seats-avatar-row {
+  gap: 12px;
+  padding: 18px 0 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--team-line);
+  border-radius: 0;
+}
+
+.avatar-inner-wrapper,
+.avatar-large-shell,
+.avatar-shell {
+  box-shadow: none;
+  border-color: var(--team-line);
+}
+
+.seat-circle-avatar:hover .avatar-inner-wrapper {
+  transform: none;
+  border-color: var(--team-accent);
+  box-shadow: none;
+}
+
+.status-indicator-dot.online,
+.status-dot.online,
+.pulse-glow-dot.active {
+  background: var(--team-accent);
+  box-shadow: none;
+}
+
+.seat-member-name,
+.email-subtext,
+.plate-label,
+.card-detail-item span,
+.quota-label-line span,
+.tutor-metric-card span,
+.research-rhythm-panel span,
+.benefit-item span,
+.item-main-content small,
+.checkin-clock span {
+  color: var(--team-muted);
+}
+
+.seats-right-container {
+  align-content: stretch;
+  justify-items: stretch;
+  gap: 18px;
+  min-width: 0;
+  padding: 28px 0 26px 30px;
+  border-left: 1px solid var(--team-ink);
+}
+
+.team-plan-flag {
+  min-width: 0;
+  padding: 12px;
+  background: var(--team-surface);
+  border: 1px solid var(--team-ink);
+  border-radius: 0;
+}
+
+.team-plan-flag.active {
+  background: var(--team-surface);
+  border-color: var(--team-accent);
+  box-shadow: none;
+}
+
+.team-plan-flag strong,
+.team-plan-flag.active strong,
+.plate-code {
+  color: var(--team-ink);
+}
+
+.team-identity-plate {
+  align-items: flex-start;
+  padding-top: 16px;
+  border-top: 1px solid var(--team-line);
+}
+
+.plate-code {
+  font-size: 24px;
+  letter-spacing: 0;
+}
+
+.invite-main-btn,
+.student-primary-action-btn,
+.submit-form-btn,
+.btn-toggle-form,
+.apple-btn.apple-btn-primary,
+.res-action-btn.download {
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--team-accent);
+  border: 1px solid var(--team-accent);
+  color: #FFFFFF;
+}
+
+.btn-toggle-form,
+.student-primary-action-btn.already-checked {
+  background: var(--team-surface);
+  color: var(--team-accent);
+}
+
+.invite-main-btn:hover,
+.student-primary-action-btn:hover {
+  transform: none;
+  background: var(--team-ink);
+  border-color: var(--team-ink);
+}
+
+.dashboard-split-layout {
+  grid-template-columns: minmax(0, 1.2fr) 430px;
+  gap: 0;
+  border-bottom: 1px solid var(--team-line);
+}
+
+.dashboard-split-layout.tutor-view {
+  grid-template-columns: minmax(0, 1.55fr) 430px;
+  gap: 0;
+}
+
+.dashboard-col {
+  gap: 28px;
+}
+
+.dashboard-col.left-col {
+  padding: 34px 34px 40px 0;
+}
+
+.dashboard-col.right-col {
+  padding: 34px 0 40px 34px;
+  border-left: 1px solid var(--team-line);
+}
+
+.col-header-row,
+.section-title-bar,
+.checklist-header,
+.resources-header,
+.student-status-heading,
+.sign-in-header {
+  border-bottom: 1px solid var(--team-ink);
+}
+
+.col-header-row h3,
+.admin-action-section h4,
+.student-glass-card h3,
+.checklist-header h3,
+.resources-header h3 {
+  color: var(--team-ink);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.student-glass-card,
+.admin-action-section,
+.team-resources-section {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.student-glass-card:not(:first-child),
+.admin-action-section:not(:first-child),
+.team-resources-section {
+  padding-top: 24px;
+  border-top: 1px solid var(--team-line);
+}
+
+.workbench-sign-in {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  border-top: 2px solid var(--team-ink);
+  padding-top: 20px;
+}
+
+.workbench-sign-in .sign-in-header {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.workbench-sign-in .sign-in-body {
+  align-items: end;
+  justify-content: end;
+  gap: 18px;
+}
+
+.checkin-clock {
+  text-align: left;
+}
+
+.checkin-clock strong {
+  color: var(--team-ink);
+  font-size: 28px;
+}
+
+.my-stats-panel {
+  gap: 20px;
+}
+
+.student-status-heading {
+  align-items: end;
+  padding-bottom: 14px;
+}
+
+.student-status-heading p,
+.sign-in-text p {
+  color: var(--team-muted);
+}
+
+.benefit-lane {
+  display: block;
+  border-top: 1px solid var(--team-line);
+}
+
+.benefit-item {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--team-line);
+}
+
+.benefit-item.enabled {
+  background: transparent;
+  border-color: var(--team-line);
+}
+
+.benefit-item strong {
+  color: var(--team-ink);
+  font-size: 18px;
+}
+
+.research-rhythm-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--team-line);
+  border-bottom: 1px solid var(--team-line);
+}
+
+.research-rhythm-panel > div {
+  min-height: 0;
+  flex: 1 1 190px;
+  padding: 16px 18px 16px 0;
+  border-right: 0;
+}
+
+.research-rhythm-panel strong,
+.tutor-metric-card strong,
+.card-detail-item strong {
+  color: var(--team-ink);
+}
+
+.members-cards-container,
+.summary-metric-cards {
+  overflow: visible;
+  background: transparent;
+  border: 0;
+}
+
+.roster-table-head {
+  padding: 12px 0;
+  background: transparent;
+  color: var(--team-muted);
+  border-top: 1px solid var(--team-ink);
+  border-bottom: 1px solid var(--team-line);
+}
+
+.member-management-card {
+  padding: 16px 0;
+  background: transparent;
+  border-top: 0;
+  border-bottom: 1px solid var(--team-line);
+}
+
+.member-management-card:hover {
+  background: transparent;
+}
+
+.card-details-grid,
+.member-benefit-strip.roomy,
+.detail-item {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.member-benefit-strip span {
+  border-radius: 0;
+  background: transparent;
+  border-color: var(--team-line);
+  color: var(--team-accent);
+}
+
+.member-benefit-strip span.muted {
+  background: transparent;
+  color: var(--team-muted);
+}
+
+.summary-metric-cards {
+  display: block;
+  border-top: 2px solid var(--team-ink);
+}
+
+.tutor-metric-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  padding: 14px 0;
+  background: transparent;
+  border-right: 0;
+  border-bottom: 1px solid var(--team-line);
+}
+
+.tutor-inline-form,
+.admin-item-card,
+.briefing-ann-card,
+.student-task-item,
+.resource-card {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--team-line);
+  border-radius: 0;
+}
+
+.tutor-inline-form {
+  padding: 16px 0;
+}
+
+.tutor-inline-form input,
+.tutor-inline-form textarea,
+.modal-form input,
+.modal-form select {
+  border-radius: 0;
+  border: 1px solid var(--team-line);
+  background: var(--team-surface);
+}
+
+.admin-item-card,
+.briefing-ann-card {
+  padding: 16px 0;
+}
+
+.item-title-row h5,
+.student-task-item h4,
+.briefing-ann-card h4 {
+  color: var(--team-ink);
+  text-decoration: none !important;
+}
+
+.student-task-list,
+.announcements-briefing-stack,
+.admin-items-list,
+.resources-grid,
+.student-leaderboard-stack {
+  gap: 0;
+}
+
+.student-task-item {
+  padding: 18px 0;
+}
+
+.task-countdown-tag,
+.published-action-btn,
+.res-action-btn,
+.pager-btn,
+.action-btn-mini,
+.action-btn-link {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.action-btn-link,
+.published-action-btn,
+.btn-toggle-form {
+  color: var(--team-accent);
+}
+
+.action-btn-link.danger,
+.published-action-btn.danger,
+.res-action-btn.delete {
+  color: var(--team-alert);
+}
+
+.image-attachment-card,
+.document-file-row,
+.document-link-row,
+.uploader-dropzone {
+  border-radius: 0;
+  border-color: var(--team-line);
+  background: var(--team-surface);
+}
+
+.team-resources-section {
+  margin-top: 0;
+  border-top: 2px solid var(--team-ink);
+}
+
+.resources-grid {
+  display: block;
+}
+
+.resource-card {
+  display: flex;
+  padding: 18px 0;
+}
+
+.toast {
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--team-ink);
+}
+
 /* Responsive break points */
 @media (max-width: 1024px) {
   .dashboard-split-layout {
