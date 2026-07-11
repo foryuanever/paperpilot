@@ -81,6 +81,17 @@ export const useForumStore = defineStore("forum", () => {
     }
   }
 
+  async function viewPost(postId) {
+    const post = state.posts.find(item => item.id === postId);
+    if (post) post.views = Math.max(0, Number(post.views || 0) + 1);
+    try {
+      const result = await paperpilotApi.viewForumPost(postId);
+      if (post && result?.views !== undefined) post.views = result.views;
+    } catch (error) {
+      await fetchPosts({ silent: true });
+    }
+  }
+
   async function bookmarkPost(postId) {
     const post = state.posts.find(item => item.id === postId);
     if (post) {
@@ -110,5 +121,5 @@ export const useForumStore = defineStore("forum", () => {
 
   fetchPosts();
 
-  return { state, fetchPosts, addPost, updatePost, deletePost, togglePin, toggleBan, addReply, likePost, bookmarkPost, likeReply };
+  return { state, fetchPosts, addPost, updatePost, deletePost, togglePin, toggleBan, addReply, likePost, viewPost, bookmarkPost, likeReply };
 });

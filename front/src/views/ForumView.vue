@@ -96,6 +96,7 @@
             v-for="post in filteredPosts"
             :key="post.id"
             class="research-post"
+            :class="[membershipClass(post.authorMembershipPlan), { 'premium-wave-post': hasPremiumWave(post) }]"
           >
             <div class="forum-row-avatar" :data-user-id="post.authorUserId" title="查看个人卡片">
               <img v-if="avatarUrlFor(post)" :src="avatarUrlFor(post)" class="post-avatar-img" :alt="post.author" />
@@ -122,7 +123,7 @@
               <div class="forum-meta-line">
                 <span class="meta-item">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21a8 8 0 0 0-16 0"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                  {{ post.author }}
+                  <b class="member-name" :class="membershipClass(post.authorMembershipPlan)">{{ post.author }}</b>
                 </span>
                 <span class="meta-item">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -133,8 +134,8 @@
                   {{ post.replies.length }}
                 </span>
                 <span class="meta-item">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m13 2-9 12h7l-1 8 10-13h-7l0-7Z"></path></svg>
-                  {{ lastActiveName(post) }}
+                  <svg class="heat-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13.5 2.2c.4 2.4-.4 4.2-1.6 5.7-.9 1.2-2 2.3-2 4 0 1.1.7 2 1.7 2.3-.2-1.5.5-2.8 1.5-3.8 2.4 1.5 4 3.7 4 6.3 0 3-2.4 5.3-5.4 5.3S6 19.7 6 16.6c0-2.2 1.1-4 2.5-5.7 1.8-2.2 3.8-4.6 5-8.7Z"/></svg>
+                  {{ post.likes || 0 }}
                 </span>
                 <time>{{ post.time }}</time>
               </div>
@@ -867,6 +868,14 @@ function lastActiveName(post) {
   return lastReply?.author || post?.author || "暂无互动";
 }
 
+function membershipClass(plan) {
+  return `member-${plan || "free"}`;
+}
+
+function hasPremiumWave(post) {
+  return post?.authorMembershipPlan === "lab";
+}
+
 function isHotPost(post) {
   return Number(post.likes || 0) + Number(post.replies?.length || 0) >= 50;
 }
@@ -1394,6 +1403,42 @@ button { cursor: pointer; }
   background: #fbfcfe;
 }
 
+.research-post:nth-child(4n + 1) {
+  background: linear-gradient(90deg, rgba(255, 251, 238, .72), #fff 22%);
+}
+
+.research-post:nth-child(4n + 2) {
+  background: linear-gradient(90deg, rgba(240, 247, 255, .82), #fff 22%);
+}
+
+.research-post:nth-child(4n + 3) {
+  background: linear-gradient(90deg, rgba(244, 240, 255, .68), #fff 22%);
+}
+
+.research-post:nth-child(4n) {
+  background: linear-gradient(90deg, rgba(238, 250, 245, .72), #fff 22%);
+}
+
+.research-post.premium-wave-post {
+  position: relative;
+  overflow: hidden;
+}
+
+.research-post.premium-wave-post::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 0%, rgba(124, 58, 237, .08) 34%, rgba(37, 99, 235, .12) 50%, rgba(124, 58, 237, .08) 66%, transparent 100%);
+  transform: translateX(-120%);
+  animation: forum-premium-wave 3.8s ease-in-out infinite;
+}
+
+@keyframes forum-premium-wave {
+  0%, 42% { transform: translateX(-120%); }
+  78%, 100% { transform: translateX(120%); }
+}
+
 .forum-row-avatar {
   width: 46px;
   height: 46px;
@@ -1482,6 +1527,35 @@ button { cursor: pointer; }
   height: 14px;
   flex: 0 0 auto;
   color: #7a8390;
+}
+
+.meta-item .heat-icon {
+  color: #ef7d22;
+}
+
+.member-name {
+  font: inherit;
+  font-weight: 800;
+}
+
+.member-free {
+  color: #667085;
+}
+
+.member-light {
+  color: #12815f;
+}
+
+.member-study {
+  color: #2463eb;
+}
+
+.member-lab {
+  color: #7c3aed;
+}
+
+.member-team {
+  color: #d35f12;
 }
 
 .forum-meta-line time {

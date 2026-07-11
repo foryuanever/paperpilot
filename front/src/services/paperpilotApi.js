@@ -408,6 +408,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.post(`/api/forum/posts/${id}/like`);
     return data;
   },
+  async viewForumPost(id) {
+    const { data } = await apiClient.post(`/api/forum/posts/${id}/view`);
+    return data;
+  },
   async bookmarkForumPost(id) {
     const { data } = await apiClient.post(`/api/forum/posts/${id}/bookmark`);
     return data;

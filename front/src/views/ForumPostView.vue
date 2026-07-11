@@ -19,7 +19,7 @@
                 <img v-if="avatarUrlFor(post)" :src="avatarUrlFor(post)" class="avatar-img" :alt="post.author" />
                 <span v-else class="avatar">{{ post.avatar }}</span>
                 <div>
-                  <strong>{{ post.author }}</strong>
+                  <strong class="member-name" :class="membershipClass(post.authorMembershipPlan)">{{ post.author }}</strong>
                   <small>
                     <span class="type-label" :class="typeClass(post.postType)">{{ post.postType }}</span>
                     <span>{{ post.direction }}</span>
@@ -71,8 +71,10 @@
             </div>
 
             <footer class="article-actions">
-              <button :class="{ active: post.hasLiked }" @click="forumStore.likePost(post.id)">赞同 {{ post.likes }}</button>
-              <button :class="{ active: post.hasBookmarked }" @click="forumStore.bookmarkPost(post.id)">收藏 {{ post.bookmarks }}</button>
+              <button class="like-action" :class="{ active: post.hasLiked, burst: likeBurst }" @click="likePostWithBurst">
+                <span class="like-flame">🔥</span>
+                赞同 {{ post.likes }}
+              </button>
               <span>{{ post.replies.length }} 条评论</span>
             </footer>
           </article>
@@ -106,7 +108,7 @@
                 <span v-else class="comment-avatar" :data-user-id="reply.authorUserId" title="查看个人卡片">{{ reply.avatar }}</span>
                 <div>
                   <header>
-                    <strong>{{ reply.author }}</strong>
+                    <strong class="member-name" :class="membershipClass(reply.authorMembershipPlan)">{{ reply.author }}</strong>
                     <time>{{ reply.time }}</time>
                     <button :class="{ active: reply.hasLiked }" @click="forumStore.likeReply(post.id, reply.id)">赞同 {{ reply.likes }}</button>
                     <button @click="setReplyTarget(reply)">回复</button>
@@ -161,6 +163,7 @@ const replyContent = ref("");
 const submitting = ref(false);
 const previewImage = ref("");
 const replyTarget = ref(null);
+const likeBurst = ref(false);
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
 const defaultValidateLink = markdown.validateLink;
 markdown.validateLink = (url) => /^data:(image|application|text)\//i.test(url) || defaultValidateLink(url);
@@ -169,6 +172,7 @@ const post = computed(() => forumStore.state.posts.find(item => item.id === rout
 
 onMounted(async () => {
   if (!post.value) await forumStore.fetchPosts();
+  if (post.value) await forumStore.viewPost(post.value.id);
 });
 
 function typeClass(type) {
@@ -191,6 +195,16 @@ function renderMarkdown(value) {
 
 function messageAuthor() {
   router.push({ path: "/messages", query: { contact: post.value.authorUserId } });
+}
+
+async function likePostWithBurst() {
+  if (!post.value) return;
+  likeBurst.value = false;
+  requestAnimationFrame(() => {
+    likeBurst.value = true;
+    window.setTimeout(() => { likeBurst.value = false; }, 520);
+  });
+  await forumStore.likePost(post.value.id);
 }
 
 async function submitReply() {
@@ -222,6 +236,10 @@ function avatarUrlFor(postOrReply) {
   }
   return postOrReply?.avatarUrl || "";
 }
+
+function membershipClass(plan) {
+  return `member-${plan || "free"}`;
+}
 </script>
 
 <style scoped>
@@ -252,6 +270,12 @@ button, textarea { font: inherit; }
 .avatar-img, .comment-avatar-img { width: 42px; height: 42px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; }
 .author-profile-trigger > div { display: flex; flex-direction: column; gap: 3px; }
 .author-row strong { font-size: 14px; }
+.member-name { font-weight: 850; }
+.member-free { color: #667085; }
+.member-light { color: #12815f; }
+.member-study { color: #2463eb; }
+.member-lab { color: #7c3aed; }
+.member-team { color: #d35f12; }
 .author-row small { display: flex; align-items: center; gap: 7px; color: #96a0b0; }
 .article-meta-stack { display: grid; justify-items: end; gap: 8px; color: #929dae; font-size: 12px; }
 .article-meta-stack > div { display: flex; align-items: center; gap: 8px; }
@@ -302,6 +326,44 @@ button, textarea { font: inherit; }
 .article-actions button { padding: 7px 12px; border: 0; border-radius: 8px; color: #697589; background: #f2f5f8; cursor: pointer; }
 .article-actions button.active { color: #0865ee; background: #eaf2ff; }
 .article-actions span { margin-left: auto; color: #8b95a5; font-size: 11px; }
+.like-action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow: visible;
+}
+.like-action.active {
+  color: #d65d0e !important;
+  background: #fff3e8 !important;
+}
+.like-flame {
+  display: inline-block;
+  transform-origin: 50% 70%;
+}
+.like-action.burst .like-flame {
+  animation: like-flame-pop .48s cubic-bezier(.2,.9,.2,1.25);
+}
+.like-action.burst::after {
+  content: "+1";
+  position: absolute;
+  top: -18px;
+  right: 8px;
+  color: #e15f13;
+  font-size: 12px;
+  font-weight: 900;
+  animation: like-count-float .5s ease-out forwards;
+}
+@keyframes like-flame-pop {
+  0% { transform: scale(.82) rotate(-8deg); }
+  45% { transform: scale(1.38) rotate(7deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes like-count-float {
+  from { opacity: 0; transform: translateY(6px); }
+  20% { opacity: 1; }
+  to { opacity: 0; transform: translateY(-8px); }
+}
 .comments-card { margin-top: 16px; padding: 24px 26px; }
 .comments-card > header { display: flex; justify-content: space-between; align-items: center; }
 .comments-card > header span, .side-kicker { color: #65a0fa; font-size: 10px; letter-spacing: .13em; font-weight: 900; }
