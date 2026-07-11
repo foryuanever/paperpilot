@@ -1431,12 +1431,12 @@ button { cursor: pointer; }
   pointer-events: none;
   background: linear-gradient(100deg, transparent 0%, rgba(124, 58, 237, .05) 34%, rgba(37, 99, 235, .08) 50%, rgba(124, 58, 237, .05) 66%, transparent 100%);
   transform: translateX(-120%);
-  animation: forum-premium-wave 7.5s ease-in-out infinite;
+  animation: forum-premium-wave 8.5s linear infinite;
 }
 
 @keyframes forum-premium-wave {
-  0%, 42% { transform: translateX(-120%); }
-  78%, 100% { transform: translateX(120%); }
+  0%, 12% { transform: translateX(-120%); }
+  88%, 100% { transform: translateX(120%); }
 }
 
 .forum-row-avatar {
