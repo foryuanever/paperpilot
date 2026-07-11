@@ -12,7 +12,7 @@
             <span class="seats-count-badge">{{ teamStore.usedSeats }} / {{ teamStore.totalSeats }}</span>
           </div>
           <p class="seats-helper-text">
-            基础团队固定 8 席；导师车队会员可扩展席位，并让全队共享会员权益。
+            团队席位用于协作任务、公告同步和共享材料管理。
           </p>
           <div class="seats-avatar-row">
             <div
@@ -66,7 +66,7 @@
         <div class="seats-right-container">
           <div class="team-plan-flag" :class="{ active: hasTeamFleetPlan }">
             <span>{{ hasTeamFleetPlan ? "导师车队会员" : "基础团队" }}</span>
-            <strong>{{ hasTeamFleetPlan ? "全队共享权益" : "默认 8 席位" }}</strong>
+            <strong>{{ hasTeamFleetPlan ? "全队共享权益" : "团队协作中" }}</strong>
           </div>
           <div class="team-identity-plate">
             <span class="plate-label">团队标示号</span>
@@ -5147,6 +5147,45 @@ onUnmounted(() => {
   border-radius: 12px;
   background: #172033;
   box-shadow: none;
+}
+
+/* Header refinement: softer transition and tighter top rhythm */
+.team-page {
+  padding-top: 14px;
+}
+
+.team-shell {
+  padding-top: 0;
+}
+
+.team-seats-header {
+  grid-template-columns: minmax(0, 1fr) 330px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.96) 66%, rgba(248, 251, 249, 0.98) 100%);
+}
+
+.seats-left-container {
+  padding-top: 26px;
+  padding-bottom: 26px;
+}
+
+.seats-right-container {
+  justify-content: center;
+  gap: 26px;
+  padding: 26px 34px 26px 28px;
+  background: transparent;
+  border-left: 1px solid rgba(217, 227, 238, 0.72);
+}
+
+.team-plan-flag {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+}
+
+.team-identity-plate {
+  padding-top: 22px;
+  border-top: 1px solid rgba(217, 227, 238, 0.72);
 }
 
 @media (max-width: 1120px) {
