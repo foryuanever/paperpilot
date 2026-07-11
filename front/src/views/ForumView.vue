@@ -97,40 +97,60 @@
             :key="post.id"
             class="research-post"
           >
-            <header class="post-label-row">
-              <div class="primary-labels">
-                <span v-if="post.pinned" class="state-badge pin-badge">📌 置顶</span>
-                <span v-if="isHotPost(post)" class="state-badge hot-badge">🔥 热帖</span>
-                <span v-if="post.banned" class="state-badge ban-badge">已封禁</span>
-                <button class="type-label" :class="typeClass(post.postType)" @click="activeType = post.postType">
-                  {{ post.postType }}
-                </button>
-                <button class="discipline-label" @click="activeDirection = post.direction">{{ post.direction }}</button>
-                <span v-if="post.resolved" class="resolved-label">已解决</span>
-              </div>
-              <time class="post-time">{{ post.time }}</time>
-            </header>
-
-            <div v-if="replyAvatars(post).length" class="reply-avatar-strip" aria-label="评论参与者">
-              <span
-                v-for="avatar in replyAvatars(post)"
-                :key="`${post.id}-${avatar.key}`"
-                class="reply-mini-avatar"
-                :title="avatar.name"
-              >
-                <img v-if="avatar.url" :src="avatar.url" :alt="avatar.name" />
-                <b v-else>{{ avatar.text }}</b>
-              </span>
+            <div class="forum-row-avatar" :data-user-id="post.authorUserId" title="查看个人卡片">
+              <img v-if="avatarUrlFor(post)" :src="avatarUrlFor(post)" class="post-avatar-img" :alt="post.author" />
+              <span v-else class="post-avatar">{{ post.avatar }}</span>
             </div>
 
-            <div class="post-author-row">
-              <div class="post-author-main" :data-user-id="post.authorUserId" title="查看个人卡片">
-                <img v-if="avatarUrlFor(post)" :src="avatarUrlFor(post)" class="post-avatar-img" :alt="post.author" />
-                <span v-else class="post-avatar">{{ post.avatar }}</span>
-                <div>
-                  <strong>{{ post.author }}</strong>
-                  <span>发布于 {{ post.direction }}</span>
+            <div class="forum-row-main">
+              <div class="forum-title-line">
+                <h2 @click="openPost(post.id)">
+                  <span v-if="post.pinned" class="title-icon">📌</span>
+                  <span v-if="isHotPost(post)" class="title-icon">🔥</span>
+                  {{ post.title }}
+                </h2>
+                <div class="forum-row-badges">
+                  <span v-if="post.pinned" class="state-badge pin-badge">置顶</span>
+                  <span v-if="isHotPost(post)" class="state-badge hot-badge">热帖</span>
+                  <span v-if="post.banned" class="state-badge ban-badge">已封禁</span>
+                  <button class="type-label" :class="typeClass(post.postType)" @click="activeType = post.postType">
+                    {{ post.postType }}
+                  </button>
                 </div>
+              </div>
+
+              <div class="forum-meta-line">
+                <span class="meta-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21a8 8 0 0 0-16 0"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                  {{ post.author }}
+                </span>
+                <span class="meta-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  {{ post.views || 0 }}
+                </span>
+                <span class="meta-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"></path></svg>
+                  {{ post.replies.length }}
+                </span>
+                <span class="meta-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m13 2-9 12h7l-1 8 10-13h-7l0-7Z"></path></svg>
+                  {{ lastActiveName(post) }}
+                </span>
+                <time>{{ post.time }}</time>
+              </div>
+            </div>
+
+            <div class="forum-row-side">
+              <div v-if="replyAvatars(post).length" class="reply-avatar-strip" aria-label="评论参与者">
+                <span
+                  v-for="avatar in replyAvatars(post)"
+                  :key="`${post.id}-${avatar.key}`"
+                  class="reply-mini-avatar"
+                  :title="avatar.name"
+                >
+                  <img v-if="avatar.url" :src="avatar.url" :alt="avatar.name" />
+                  <b v-else>{{ avatar.text }}</b>
+                </span>
               </div>
               <div v-if="isAdmin" class="admin-post-actions">
                 <button :disabled="moderationBusy[post.id]" :class="{ danger: post.banned }" @click="toggleModeration(post, 'ban')">
@@ -141,94 +161,6 @@
                 </button>
               </div>
             </div>
-
-            <h2 @click="openPost(post.id)">
-              <span v-if="post.pinned" class="title-icon">📌</span>
-              <span v-if="isHotPost(post)" class="title-icon">🔥</span>
-              {{ post.title }}
-            </h2>
-
-            <div v-if="post.images?.length" class="post-image-grid">
-              <button v-for="(image, index) in post.images" :key="`${post.id}-image-${index}`" @click="previewImage = image">
-                <img :src="image.data" :alt="image.name" />
-                <span>{{ image.name }}</span>
-              </button>
-            </div>
-
-            <div v-if="post.attachments?.length" class="post-attachment-list">
-              <a
-                v-for="(file, index) in post.attachments"
-                :key="`${post.id}-attachment-${index}`"
-                :href="file.data"
-                :download="file.name"
-              >
-                <span class="attachment-file-icon">附</span>
-                <span><strong>{{ file.name }}</strong><small>{{ file.size }}</small></span>
-                <b>下载</b>
-              </a>
-            </div>
-
-            <div v-if="post.paperTitle || post.venueName || post.resourceLink" class="resource-panel">
-              <div v-if="post.paperTitle" class="resource-main">
-                <span class="resource-kind">关联论文</span>
-                <strong>{{ post.paperTitle }}</strong>
-                <small v-if="post.publishYear">{{ post.publishYear }}</small>
-              </div>
-              <div v-if="post.venueName || post.venueLevel" class="venue-meta">
-                <span v-if="post.venueName">{{ post.venueName }}</span>
-                <strong v-if="post.venueLevel">{{ post.venueLevel }}</strong>
-              </div>
-              <a
-                v-if="post.resourceLink"
-                :href="normalizeLink(post.resourceLink)"
-                target="_blank"
-                rel="noreferrer"
-                class="resource-link"
-              >
-                查看资源
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M7 17 17 7M8 7h9v9"></path>
-                </svg>
-              </a>
-            </div>
-
-            <div class="post-tag-row">
-              <button
-                v-for="tag in post.tags"
-                :key="tag"
-                class="topic-tag"
-                :class="{ active: activeTag === tag }"
-                @click="activeTag = activeTag === tag ? '' : tag"
-              >
-                # {{ tag }}
-              </button>
-            </div>
-
-            <footer class="post-footer">
-              <div class="post-actions">
-                <button :class="{ active: post.hasLiked }" @click="forumStore.likePost(post.id)">
-                  <svg viewBox="0 0 24 24" :fill="post.hasLiked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.8">
-                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.3a2 2 0 0 0 2-1.7l1.4-9A2 2 0 0 0 19.7 9H14ZM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
-                  </svg>
-                  {{ post.likes }} 赞同
-                </button>
-                <button @click="openPost(post.id)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"></path>
-                  </svg>
-                  {{ post.replies.length }} 回复
-                </button>
-                <button :class="{ active: post.hasBookmarked }" @click="forumStore.bookmarkPost(post.id)">
-                  <svg viewBox="0 0 24 24" :fill="post.hasBookmarked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.8">
-                    <path d="M6 3h12v18l-6-4-6 4V3Z"></path>
-                  </svg>
-                  {{ post.bookmarks }} 收藏
-                </button>
-              </div>
-              <button class="discussion-toggle" @click="openPost(post.id)">
-                进入帖子查看评论
-              </button>
-            </footer>
           </article>
         </section>
 
@@ -929,6 +861,12 @@ function replyAvatars(post) {
   }).slice(0, 5);
 }
 
+function lastActiveName(post) {
+  const replies = post?.replies || [];
+  const lastReply = replies.length ? replies[replies.length - 1] : null;
+  return lastReply?.author || post?.author || "暂无互动";
+}
+
 function isHotPost(post) {
   return Number(post.likes || 0) + Number(post.replies?.length || 0) >= 50;
 }
@@ -1421,6 +1359,166 @@ button { cursor: pointer; }
 
 .markdown-text {
   white-space: pre-wrap;
+}
+
+/* Forum stream: compact topic rows inspired by classic forum indexes */
+.post-list {
+  gap: 0;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #e8ebef;
+  border-radius: 14px;
+}
+
+.research-post {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 106px;
+  padding: 16px;
+  border: 0;
+  border-bottom: 1px solid #eceff3;
+  border-radius: 0;
+  box-shadow: none;
+  background: #ffffff;
+}
+
+.research-post:last-child {
+  border-bottom: 0;
+}
+
+.research-post:hover {
+  border-color: #eceff3;
+  box-shadow: none;
+  background: #fafbfc;
+}
+
+.forum-row-avatar {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #f4d86e;
+  box-shadow: 0 6px 16px rgba(20, 31, 50, .08);
+}
+
+.forum-row-avatar .post-avatar,
+.forum-row-avatar .post-avatar-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  font-size: 18px;
+}
+
+.forum-row-main {
+  min-width: 0;
+}
+
+.forum-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.research-post h2 {
+  min-width: 0;
+  margin: 0;
+  color: #53565c;
+  font-size: 22px;
+  font-weight: 850;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.research-post h2:hover {
+  color: #20242c;
+}
+
+.forum-row-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.forum-row-badges .state-badge,
+.forum-row-badges .type-label {
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 10px;
+}
+
+.forum-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  margin-top: 9px;
+  color: #55585f;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.meta-item svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: #5a5d64;
+}
+
+.forum-meta-line time {
+  color: #55585f;
+  white-space: nowrap;
+}
+
+.forum-row-side {
+  min-width: 132px;
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.reply-avatar-strip {
+  position: static;
+  top: auto;
+  right: auto;
+  transform: none;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin: 0;
+}
+
+.reply-mini-avatar {
+  width: 28px;
+  height: 28px;
+  margin-right: -6px;
+}
+
+.admin-post-actions {
+  justify-content: flex-end;
+}
+
+.admin-post-actions button {
+  height: 28px;
+  border-radius: 7px;
 }
 
 .hero-action-stack {
