@@ -64,17 +64,12 @@ public class TeamDataController {
         TeamEntity team = teamRepository.findAll().stream()
             .findFirst()
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "尚未建立科研团队"));
-        int effectiveSeatLimit = effectiveSeatLimit(team);
-        if (team.getSeatLimit() == null || team.getSeatLimit() != effectiveSeatLimit) {
-            team.setSeatLimit(effectiveSeatLimit);
-            teamRepository.save(team);
-        }
-        return team;
+        return normalizeTeamMembers(team);
     }
 
     @GetMapping("/members")
     public List<Map<String, Object>> getMembers() {
-        TeamEntity team = getTeamInfo();
+        TeamEntity team = normalizeTeamMembers(getTeamInfo());
         List<AppUserEntity> users = appUserRepository.findByTeamIdOrderByCreatedAtAsc(team.getId());
         List<Map<String, Object>> result = new ArrayList<>();
 
@@ -127,7 +122,7 @@ public class TeamDataController {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "该邮箱已被使用");
         }
 
-        TeamEntity team = getTeamInfo();
+        TeamEntity team = normalizeTeamMembers(getTeamInfo());
         int usedSeats = appUserRepository.findByTeamIdOrderByCreatedAtAsc(team.getId()).size();
         if (usedSeats >= effectiveSeatLimit(team)) {
             throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED, "当前团队默认 8 个席位；继续加人需要导师开通“导师车队会员”。");
@@ -493,6 +488,23 @@ public class TeamDataController {
                 && user.getMembershipExpiresAt() != null
                 && user.getMembershipExpiresAt().isAfter(now));
         return hasTeamPlan ? TEAM_MEMBER_SEATS : BASE_TEAM_SEATS;
+    }
+
+    private TeamEntity normalizeTeamMembers(TeamEntity team) {
+        if (team == null || team.getId() == null) return team;
+        int seatLimit = effectiveSeatLimit(team);
+        List<AppUserEntity> members = appUserRepository.findByTeamIdOrderByCreatedAtAsc(team.getId());
+        if (members.size() > seatLimit) {
+            List<AppUserEntity> overflow = members.subList(seatLimit, members.size());
+            for (AppUserEntity user : overflow) {
+                user.setTeamId(null);
+            }
+            appUserRepository.saveAll(overflow);
+            members = appUserRepository.findByTeamIdOrderByCreatedAtAsc(team.getId());
+        }
+        team.setSeatLimit(seatLimit);
+        team.setMemberCount(members.size());
+        return teamRepository.save(team);
     }
 
     private int calculateStreak(String memberId) {

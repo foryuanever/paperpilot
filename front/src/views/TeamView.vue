@@ -11,6 +11,9 @@
             <h2>实验室席位</h2>
             <span class="seats-count-badge">{{ teamStore.usedSeats }} / {{ teamStore.totalSeats }}</span>
           </div>
+          <p class="seats-helper-text">
+            基础团队固定 8 席；导师车队会员可扩展席位，并让全队共享会员权益。
+          </p>
           <div class="seats-avatar-row">
             <div
               v-for="member in teamStore.members"
@@ -89,6 +92,11 @@
           </div>
 
           <div class="members-cards-container">
+            <div class="roster-table-head">
+              <span>成员</span>
+              <span>科研状态</span>
+              <span>额度与操作</span>
+            </div>
             <article
               v-for="member in teamStore.members"
               :key="member.id"
@@ -1676,12 +1684,15 @@ onUnmounted(() => {
   position: relative;
   min-height: 100vh;
   padding: 40px 24px 100px;
-  background: 
-    radial-gradient(circle at 10% 10%, rgba(0, 102, 255, 0.05), transparent 40%),
-    radial-gradient(circle at 90% 90%, rgba(52, 199, 89, 0.03), transparent 30%),
-    linear-gradient(180deg, #faf9f7 0%, #f3f2ef 100%);
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.08), transparent 34%),
+    linear-gradient(180deg, #f4f7fb 0%, #eef3f8 100%);
   color: var(--spatial-graphite, #1c1c1e);
   font-family: var(--spatial-font-body, "Inter", -apple-system, sans-serif);
+}
+
+.team-page .spatial-orb {
+  display: none;
 }
 
 .team-shell {
@@ -1696,23 +1707,22 @@ onUnmounted(() => {
 
 /* Horizontal Seats Header */
 .team-seats-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
   gap: 24px;
-  padding: 28px 32px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(20px);
-  box-shadow: 0 8px 32px rgba(10, 10, 12, 0.03);
+  padding: 28px;
+  border-radius: 26px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.95) 58%, rgba(239, 249, 244, 0.94));
+  border: 1px solid #dce7f4;
+  box-shadow: 0 22px 55px rgba(30, 53, 92, 0.11);
 }
 
 .seats-left-container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   flex: 1;
   min-width: 300px;
 }
@@ -1740,11 +1750,22 @@ onUnmounted(() => {
   color: var(--spatial-accent, #0066ff);
 }
 
+.seats-helper-text {
+  margin: -2px 0 6px;
+  color: #516173;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .seats-avatar-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(245, 248, 253, 0.86);
+  border: 1px solid rgba(206, 218, 235, 0.78);
 }
 
 .seat-circle-avatar {
@@ -1761,8 +1782,8 @@ onUnmounted(() => {
 
 .avatar-inner-wrapper {
   position: relative;
-  width: 60px;
-  height: 60px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   padding: 3px;
   background: rgba(255, 255, 255, 0.8);
@@ -1775,7 +1796,7 @@ onUnmounted(() => {
 }
 
 .seat-circle-avatar:hover .avatar-inner-wrapper {
-  transform: translateY(-4px) scale(1.05);
+  transform: translateY(-2px);
   border-color: var(--spatial-accent, #0066ff);
   box-shadow: 0 6px 18px rgba(0, 102, 255, 0.15);
 }
@@ -1858,9 +1879,14 @@ onUnmounted(() => {
 
 /* Right Header Container */
 .seats-right-container {
-  display: flex;
-  align-items: center;
-  gap: 20px;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: space-between;
+  justify-items: end;
+  gap: 14px;
+  min-width: 250px;
+  padding-left: 22px;
+  border-left: 1px solid #dbe5f1;
 }
 
 .team-plan-flag {
@@ -1942,6 +1968,11 @@ onUnmounted(() => {
   align-items: start;
 }
 
+.dashboard-split-layout.tutor-view {
+  grid-template-columns: minmax(0, 1.6fr) minmax(360px, 0.78fr);
+  gap: 22px;
+}
+
 .dashboard-col {
   display: flex;
   flex-direction: column;
@@ -1974,19 +2005,44 @@ onUnmounted(() => {
 .members-cards-container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 22px;
+  background: #ffffff;
+  border: 1px solid #dce6f1;
+  box-shadow: 0 18px 42px rgba(31, 48, 84, 0.08);
+}
+
+.roster-table-head {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.15fr) minmax(300px, 1.35fr) minmax(250px, 1fr);
+  gap: 18px;
+  align-items: center;
+  padding: 13px 20px;
+  background: #f5f8fc;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .member-management-card {
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  background: #ffffff;
+  border: 0;
+  border-top: 1px solid #eef2f7;
+  border-radius: 0;
+  padding: 16px 20px;
+  box-shadow: none;
+  display: grid;
+  grid-template-columns: minmax(230px, 1.15fr) minmax(300px, 1.35fr) minmax(250px, 1fr);
+  align-items: center;
+  gap: 18px;
+  transition: background 0.18s ease;
+}
+
+.member-management-card:hover {
+  background: #fbfdff;
 }
 
 .card-identity-row {
@@ -1997,8 +2053,8 @@ onUnmounted(() => {
 
 .avatar-large-shell {
   position: relative;
-  width: 52px;
-  height: 52px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   padding: 2px;
   background: #ffffff;
@@ -2076,10 +2132,11 @@ onUnmounted(() => {
 .card-details-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  border-top: 1px solid rgba(0, 0, 0, 0.04);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
-  padding: 12px 0;
+  gap: 10px;
+  border: 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: #f7f9fc;
 }
 
 .card-detail-item {
@@ -2105,10 +2162,10 @@ onUnmounted(() => {
 
 /* Quota management styles */
 .card-actions-wrapper {
-  background: rgba(0, 0, 0, 0.015);
-  border-radius: 12px;
-  padding: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.02);
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  border: 0;
 }
 
 .quota-management-bar {
@@ -2210,17 +2267,27 @@ onUnmounted(() => {
 .summary-metric-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #ffffff;
+  border: 1px solid #dce6f1;
+  box-shadow: 0 16px 36px rgba(31, 48, 84, 0.07);
 }
 
 .tutor-metric-card {
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  border-radius: 16px;
+  background: #ffffff;
+  border: 0;
+  border-right: 1px solid #edf2f7;
+  border-radius: 0;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.tutor-metric-card:last-child {
+  border-right: 0;
 }
 
 .tutor-metric-card span {
@@ -2236,12 +2303,11 @@ onUnmounted(() => {
 
 /* Control Panel Section Admin */
 .admin-action-section {
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(20px);
-  border-radius: 24px;
-  padding: 20px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.01);
+  background: #ffffff;
+  border: 1px solid #dce6f1;
+  border-radius: 20px;
+  padding: 18px;
+  box-shadow: 0 16px 36px rgba(31, 48, 84, 0.07);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -2261,8 +2327,10 @@ onUnmounted(() => {
 }
 
 .btn-toggle-form {
-  background: none;
-  border: none;
+  background: #f3f7ff;
+  border: 1px solid #d8e5ff;
+  border-radius: 999px;
+  padding: 7px 12px;
   font-size: 12px;
   font-weight: 600;
   color: var(--spatial-accent, #0066ff);
@@ -2273,8 +2341,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: rgba(0, 0, 0, 0.015);
-  border: 1px solid rgba(0, 0, 0, 0.02);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   padding: 14px;
   border-radius: 14px;
 }
@@ -2354,14 +2422,14 @@ onUnmounted(() => {
 .admin-items-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .admin-item-card {
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  border-radius: 14px;
-  padding: 14px;
+  background: #fbfdff;
+  border: 1px solid #e6edf5;
+  border-radius: 16px;
+  padding: 13px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -3241,17 +3309,42 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
     gap: 24px;
   }
+
+  .team-seats-header {
+    grid-template-columns: 1fr;
+  }
+
+  .seats-right-container {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-items: stretch;
+    min-width: 0;
+    padding-left: 0;
+    padding-top: 18px;
+    border-left: 0;
+    border-top: 1px solid #dbe5f1;
+  }
+
+  .roster-table-head {
+    display: none;
+  }
+
+  .member-management-card {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    border-radius: 16px;
+    margin: 10px;
+    border: 1px solid #e6edf5;
+  }
 }
 
 @media (max-width: 768px) {
   .team-seats-header {
-    flex-direction: column;
     align-items: stretch;
     padding: 20px;
   }
   
   .seats-right-container {
-    justify-content: space-between;
+    grid-template-columns: 1fr;
   }
 
   .stats-pills-row {

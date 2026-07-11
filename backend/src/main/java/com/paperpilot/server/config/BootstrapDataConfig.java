@@ -131,20 +131,28 @@ public class BootstrapDataConfig {
             return teamRepository.save(created);
         });
         List<AppUserEntity> users = appUserRepository.findAll();
+        users.sort((left, right) -> {
+            LocalDateTime leftTime = left.getCreatedAt() != null ? left.getCreatedAt() : LocalDateTime.MIN;
+            LocalDateTime rightTime = right.getCreatedAt() != null ? right.getCreatedAt() : LocalDateTime.MIN;
+            return leftTime.compareTo(rightTime);
+        });
+        int baseSeatLimit = 8;
+        int assignedSeats = 0;
         for (AppUserEntity user : users) {
             if (user.getEmail() != null && user.getEmail().endsWith("@paperslover.community")) {
                 user.setTeamId(null);
                 continue;
             }
-            if (user.getTeamId() == null) {
+            if (assignedSeats < baseSeatLimit) {
                 user.setTeamId(team.getId());
+                assignedSeats += 1;
+            } else if (team.getId().equals(user.getTeamId())) {
+                user.setTeamId(null);
             }
         }
         appUserRepository.saveAll(users);
-        team.setMemberCount((int) appUserRepository.findByTeamIdOrderByCreatedAtAsc(team.getId()).size());
-        if (team.getSeatLimit() == null || team.getSeatLimit() > 8) {
-            team.setSeatLimit(8);
-        }
+        team.setMemberCount(assignedSeats);
+        team.setSeatLimit(baseSeatLimit);
         teamRepository.save(team);
     }
 
