@@ -281,6 +281,7 @@
                   <small>截止: {{ formatDeadlineString(task.deadline) }}</small>
                 </div>
               </div>
+              <div v-if="!teamStore.tasks.length" class="empty-state-text">暂无科研任务，点击右上角添加任务。</div>
             </div>
             <!-- Pagination Bar for Mentor Tasks -->
             <div class="pagination-bar" v-if="taskTotalPages > 1">
@@ -369,6 +370,7 @@
                   <small>发布: {{ ann.publishTime }}</small>
                 </div>
               </div>
+              <div v-if="!teamStore.announcements.length" class="empty-state-text">暂无公告，点击右上角发布公告。</div>
             </div>
             <!-- Pagination for announcements -->
             <div class="pagination-bar" v-if="annTotalPages > 1">
@@ -521,7 +523,7 @@
                   <span>{{ getTaskDeadlineCountdown(task.deadline).text }}</span>
                 </div>
               </article>
-              <div v-if="!teamStore.tasks.length" class="empty-state-text">暂无分配的任务。</div>
+              <div v-if="!teamStore.tasks.length" class="empty-state-text">暂无待办科研任务。</div>
             </div>
             <!-- Pagination Bar for Student Tasks -->
             <div class="pagination-bar" v-if="taskTotalPages > 1">
@@ -575,7 +577,7 @@
                   <small>发布时间: {{ ann.publishTime }}</small>
                 </div>
               </article>
-              <div v-if="!teamStore.announcements.length" class="empty-state-text">目前没有公告。</div>
+              <div v-if="!teamStore.announcements.length" class="empty-state-text">暂无重要公告。</div>
             </div>
             <!-- Pagination Bar for Student Announcements -->
             <div class="pagination-bar" v-if="annTotalPages > 1">
@@ -5237,6 +5239,229 @@ onUnmounted(() => {
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+/* Team density pass: compact growing lists and make empty states intentional */
+.dashboard-split-layout .admin-action-section,
+.dashboard-split-layout .tasks-checklist-panel,
+.dashboard-split-layout .announcements-briefing {
+  min-height: 0;
+}
+
+.dashboard-col.right-col .admin-action-section .admin-items-list,
+.announcements-briefing .student-task-list,
+.tasks-checklist-panel .student-task-list {
+  max-height: 560px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #c9d5e4 transparent;
+}
+
+.dashboard-col.right-col .admin-action-section .admin-items-list::-webkit-scrollbar,
+.announcements-briefing .student-task-list::-webkit-scrollbar,
+.tasks-checklist-panel .student-task-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dashboard-col.right-col .admin-action-section .admin-items-list::-webkit-scrollbar-thumb,
+.announcements-briefing .student-task-list::-webkit-scrollbar-thumb,
+.tasks-checklist-panel .student-task-list::-webkit-scrollbar-thumb {
+  background: #c9d5e4;
+  border-radius: 999px;
+}
+
+.student-task-item,
+.announcement-task-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 18px;
+  min-height: 0;
+  padding: 14px 0;
+}
+
+.announcements-briefing .student-task-item,
+.dashboard-col.right-col .admin-item-card {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.task-info,
+.item-main-content {
+  min-width: 0;
+}
+
+.task-info {
+  display: grid;
+  gap: 7px;
+}
+
+.task-info h4,
+.item-title-row h5 {
+  line-height: 1.35;
+}
+
+.task-info small,
+.item-main-content small {
+  color: #8390a3;
+  font-size: 11px;
+}
+
+.task-desc-truncated {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.55;
+}
+
+.announcements-briefing .task-desc-truncated {
+  -webkit-line-clamp: 3;
+}
+
+.student-task-item .task-attachments-list,
+.announcement-task-item .task-attachments-list,
+.admin-item-card .task-attachments-list {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 4px 0 0;
+}
+
+.student-task-item .attachment-wrapper,
+.announcement-task-item .attachment-wrapper,
+.admin-item-card .attachment-wrapper {
+  display: block;
+  width: auto;
+  max-width: 100%;
+}
+
+.student-task-item .image-attachment-card,
+.announcement-task-item .image-attachment-card,
+.admin-item-card .image-attachment-card {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: min(220px, 100%);
+  max-width: 100%;
+  min-height: 54px;
+  padding: 8px;
+  border-radius: 14px;
+  background: #f8fbff;
+  border: 1px solid #dce5f0;
+  box-shadow: none;
+}
+
+.student-task-item .image-attachment-card:hover,
+.announcement-task-item .image-attachment-card:hover,
+.admin-item-card .image-attachment-card:hover {
+  transform: none;
+  background: #f2f7ff;
+}
+
+.student-task-item .task-attachment-img-preview,
+.announcement-task-item .task-attachment-img-preview,
+.admin-item-card .task-attachment-img-preview {
+  width: 46px;
+  height: 38px;
+  max-height: 38px;
+  border-radius: 9px;
+  object-fit: cover;
+}
+
+.student-task-item .img-name,
+.announcement-task-item .img-name,
+.admin-item-card .img-name {
+  min-width: 0;
+  color: #52637a;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.student-task-item .document-file-row,
+.announcement-task-item .document-file-row,
+.admin-item-card .document-file-row,
+.student-task-item .document-link-row,
+.announcement-task-item .document-link-row,
+.admin-item-card .document-link-row {
+  width: auto;
+  max-width: min(280px, 100%);
+  min-height: 54px;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: #f8fbff;
+  border: 1px solid #dce5f0;
+}
+
+.student-task-item .document-file-icon,
+.announcement-task-item .document-file-icon,
+.admin-item-card .document-file-icon {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 44px;
+  font-size: 15px;
+}
+
+.student-task-item .document-file-icon.is-pdf,
+.announcement-task-item .document-file-icon.is-pdf,
+.admin-item-card .document-file-icon.is-pdf {
+  font-size: 10px;
+}
+
+.student-task-item .document-file-meta,
+.announcement-task-item .document-file-meta,
+.admin-item-card .document-file-meta {
+  gap: 3px;
+}
+
+.student-task-item .document-file-meta strong,
+.announcement-task-item .document-file-meta strong,
+.admin-item-card .document-file-meta strong {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.student-task-item .document-file-meta small,
+.announcement-task-item .document-file-meta small,
+.admin-item-card .document-file-meta small {
+  font-size: 11px;
+}
+
+.task-countdown-tag {
+  align-self: start;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.empty-state-text {
+  min-height: 158px;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  color: #718096;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  border: 1px dashed #cbd7e6;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(247, 251, 255, 0.96)),
+    radial-gradient(circle at 50% 0%, rgba(43, 104, 255, 0.08), transparent 52%);
+}
+
+.admin-items-list .empty-state-text {
+  min-height: 132px;
+  margin-top: 4px;
 }
 
 </style>
