@@ -92,6 +92,7 @@ export const useTeamStore = defineStore("team", () => {
     if (state.members.length >= state.totalSeats) throw new Error("席位不足，请升级套餐以增加席位");
     const saved = await paperpilotApi.addMember(member);
     state.members.push(saved);
+    await loadFromServer();
   }
 
   async function removeMember(memberId) {
@@ -179,6 +180,7 @@ export const useTeamStore = defineStore("team", () => {
     const index = state.checkins.findIndex(item => item.memberId === memberId);
     if (index >= 0) state.checkins[index] = saved;
     else state.checkins.push(saved);
+    return saved;
   }
 
   async function incrementActiveTime(memberId, seconds) {

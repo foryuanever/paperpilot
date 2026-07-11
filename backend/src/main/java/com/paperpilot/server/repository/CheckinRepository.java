@@ -11,4 +11,5 @@ import java.util.Optional;
 public interface CheckinRepository extends JpaRepository<CheckinEntity, Long> {
     List<CheckinEntity> findAllByDate(String date);
     Optional<CheckinEntity> findByMemberIdAndDate(String memberId, String date);
+    List<CheckinEntity> findAllByMemberIdOrderByDateDesc(String memberId);
 }

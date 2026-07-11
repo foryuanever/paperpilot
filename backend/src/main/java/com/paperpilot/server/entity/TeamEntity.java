@@ -29,7 +29,7 @@ public class TeamEntity {
     private Integer memberCount = 1;
 
     @Column(name = "seat_limit", nullable = false)
-    private Integer seatLimit = 20;
+    private Integer seatLimit = 8;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

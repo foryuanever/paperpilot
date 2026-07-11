@@ -8,6 +8,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -32,6 +33,9 @@ public class TeamDataController {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final ZoneId CN_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final int BASE_TEAM_SEATS = 8;
+    private static final int TEAM_MEMBER_SEATS = 20;
 
     public TeamDataController(
         AppUserRepository appUserRepository,
@@ -57,9 +61,15 @@ public class TeamDataController {
 
     @GetMapping("/info")
     public TeamEntity getTeamInfo() {
-        return teamRepository.findAll().stream()
+        TeamEntity team = teamRepository.findAll().stream()
             .findFirst()
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "尚未建立科研团队"));
+        int effectiveSeatLimit = effectiveSeatLimit(team);
+        if (team.getSeatLimit() == null || team.getSeatLimit() != effectiveSeatLimit) {
+            team.setSeatLimit(effectiveSeatLimit);
+            teamRepository.save(team);
+        }
+        return team;
     }
 
     @GetMapping("/members")
@@ -117,6 +127,12 @@ public class TeamDataController {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "该邮箱已被使用");
         }
 
+        TeamEntity team = getTeamInfo();
+        int usedSeats = appUserRepository.findByTeamIdOrderByCreatedAtAsc(team.getId()).size();
+        if (usedSeats >= effectiveSeatLimit(team)) {
+            throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED, "当前团队默认 8 个席位；继续加人需要导师开通“导师车队会员”。");
+        }
+
         AppUserEntity user = new AppUserEntity();
         user.setUsername(name);
         user.setEmail(email);
@@ -126,7 +142,7 @@ public class TeamDataController {
         user.setTokenUsed(0L);
         user.setActiveTime(0L);
         user.setLastIp(null);
-        user.setTeamId(getTeamInfo().getId());
+        user.setTeamId(team.getId());
         
         String defaultPw = role.equals("导师") ? "Tutor2026!" : (role.equals("管理员") ? "Admin2026!" : "Student2026!");
         user.setPlainPassword(defaultPw);
@@ -425,7 +441,7 @@ public class TeamDataController {
 
     @GetMapping("/checkins")
     public List<Map<String, Object>> getCheckins(@RequestParam(name = "date", required = false) String date) {
-        String queryDate = date != null ? date : LocalDate.now().format(DATE_FORMATTER);
+        String queryDate = date != null ? date : LocalDate.now(CN_ZONE).format(DATE_FORMATTER);
         List<CheckinEntity> list = checkinRepository.findAllByDate(queryDate);
         List<Map<String, Object>> result = new ArrayList<>();
         
@@ -434,6 +450,7 @@ public class TeamDataController {
             map.put("memberId", c.getMemberId());
             map.put("time", c.getTime());
             map.put("status", c.getStatus());
+            map.put("streak", calculateStreak(c.getMemberId()));
             result.add(map);
         }
         return result;
@@ -448,14 +465,14 @@ public class TeamDataController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "成员ID不能为空");
         }
 
-        String today = LocalDate.now().format(DATE_FORMATTER);
+        String today = LocalDate.now(CN_ZONE).format(DATE_FORMATTER);
         CheckinEntity checkin = checkinRepository.findByMemberIdAndDate(memberId, today)
             .orElse(new CheckinEntity());
             
         checkin.setMemberId(memberId);
         checkin.setDate(today);
         checkin.setStatus(status != null ? status : "已打卡");
-        checkin.setTime(LocalDateTime.now().format(TIME_FORMATTER));
+        checkin.setTime(LocalDateTime.now(CN_ZONE).format(TIME_FORMATTER));
 
         CheckinEntity saved = checkinRepository.save(checkin);
         
@@ -463,6 +480,37 @@ public class TeamDataController {
         res.put("memberId", saved.getMemberId());
         res.put("status", saved.getStatus());
         res.put("time", saved.getTime());
+        res.put("streak", calculateStreak(saved.getMemberId()));
         return res;
+    }
+
+    private int effectiveSeatLimit(TeamEntity team) {
+        if (team == null || team.getId() == null) return BASE_TEAM_SEATS;
+        LocalDateTime now = LocalDateTime.now(CN_ZONE);
+        boolean hasTeamPlan = appUserRepository.findByTeamIdOrderByCreatedAtAsc(team.getId()).stream()
+            .anyMatch(user -> "导师".equals(user.getRole())
+                && "team".equals(user.getMembershipPlan())
+                && user.getMembershipExpiresAt() != null
+                && user.getMembershipExpiresAt().isAfter(now));
+        return hasTeamPlan ? TEAM_MEMBER_SEATS : BASE_TEAM_SEATS;
+    }
+
+    private int calculateStreak(String memberId) {
+        if (memberId == null || memberId.isBlank()) return 0;
+        List<CheckinEntity> checkins = checkinRepository.findAllByMemberIdOrderByDateDesc(memberId);
+        if (checkins.isEmpty()) return 0;
+        java.util.Set<String> dates = new java.util.HashSet<>();
+        for (CheckinEntity checkin : checkins) {
+            if ("已打卡".equals(checkin.getStatus()) && checkin.getDate() != null) {
+                dates.add(checkin.getDate());
+            }
+        }
+        LocalDate cursor = LocalDate.now(CN_ZONE);
+        int streak = 0;
+        while (dates.contains(cursor.format(DATE_FORMATTER))) {
+            streak += 1;
+            cursor = cursor.minusDays(1);
+        }
+        return streak;
     }
 }

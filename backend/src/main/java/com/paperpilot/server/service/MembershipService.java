@@ -16,35 +16,42 @@ public class MembershipService {
     public static final String PLAN_LIGHT = "light";
     public static final String PLAN_STUDY = "study";
     public static final String PLAN_LAB = "lab";
+    public static final String PLAN_TEAM = "team";
 
     private final AppUserRepository users;
 
     public MembershipService(AppUserRepository users) { this.users = users; }
 
     public List<Map<String, Object>> catalog() {
-        return List.of(plan(PLAN_LIGHT), plan(PLAN_STUDY), plan(PLAN_LAB));
+        return List.of(plan(PLAN_LIGHT), plan(PLAN_STUDY), plan(PLAN_LAB), plan(PLAN_TEAM));
     }
 
     public Map<String, Object> membership(AppUserEntity user) {
         expireIfNeeded(user);
+        AppUserEntity owner = entitlementOwner(user);
+        if (owner.getId() != null && !owner.getId().equals(user.getId())) {
+            expireIfNeeded(owner);
+        }
         Map<String, Object> result = new LinkedHashMap<>();
-        String id = safe(user.getMembershipPlan(), "free");
+        String id = safe(owner.getMembershipPlan(), "free");
         result.put("id", id);
-        result.put("name", planName(id));
-        result.put("cycle", safe(user.getMembershipCycle(), "monthly"));
-        result.put("expiresAt", user.getMembershipExpiresAt());
+        result.put("name", owner.getId() != null && !owner.getId().equals(user.getId()) ? planName(id) + "（团队共享）" : planName(id));
+        result.put("cycle", safe(owner.getMembershipCycle(), "monthly"));
+        result.put("expiresAt", owner.getMembershipExpiresAt());
         result.put("active", !"free".equals(id));
+        result.put("sharedFromTeam", owner.getId() != null && !owner.getId().equals(user.getId()));
         result.put("benefits", Map.of(
             "translation", Map.of("label", "论文翻译与文献导入", "unlimited", true),
-            "review", allowance(user.getReviewQuota(), user.getReviewUsed()),
-            "ppt", allowance(user.getPptQuota(), user.getPptUsed()),
-            "chat", allowance(user.getChatQuota(), user.getChatUsed())
+            "review", allowance(owner.getReviewQuota(), owner.getReviewUsed()),
+            "ppt", allowance(owner.getPptQuota(), owner.getPptUsed()),
+            "chat", allowance(owner.getChatQuota(), owner.getChatUsed()),
+            "teamSeats", Map.of("quota", teamSeats(id), "shared", PLAN_TEAM.equals(id))
         ));
         return result;
     }
 
     public void activate(AppUserEntity user, String planId, String cycle) {
-        if (!List.of(PLAN_LIGHT, PLAN_STUDY, PLAN_LAB).contains(planId)) {
+        if (!List.of(PLAN_LIGHT, PLAN_STUDY, PLAN_LAB, PLAN_TEAM).contains(planId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择有效会员套餐");
         }
         int months = cycleMonths(cycle);
@@ -67,23 +74,27 @@ public class MembershipService {
         expireIfNeeded(user);
         String kind = entitlementFor(action);
         if (kind == null) return;
+        AppUserEntity owner = entitlementOwner(user);
+        if (owner.getId() != null && !owner.getId().equals(user.getId())) {
+            expireIfNeeded(owner);
+        }
         int quota = switch (kind) {
-            case "review" -> number(user.getReviewQuota());
-            case "ppt" -> number(user.getPptQuota());
-            default -> number(user.getChatQuota());
+            case "review" -> number(owner.getReviewQuota());
+            case "ppt" -> number(owner.getPptQuota());
+            default -> number(owner.getChatQuota());
         };
         int used = switch (kind) {
-            case "review" -> number(user.getReviewUsed());
-            case "ppt" -> number(user.getPptUsed());
-            default -> number(user.getChatUsed());
+            case "review" -> number(owner.getReviewUsed());
+            case "ppt" -> number(owner.getPptUsed());
+            default -> number(owner.getChatUsed());
         };
         if (used >= quota) {
-            throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED, planName(safe(user.getMembershipPlan(), "free")) + "的" + label(kind) + "额度已用完，请升级或续费后继续使用。");
+            throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED, planName(safe(owner.getMembershipPlan(), "free")) + "的" + label(kind) + "额度已用完，请升级或续费后继续使用。");
         }
-        if ("review".equals(kind)) user.setReviewUsed(used + 1);
-        else if ("ppt".equals(kind)) user.setPptUsed(used + 1);
-        else user.setChatUsed(used + 1);
-        users.save(user);
+        if ("review".equals(kind)) owner.setReviewUsed(used + 1);
+        else if ("ppt".equals(kind)) owner.setPptUsed(used + 1);
+        else owner.setChatUsed(used + 1);
+        users.save(owner);
     }
 
     public void assertAvailable(Long userId, String action) {
@@ -92,10 +103,14 @@ public class MembershipService {
         expireIfNeeded(user);
         String kind = entitlementFor(action);
         if (kind == null) return;
-        int quota = "review".equals(kind) ? number(user.getReviewQuota()) : "ppt".equals(kind) ? number(user.getPptQuota()) : number(user.getChatQuota());
-        int used = "review".equals(kind) ? number(user.getReviewUsed()) : "ppt".equals(kind) ? number(user.getPptUsed()) : number(user.getChatUsed());
+        AppUserEntity owner = entitlementOwner(user);
+        if (owner.getId() != null && !owner.getId().equals(user.getId())) {
+            expireIfNeeded(owner);
+        }
+        int quota = "review".equals(kind) ? number(owner.getReviewQuota()) : "ppt".equals(kind) ? number(owner.getPptQuota()) : number(owner.getChatQuota());
+        int used = "review".equals(kind) ? number(owner.getReviewUsed()) : "ppt".equals(kind) ? number(owner.getPptUsed()) : number(owner.getChatUsed());
         if (used >= quota) {
-            throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED, planName(safe(user.getMembershipPlan(), "free")) + "不含可用的" + label(kind) + "额度，请升级或续费后继续使用。");
+            throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED, planName(safe(owner.getMembershipPlan(), "free")) + "不含可用的" + label(kind) + "额度，请升级或续费后继续使用。");
         }
     }
 
@@ -109,12 +124,30 @@ public class MembershipService {
         }
     }
 
+    private AppUserEntity entitlementOwner(AppUserEntity user) {
+        if (user.getTeamId() != null) {
+            LocalDateTime now = LocalDateTime.now();
+            AppUserEntity teamSponsor = users.findByTeamIdOrderByCreatedAtAsc(user.getTeamId()).stream()
+                .filter(item -> "导师".equals(item.getRole()))
+                .filter(item -> PLAN_TEAM.equals(item.getMembershipPlan()))
+                .filter(item -> item.getMembershipExpiresAt() != null && item.getMembershipExpiresAt().isAfter(now))
+                .findFirst()
+                .orElse(null);
+            if (teamSponsor != null) {
+                return teamSponsor;
+            }
+        }
+        return user;
+    }
+
     private Map<String, Object> plan(String id) {
         Map<String, Object> item = new LinkedHashMap<>();
         if (PLAN_LIGHT.equals(id)) {
             item.put("id", id); item.put("name", "轻享会员"); item.put("monthlyPrice", 9.9); item.put("reviewQuota", 3); item.put("pptQuota", 0); item.put("chatQuota", 20);
         } else if (PLAN_STUDY.equals(id)) {
             item.put("id", id); item.put("name", "研读会员"); item.put("monthlyPrice", 19.9); item.put("reviewQuota", 10); item.put("pptQuota", 2); item.put("chatQuota", 80);
+        } else if (PLAN_TEAM.equals(id)) {
+            item.put("id", id); item.put("name", "导师车队会员"); item.put("monthlyPrice", 69.9); item.put("reviewQuota", 60); item.put("pptQuota", 12); item.put("chatQuota", 360); item.put("teamSeats", 20); item.put("teamShared", true);
         } else {
             item.put("id", id); item.put("name", "课题会员"); item.put("monthlyPrice", 29.9); item.put("reviewQuota", 25); item.put("pptQuota", 5); item.put("chatQuota", 180);
         }
@@ -131,5 +164,6 @@ public class MembershipService {
     private Map<String, Object> allowance(Integer quota, Integer used) { int q = number(quota); int u = number(used); return Map.of("quota", q, "used", u, "remaining", Math.max(0, q - u)); }
     private int number(Integer value) { return value == null ? 0 : value; }
     private String safe(String value, String fallback) { return value == null || value.isBlank() ? fallback : value; }
-    private String planName(String id) { return "light".equals(id) ? "轻享会员" : "study".equals(id) ? "研读会员" : "lab".equals(id) ? "课题会员" : "未开通会员"; }
+    private int teamSeats(String id) { return PLAN_TEAM.equals(id) ? 20 : 8; }
+    private String planName(String id) { return "light".equals(id) ? "轻享会员" : "study".equals(id) ? "研读会员" : "lab".equals(id) ? "课题会员" : "team".equals(id) ? "导师车队会员" : "未开通会员"; }
 }

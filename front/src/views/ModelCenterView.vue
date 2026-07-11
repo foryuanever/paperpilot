@@ -175,7 +175,7 @@ const plans = computed(() => usageStore.state.plans || []);
 const displayPlans = computed(() => plans.value.filter((item) => item.id !== "free"));
 const membership = computed(() => usageStore.state.membership || { id: "free", name: "未开通会员", benefits: {} });
 const selectedPlanInfo = computed(() => displayPlans.value.find((item) => item.id === selectedPlan.value) || displayPlans.value[0] || { name: "研读会员", monthlyPrice: 19.9, reviewQuota: 10, pptQuota: 2, chatQuota: 80 });
-const planInitial = computed(() => ({ free: "B", light: "L", study: "R", lab: "P" })[membership.value.id] || "B");
+const planInitial = computed(() => ({ free: "B", light: "L", study: "R", lab: "P", team: "T" })[membership.value.id] || "B");
 const benefitItems = computed(() => {
   const benefits = membership.value.benefits || {};
   const row = (key, label) => ({ key, label, ...(benefits[key] || { quota: 0, used: 0, remaining: 0 }) });
@@ -184,13 +184,15 @@ const benefitItems = computed(() => {
     row("review", "论文综述"),
     row("ppt", "组会 PPT"),
     row("chat", "AI 对话"),
+    { key: "teamSeats", label: "团队席位", ...(benefits.teamSeats || { quota: 8, shared: false }) },
   ];
 });
 const checkoutDescription = computed(() => [
   `论文综述 ${selectedPlanInfo.value.reviewQuota || 0} 次`,
   `组会 PPT ${selectedPlanInfo.value.pptQuota || 0} 次`,
   `AI 文章对话 ${selectedPlanInfo.value.chatQuota || 0} 次`,
-].join(" · "));
+  selectedPlanInfo.value.teamShared ? `团队共享 ${selectedPlanInfo.value.teamSeats || 20} 席` : "",
+].filter(Boolean).join(" · "));
 
 onMounted(() => {
   load();
@@ -234,15 +236,15 @@ function cycleShortLabel(cycle) {
 }
 
 function planBadge(id) {
-  return ({ light: "L", study: "R", lab: "P" })[id] || "M";
+  return ({ light: "L", study: "R", lab: "P", team: "T" })[id] || "M";
 }
 
 function planBadgeLabel(id) {
-  return ({ light: "推荐", study: "热销", lab: "超值" })[id] || "套餐";
+  return ({ light: "推荐", study: "热销", lab: "超值", team: "导师车队" })[id] || "套餐";
 }
 
 function planCardTitle(id) {
-  return ({ light: "轻享月卡", study: "尊享月卡", lab: "课题月卡" })[id] || "会员套餐";
+  return ({ light: "轻享月卡", study: "尊享月卡", lab: "课题月卡", team: "导师车队卡" })[id] || "会员套餐";
 }
 
 function planCopy(id) {
@@ -250,6 +252,7 @@ function planCopy(id) {
     light: "适合轻量阅读和偶尔生成综述，保留低门槛入口。",
     study: "适合每周组会和课程论文，PPT 次数与综述次数更均衡。",
     lab: "适合课题组高频使用，给更多 PPT 与 AI 对话余量。",
+    team: "导师一人开通，全队共享席位与组会生成权益。",
   })[id] || "按任务次数使用。";
 }
 
@@ -259,6 +262,7 @@ function planRows(plan) {
     { icon: "综", label: "论文综述生成", level: plan.reviewQuota > 0 ? "包含" : "未含", value: `${plan.reviewQuota || 0} 次` },
     { icon: "P", label: "组会 PPT 生成", level: plan.pptQuota > 0 ? "重任务" : "未含", value: `${plan.pptQuota || 0} 次` },
     { icon: "问", label: "AI 文章对话", level: plan.chatQuota > 80 ? "高频" : "常规", value: `${plan.chatQuota || 0} 次` },
+    { icon: "团", label: "团队共享席位", level: plan.teamShared ? "导师共享" : "基础", value: `${plan.teamSeats || 8} 席` },
   ];
 }
 
@@ -552,15 +556,15 @@ button {
 
 .plan-cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-top: 18px;
 }
 
 .plan-card {
-  --tier: #35725f;
-  --tier-soft: #f7fbf9;
-  --tier-line: #cfe1db;
+  --tier: #14946f;
+  --tier-soft: #effbf6;
+  --tier-line: #9edfc9;
   min-width: 0;
   padding: 20px;
   border: 1px solid var(--tier-line);
@@ -570,15 +574,21 @@ button {
 }
 
 .plan-card.study {
-  --tier: #3f64ae;
-  --tier-soft: #f6f8fd;
-  --tier-line: #cbd7f2;
+  --tier: #2563eb;
+  --tier-soft: #eff6ff;
+  --tier-line: #a8c7ff;
 }
 
 .plan-card.lab {
-  --tier: #6c5c9c;
-  --tier-soft: #f8f7fc;
-  --tier-line: #d8d2ea;
+  --tier: #7c3aed;
+  --tier-soft: #f7f2ff;
+  --tier-line: #cbb6ff;
+}
+
+.plan-card.team {
+  --tier: #e06d1b;
+  --tier-soft: #fff5ed;
+  --tier-line: #f2bc8f;
 }
 
 .plan-card:hover,

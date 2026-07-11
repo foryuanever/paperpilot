@@ -40,18 +40,31 @@
             </div>
             <!-- Empty seats -->
             <button
-              v-for="n in Math.max(0, teamStore.totalSeats - teamStore.usedSeats)"
-              :key="'empty-' + n"
+              v-if="hasWriteAccess && teamStore.usedSeats < teamStore.totalSeats"
               class="seat-circle-avatar empty-seat-btn"
-              @click="hasWriteAccess ? (showInviteModal = true) : showToast('只有导师可以邀请新成员')"
+              @click="showInviteModal = true"
+              :title="`添加成员，当前可用 ${teamStore.totalSeats - teamStore.usedSeats} 个席位`"
             >
-              <span class="plus-symbol">+</span>
-              <span class="seat-member-name">待邀</span>
+              <span class="avatar-inner-wrapper"><span class="plus-symbol">+</span></span>
+              <span class="seat-member-name">添加</span>
+            </button>
+            <button
+              v-else-if="hasWriteAccess"
+              class="seat-circle-avatar empty-seat-btn locked-seat-btn"
+              @click="showToast('默认团队含 8 个席位，继续加人需开通导师车队会员')"
+              title="开通导师车队会员后可扩展团队席位"
+            >
+              <span class="avatar-inner-wrapper"><span class="plus-symbol">+</span></span>
+              <span class="seat-member-name">升级</span>
             </button>
           </div>
         </div>
 
         <div class="seats-right-container">
+          <div class="team-plan-flag" :class="{ active: hasTeamFleetPlan }">
+            <span>{{ hasTeamFleetPlan ? "导师车队会员" : "基础团队" }}</span>
+            <strong>{{ hasTeamFleetPlan ? "全队共享权益" : "默认 8 席位" }}</strong>
+          </div>
           <div class="team-identity-plate">
             <span class="plate-label">团队标示号</span>
             <strong class="plate-code">{{ teamStore.teamIdentifier }}</strong>
@@ -416,12 +429,15 @@
           <div class="student-glass-card workbench-sign-in">
             <div class="sign-in-header">
               <h3>实验室学术签到</h3>
-              <span class="pulse-glow-dot" :class="{ active: currentCheckinItem?.status === '已打卡' }"></span>
+              <div class="checkin-clock">
+                <span>{{ currentResearchDate }}</span>
+                <strong>{{ currentResearchClock }}</strong>
+              </div>
             </div>
             <div class="sign-in-body">
               <div class="sign-in-text">
                 <p v-if="currentCheckinItem?.status === '已打卡'">
-                  您今日已于 <strong>{{ currentCheckinItem.time }}</strong> 完成签到，继续保持！
+                  您今日已于 <strong>{{ currentCheckinItem.time }}</strong> 完成签到，已连续 <strong>{{ currentCheckinItem.streak || checkinStreak }}</strong> 天。
                 </p>
                 <p v-else>
                   今天还没签到，快点击按钮记录今天的科研时长吧。
@@ -430,10 +446,9 @@
               <button
                 class="student-primary-action-btn"
                 :class="{ 'already-checked': currentCheckinItem?.status === '已打卡' }"
-                :disabled="currentCheckinItem?.status === '已打卡'"
                 @click="doCheckin"
               >
-                {{ currentCheckinItem?.status === '已打卡' ? '今日已签到' : '立即签到打卡' }}
+                {{ currentCheckinItem?.status === '已打卡' ? '查看打卡记录' : '立即签到打卡' }}
               </button>
             </div>
           </div>
@@ -802,6 +817,22 @@
       <div v-if="toastMessage" class="toast">{{ toastMessage }}</div>
     </Transition>
 
+    <Transition name="fade">
+      <div v-if="showCheckinModal" class="overlay" @click="showCheckinModal = false">
+        <div class="modal-card checkin-success-modal" @click.stop>
+          <button class="close-btn modal-close-float" @click="showCheckinModal = false">关闭</button>
+          <div class="checkin-medal">✓</div>
+          <span class="panel-eyebrow">Daily Research Check-in</span>
+          <h3>{{ checkinDialogTitle }}</h3>
+          <p>{{ checkinMotivation }}</p>
+          <div class="checkin-streak-panel">
+            <span>连续打卡</span>
+            <strong>{{ checkinStreak }} 天</strong>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Image Preview Lightbox Overlay -->
     <Transition name="fade">
       <div v-if="showImagePreview" class="modal-overlay image-preview-overlay" @click="showImagePreview = false">
@@ -1063,6 +1094,20 @@ function handleAnnAttachmentUpload(event) {
 
 const toastMessage = ref("");
 let toastTimer = null;
+let clockTimer = null;
+const currentResearchDate = ref("");
+const currentResearchClock = ref("");
+const showCheckinModal = ref(false);
+const checkinStreak = ref(0);
+const checkinDialogTitle = ref("今天的科研节奏已经记录");
+const checkinMotivation = ref("稳定推进比短暂冲刺更可靠。今天多走一步，下一次汇报就多一分底气。");
+const checkinMessages = [
+  "稳定推进比短暂冲刺更可靠。今天多走一步，下一次汇报就多一分底气。",
+  "科研不是只靠灵感，更多时候靠每天把问题往前推一点。",
+  "今天的记录已经归档。把复杂问题拆小，你会看到进展越来越清楚。",
+  "保持节奏很好。连续打卡不是形式，是给自己留下一条可追踪的成长线。",
+];
+const TEAM_BASE_SEATS = 8;
 
 const currentMemberId = computed(() => {
   const current = teamStore.members.find((member) => member.isCurrentUser);
@@ -1082,6 +1127,8 @@ const checkedInCount = computed(() => teamStore.checkins.filter((item) => item.s
 const currentCheckinItem = computed(() => {
   return teamStore.checkins.find((item) => item.memberId === currentMemberId.value);
 });
+
+const hasTeamFleetPlan = computed(() => Number(teamStore.totalSeats || TEAM_BASE_SEATS) > TEAM_BASE_SEATS);
 
 const completedTaskCount = computed(() => {
   return teamStore.tasks.filter((task) => task.status === "已完成").length;
@@ -1571,13 +1618,48 @@ async function retractAnnouncement(announcement) {
   }
 }
 
-function doCheckin() {
-  if (currentCheckinItem.value?.status === "已打卡") return;
-  teamStore.performCheckin(currentMemberId.value);
-  showToast("签到成功");
+function updateResearchClock() {
+  const now = new Date();
+  currentResearchDate.value = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+  }).format(now);
+  currentResearchClock.value = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(now);
+}
+
+function openCheckinDialog(saved = currentCheckinItem.value) {
+  const streak = Number(saved?.streak || currentCheckinItem.value?.streak || 1);
+  checkinStreak.value = Math.max(1, streak);
+  checkinDialogTitle.value = saved?.status === "已打卡" ? "今日打卡已完成" : "今天的科研节奏已经记录";
+  checkinMotivation.value = checkinMessages[(checkinStreak.value - 1) % checkinMessages.length];
+  showCheckinModal.value = true;
+}
+
+async function doCheckin() {
+  if (currentCheckinItem.value?.status === "已打卡") {
+    openCheckinDialog(currentCheckinItem.value);
+    return;
+  }
+  try {
+    const saved = await teamStore.performCheckin(currentMemberId.value);
+    openCheckinDialog(saved);
+  } catch (error) {
+    showToast(error.response?.data?.message || "签到失败，请稍后重试");
+  }
 }
 
 onMounted(() => {
+  updateResearchClock();
+  clockTimer = setInterval(updateResearchClock, 1000);
   teamStore.loadFromServer().catch(error => {
     console.error("Failed to refresh team page:", error);
   });
@@ -1585,6 +1667,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (toastTimer) clearTimeout(toastTimer);
+  if (clockTimer) clearInterval(clockTimer);
 });
 </script>
 
@@ -1764,11 +1847,51 @@ onUnmounted(() => {
   color: rgba(0, 102, 255, 0.5);
 }
 
+.locked-seat-btn .avatar-inner-wrapper {
+  border-color: rgba(224, 109, 27, 0.34);
+  background: rgba(255, 245, 237, 0.72);
+}
+
+.locked-seat-btn .plus-symbol {
+  color: #d35f19;
+}
+
 /* Right Header Container */
 .seats-right-container {
   display: flex;
   align-items: center;
   gap: 20px;
+}
+
+.team-plan-flag {
+  display: grid;
+  gap: 2px;
+  min-width: 132px;
+  padding: 10px 12px;
+  border: 1px solid rgba(40, 82, 145, 0.12);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(247, 250, 255, 0.92), rgba(255, 255, 255, 0.72));
+}
+
+.team-plan-flag span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.team-plan-flag strong {
+  color: #1e3a8a;
+  font-size: 13px;
+}
+
+.team-plan-flag.active {
+  border-color: rgba(224, 109, 27, 0.34);
+  background: linear-gradient(180deg, #fff5ed, #ffffff);
+  box-shadow: 0 8px 18px rgba(224, 109, 27, 0.08);
+}
+
+.team-plan-flag.active strong {
+  color: #c85112;
 }
 
 .team-identity-plate {
@@ -2412,6 +2535,23 @@ onUnmounted(() => {
   margin: 0;
 }
 
+.checkin-clock {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.checkin-clock span {
+  color: #8e8e93;
+  font-size: 11px;
+}
+
+.checkin-clock strong {
+  color: #1c1c1e;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
 .pulse-glow-dot {
   width: 10px;
   height: 10px;
@@ -2466,7 +2606,7 @@ onUnmounted(() => {
 .student-primary-action-btn.already-checked {
   background: rgba(52, 199, 89, 0.08);
   color: #248a3d;
-  cursor: not-allowed;
+  cursor: pointer;
   transform: none;
 }
 
@@ -2992,6 +3132,83 @@ onUnmounted(() => {
 
 .quota-block.roomy .quota-head span { color: #8e8e93; }
 .quota-block.roomy .quota-head strong { color: #1c1c1e; }
+
+.checkin-success-modal {
+  position: relative;
+  width: min(480px, 100%);
+  overflow: hidden;
+}
+
+.checkin-success-modal::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(52, 199, 89, 0.14), transparent 36%),
+    radial-gradient(circle at 92% 24%, rgba(0, 102, 255, 0.12), transparent 32%);
+  pointer-events: none;
+}
+
+.checkin-success-modal > * {
+  position: relative;
+  z-index: 1;
+}
+
+.modal-close-float {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+}
+
+.checkin-medal {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 18px;
+  border-radius: 18px;
+  color: #fff;
+  background: linear-gradient(135deg, #1bb978, #0a84ff);
+  font-size: 26px;
+  font-weight: 900;
+  box-shadow: 0 12px 24px rgba(20, 148, 111, 0.22);
+}
+
+.checkin-success-modal h3 {
+  margin: 8px 0 10px;
+  color: #111827;
+  font-size: 22px;
+}
+
+.checkin-success-modal p {
+  margin: 0;
+  max-width: 56ch;
+  color: #475569;
+  line-height: 1.7;
+}
+
+.checkin-streak-panel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 24px;
+  padding: 16px 18px;
+  border: 1px solid rgba(20, 148, 111, 0.18);
+  border-radius: 16px;
+  background: rgba(240, 253, 246, 0.84);
+}
+
+.checkin-streak-panel span {
+  color: #25725a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.checkin-streak-panel strong {
+  color: #0f8d66;
+  font-size: 28px;
+  line-height: 1;
+}
 
 /* Toast */
 .toast {

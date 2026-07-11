@@ -127,6 +127,7 @@ public class BootstrapDataConfig {
             created.setName("PaperSlover 科研团队");
             created.setIdentifier("LAB-2026-PILOT");
             created.setMemberCount(0);
+            created.setSeatLimit(8);
             return teamRepository.save(created);
         });
         List<AppUserEntity> users = appUserRepository.findAll();
@@ -141,6 +142,9 @@ public class BootstrapDataConfig {
         }
         appUserRepository.saveAll(users);
         team.setMemberCount((int) appUserRepository.findByTeamIdOrderByCreatedAtAsc(team.getId()).size());
+        if (team.getSeatLimit() == null || team.getSeatLimit() > 8) {
+            team.setSeatLimit(8);
+        }
         teamRepository.save(team);
     }
 
