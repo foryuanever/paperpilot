@@ -4664,4 +4664,630 @@ onUnmounted(() => {
     transform: scale(1);
   }
 }
+
+/* Impeccable redesign: calm research operations surface.
+   Soft hierarchy, flowing bands, restrained color, no grid-of-cards rhythm. */
+.team-page {
+  --team-bg: #eef3f8;
+  --team-surface: #ffffff;
+  --team-surface-soft: #f7faff;
+  --team-ink: #142033;
+  --team-muted: #5b6a80;
+  --team-faint: #8794a8;
+  --team-line: #d9e3ee;
+  --team-blue: #2d63d8;
+  --team-green: #0f8f66;
+  --team-red: #c73b45;
+  padding: 34px 22px 88px;
+  background:
+    radial-gradient(circle at 8% -10%, rgba(68, 111, 210, 0.12), transparent 30%),
+    linear-gradient(180deg, #f6f9fc 0%, var(--team-bg) 100%);
+  color: var(--team-ink);
+  font-family: Inter, "Helvetica Neue", Arial, system-ui, sans-serif;
+}
+
+.team-shell {
+  max-width: 1480px;
+  gap: 24px;
+}
+
+.team-seats-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--team-surface);
+  border: 1px solid var(--team-line);
+  border-radius: 22px;
+}
+
+.seats-left-container {
+  gap: 18px;
+  padding: 28px 30px;
+  min-width: 0;
+}
+
+.seats-label-row {
+  align-items: center;
+  gap: 12px;
+}
+
+.seats-label-row h2 {
+  color: var(--team-ink);
+  font-size: 25px;
+  line-height: 1.1;
+  font-weight: 820;
+}
+
+.seats-count-badge {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: #eaf1ff;
+  color: var(--team-blue);
+  font-size: 12px;
+}
+
+.seats-helper-text {
+  max-width: 66ch;
+  color: var(--team-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.seats-avatar-row {
+  gap: 14px;
+  padding: 16px;
+  background: linear-gradient(180deg, #f8fbff, #f3f7fc);
+  border: 1px solid #e2ebf5;
+  border-radius: 18px;
+}
+
+.seat-circle-avatar {
+  min-width: 58px;
+}
+
+.avatar-inner-wrapper {
+  width: 52px;
+  height: 52px;
+  border: 3px solid #ffffff;
+  background: #ffffff;
+  box-shadow: 0 4px 10px rgba(43, 73, 118, 0.12);
+}
+
+.seat-circle-avatar:hover .avatar-inner-wrapper {
+  transform: translateY(-2px);
+  border-color: #dbe8ff;
+  box-shadow: 0 6px 12px rgba(43, 73, 118, 0.14);
+}
+
+.status-indicator-dot.online,
+.status-dot.online,
+.pulse-glow-dot.active {
+  background: var(--team-green);
+  box-shadow: 0 0 0 4px rgba(15, 143, 102, 0.13);
+}
+
+.seat-member-name {
+  color: #536176;
+  font-size: 11px;
+}
+
+.seats-right-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+  min-width: 0;
+  padding: 28px;
+  background: #f7fbf9;
+  border-left: 1px solid var(--team-line);
+}
+
+.team-plan-flag {
+  min-width: 0;
+  padding: 14px;
+  background: #ffffff;
+  border: 0;
+  border-radius: 16px;
+}
+
+.team-plan-flag span,
+.plate-label {
+  color: var(--team-muted);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.team-plan-flag strong,
+.team-plan-flag.active strong,
+.plate-code {
+  color: var(--team-ink);
+}
+
+.team-identity-plate {
+  align-items: flex-start;
+  padding: 0;
+  border: 0;
+}
+
+.plate-code {
+  margin-top: 4px;
+  font-size: 22px;
+  letter-spacing: 0;
+}
+
+.invite-main-btn,
+.student-primary-action-btn,
+.submit-form-btn,
+.apple-btn.apple-btn-primary,
+.res-action-btn.download {
+  border: 0;
+  border-radius: 12px;
+  background: var(--team-blue);
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.btn-toggle-form,
+.student-primary-action-btn.already-checked {
+  border: 0;
+  border-radius: 999px;
+  background: #edf5ef;
+  color: #247456;
+}
+
+.invite-main-btn:hover,
+.student-primary-action-btn:hover {
+  transform: translateY(-1px);
+  background: #214fb5;
+}
+
+.dashboard-split-layout,
+.dashboard-split-layout.tutor-view {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  border: 0;
+}
+
+.dashboard-col.left-col {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+}
+
+.dashboard-col.right-col {
+  flex: 0 0 390px;
+  padding: 0;
+  border: 0;
+}
+
+.dashboard-col {
+  gap: 18px;
+}
+
+.student-glass-card,
+.admin-action-section,
+.team-resources-section {
+  position: relative;
+  padding: 22px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--team-line);
+  border-radius: 20px;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.student-glass-card:not(:first-child),
+.admin-action-section:not(:first-child),
+.team-resources-section {
+  padding-top: 22px;
+  border-top: 1px solid var(--team-line);
+}
+
+.student-glass-card h3,
+.admin-action-section h4,
+.col-header-row h3,
+.checklist-header h3,
+.resources-header h3 {
+  margin: 0;
+  color: var(--team-ink);
+  font-size: 18px;
+  line-height: 1.25;
+  font-weight: 820;
+  letter-spacing: 0;
+}
+
+.col-header-row,
+.section-title-bar,
+.checklist-header,
+.resources-header,
+.student-status-heading,
+.sign-in-header {
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e6edf5;
+}
+
+.workbench-sign-in {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 28px;
+}
+
+.workbench-sign-in .sign-in-header {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.workbench-sign-in .sign-in-body {
+  justify-content: flex-end;
+  align-items: center;
+  gap: 18px;
+}
+
+.checkin-clock {
+  text-align: left;
+}
+
+.checkin-clock strong {
+  color: var(--team-ink);
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sign-in-text p,
+.student-status-heading p,
+.item-main-content p,
+.ann-content-truncated,
+.task-desc-truncated {
+  color: var(--team-muted);
+  line-height: 1.65;
+}
+
+.my-stats-panel {
+  gap: 18px;
+}
+
+.student-status-heading {
+  align-items: center;
+}
+
+.member-plan-pill,
+.seats-count-badge,
+.col-meta-pill,
+.task-count-indicator,
+.status-tag,
+.role-badge,
+.role-pill {
+  border-radius: 999px;
+}
+
+.member-plan-pill {
+  border: 0;
+  background: #fff4e5;
+  color: #9a5a14;
+}
+
+.member-plan-pill.active {
+  background: #e8f8ef;
+  color: #18734f;
+}
+
+.benefit-lane {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid #e5edf6;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.benefit-item {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 15px 16px;
+  background: #ffffff;
+  border: 0;
+  border-bottom: 1px solid #e5edf6;
+  border-radius: 0;
+}
+
+.benefit-item:last-child {
+  border-bottom: 0;
+}
+
+.benefit-item.enabled {
+  background: #f4fbf7;
+}
+
+.benefit-item span,
+.research-rhythm-panel span,
+.tutor-metric-card span,
+.card-detail-item span,
+.quota-label-line span,
+.item-main-content small {
+  color: var(--team-muted);
+}
+
+.benefit-item strong {
+  color: var(--team-ink);
+  font-size: 16px;
+}
+
+.research-rhythm-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow: visible;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.research-rhythm-panel > div {
+  flex: 1 1 170px;
+  min-height: 78px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 16px;
+  background: #f7faff;
+}
+
+.research-rhythm-panel strong,
+.tutor-metric-card strong,
+.card-detail-item strong {
+  color: var(--team-ink);
+}
+
+.members-cards-container {
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid var(--team-line);
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.roster-table-head {
+  padding: 13px 18px;
+  background: #f5f8fc;
+  border: 0;
+  border-bottom: 1px solid var(--team-line);
+  color: var(--team-muted);
+}
+
+.member-management-card {
+  padding: 16px 18px;
+  background: #ffffff;
+  border: 0;
+  border-bottom: 1px solid #e7edf5;
+}
+
+.member-management-card:last-child {
+  border-bottom: 0;
+}
+
+.member-management-card:hover {
+  background: #f8fbff;
+}
+
+.card-details-grid {
+  padding: 0;
+  gap: 10px;
+  background: transparent;
+  border: 0;
+}
+
+.card-detail-item {
+  padding: 10px 12px;
+  background: #f7faff;
+  border: 0;
+  border-radius: 12px;
+}
+
+.member-benefit-strip {
+  gap: 7px;
+}
+
+.member-benefit-strip span {
+  min-height: 24px;
+  border: 0;
+  border-radius: 999px;
+  background: #edf7f2;
+  color: #18734f;
+}
+
+.member-benefit-strip span.muted {
+  background: #f0f3f7;
+  color: var(--team-muted);
+}
+
+.summary-metric-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid var(--team-line);
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.tutor-metric-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  padding: 15px 16px;
+  background: #ffffff;
+  border: 0;
+  border-bottom: 1px solid #e7edf5;
+}
+
+.tutor-metric-card:last-child {
+  border-bottom: 0;
+}
+
+.admin-action-section,
+.announcements-briefing,
+.active-leaderboard-card {
+  overflow: hidden;
+}
+
+.admin-items-list,
+.announcements-briefing-stack,
+.student-task-list,
+.student-leaderboard-stack {
+  gap: 0;
+}
+
+.admin-item-card,
+.briefing-ann-card,
+.student-task-item,
+.resource-card {
+  padding: 16px 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #e7edf5;
+  border-radius: 0;
+}
+
+.admin-item-card:last-child,
+.briefing-ann-card:last-child,
+.student-task-item:last-child,
+.resource-card:last-child {
+  border-bottom: 0;
+}
+
+.item-title-row h5,
+.student-task-item h4,
+.briefing-ann-card h4 {
+  color: var(--team-ink);
+  text-decoration: none !important;
+}
+
+.tutor-inline-form {
+  padding: 16px;
+  background: #f7faff;
+  border: 0;
+  border-radius: 16px;
+}
+
+.tutor-inline-form input,
+.tutor-inline-form textarea,
+.modal-form input,
+.modal-form select {
+  border-radius: 12px;
+  border: 1px solid #d6e0ec;
+  background: #ffffff;
+}
+
+.btn-toggle-form,
+.published-action-btn,
+.action-btn-link,
+.res-action-btn,
+.pager-btn,
+.task-countdown-tag {
+  box-shadow: none;
+}
+
+.action-btn-link,
+.published-action-btn {
+  color: var(--team-blue);
+}
+
+.action-btn-link.danger,
+.published-action-btn.danger,
+.res-action-btn.delete {
+  color: var(--team-red);
+}
+
+.image-attachment-card,
+.document-file-row,
+.document-link-row,
+.uploader-dropzone {
+  border-radius: 14px;
+  border-color: #dce5f0;
+  background: #ffffff;
+}
+
+.team-resources-section {
+  margin-top: 0;
+}
+
+.resources-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.resource-card {
+  display: flex;
+}
+
+.toast {
+  border-radius: 12px;
+  background: #172033;
+  box-shadow: none;
+}
+
+@media (max-width: 1120px) {
+  .team-seats-header,
+  .dashboard-split-layout,
+  .dashboard-split-layout.tutor-view,
+  .workbench-sign-in {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dashboard-col.right-col {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .seats-right-container {
+    border-left: 0;
+    border-top: 1px solid var(--team-line);
+  }
+}
+
+@media (max-width: 760px) {
+  .team-page {
+    padding: 18px 12px 72px;
+  }
+
+  .team-seats-header,
+  .student-glass-card,
+  .admin-action-section,
+  .members-cards-container,
+  .summary-metric-cards {
+    border-radius: 16px;
+  }
+
+  .seats-left-container,
+  .seats-right-container,
+  .student-glass-card,
+  .admin-action-section {
+    padding: 18px;
+  }
+
+  .seats-label-row h2 {
+    font-size: 22px;
+  }
+
+  .student-status-heading,
+  .sign-in-body {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 </style>
