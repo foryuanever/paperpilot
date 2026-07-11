@@ -247,7 +247,6 @@ const navItems = computed(() => {
       { to: "/search", label: "检索" },
       { to: "/forum", label: "学术论坛" },
       { to: "/models", label: "用量" },
-      { to: "/referral", label: "邀请" },
       { to: "/team", label: "团队" }
     ];
   }

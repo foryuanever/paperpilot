@@ -1688,6 +1688,7 @@ onUnmounted(() => {
 }
 
 :deep(.library-table tbody tr) {
+  height: 92px;
   transition: background-color .15s ease;
 }
 
@@ -1706,11 +1707,14 @@ onUnmounted(() => {
 .doc-title-main {
   font-size: 13px;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.35;
   color: var(--text-main);
   cursor: help;
-  display: block;
-  white-space: normal;
+  display: -webkit-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   word-break: break-word;
 }
 
@@ -1722,12 +1726,16 @@ onUnmounted(() => {
   font-size: 10.5px;
   color: var(--text-secondary);
   line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .source-text {
   max-width: 285px;
-  white-space: normal;
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .doc-note-cell {
@@ -1757,9 +1765,12 @@ onUnmounted(() => {
 }
 
 .doc-authors-cell span {
-  display: block;
-  line-height: 1.5;
-  white-space: normal;
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   word-break: break-word;
 }
 
