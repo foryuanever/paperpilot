@@ -134,7 +134,7 @@
                   {{ post.replies.length }}
                 </span>
                 <span class="meta-item">
-                  <svg class="heat-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13.5 2.2c.4 2.4-.4 4.2-1.6 5.7-.9 1.2-2 2.3-2 4 0 1.1.7 2 1.7 2.3-.2-1.5.5-2.8 1.5-3.8 2.4 1.5 4 3.7 4 6.3 0 3-2.4 5.3-5.4 5.3S6 19.7 6 16.6c0-2.2 1.1-4 2.5-5.7 1.8-2.2 3.8-4.6 5-8.7Z"/></svg>
+                  <span class="heat-icon" aria-hidden="true">🔥</span>
                   {{ post.likes || 0 }}
                 </span>
                 <time>{{ post.time }}</time>
@@ -1263,7 +1263,7 @@ button { cursor: pointer; }
   font-weight: 900;
 }
 
-.pin-badge { color: #075ee5; background: #eaf2ff; }
+.pin-badge { color: #b91c1c; background: #fee2e2; border: 1px solid #fecaca; }
 .hot-badge { color: #b85b00; background: #fff0d6; }
 .ban-badge { color: #b4233a; background: #fff0f2; }
 .title-icon { margin-right: 4px; font-size: 14px; }
@@ -1530,7 +1530,13 @@ button { cursor: pointer; }
 }
 
 .meta-item .heat-icon {
-  color: #ef7d22;
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  font-size: 14px;
+  line-height: 1;
+  filter: saturate(1.15);
 }
 
 .member-name {

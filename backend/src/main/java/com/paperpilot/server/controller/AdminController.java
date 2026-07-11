@@ -21,6 +21,7 @@ import com.paperpilot.server.repository.PaymentOrderRepository;
 import com.paperpilot.server.repository.PaymentTicketRepository;
 import com.paperpilot.server.service.AuthService;
 import com.paperpilot.server.service.BillingService;
+import com.paperpilot.server.service.MembershipService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -45,6 +46,7 @@ public class AdminController {
     private final AuthService authService;
     private final SiteMessageRepository siteMessageRepository;
     private final BillingService billingService;
+    private final MembershipService membershipService;
     private final PaymentOrderRepository paymentOrderRepository;
     private final PaymentTicketRepository paymentTicketRepository;
 
@@ -59,6 +61,7 @@ public class AdminController {
         AuthService authService,
         SiteMessageRepository siteMessageRepository,
         BillingService billingService,
+        MembershipService membershipService,
         PaymentOrderRepository paymentOrderRepository,
         PaymentTicketRepository paymentTicketRepository
     ) {
@@ -72,6 +75,7 @@ public class AdminController {
         this.authService = authService;
         this.siteMessageRepository = siteMessageRepository;
         this.billingService = billingService;
+        this.membershipService = membershipService;
         this.paymentOrderRepository = paymentOrderRepository;
         this.paymentTicketRepository = paymentTicketRepository;
     }
@@ -169,6 +173,28 @@ public class AdminController {
         Double balanceAmount = body.get("balanceAmount") == null ? null : Double.valueOf(String.valueOf(body.get("balanceAmount")));
         String ip = getClientIp(request);
         authService.adminChangeQuota(id, quota, balanceAmount, ip);
+    }
+
+    @PatchMapping("/users/{id}/membership")
+    public AppUserEntity updateUserMembership(@PathVariable("id") Long id, @RequestBody Map<String, String> body) {
+        AppUserEntity user = appUserRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
+        String planId = body.getOrDefault("planId", "free");
+        String cycle = body.getOrDefault("cycle", "monthly");
+        if ("free".equals(planId)) {
+            user.setMembershipPlan("free");
+            user.setMembershipCycle("monthly");
+            user.setMembershipExpiresAt(null);
+            user.setReviewQuota(0);
+            user.setReviewUsed(0);
+            user.setPptQuota(0);
+            user.setPptUsed(0);
+            user.setChatQuota(0);
+            user.setChatUsed(0);
+            return appUserRepository.save(user);
+        }
+        membershipService.activate(user, planId, cycle);
+        return user;
     }
 
     @PatchMapping("/users/{id}/role")

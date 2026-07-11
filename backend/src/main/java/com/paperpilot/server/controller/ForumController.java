@@ -4,12 +4,15 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paperpilot.server.entity.AppUserEntity;
 import com.paperpilot.server.entity.ForumPostEntity;
+import com.paperpilot.server.entity.ForumPostViewEntity;
 import com.paperpilot.server.entity.ForumReplyEntity;
 import com.paperpilot.server.repository.AppUserRepository;
 import com.paperpilot.server.repository.ForumPostRepository;
+import com.paperpilot.server.repository.ForumPostViewRepository;
 import com.paperpilot.server.repository.ForumReplyRepository;
 import com.paperpilot.server.service.CurrentUserService;
 import com.paperpilot.server.service.NotificationService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -25,6 +28,7 @@ import java.util.*;
 public class ForumController {
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private final ForumPostRepository forumPostRepository;
+    private final ForumPostViewRepository forumPostViewRepository;
     private final ForumReplyRepository forumReplyRepository;
     private final AppUserRepository appUserRepository;
     private final CurrentUserService currentUserService;
@@ -33,6 +37,7 @@ public class ForumController {
 
     public ForumController(
         ForumPostRepository forumPostRepository,
+        ForumPostViewRepository forumPostViewRepository,
         ForumReplyRepository forumReplyRepository,
         AppUserRepository appUserRepository,
         CurrentUserService currentUserService,
@@ -40,6 +45,7 @@ public class ForumController {
         ObjectMapper objectMapper
     ) {
         this.forumPostRepository = forumPostRepository;
+        this.forumPostViewRepository = forumPostViewRepository;
         this.forumReplyRepository = forumReplyRepository;
         this.appUserRepository = appUserRepository;
         this.currentUserService = currentUserService;
@@ -112,11 +118,25 @@ public class ForumController {
     }
 
     @PostMapping("/posts/{id}/view")
+    @Transactional
     public Map<String, Object> viewPost(@PathVariable String id) {
+        AppUserEntity actor = currentUserService.getOrCreateDefaultUser();
         ForumPostEntity post = findPost(id);
-        post.setViews(value(post.getViews()) + 1);
-        forumPostRepository.save(post);
-        return Map.of("views", value(post.getViews()));
+        boolean counted = false;
+        if (actor.getId() != null && !forumPostViewRepository.existsByPostIdAndUserId(post.getId(), actor.getId())) {
+            ForumPostViewEntity view = new ForumPostViewEntity();
+            view.setPostId(post.getId());
+            view.setUserId(actor.getId());
+            try {
+                forumPostViewRepository.save(view);
+                post.setViews(value(post.getViews()) + 1);
+                forumPostRepository.save(post);
+                counted = true;
+            } catch (DataIntegrityViolationException ignored) {
+                counted = false;
+            }
+        }
+        return Map.of("views", value(post.getViews()), "counted", counted);
     }
 
     @PostMapping("/posts/{id}/bookmark")

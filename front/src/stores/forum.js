@@ -83,7 +83,6 @@ export const useForumStore = defineStore("forum", () => {
 
   async function viewPost(postId) {
     const post = state.posts.find(item => item.id === postId);
-    if (post) post.views = Math.max(0, Number(post.views || 0) + 1);
     try {
       const result = await paperpilotApi.viewForumPost(postId);
       if (post && result?.views !== undefined) post.views = result.views;

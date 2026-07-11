@@ -296,6 +296,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.patch(`/api/admin/users/${userId}/quota`, payload);
     return data;
   },
+  async updateAdminUserMembership(userId, payload) {
+    const { data } = await apiClient.patch(`/api/admin/users/${userId}/membership`, payload);
+    return data;
+  },
   async updateUserRole(userId, role) {
     const { data } = await apiClient.patch(`/api/admin/users/${userId}/role`, { role });
     return data;

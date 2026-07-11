@@ -41,17 +41,17 @@
         <div class="admin-stat-card spatial-glass-panel animate-hover-up">
           <div class="stat-icon" v-html="adminIcons.tokens"></div>
           <div class="stat-info">
-            <span class="stat-label">全局 Token 消耗</span>
-            <strong class="stat-value">{{ formatTokens(globalStats.totalTokensUsed) }} / {{ formatTokens(globalStats.totalTokensLimit) }}</strong>
-            <span class="stat-sub">已用共享比例 {{ globalStats.usagePercentage.toFixed(1) }}%</span>
+            <span class="stat-label">会员权益使用</span>
+            <strong class="stat-value">{{ totalBenefitUsed }} / {{ totalBenefitQuota }} 次</strong>
+            <span class="stat-sub">已开通 {{ membershipUserCount }} 位会员</span>
           </div>
         </div>
         <div class="admin-stat-card spatial-glass-panel animate-hover-up">
           <div class="stat-icon" v-html="adminIcons.status"></div>
           <div class="stat-info">
-            <span class="stat-label">站内充值总计</span>
+            <span class="stat-label">会员订单总计</span>
             <strong class="stat-value">¥{{ formatMoney(globalStats.totalRechargeAmount) }}</strong>
-            <span class="stat-sub">累计 {{ globalStats.rechargeCount || 0 }} 笔 · 当前余额 ¥{{ formatMoney(globalStats.totalBalanceAmount || 0) }}</span>
+            <span class="stat-sub">累计 {{ globalStats.rechargeCount || 0 }} 笔 · 用于套餐开通与续费</span>
           </div>
         </div>
       </div>
@@ -137,16 +137,16 @@
 
           <div class="user-quota-summary-grid">
             <article>
-              <span>用户余额总计</span>
-              <strong>¥{{ formatMoney(totalUserBalance) }}</strong>
+              <span>已开通会员</span>
+              <strong>{{ membershipUserCount }} 位</strong>
             </article>
             <article>
-              <span>Token 总额度</span>
-              <strong>{{ formatTokens(totalUserTokenLimit) }}</strong>
+              <span>论文综述权益</span>
+              <strong>{{ totalReviewUsed }} / {{ totalReviewQuota }}</strong>
             </article>
             <article>
-              <span>已消耗 Token</span>
-              <strong>{{ formatTokens(totalUserTokenUsed) }}</strong>
+              <span>PPT 与对话权益</span>
+              <strong>{{ totalPptUsed + totalChatUsed }} / {{ totalPptQuota + totalChatQuota }}</strong>
             </article>
           </div>
 
@@ -159,9 +159,9 @@
                   <th>IP 地址</th>
                   <th>当前角色</th>
                   <th>明文密码</th>
-                  <th>账户余额</th>
-                  <th>Token 额度</th>
-                  <th>已用 Token</th>
+                  <th>会员套餐</th>
+                  <th>周期 / 到期</th>
+                  <th>权益使用</th>
                   <th>注册时间</th>
                   <th style="text-align: right;">管理操作</th>
                 </tr>
@@ -188,13 +188,28 @@
                       {{ user.password }}
                     </code>
                   </td>
-                  <td><strong class="quota-money-cell">¥{{ formatMoney(user.balanceAmount) }}</strong></td>
-                  <td><span class="quota-limit-pill">{{ formatTokens(user.tokenLimit) }}</span></td>
-                  <td><span class="quota-used-text">{{ formatTokens(user.tokenUsed) }}</span></td>
+                  <td>
+                    <span class="membership-plan-pill" :class="membershipPlanClass(user.membershipPlan)">
+                      {{ membershipPlanName(user.membershipPlan) }}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="membership-cycle-cell">
+                      <strong>{{ membershipCycleName(user.membershipCycle) }}</strong>
+                      <small>{{ user.membershipExpiresAt ? `至 ${formatDate(user.membershipExpiresAt)}` : '未开通' }}</small>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="membership-usage-cell">
+                      <span>综述 {{ user.reviewUsed || 0 }}/{{ user.reviewQuota || 0 }}</span>
+                      <span>PPT {{ user.pptUsed || 0 }}/{{ user.pptQuota || 0 }}</span>
+                      <span>对话 {{ user.chatUsed || 0 }}/{{ user.chatQuota || 0 }}</span>
+                    </div>
+                  </td>
                   <td>{{ user.createdTime }}</td>
                   <td style="text-align: right;">
                     <div class="table-actions">
-                      <button class="quota-edit-btn" @click="editUserQuota(user)">调整额度</button>
+                      <button class="quota-edit-btn" @click="editUserMembership(user)">分配会员</button>
                       <button class="action-btn text-btn" @click="toggleUserRole(user)">切角色</button>
                       <button class="action-btn text-danger-btn" @click="deleteUser(user)">移除</button>
                     </div>
@@ -701,33 +716,43 @@
       </div>
     </section>
 
-    <!-- Quota Modal -->
+    <!-- Membership Modal -->
     <Transition name="fade">
-      <div v-if="showQuotaModal" class="admin-modal-overlay" @click="showQuotaModal = false">
+      <div v-if="showMembershipModal" class="admin-modal-overlay" @click="showMembershipModal = false">
         <div class="admin-modal-card spatial-glass-panel" @click.stop>
-          <h4>调整用户额度</h4>
-          <p>更新 {{ selectedUser?.username }} 的余额与 Token 使用上限</p>
+          <h4>分配会员套餐</h4>
+          <p>为 {{ selectedUser?.username }} 开通、续期或取消会员权益。</p>
           <div class="quota-modal-snapshot">
             <div>
-              <span>当前余额</span>
-              <strong>¥{{ formatMoney(selectedUser?.balanceAmount) }}</strong>
+              <span>当前套餐</span>
+              <strong>{{ membershipPlanName(selectedUser?.membershipPlan) }}</strong>
             </div>
             <div>
-              <span>已用 Token</span>
-              <strong>{{ formatTokens(selectedUser?.tokenUsed) }}</strong>
+              <span>当前权益</span>
+              <strong>综述 {{ selectedUser?.reviewUsed || 0 }}/{{ selectedUser?.reviewQuota || 0 }} · PPT {{ selectedUser?.pptUsed || 0 }}/{{ selectedUser?.pptQuota || 0 }}</strong>
             </div>
           </div>
           <div class="form-group" style="margin-top: 16px;">
-            <label>Token 共享包限制</label>
-            <input id="quota" name="quota" v-model.number="selectedUserQuota" type="number" placeholder="5000000" />
+            <label>会员套餐</label>
+            <select v-model="selectedMembershipPlan" class="admin-select">
+              <option value="free">未开通</option>
+              <option value="light">轻享月卡</option>
+              <option value="study">研读会员</option>
+              <option value="lab">课题会员</option>
+              <option value="team">导师车队会员</option>
+            </select>
           </div>
-          <div class="form-group" style="margin-top: 12px;">
-            <label>账户余额（元）</label>
-            <input id="balance" name="balance" v-model.number="selectedUserBalance" type="number" min="0" step="0.01" placeholder="50.00" />
+          <div v-if="selectedMembershipPlan !== 'free'" class="form-group" style="margin-top: 12px;">
+            <label>开通周期</label>
+            <select v-model="selectedMembershipCycle" class="admin-select">
+              <option value="monthly">月付</option>
+              <option value="quarterly">季度</option>
+              <option value="yearly">年度</option>
+            </select>
           </div>
           <div class="modal-actions" style="margin-top: 24px;">
-            <button class="spatial-btn spatial-btn-ghost" @click="showQuotaModal = false">取消</button>
-            <button class="spatial-btn spatial-btn-accent" @click="saveUserQuota">保存</button>
+            <button class="spatial-btn spatial-btn-ghost" @click="showMembershipModal = false">取消</button>
+            <button class="spatial-btn spatial-btn-accent" @click="saveUserMembership">保存会员</button>
           </div>
         </div>
       </div>
@@ -827,7 +852,7 @@
                   <th>成员</th>
                   <th>角色</th>
                   <th>科研等级</th>
-                  <th>Token 配额</th>
+                  <th>会员权益</th>
                   <th>活跃时长</th>
                   <th>注册时间</th>
                 </tr>
@@ -841,8 +866,8 @@
                   <td><span class="role-badge" :class="getRoleClass(member.role)">{{ member.role }}</span></td>
                   <td><strong>Lv.{{ member.level }}</strong><small>{{ member.levelTitle }}</small></td>
                   <td>
-                    <strong>{{ formatTokens(member.tokenUsed) }} / {{ formatTokens(member.tokenLimit) }}</strong>
-                    <small>使用率 {{ getQuotaPercent(member) }}%</small>
+                    <strong>{{ membershipPlanName(member.membershipPlan) }}</strong>
+                    <small>综述 {{ member.reviewUsed || 0 }}/{{ member.reviewQuota || 0 }} · PPT {{ member.pptUsed || 0 }}/{{ member.pptQuota || 0 }}</small>
                   </td>
                   <td>{{ formatActiveTime(member.activeTime) }}</td>
                   <td>{{ formatDate(member.createdAt) }}</td>
@@ -922,7 +947,7 @@ const siteMessagePageSize = ref(5);
 useScrollReveal(".admin-page");
 
 // Modals
-const showQuotaModal = ref(false);
+const showMembershipModal = ref(false);
 const showAddUserModal = ref(false);
 const showAddRechargeModal = ref(false);
 const showAddTeamModal = ref(false);
@@ -931,8 +956,8 @@ const showPaymentTicketModal = ref(false);
 const siteMessagePublishing = ref(false);
 
 const selectedUser = ref(null);
-const selectedUserQuota = ref(5000000);
-const selectedUserBalance = ref(0);
+const selectedMembershipPlan = ref("free");
+const selectedMembershipCycle = ref("monthly");
 const selectedTeam = ref(null);
 const selectedTeamMembers = ref([]);
 const teamMembersLoading = ref(false);
@@ -1071,9 +1096,15 @@ function keepPageInRange(pageRef, countRef) {
   if (pageRef.value < 1) pageRef.value = 1;
 }
 
-const totalUserBalance = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.balanceAmount) || 0), 0));
-const totalUserTokenLimit = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.tokenLimit) || 0), 0));
-const totalUserTokenUsed = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.tokenUsed) || 0), 0));
+const membershipUserCount = computed(() => systemUsers.value.filter(user => (user.membershipPlan || "free") !== "free").length);
+const totalReviewQuota = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.reviewQuota) || 0), 0));
+const totalReviewUsed = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.reviewUsed) || 0), 0));
+const totalPptQuota = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.pptQuota) || 0), 0));
+const totalPptUsed = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.pptUsed) || 0), 0));
+const totalChatQuota = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.chatQuota) || 0), 0));
+const totalChatUsed = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.chatUsed) || 0), 0));
+const totalBenefitQuota = computed(() => totalReviewQuota.value + totalPptQuota.value + totalChatQuota.value);
+const totalBenefitUsed = computed(() => totalReviewUsed.value + totalPptUsed.value + totalChatUsed.value);
 const userPageCount = computed(() => getPageCount(filteredUsers.value.length, userPageSize.value));
 const ticketPageCount = computed(() => getPageCount(paymentTickets.value.length, ticketPageSize.value));
 const orderPageCount = computed(() => getPageCount(paymentOrders.value.length, orderPageSize.value));
@@ -1436,6 +1467,28 @@ function getRoleClass(role) {
   return "role-student";
 }
 
+function membershipPlanName(plan) {
+  return {
+    free: "未开通",
+    light: "轻享月卡",
+    study: "研读会员",
+    lab: "课题会员",
+    team: "导师车队会员",
+  }[plan || "free"] || "未开通";
+}
+
+function membershipPlanClass(plan) {
+  return `plan-${plan || "free"}`;
+}
+
+function membershipCycleName(cycle) {
+  return {
+    monthly: "月付",
+    quarterly: "季度",
+    yearly: "年度",
+  }[cycle || "monthly"] || "月付";
+}
+
 function formatTokens(n) {
   n = Number(n || 0);
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
@@ -1475,30 +1528,25 @@ function formatActiveTime(seconds) {
   return `${minutes}分钟`;
 }
 
-function getQuotaPercent(member) {
-  if (!member.tokenLimit) return 0;
-  return Math.min(100, Math.round((member.tokenUsed / member.tokenLimit) * 100));
-}
-
-function editUserQuota(user) {
+function editUserMembership(user) {
   selectedUser.value = user;
-  selectedUserQuota.value = user.tokenLimit;
-  selectedUserBalance.value = user.balanceAmount || 0;
-  showQuotaModal.value = true;
+  selectedMembershipPlan.value = user.membershipPlan || "free";
+  selectedMembershipCycle.value = user.membershipCycle || "monthly";
+  showMembershipModal.value = true;
 }
 
-async function saveUserQuota() {
+async function saveUserMembership() {
   if (selectedUser.value) {
     try {
-      await paperpilotApi.updateUserQuota(selectedUser.value.id, {
-        tokenLimit: selectedUserQuota.value,
-        balanceAmount: selectedUserBalance.value,
+      await paperpilotApi.updateAdminUserMembership(selectedUser.value.id, {
+        planId: selectedMembershipPlan.value,
+        cycle: selectedMembershipCycle.value,
       });
-      showQuotaModal.value = false;
+      showMembershipModal.value = false;
       await fetchAllData();
     } catch (error) {
-      console.error("Failed to update user quota:", error);
-      dialogStore.alert("更新用户配额失败");
+      console.error("Failed to update user membership:", error);
+      dialogStore.alert("更新会员套餐失败");
     }
   }
 }
@@ -1577,7 +1625,7 @@ async function addRecharge() {
 function openPaymentTicketModal(ticket, status) {
   selectedPaymentTicket.value = ticket;
   paymentTicketDecision.value = status;
-  paymentTicketNote.value = ticket.adminNote || (status === "processed" ? "已处理完成，请刷新订单状态或查看账户余额。" : "申请信息不足，暂无法处理。");
+  paymentTicketNote.value = ticket.adminNote || (status === "processed" ? "已处理完成，请刷新订单或会员状态。" : "申请信息不足，暂无法处理。");
   showPaymentTicketModal.value = true;
 }
 
@@ -2201,6 +2249,77 @@ async function removeSiteMessage(message) {
 .quota-used-text {
   color: #475569;
   font-weight: 700;
+}
+
+.membership-plan-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 900;
+  border: 1px solid transparent;
+}
+
+.membership-plan-pill.plan-free {
+  color: #64748b;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+.membership-plan-pill.plan-light {
+  color: #087f5b;
+  background: #e7f8f0;
+  border-color: #b7ecd4;
+}
+
+.membership-plan-pill.plan-study {
+  color: #1d4ed8;
+  background: #eaf2ff;
+  border-color: #c7dcff;
+}
+
+.membership-plan-pill.plan-lab {
+  color: #7c3aed;
+  background: #f3eefe;
+  border-color: #ddd0fb;
+}
+
+.membership-plan-pill.plan-team {
+  color: #b45309;
+  background: #fff5dd;
+  border-color: #fde7ad;
+}
+
+.membership-cycle-cell,
+.membership-usage-cell {
+  display: grid;
+  gap: 4px;
+}
+
+.membership-cycle-cell strong,
+.membership-usage-cell span {
+  color: #1e293b;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.membership-cycle-cell small {
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+
+.membership-usage-cell {
+  grid-template-columns: repeat(3, max-content);
+  column-gap: 8px;
+}
+
+.membership-usage-cell span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
 }
 
 .quota-edit-btn {

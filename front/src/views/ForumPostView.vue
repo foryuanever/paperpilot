@@ -259,7 +259,7 @@ button, textarea { font: inherit; }
 .type-label.research { color: #087d5e; background: #ddf7ef; }
 .type-label.competition { color: #c83e5d; background: #ffe8ee; }
 .state-badge { padding: 5px 9px; border-radius: 7px; font-size: 11px; font-weight: 900; }
-.pin-badge { color: #075ee5; background: #eaf2ff; }
+.pin-badge { color: #b91c1c; background: #fee2e2; border: 1px solid #fecaca; }
 .ban-badge { color: #b4233a; background: #fff0f2; }
 .label-row time { margin-left: auto; color: #97a1b1; }
 .post-article h1 { max-width: 760px; margin: 22px 0 18px 56px; font-size: 24px; line-height: 1.45; letter-spacing: 0; text-wrap: balance; }
