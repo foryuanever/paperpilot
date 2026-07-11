@@ -5464,4 +5464,132 @@ onUnmounted(() => {
   margin-top: 4px;
 }
 
+/* Team flow rewrite: every work module is a full-width horizontal strip */
+.dashboard-split-layout,
+.dashboard-split-layout.tutor-view,
+.dashboard-split-layout.student-view {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  align-items: stretch;
+  border: 0;
+}
+
+.dashboard-col,
+.dashboard-col.left-col,
+.dashboard-col.right-col {
+  width: 100%;
+  flex: none;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dashboard-col.left-col,
+.dashboard-col.right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.tutor-view .right-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.summary-metric-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+}
+
+.tutor-metric-card {
+  border-bottom: 0;
+  border-right: 1px solid #e7edf5;
+}
+
+.tutor-metric-card:last-child {
+  border-right: 0;
+}
+
+.admin-action-section,
+.student-glass-card.tasks-checklist-panel,
+.student-glass-card.announcements-briefing {
+  width: 100%;
+}
+
+.dashboard-col.right-col .admin-action-section .admin-items-list,
+.announcements-briefing .student-task-list,
+.tasks-checklist-panel .student-task-list {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.announcements-briefing .student-task-item,
+.tasks-checklist-panel .student-task-item,
+.admin-item-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  min-height: 92px;
+}
+
+.announcements-briefing .student-task-item .task-info,
+.tasks-checklist-panel .student-task-item .task-info,
+.admin-item-card .item-main-content {
+  max-width: none;
+}
+
+.announcements-briefing .task-desc-truncated,
+.tasks-checklist-panel .task-desc-truncated,
+.admin-item-card .task-desc-truncated {
+  -webkit-line-clamp: 2;
+  max-width: 78ch;
+}
+
+.announcements-briefing .task-attachments-list,
+.tasks-checklist-panel .task-attachments-list,
+.admin-item-card .task-attachments-list {
+  margin-top: 6px;
+}
+
+.announcements-briefing .pagination-bar,
+.tasks-checklist-panel .pagination-bar,
+.admin-action-section .pagination-bar {
+  justify-content: flex-end;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid #e7edf5;
+}
+
+.empty-state-text {
+  min-height: 118px;
+}
+
+@media (max-width: 900px) {
+  .summary-metric-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .tutor-metric-card {
+    border-right: 0;
+    border-bottom: 1px solid #e7edf5;
+  }
+
+  .tutor-metric-card:last-child {
+    border-bottom: 0;
+  }
+
+  .announcements-briefing .student-task-item,
+  .tasks-checklist-panel .student-task-item,
+  .admin-item-card {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 10px;
+  }
+}
+
 </style>
