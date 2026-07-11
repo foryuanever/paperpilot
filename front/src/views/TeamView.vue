@@ -95,7 +95,7 @@
             <div class="roster-table-head">
               <span>成员</span>
               <span>科研状态</span>
-              <span>额度与操作</span>
+              <span>权益与操作</span>
             </div>
             <article
               v-for="member in teamStore.members"
@@ -149,25 +149,16 @@
               <div class="card-actions-wrapper">
                 <div class="quota-management-bar">
                   <div class="quota-label-line">
-                    <span>Token 限制</span>
-                    <strong>{{ formatTokens(member.tokenUsed) }} / {{ formatTokens(member.tokenLimit) }}</strong>
+                    <span>成员权益</span>
+                    <strong>{{ member.role === "导师" && hasTeamFleetPlan ? "车队共享中" : "基础席位" }}</strong>
                   </div>
-                  <div class="progress-bar-track">
-                    <span
-                      class="progress-fill-bar"
-                      :class="getQuotaColorClass(member.tokenUsed / member.tokenLimit)"
-                      :style="{ width: `${Math.min(100, (member.tokenUsed / member.tokenLimit) * 100)}%` }"
-                    ></span>
+                  <div class="member-benefit-strip">
+                    <span>论文导入</span>
+                    <span>翻译</span>
+                    <span :class="{ muted: !hasTeamFleetPlan }">PPT 权益</span>
                   </div>
 
-                  <!-- Inline Quota adjustment tool -->
-                  <div v-if="editingMemberId === member.id" class="quota-edit-inputs">
-                    <input v-model.number="tempLimit" type="number" min="0" step="100000" />
-                    <button class="action-btn-mini confirm" @click="saveQuota(member.id)">保存</button>
-                    <button class="action-btn-mini cancel" @click="editingMemberId = null">取消</button>
-                  </div>
-                  <div v-else class="quota-trigger-actions">
-                    <button class="action-btn-link" @click="startEditQuota(member)">修改额度</button>
+                  <div class="quota-trigger-actions">
                     <button
                       v-if="member.id !== currentMemberId"
                       class="action-btn-link"
@@ -194,8 +185,8 @@
           <!-- Quick summary widget -->
           <div class="summary-metric-cards">
             <div class="tutor-metric-card">
-              <span>Token 资产池</span>
-              <strong>{{ formatTokens(teamStore.groupTokenPool) }}</strong>
+              <span>团队席位</span>
+              <strong>{{ teamStore.usedSeats }} / {{ teamStore.totalSeats }}</strong>
             </div>
             <div class="tutor-metric-card">
               <span>今日签到率</span>
@@ -461,33 +452,53 @@
             </div>
           </div>
 
-          <!-- My Token & Level Info -->
+          <!-- My membership and research rhythm -->
           <div class="student-glass-card my-stats-panel">
-            <h3>我的科研状态</h3>
-            <div class="stats-pills-row">
-              <div class="stat-pill-box">
+            <div class="student-status-heading">
+              <div>
+                <h3>我的团队权益</h3>
+                <p>当前账号未开通套餐，仅保留基础团队协作能力。</p>
+              </div>
+              <span class="member-plan-pill" :class="{ active: hasTeamFleetPlan }">
+                {{ hasTeamFleetPlan ? "车队会员共享" : "未开通套餐" }}
+              </span>
+            </div>
+
+            <div class="benefit-lane">
+              <div class="benefit-item enabled">
+                <span>论文导入 / 翻译</span>
+                <strong>基础可用</strong>
+              </div>
+              <div class="benefit-item">
+                <span>论文综述</span>
+                <strong>{{ hasTeamFleetPlan ? "共享可用" : "未开通" }}</strong>
+              </div>
+              <div class="benefit-item">
+                <span>组会 PPT</span>
+                <strong>{{ hasTeamFleetPlan ? "车队额度" : "未开通" }}</strong>
+              </div>
+            </div>
+
+            <div class="research-rhythm-panel">
+              <div>
                 <span>科研等级</span>
                 <strong>Lv.{{ getMemberLevelInfo(currentUserMember?.activeTime).level }}</strong>
                 <small>{{ getMemberLevelInfo(currentUserMember?.activeTime).title }}</small>
               </div>
-              <div class="stat-pill-box">
-                <span>当前在线</span>
+              <div>
+                <span>连续打卡</span>
+                <strong>{{ currentCheckinItem?.streak || checkinStreak || 0 }} 天</strong>
+                <small>保持节奏</small>
+              </div>
+              <div>
+                <span>有效学术时长</span>
                 <strong>{{ formatActiveTime(currentUserMember?.activeTime) }}</strong>
-                <small>有效学术时长</small>
+                <small>团队排行第 {{ currentMemberRank }} 名</small>
               </div>
-            </div>
-
-            <div class="student-quota-block">
-              <div class="student-quota-header">
-                <span>Token 使用量</span>
-                <strong>{{ formatTokens(currentUserMember?.tokenUsed || 0) }} / {{ formatTokens(currentUserMember?.tokenLimit || 0) }}</strong>
-              </div>
-              <div class="progress-bar-track">
-                <span
-                  class="progress-fill-bar"
-                  :class="getQuotaColorClass((currentUserMember?.tokenUsed || 0) / (currentUserMember?.tokenLimit || 1))"
-                  :style="{ width: `${Math.min(100, ((currentUserMember?.tokenUsed || 0) / (currentUserMember?.tokenLimit || 1)) * 100)}%` }"
-                ></span>
+              <div>
+                <span>任务进度</span>
+                <strong>{{ completedTaskCount }} / {{ teamStore.tasks.length }}</strong>
+                <small>本页任务</small>
               </div>
             </div>
           </div>
@@ -730,7 +741,7 @@
               <span>邮箱</span>
               <input v-model="newMemberEmail" type="email" placeholder="输入邮箱地址" required />
             </label>
-            <div class="form-grid">
+            <div class="form-grid single">
               <label>
                 <span>角色</span>
                 <select v-model="newMemberRole">
@@ -738,10 +749,6 @@
                   <option value="特权用户">特权用户</option>
                   <option value="管理员">管理员</option>
                 </select>
-              </label>
-              <label>
-                <span>初始额度</span>
-                <input v-model.number="newMemberLimit" type="number" min="0" step="100000" />
               </label>
             </div>
             <div class="form-actions">
@@ -802,15 +809,13 @@
 
           <div v-if="canViewQuota(selectedMember)" class="quota-block roomy">
             <div class="quota-head">
-              <span>Token 使用情况</span>
-              <strong>{{ formatTokens(selectedMember.tokenUsed) }} / {{ formatTokens(selectedMember.tokenLimit) }}</strong>
+              <span>会员权益</span>
+              <strong>{{ hasTeamFleetPlan ? "车队权益共享中" : "未开通套餐" }}</strong>
             </div>
-            <div class="progress-track">
-              <span
-                class="progress-fill"
-                :class="getQuotaColorClass(selectedMember.tokenUsed / selectedMember.tokenLimit)"
-                :style="{ width: `${Math.min(100, (selectedMember.tokenUsed / selectedMember.tokenLimit) * 100)}%` }"
-              ></span>
+            <div class="member-benefit-strip roomy">
+              <span>基础导入</span>
+              <span>团队任务</span>
+              <span :class="{ muted: !hasTeamFleetPlan }">PPT 生成</span>
             </div>
           </div>
 
@@ -1049,10 +1054,6 @@ async function deleteResource(id) {
 const newMemberName = ref("");
 const newMemberEmail = ref("");
 const newMemberRole = ref("学生");
-const newMemberLimit = ref(1000000);
-
-const editingMemberId = ref(null);
-const tempLimit = ref(0);
 
 const showAddTaskForm = ref(false);
 const editingTaskId = ref(null);
@@ -1151,6 +1152,11 @@ const maxActiveTime = computed(() => Math.max(1, ...teamStore.members.map((membe
 
 const sortedLeaderboard = computed(() => {
   return [...teamStore.members].sort((a, b) => (b.activeTime || 0) - (a.activeTime || 0));
+});
+
+const currentMemberRank = computed(() => {
+  const index = sortedLeaderboard.value.findIndex((member) => member.id === currentMemberId.value);
+  return index >= 0 ? index + 1 : "-";
 });
 
 const taskPage = ref(1);
@@ -1256,13 +1262,6 @@ function getMemberLevelInfo(activeTime) {
   return { level, title };
 }
 
-function formatTokens(value) {
-  const n = Number(value || 0);
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${Math.round(n / 1000)}K`;
-  return String(n);
-}
-
 function formatActiveTime(seconds) {
   if (!seconds) return "0分钟";
   const h = Math.floor(seconds / 3600);
@@ -1271,21 +1270,6 @@ function formatActiveTime(seconds) {
   if (h > 0) return `${h}小时${m}分钟`;
   if (m > 0) return `${m}分钟${s}秒`;
   return `${s}秒`;
-}
-
-function startEditQuota(member) {
-  editingMemberId.value = member.id;
-  tempLimit.value = member.tokenLimit;
-}
-
-function saveQuota(memberId) {
-  if (tempLimit.value < 0) {
-    showToast("额度不能小于 0");
-    return;
-  }
-  teamStore.updateQuota(memberId, tempLimit.value);
-  editingMemberId.value = null;
-  showToast("额度已更新");
 }
 
 function toggleRole(member) {
@@ -1320,12 +1304,10 @@ function submitInvite() {
       name: newMemberName.value.trim(),
       email: newMemberEmail.value.trim(),
       role: newMemberRole.value,
-      tokenLimit: newMemberLimit.value,
     });
     newMemberName.value = "";
     newMemberEmail.value = "";
     newMemberRole.value = "学生";
-    newMemberLimit.value = 1000000;
     showInviteModal.value = false;
     showToast("邀请已创建");
   } catch (error) {
@@ -2189,6 +2171,38 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
+.member-benefit-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.member-benefit-strip span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eef7f2;
+  color: #137348;
+  border: 1px solid #cdebdc;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.member-benefit-strip span.muted {
+  background: #f4f6f9;
+  color: #778397;
+  border-color: #e1e7ef;
+}
+
+.member-benefit-strip.roomy {
+  padding: 12px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e5ebf3;
+}
+
 .progress-bar-track {
   width: 100%;
   height: 6px;
@@ -2351,6 +2365,10 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
+}
+
+.form-grid.single {
+  grid-template-columns: 1fr;
 }
 
 .tutor-inline-form input,
@@ -2678,54 +2696,124 @@ onUnmounted(() => {
   transform: none;
 }
 
-/* Stats Pill layout */
-.stats-pills-row {
+/* Student membership rhythm */
+.my-stats-panel {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-bottom: 20px;
+  gap: 18px;
 }
 
-.stat-pill-box {
-  background: rgba(0, 0, 0, 0.015);
-  border: 1px solid rgba(0, 0, 0, 0.02);
-  border-radius: 16px;
-  padding: 16px;
+.student-status-heading {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.stat-pill-box span {
-  font-size: 11px;
-  color: #8e8e93;
-}
-
-.stat-pill-box strong {
-  font-size: 22px;
-  font-weight: 700;
-  color: #1c1c1e;
-}
-
-.stat-pill-box small {
-  font-size: 10px;
-  color: #aeabaf;
-}
-
-.student-quota-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.student-quota-header {
-  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  font-size: 12px;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e8edf4;
 }
 
-.student-quota-header span { color: #8e8e93; }
-.student-quota-header strong { color: #1c1c1e; }
+.student-status-heading h3 {
+  margin: 0 0 6px;
+}
+
+.student-status-heading p {
+  margin: 0;
+  color: #53657a;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.member-plan-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a4b10;
+  border: 1px solid #fed7aa;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.member-plan-pill.active {
+  background: #ecfdf3;
+  color: #067647;
+  border-color: #bbf7d0;
+}
+
+.benefit-lane {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.benefit-item {
+  min-height: 86px;
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  padding: 16px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.benefit-item.enabled {
+  background: #eefcf5;
+  border-color: #c7ead7;
+}
+
+.benefit-item span {
+  color: #617087;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.benefit-item strong {
+  color: #142033;
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.research-rhythm-panel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #dfe7f1;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.research-rhythm-panel > div {
+  min-height: 92px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 16px;
+  border-right: 1px solid #e8edf4;
+}
+
+.research-rhythm-panel > div:last-child {
+  border-right: 0;
+}
+
+.research-rhythm-panel span {
+  color: #66758a;
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.research-rhythm-panel strong {
+  color: #121a2a;
+  font-size: 20px;
+  font-weight: 860;
+}
+
+.research-rhythm-panel small {
+  color: #8a96a8;
+  font-size: 10px;
+}
 
 /* Student Tasks Checklist */
 .checklist-header {
@@ -3335,6 +3423,23 @@ onUnmounted(() => {
     margin: 10px;
     border: 1px solid #e6edf5;
   }
+
+  .benefit-lane,
+  .research-rhythm-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .research-rhythm-panel > div:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .research-rhythm-panel > div {
+    border-bottom: 1px solid #e8edf4;
+  }
+
+  .research-rhythm-panel > div:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
 }
 
 @media (max-width: 768px) {
@@ -3349,6 +3454,22 @@ onUnmounted(() => {
 
   .stats-pills-row {
     grid-template-columns: 1fr;
+  }
+
+  .benefit-lane,
+  .research-rhythm-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .research-rhythm-panel > div,
+  .research-rhythm-panel > div:nth-child(2n),
+  .research-rhythm-panel > div:nth-last-child(-n + 2) {
+    border-right: 0;
+    border-bottom: 1px solid #e8edf4;
+  }
+
+  .research-rhythm-panel > div:last-child {
+    border-bottom: 0;
   }
 }
 
