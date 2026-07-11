@@ -382,41 +382,6 @@
             </div>
           </div>
 
-          <!-- Leaderboard in Mentor view -->
-          <div class="admin-action-section">
-            <h4>实验室活跃排行</h4>
-            <div class="leaderboard-container">
-              <div
-                v-for="(member, idx) in paginatedLeaderboard"
-                :key="member.id"
-                class="leader-row-item"
-              >
-                <span class="leader-rank-no">{{ (leaderPage - 1) * leaderPageSize + idx + 1 }}</span>
-                <div class="leader-info-box">
-                  <div class="leader-meta-line">
-                    <strong>{{ member.name }}</strong>
-                    <span>{{ formatActiveTime(member.activeTime) }}</span>
-                  </div>
-                  <div class="leader-progress-track">
-                    <div
-                      class="leader-progress-bar"
-                      :style="{ width: `${Math.min(100, ((member.activeTime || 0) / (maxActiveTime || 1)) * 100)}%` }"
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- Pagination for leaderboard -->
-            <div class="pagination-bar" v-if="leaderTotalPages > 1">
-              <button type="button" class="pager-btn" :disabled="leaderPage === 1" @click="leaderPage--">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon"><polyline points="15 18 9 12 15 6"></polyline></svg>
-              </button>
-              <span class="pager-info">{{ leaderPage }} / {{ leaderTotalPages }}</span>
-              <button type="button" class="pager-btn" :disabled="leaderPage === leaderTotalPages" @click="leaderPage++">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon"><polyline points="9 18 15 12 9 6"></polyline></svg>
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -493,7 +458,7 @@
               <div>
                 <span>有效学术时长</span>
                 <strong>{{ formatActiveTime(currentUserMember?.activeTime) }}</strong>
-                <small>团队排行第 {{ currentMemberRank }} 名</small>
+                <small>今日科研记录</small>
               </div>
               <div>
                 <span>任务进度</span>
@@ -575,36 +540,39 @@
         <div class="dashboard-col right-col">
           <!-- Announcements carousel style -->
           <div class="student-glass-card announcements-briefing">
-            <h3>重要公告通知</h3>
-            <div class="announcements-briefing-stack">
+            <div class="checklist-header">
+              <h3>重要公告通知</h3>
+              <span class="task-count-indicator">共 {{ teamStore.announcements.length }} 项</span>
+            </div>
+            <div class="student-task-list">
               <article
                 v-for="ann in paginatedAnnouncements"
                 :key="ann.id"
-                class="briefing-ann-card"
+                class="student-task-item announcement-task-item"
               >
-                <div class="ann-header">
+                <div class="task-info">
                   <h4 @click="openDetailModal('announcement', ann)" style="cursor: pointer; text-decoration: underline; text-underline-offset: 4px;">{{ ann.title }}</h4>
-                  <small>{{ ann.publishTime }}</small>
-                </div>
-                <p class="ann-content-truncated" @click="openDetailModal('announcement', ann)">{{ ann.content }}</p>
-                <div v-if="ann.image || ann.link || ann.attachmentName" class="task-attachments-list">
-                  <div v-if="ann.image" class="image-attachment-card" @click="previewImage({ data: ann.image, name: ann.title })">
-                    <img :src="ann.image" class="task-attachment-img-preview" title="点击预览图片" />
-                    <span class="img-name">{{ ann.title }}配图</span>
+                  <p class="task-desc-truncated" @click="openDetailModal('announcement', ann)">{{ ann.content }}</p>
+                  <div v-if="ann.image || ann.link || ann.attachmentName" class="task-attachments-list">
+                    <div v-if="ann.image" class="image-attachment-card" @click="previewImage({ data: ann.image, name: ann.title })">
+                      <img :src="ann.image" class="task-attachment-img-preview" title="点击预览图片" />
+                      <span class="img-name">{{ ann.title }}配图</span>
+                    </div>
+                    <a v-if="ann.link" :href="ann.link" target="_blank" class="document-link-row" @click.stop>
+                      <span class="file-format-badge">LINK</span>
+                      <span class="attachment-name">查看通知链接</span>
+                    </a>
+                    <button v-if="ann.attachmentName" type="button" class="document-file-row" @click="downloadAnnouncementAttachment(ann)">
+                      <span class="document-file-icon" :class="getDocumentIconClass(ann.attachmentName)">
+                        {{ getDocumentIconLabel(ann.attachmentName) }}
+                      </span>
+                      <span class="document-file-meta">
+                        <strong :title="ann.attachmentName">{{ ann.attachmentName }}</strong>
+                        <small>{{ getAnnouncementAttachmentSize(ann) }}</small>
+                      </span>
+                    </button>
                   </div>
-                  <a v-if="ann.link" :href="ann.link" target="_blank" class="document-link-row" @click.stop>
-                    <span class="file-format-badge">LINK</span>
-                    <span class="attachment-name">查看通知链接</span>
-                  </a>
-                  <button v-if="ann.attachmentName" type="button" class="document-file-row" @click="downloadAnnouncementAttachment(ann)">
-                    <span class="document-file-icon" :class="getDocumentIconClass(ann.attachmentName)">
-                      {{ getDocumentIconLabel(ann.attachmentName) }}
-                    </span>
-                    <span class="document-file-meta">
-                      <strong :title="ann.attachmentName">{{ ann.attachmentName }}</strong>
-                      <small>{{ getAnnouncementAttachmentSize(ann) }}</small>
-                    </span>
-                  </button>
+                  <small>发布时间: {{ ann.publishTime }}</small>
                 </div>
               </article>
               <div v-if="!teamStore.announcements.length" class="empty-state-text">目前没有公告。</div>
@@ -621,44 +589,6 @@
             </div>
           </div>
 
-          <!-- Active Leaderboard -->
-          <div class="student-glass-card active-leaderboard-card">
-            <h3>实验室今日排行</h3>
-            <div class="student-leaderboard-stack">
-              <div
-                v-for="(member, index) in paginatedLeaderboard"
-                :key="member.id"
-                class="student-leader-row"
-                :class="{ 'is-current-user': member.isCurrentUser }"
-              >
-                <div class="rank-container">
-                  <span class="rank-number" :class="'rank-' + ((leaderPage - 1) * leaderPageSize + index + 1)">{{ (leaderPage - 1) * leaderPageSize + index + 1 }}</span>
-                </div>
-                <div class="leader-details">
-                  <div class="name-time-row">
-                    <strong>{{ member.name }}</strong>
-                    <span>{{ formatActiveTime(member.activeTime) }}</span>
-                  </div>
-                  <div class="progress-bar-track">
-                    <span
-                      class="progress-fill-bar"
-                      :style="{ width: `${Math.min(100, ((member.activeTime || 0) / (maxActiveTime || 1)) * 100)}%` }"
-                    ></span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- Pagination Bar for Student Leaderboard -->
-            <div class="pagination-bar" v-if="leaderTotalPages > 1">
-              <button type="button" class="pager-btn" :disabled="leaderPage === 1" @click="leaderPage--">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon"><polyline points="15 18 9 12 15 6"></polyline></svg>
-              </button>
-              <span class="pager-info">{{ leaderPage }} / {{ leaderTotalPages }}</span>
-              <button type="button" class="pager-btn" :disabled="leaderPage === leaderTotalPages" @click="leaderPage++">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon"><polyline points="9 18 15 12 9 6"></polyline></svg>
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -1148,25 +1078,11 @@ const completionRate = computed(() => {
   return Math.round((completedTaskCount.value / teamStore.tasks.length) * 100);
 });
 
-const maxActiveTime = computed(() => Math.max(1, ...teamStore.members.map((member) => member.activeTime || 0)));
-
-const sortedLeaderboard = computed(() => {
-  return [...teamStore.members].sort((a, b) => (b.activeTime || 0) - (a.activeTime || 0));
-});
-
-const currentMemberRank = computed(() => {
-  const index = sortedLeaderboard.value.findIndex((member) => member.id === currentMemberId.value);
-  return index >= 0 ? index + 1 : "-";
-});
-
 const taskPage = ref(1);
-const taskPageSize = 3;
+const taskPageSize = 4;
 
 const annPage = ref(1);
-const annPageSize = 3;
-
-const leaderPage = ref(1);
-const leaderPageSize = 5;
+const annPageSize = 4;
 
 const resPage = ref(1);
 const resPageSize = 6;
@@ -1182,12 +1098,6 @@ const paginatedAnnouncements = computed(() => {
   return teamStore.announcements.slice(start, start + annPageSize);
 });
 const annTotalPages = computed(() => Math.ceil(teamStore.announcements.length / annPageSize) || 1);
-
-const paginatedLeaderboard = computed(() => {
-  const start = (leaderPage.value - 1) * leaderPageSize;
-  return sortedLeaderboard.value.slice(start, start + leaderPageSize);
-});
-const leaderTotalPages = computed(() => Math.ceil(sortedLeaderboard.value.length / leaderPageSize) || 1);
 
 const paginatedResources = computed(() => {
   const start = (resPage.value - 1) * resPageSize;
