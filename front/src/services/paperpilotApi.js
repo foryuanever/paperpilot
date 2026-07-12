@@ -389,6 +389,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.get("/api/forum/posts", { timeout: 15000 });
     return data;
   },
+  async getForumActiveUsers() {
+    const { data } = await apiClient.get("/api/forum/active-users", { timeout: 15000 });
+    return data;
+  },
   async createForumPost(payload) {
     const { data } = await apiClient.post("/api/forum/posts", payload, { timeout: 15000 });
     return data;

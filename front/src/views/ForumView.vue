@@ -93,7 +93,7 @@
 
         <section v-else-if="filteredPosts.length" class="post-list">
           <article
-            v-for="post in filteredPosts"
+            v-for="post in paginatedPosts"
             :key="post.id"
             class="research-post"
             :class="[membershipClass(post.authorMembershipPlan), { 'premium-wave-post': hasPremiumWave(post) }]"
@@ -114,6 +114,13 @@
                   <span v-if="post.pinned" class="state-badge pin-badge">置顶</span>
                   <span v-if="isHotPost(post)" class="state-badge hot-badge">热帖</span>
                   <span v-if="post.banned" class="state-badge ban-badge">已封禁</span>
+                  <button
+                    v-if="post.direction"
+                    class="direction-label"
+                    @click="activeDirection = post.direction"
+                  >
+                    {{ post.direction }}
+                  </button>
                   <button class="type-label" :class="typeClass(post.postType)" @click="activeType = post.postType">
                     {{ post.postType }}
                   </button>
@@ -165,6 +172,22 @@
           </article>
         </section>
 
+        <nav v-if="filteredPosts.length > postPageSize" class="forum-pagination" aria-label="帖子分页">
+          <span>共 {{ filteredPosts.length }} 条 · 第 {{ postPage }} / {{ postPageCount }} 页</span>
+          <div>
+            <button :disabled="postPage <= 1" @click="postPage -= 1">上一页</button>
+            <button
+              v-for="page in visiblePostPages"
+              :key="page"
+              :class="{ active: postPage === page }"
+              @click="postPage = page"
+            >
+              {{ page }}
+            </button>
+            <button :disabled="postPage >= postPageCount" @click="postPage += 1">下一页</button>
+          </div>
+        </nav>
+
         <section v-else class="empty-state">
           <span>NO RESULT</span>
           <h2>暂时没有匹配的研究主题</h2>
@@ -174,25 +197,35 @@
       </main>
 
       <aside class="community-sidebar">
-        <section class="sidebar-card quick-publish">
-          <span class="card-kicker">快速发布</span>
-          <h3>你现在需要什么？</h3>
-          <button v-for="module in postModules.slice(0, 4)" :key="module.value" @click="openCreateModal(module.value)">
-            <span :class="module.className">{{ module.short }}</span>
-            <span>
-              <strong>{{ module.label }}</strong>
-              <small>{{ module.action }}</small>
-            </span>
-            <b>›</b>
-          </button>
-          <button class="manage-posts-entry" @click="showMyPostsManager = true">
-            <span class="research">管</span>
-            <span>
-              <strong>管理帖子</strong>
-              <small>编辑或删除我发布的主题</small>
-            </span>
-            <b>›</b>
-          </button>
+        <section class="sidebar-card active-board">
+          <div class="sidebar-title-row">
+            <div>
+              <span class="card-kicker">DAILY ACTIVE</span>
+              <h3>日活跃榜单</h3>
+            </div>
+            <small>{{ activeUsers.length }} 人</small>
+          </div>
+          <div v-if="activeUsersLoading" class="active-board-empty">正在统计今日浏览...</div>
+          <div v-else-if="paginatedActiveUsers.length" class="active-user-list">
+            <article v-for="user in paginatedActiveUsers" :key="user.userId">
+              <span class="active-rank" :class="{ top: user.rank <= 3 }">{{ user.rank }}</span>
+              <img v-if="user.avatarUrl" :src="user.avatarUrl" :alt="user.username" />
+              <b v-else>{{ String(user.username || "U").slice(0, 1).toUpperCase() }}</b>
+              <div>
+                <strong class="member-name" :class="membershipClass(user.membershipPlan)">{{ user.username }}</strong>
+                <small>浏览 {{ user.viewedPosts }} 个帖子</small>
+              </div>
+            </article>
+          </div>
+          <div v-else class="active-board-empty">
+            <strong>今日还没有浏览记录</strong>
+            <p>打开帖子后会进入日活统计。</p>
+          </div>
+          <nav v-if="activePageCount > 1" class="active-board-pager">
+            <button :disabled="activePage <= 1" @click="activePage -= 1">‹</button>
+            <span>{{ activePage }} / {{ activePageCount }}</span>
+            <button :disabled="activePage >= activePageCount" @click="activePage += 1">›</button>
+          </nav>
         </section>
 
         <section class="sidebar-card">
@@ -284,7 +317,7 @@
                 v-for="module in postModules"
                 :key="module.value"
                 :class="[module.className, { active: form.postType === module.value }]"
-                @click="form.postType = module.value"
+                @click="choosePostType(module.value)"
               >
                 <span>{{ module.short }}</span>
                 <strong>{{ module.label }}</strong>
@@ -295,10 +328,10 @@
           <div class="form-section">
             <h3><span>2</span> 选择所属方向</h3>
             <label class="wide-field direction-combobox">
-              <span>所属方向</span>
+              <span>所属方向 <em v-if="isFishPostType(form.postType)">摸鱼专区可不选</em></span>
               <input
                 v-model="directionQuery"
-                placeholder="输入关键词搜索方向，例如 计算机 / 人工智能 / 自动化"
+                :placeholder="isFishPostType(form.postType) ? '可选：不选则显示为闲聊' : '输入关键词搜索方向，例如 工学 / 理学 / 医学'"
                 @focus="directionPickerOpen = true"
               />
               <div v-if="directionPickerOpen" class="direction-suggestion-panel">
@@ -312,7 +345,7 @@
                   {{ item }}
                 </button>
               </div>
-              <small>当前：{{ form.direction }}</small>
+              <small>当前：{{ form.direction || "未选择方向" }}</small>
             </label>
           </div>
 
@@ -447,12 +480,13 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import MarkdownIt from "markdown-it";
 import { useAuthStore } from "../stores/auth";
 import { useForumStore } from "../stores/forum";
 import { useLibraryStore } from "../stores/library";
+import { paperpilotApi } from "../services/paperpilotApi";
 
 const authStore = useAuthStore();
 const forumStore = useForumStore();
@@ -464,30 +498,24 @@ const postModules = [
   { value: "科研羊毛", label: "科研羊毛", short: "享", description: "算力、软件与学术优惠", action: "分享限时科研资源", className: "benefit" },
   { value: "论文期刊", label: "论文期刊", short: "刊", description: "好论文与投稿期刊推荐", action: "推荐论文或期刊", className: "paper" },
   { value: "研究讨论", label: "研究讨论", short: "研", description: "方法、实验与科研问题", action: "发起方法讨论", className: "research" },
-  { value: "比赛组队", label: "比赛组队", short: "赛", description: "科研竞赛与建模组队", action: "寻找比赛队友", className: "competition" }
+  { value: "比赛组队", label: "比赛组队", short: "赛", description: "科研竞赛与建模组队", action: "寻找比赛队友", className: "competition" },
+  { value: "摸鱼专区", label: "摸鱼专区", short: "鱼", description: "科研间隙闲聊与轻松分享", action: "发一条轻松动态", className: "fish" }
 ];
 
 const directionOptions = [
-  "计算机",
-  "人工智能",
-  "软件工程",
-  "自动化",
-  "电气工程",
-  "电子信息",
-  "通信工程",
-  "机械工程",
-  "土木建筑",
-  "材料化学",
-  "数学",
-  "物理",
+  "工学",
+  "理学",
   "医学",
-  "生物医药",
-  "经济管理",
+  "农学",
+  "管理学",
+  "经济学",
   "法学",
-  "教育",
-  "文学艺术",
-  "农业",
-  "环境科学"
+  "教育学",
+  "文学",
+  "艺术学",
+  "哲学",
+  "历史学",
+  "交叉学科"
 ];
 
 const directions = ["全部方向", ...directionOptions];
@@ -521,6 +549,12 @@ const contentEditor = ref(null);
 const markdownMode = ref("edit");
 const editingPost = ref(null);
 const moderationBusy = reactive({});
+const postPage = ref(1);
+const postPageSize = 15;
+const activeUsers = ref([]);
+const activeUsersLoading = ref(false);
+const activePage = ref(1);
+const activePageSize = 6;
 const markdown = new MarkdownIt({
   html: false,
   linkify: true,
@@ -531,7 +565,7 @@ markdown.validateLink = (url) => /^data:(image|application|text)\//i.test(url) |
 
 const blankForm = () => ({
   postType: "数据集求助",
-  direction: "人工智能",
+  direction: "工学",
   title: "",
   content: announcementTemplate,
   tagsRaw: "",
@@ -545,7 +579,7 @@ const blankForm = () => ({
 const form = reactive(blankForm());
 
 onMounted(async () => {
-  await Promise.all([forumStore.fetchPosts(), libraryStore.hydrateLibrary()]);
+  await Promise.all([forumStore.fetchPosts(), libraryStore.hydrateLibrary(), fetchActiveUsers()]);
 });
 
 const filteredPosts = computed(() => {
@@ -577,12 +611,21 @@ const totalReplies = computed(() => forumStore.state.posts.reduce((sum, post) =>
 const hasFilters = computed(() => Boolean(searchQuery.value || activeType.value || activeTag.value || activeDirection.value !== "全部方向"));
 const isAdmin = computed(() => authStore.profile.role === "管理员" || authStore.session?.role === "管理员");
 const myPosts = computed(() => forumStore.state.posts.filter(post => isMine(post)));
+const postPageCount = computed(() => Math.max(1, Math.ceil(filteredPosts.value.length / postPageSize)));
+const paginatedPosts = computed(() => filteredPosts.value.slice((postPage.value - 1) * postPageSize, postPage.value * postPageSize));
+const visiblePostPages = computed(() => {
+  const total = postPageCount.value;
+  const start = Math.max(1, Math.min(postPage.value - 2, total - 4));
+  return Array.from({ length: Math.min(5, total) }, (_, index) => start + index);
+});
 const filteredDirectionOptions = computed(() => {
   const q = directionQuery.value.trim().toLowerCase();
   const list = directions.slice(1);
   if (!q) return list.slice(0, 18);
   return list.filter(item => item.toLowerCase().includes(q)).slice(0, 18);
 });
+const activePageCount = computed(() => Math.max(1, Math.ceil(activeUsers.value.length / activePageSize)));
+const paginatedActiveUsers = computed(() => activeUsers.value.slice((activePage.value - 1) * activePageSize, activePage.value * activePageSize));
 
 const popularTags = computed(() => {
   const counts = {};
@@ -593,7 +636,7 @@ const popularTags = computed(() => {
 });
 
 const selectedPaper = computed(() => libraryStore.state.documents.find(doc => String(doc.id) === String(form.paperId)));
-const canSubmit = computed(() => form.title.trim() && form.content.trim().length > 5 && form.postType && form.direction);
+const canSubmit = computed(() => form.title.trim() && form.content.trim().length > 5 && form.postType && (isFishPostType(form.postType) || form.direction));
 const editorLineNumbers = computed(() => {
   const count = Math.max(1, String(form.content || "").split("\n").length);
   return Array.from({ length: count }, (_, index) => index + 1);
@@ -605,6 +648,21 @@ const renderedMarkdown = computed(() => {
 
 function typeClass(type) {
   return postModules.find(item => item.value === type)?.className || "research";
+}
+
+function isFishPostType(type) {
+  return type === "摸鱼专区";
+}
+
+function choosePostType(type) {
+  form.postType = type;
+  if (isFishPostType(type)) {
+    form.direction = "";
+    directionQuery.value = "";
+  } else if (!form.direction) {
+    form.direction = "工学";
+    directionQuery.value = form.direction;
+  }
 }
 
 function getTypeCount(type) {
@@ -637,7 +695,7 @@ function openCreateModal(type = "") {
   directionPickerOpen.value = false;
   markdownMode.value = "split";
   moderationError.value = "";
-  if (type) form.postType = type;
+  if (type) choosePostType(type);
   showCreateModal.value = true;
 }
 
@@ -677,6 +735,7 @@ async function submitPost() {
       desc: `《${form.title.slice(0, 18)}》已${editingPost.value ? "保存" : "发布"}。`
     });
     window.dispatchEvent(new Event("paperpilot:forum-posts-changed"));
+    fetchActiveUsers();
   } catch (error) {
     console.error("Failed to publish forum post:", error);
     moderationError.value = error?.response?.data?.message
@@ -694,11 +753,24 @@ function chooseDirection(item) {
   directionPickerOpen.value = false;
 }
 
+async function fetchActiveUsers() {
+  activeUsersLoading.value = true;
+  try {
+    activeUsers.value = await paperpilotApi.getForumActiveUsers();
+    if (activePage.value > activePageCount.value) activePage.value = activePageCount.value;
+  } catch (error) {
+    console.warn("Failed to load forum active users:", error);
+    activeUsers.value = [];
+  } finally {
+    activeUsersLoading.value = false;
+  }
+}
+
 function openEditPost(post) {
   editingPost.value = post;
   Object.assign(form, blankForm(), {
     postType: post.postType || "数据集求助",
-    direction: post.direction || "人工智能",
+    direction: post.direction || (isFishPostType(post.postType) ? "" : "工学"),
     title: post.title || "",
     content: post.content || "",
     tagsRaw: (post.tags || []).join(" "),
@@ -921,6 +993,14 @@ function readFile(file) {
   });
 }
 
+watch([searchQuery, activeType, activeDirection, activeTag, sortMode], () => {
+  postPage.value = 1;
+});
+
+watch(postPageCount, (count) => {
+  if (postPage.value > count) postPage.value = count;
+});
+
 function formatFileSize(bytes) {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)}KB`;
@@ -992,7 +1072,7 @@ button { cursor: pointer; }
 
 .module-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
   margin: 18px 0;
 }
@@ -1012,7 +1092,7 @@ button { cursor: pointer; }
 }
 .module-card:hover, .module-card.active { transform: translateY(-2px); border-color: #86afff; box-shadow: 0 12px 30px rgba(40, 83, 153, .1); }
 .module-card.active { background: #f6f9ff; }
-.module-mark, .type-picker button > span, .quick-publish button > span {
+.module-mark, .type-picker button > span {
   width: 42px;
   height: 42px;
   display: grid;
@@ -1020,11 +1100,12 @@ button { cursor: pointer; }
   border-radius: 12px;
   font-weight: 900;
 }
-.dataset .module-mark, .dataset > span:first-child, .quick-publish .dataset { color: #1267e8; background: #e7f0ff; }
-.benefit .module-mark, .benefit > span:first-child, .quick-publish .benefit { color: #c56a00; background: #fff1d8; }
-.paper .module-mark, .paper > span:first-child, .quick-publish .paper { color: #6554d9; background: #eeeaff; }
-.research .module-mark, .research > span:first-child, .quick-publish .research { color: #0a8b67; background: #ddf7ef; }
-.competition .module-mark, .competition > span:first-child, .quick-publish .competition { color: #d14b68; background: #ffe8ee; }
+.dataset .module-mark, .dataset > span:first-child { color: #1267e8; background: #e7f0ff; }
+.benefit .module-mark, .benefit > span:first-child { color: #c56a00; background: #fff1d8; }
+.paper .module-mark, .paper > span:first-child { color: #6554d9; background: #eeeaff; }
+.research .module-mark, .research > span:first-child { color: #0a8b67; background: #ddf7ef; }
+.competition .module-mark, .competition > span:first-child { color: #d14b68; background: #ffe8ee; }
+.fish .module-mark, .fish > span:first-child { color: #0f766e; background: #dff7f2; }
 .module-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .module-copy strong { font-size: 14px; }
 .module-copy small { color: #8993a5; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1075,6 +1156,7 @@ button { cursor: pointer; }
 .type-label.paper { color: #6554d9; background: #eeeaff; }
 .type-label.research { color: #087d5e; background: #ddf7ef; }
 .type-label.competition { color: #c83e5d; background: #ffe8ee; }
+.type-label.fish { color: #0f766e; background: #dff7f2; }
 .discipline-label { color: #344158; background: #eef1f6; }
 .area-label { color: #48698f; background: #edf5fb; }
 .resolved-label { color: #14815f; background: #e6f8f1; }
@@ -1147,6 +1229,131 @@ button { cursor: pointer; }
 .quick-publish strong { color: #2a3549; font-size: 12px; }
 .quick-publish small { color: #98a2b2; font-size: 10px; }
 .quick-publish b { color: #adb5c1; font-size: 20px; }
+
+.active-board .sidebar-title-row {
+  align-items: flex-start;
+}
+
+.active-board .sidebar-title-row h3 {
+  margin: 5px 0 0;
+}
+
+.active-board .sidebar-title-row small {
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #075ee5;
+  background: #eef5ff;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.active-user-list {
+  display: grid;
+  gap: 6px;
+}
+
+.active-user-list article {
+  display: grid;
+  grid-template-columns: 26px 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-height: 50px;
+  padding: 7px 0;
+  border-top: 1px solid #edf0f4;
+}
+
+.active-rank {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #6b7280;
+  background: #f4f6fa;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.active-rank.top {
+  color: #a16207;
+  background: #fff3ca;
+}
+
+.active-user-list img,
+.active-user-list article > b {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(135deg, #176ce4, #643bd4);
+  object-fit: cover;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.active-user-list div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.active-user-list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.active-user-list small {
+  color: #8b95a6;
+  font-size: 10px;
+}
+
+.active-board-empty {
+  padding: 18px 0 4px;
+  border-top: 1px solid #edf0f4;
+  color: #8b95a6;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.active-board-empty strong {
+  display: block;
+  color: #334155;
+}
+
+.active-board-empty p {
+  margin: 4px 0 0;
+}
+
+.active-board-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #edf0f4;
+}
+
+.active-board-pager button,
+.forum-pagination button {
+  min-width: 30px;
+  height: 30px;
+  border: 1px solid #dce4ef;
+  border-radius: 9px;
+  color: #334155;
+  background: #fff;
+  font-weight: 850;
+}
+
+.active-board-pager button:disabled,
+.forum-pagination button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
 .sidebar-title-row h3 { margin: 0; }
 .hot-tags { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
 .hot-tags button { display: flex; justify-content: space-between; padding: 8px 9px; border: 0; border-radius: 8px; background: transparent; color: #59657a; font-size: 11px; }
@@ -1171,7 +1378,7 @@ button { cursor: pointer; }
 .form-section + .form-section { margin-top: 24px; padding-top: 21px; border-top: 1px solid #edf0f4; }
 .form-section h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 14px; }
 .form-section h3 > span { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #0865ee; font-size: 10px; }
-.type-picker { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.type-picker { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
 .type-picker button { padding: 11px 7px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #e1e6ee; border-radius: 11px; background: #fff; color: #435067; }
 .type-picker button > span { width: 27px; height: 27px; border-radius: 8px; font-size: 11px; }
 .type-picker button strong { font-size: 11px; }
@@ -1502,7 +1709,8 @@ button { cursor: pointer; }
 }
 
 .forum-row-badges .state-badge,
-.forum-row-badges .type-label {
+.forum-row-badges .type-label,
+.forum-row-badges .direction-label {
   height: 20px;
   display: inline-flex;
   align-items: center;
@@ -1510,6 +1718,38 @@ button { cursor: pointer; }
   border-radius: 999px;
   font-size: 10px;
   font-weight: 750;
+}
+
+.direction-label {
+  border: 0;
+  color: #385b85;
+  background: #eef5fb;
+}
+
+.forum-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #e7ebf2;
+  border-radius: 14px;
+  background: #fff;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.forum-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.forum-pagination button.active {
+  border-color: #8cb7ff;
+  color: #075ee5;
+  background: #edf4ff;
 }
 
 .forum-meta-line {
@@ -1640,6 +1880,19 @@ button { cursor: pointer; }
 
 .direction-combobox {
   position: relative;
+}
+
+.direction-combobox > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.direction-combobox > span em {
+  color: #0f766e;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
 }
 
 .direction-combobox > small {

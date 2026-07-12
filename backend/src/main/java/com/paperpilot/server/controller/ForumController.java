@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Year;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -61,6 +63,31 @@ public class ForumController {
             .map(post -> toMap(post, currentUser))
             .sorted((a, b) -> Boolean.compare(Boolean.TRUE.equals(b.get("pinned")), Boolean.TRUE.equals(a.get("pinned"))))
             .toList();
+    }
+
+    @GetMapping("/active-users")
+    public List<Map<String, Object>> getDailyActiveUsers() {
+        LocalDateTime start = LocalDate.now().atStartOfDay();
+        LocalDateTime end = start.plusDays(1);
+        List<Map<String, Object>> result = new ArrayList<>();
+        int rank = 1;
+        for (Object[] row : forumPostViewRepository.findDailyActiveUserStats(start, end)) {
+            Long userId = ((Number) row[0]).longValue();
+            long viewedPosts = ((Number) row[1]).longValue();
+            Optional<AppUserEntity> user = appUserRepository.findById(userId);
+            if (user.isEmpty()) continue;
+            AppUserEntity item = user.get();
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("rank", rank++);
+            map.put("userId", item.getId());
+            map.put("username", item.getUsername());
+            map.put("avatarUrl", item.getAvatarUrl());
+            map.put("role", item.getRole());
+            map.put("membershipPlan", membershipPlan(item.getId()));
+            map.put("viewedPosts", viewedPosts);
+            result.add(map);
+        }
+        return result;
     }
 
     @PostMapping("/posts")
@@ -238,10 +265,11 @@ public class ForumController {
         map.put("avatar", avatar(post.getAvatar(), post.getAuthor()));
         map.put("avatarUrl", avatarUrl(authorUserId));
         map.put("authorMembershipPlan", membershipPlan(authorUserId));
-        map.put("postType", fallback(post.getPostType(), inferPostType(post)));
-        map.put("direction", fallback(post.getResearchArea(), "人工智能"));
+        String postType = fallback(post.getPostType(), inferPostType(post));
+        map.put("postType", postType);
+        map.put("direction", fallback(post.getResearchArea(), "摸鱼专区".equals(postType) ? "" : "工学"));
         map.put("discipline", fallback(post.getDiscipline(), "计算机科学"));
-        map.put("researchArea", fallback(post.getResearchArea(), "人工智能"));
+        map.put("researchArea", fallback(post.getResearchArea(), "摸鱼专区".equals(postType) ? "" : "工学"));
         map.put("tags", splitTags(post.getTags()));
         map.put("paperTitle", post.getPaperTitle());
         map.put("publishYear", post.getPublishYear());
@@ -292,8 +320,13 @@ public class ForumController {
         }
         post.setTitle(title);
         post.setContent(content);
-        post.setPostType(defaultText(body, "postType", "研究讨论"));
-        post.setResearchArea(defaultText(body, "direction", defaultText(body, "researchArea", "人工智能")));
+        String postType = defaultText(body, "postType", "研究讨论");
+        post.setPostType(postType);
+        String direction = text(body, "direction");
+        if (!StringUtils.hasText(direction) && !"摸鱼专区".equals(postType)) {
+            direction = defaultText(body, "researchArea", "工学");
+        }
+        post.setResearchArea(direction);
         post.setDiscipline(defaultText(body, "discipline", "综合研究"));
         post.setTags(joinTags(body.get("tags")));
         post.setPaperTitle(text(body, "paperTitle"));

@@ -13,7 +13,7 @@
     <template v-else>
       <div class="detail-layout">
         <main>
-          <article class="post-article" :class="{ 'premium-wave-post': hasPremiumWave(post) }">
+          <article class="post-article">
             <div class="author-row">
               <div class="author-profile-trigger" :data-user-id="post.authorUserId" title="查看个人卡片">
                 <img v-if="avatarUrlFor(post)" :src="avatarUrlFor(post)" class="avatar-img" :alt="post.author" />
@@ -241,9 +241,6 @@ function membershipClass(plan) {
   return `member-${plan || "free"}`;
 }
 
-function hasPremiumWave(post) {
-  return ["lab", "team"].includes(post?.authorMembershipPlan);
-}
 </script>
 
 <style scoped>
@@ -253,27 +250,7 @@ button, textarea { font: inherit; }
 .back-button:hover { color: #0865ee; }
 .detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 18px; align-items: start; }
 .post-article, .comments-card, .side-card, .detail-status { background: #fff; border: 1px solid #e5eaf1; border-radius: 20px; box-shadow: 0 10px 32px rgba(36, 57, 94, .05); }
-.post-article { position: relative; overflow: hidden; padding: 26px 34px 24px; }
-.post-article.premium-wave-post::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(100deg, transparent 0%, rgba(124, 58, 237, .075) 34%, rgba(37, 99, 235, .11) 50%, rgba(124, 58, 237, .075) 66%, transparent 100%);
-  transform: translateX(-120%);
-  animation: forum-detail-premium-wave 8.5s linear infinite;
-}
-@keyframes forum-detail-premium-wave {
-  0%, 12% { transform: translateX(-120%); }
-  88%, 100% { transform: translateX(120%); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .post-article.premium-wave-post::before {
-    animation: none;
-    transform: translateX(0);
-    opacity: .35;
-  }
-}
+.post-article { padding: 26px 34px 24px; }
 .label-row { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; color: #59667b; font-size: 11px; }
 .label-row > span { padding: 5px 9px; border-radius: 7px; background: #eef2f7; font-weight: 700; }
 .type-label { display: inline-flex; align-items: center; padding: 3px 7px; border-radius: 6px; font-size: 11px; font-weight: 900; }
