@@ -104,6 +104,13 @@
           </button>
           <button
             class="tab-btn"
+            :class="{ active: activeTab === 'forumReports' }"
+            @click="activeTab = 'forumReports'"
+          >
+            论坛举报处理
+          </button>
+          <button
+            class="tab-btn"
             :class="{ active: activeTab === 'messages' }"
             @click="activeTab = 'messages'"
           >
@@ -713,6 +720,74 @@
             </section>
           </div>
         </div>
+
+        <!-- Tab Content: Forum Reports -->
+        <div v-if="activeTab === 'forumReports'" class="tab-pane forum-reports-pane">
+          <div class="pane-header-row">
+            <div>
+              <h3>论坛举报处理</h3>
+              <p class="pane-description">用户在帖子详情页提交的举报会集中到这里。处理后会通知举报人；选择封禁时也会通知帖子作者。</p>
+            </div>
+            <button class="spatial-btn spatial-btn-ghost compact-btn" @click="fetchAllData">刷新</button>
+          </div>
+
+          <section class="forum-report-list spatial-glass-panel">
+            <article
+              v-for="report in paginatedForumReports"
+              :key="report.id"
+              class="forum-report-row"
+              :class="[`status-${report.status}`, { banned: report.postBanned }]"
+            >
+              <header>
+                <div>
+                  <span>举报 #{{ report.id }} · {{ formatDateTime(report.createdAt) }}</span>
+                  <strong>{{ report.postTitle }}</strong>
+                  <small>{{ report.postType || "论坛帖子" }} · 作者 {{ report.author || "—" }} · 举报人 {{ report.reporterName || "—" }}</small>
+                </div>
+                <b>{{ forumReportStatusLabel(report.status) }}</b>
+              </header>
+              <p>{{ report.detail }}</p>
+              <em v-if="report.adminNote">处理备注：{{ report.adminNote }}</em>
+              <div class="forum-report-actions">
+                <button
+                  class="spatial-btn spatial-btn-ghost compact-btn"
+                  :disabled="report.status !== 'open'"
+                  @click="openForumReportModal(report, 'processed', false)"
+                >
+                  标记已处理
+                </button>
+                <button
+                  class="spatial-btn spatial-btn-ghost compact-btn danger-lite"
+                  :disabled="report.postBanned"
+                  @click="openForumReportModal(report, 'processed', true)"
+                >
+                  处理并封禁
+                </button>
+                <button
+                  class="spatial-btn spatial-btn-ghost compact-btn"
+                  :disabled="report.status !== 'open'"
+                  @click="openForumReportModal(report, 'rejected', false)"
+                >
+                  不采纳
+                </button>
+              </div>
+            </article>
+            <div v-if="!forumReports.length" class="payment-empty">暂无帖子举报。</div>
+            <div v-else class="admin-pagination compact-pagination">
+              <span>{{ paginationText(forumReports.length, forumReportPage, forumReportPageSize) }}</span>
+              <div>
+                <select v-model.number="forumReportPageSize" class="pagination-size-select">
+                  <option :value="6">6 条/页</option>
+                  <option :value="10">10 条/页</option>
+                  <option :value="16">16 条/页</option>
+                </select>
+                <button :disabled="forumReportPage <= 1" @click="forumReportPage -= 1">上一页</button>
+                <strong>{{ forumReportPage }} / {{ forumReportPageCount }}</strong>
+                <button :disabled="forumReportPage >= forumReportPageCount" @click="forumReportPage += 1">下一页</button>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     </section>
 
@@ -904,6 +979,26 @@
         </div>
       </div>
     </Transition>
+
+    <!-- Forum Report Modal -->
+    <Transition name="fade">
+      <div v-if="showForumReportModal" class="admin-modal-overlay" @click="showForumReportModal = false">
+        <div class="admin-modal-card spatial-glass-panel" @click.stop>
+          <h4>{{ forumReportBanPost ? "处理举报并封禁帖子" : forumReportDecision === "rejected" ? "不采纳举报" : "标记举报已处理" }}</h4>
+          <p class="form-hint" style="margin-top: 8px;">{{ selectedForumReport?.postTitle }} · 举报 #{{ selectedForumReport?.id }}</p>
+          <div class="form-group" style="margin-top: 14px;">
+            <label>处理备注</label>
+            <textarea v-model.trim="forumReportNote" placeholder="写给用户看的处理说明，例如：已核实违规并处理，或信息不足暂不采纳。"></textarea>
+          </div>
+          <div class="modal-actions" style="margin-top: 24px;">
+            <button class="spatial-btn spatial-btn-ghost" @click="showForumReportModal = false">取消</button>
+            <button class="spatial-btn spatial-btn-accent" :disabled="forumReportSaving" @click="submitForumReportDecision">
+              {{ forumReportSaving ? "保存中..." : "确认处理" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -939,6 +1034,8 @@ const billingPage = ref(1);
 const billingPageSize = ref(8);
 const logPage = ref(1);
 const logPageSize = ref(20);
+const forumReportPage = ref(1);
+const forumReportPageSize = ref(6);
 const siteMessagePage = ref(1);
 const siteMessagePageSize = ref(5);
 
@@ -953,6 +1050,7 @@ const showAddRechargeModal = ref(false);
 const showAddTeamModal = ref(false);
 const showViewTeamModal = ref(false);
 const showPaymentTicketModal = ref(false);
+const showForumReportModal = ref(false);
 const siteMessagePublishing = ref(false);
 
 const selectedUser = ref(null);
@@ -965,6 +1063,11 @@ const selectedPaymentTicket = ref(null);
 const paymentTicketDecision = ref("processed");
 const paymentTicketNote = ref("");
 const paymentTicketSaving = ref(false);
+const selectedForumReport = ref(null);
+const forumReportDecision = ref("processed");
+const forumReportBanPost = ref(false);
+const forumReportNote = ref("");
+const forumReportSaving = ref(false);
 
 const newUser = ref({
   username: "",
@@ -993,6 +1096,7 @@ const teams = ref([]);
 const systemLogs = ref([]);
 const translationProviders = ref([]);
 const siteMessages = ref([]);
+const forumReports = ref([]);
 const modelPool = ref([]);
 const billingSettings = ref({
   unitPrice: 0.01,
@@ -1111,6 +1215,7 @@ const orderPageCount = computed(() => getPageCount(paymentOrders.value.length, o
 const rechargePageCount = computed(() => getPageCount(filteredRecharges.value.length, rechargePageSize.value));
 const billingPageCount = computed(() => getPageCount(billingCharges.value.length, billingPageSize.value));
 const logPageCount = computed(() => getPageCount(systemLogs.value.length, logPageSize.value));
+const forumReportPageCount = computed(() => getPageCount(forumReports.value.length, forumReportPageSize.value));
 const siteMessagePageCount = computed(() => getPageCount(siteMessages.value.length, siteMessagePageSize.value));
 const paginatedUsers = computed(() => paginateRows(filteredUsers.value, userPage.value, userPageSize.value));
 const paginatedPaymentTickets = computed(() => paginateRows(paymentTickets.value, ticketPage.value, ticketPageSize.value));
@@ -1118,6 +1223,7 @@ const paginatedPaymentOrders = computed(() => paginateRows(paymentOrders.value, 
 const paginatedRecharges = computed(() => paginateRows(filteredRecharges.value, rechargePage.value, rechargePageSize.value));
 const paginatedBillingCharges = computed(() => paginateRows(billingCharges.value, billingPage.value, billingPageSize.value));
 const paginatedSystemLogs = computed(() => paginateRows(systemLogs.value, logPage.value, logPageSize.value));
+const paginatedForumReports = computed(() => paginateRows(forumReports.value, forumReportPage.value, forumReportPageSize.value));
 const paginatedSiteMessages = computed(() => paginateRows(siteMessages.value, siteMessagePage.value, siteMessagePageSize.value));
 
 watch([searchQuery, roleFilter, userPageSize], () => {
@@ -1126,11 +1232,12 @@ watch([searchQuery, roleFilter, userPageSize], () => {
 watch([rechargeQuery, rechargePageSize], () => {
   rechargePage.value = 1;
 });
-watch([ticketPageSize, orderPageSize, billingPageSize, logPageSize, siteMessagePageSize], () => {
+watch([ticketPageSize, orderPageSize, billingPageSize, logPageSize, forumReportPageSize, siteMessagePageSize], () => {
   ticketPage.value = 1;
   orderPage.value = 1;
   billingPage.value = 1;
   logPage.value = 1;
+  forumReportPage.value = 1;
   siteMessagePage.value = 1;
 });
 watch(userPageCount, () => keepPageInRange(userPage, userPageCount));
@@ -1139,6 +1246,7 @@ watch(orderPageCount, () => keepPageInRange(orderPage, orderPageCount));
 watch(rechargePageCount, () => keepPageInRange(rechargePage, rechargePageCount));
 watch(billingPageCount, () => keepPageInRange(billingPage, billingPageCount));
 watch(logPageCount, () => keepPageInRange(logPage, logPageCount));
+watch(forumReportPageCount, () => keepPageInRange(forumReportPage, forumReportPageCount));
 watch(siteMessagePageCount, () => keepPageInRange(siteMessagePage, siteMessagePageCount));
 
 const engineUsageTrends = computed(() => {
@@ -1331,7 +1439,10 @@ async function fetchAllData() {
     // 7. Fetch site-wide messages
     siteMessages.value = await paperpilotApi.getAdminSiteMessages();
 
-    // 8. Fetch AI model pool status
+    // 8. Fetch forum reports
+    forumReports.value = await paperpilotApi.getForumReports();
+
+    // 9. Fetch AI model pool status
     modelPool.value = await paperpilotApi.getModelPool(modelScene.value);
 
   } catch (error) {
@@ -1520,6 +1631,14 @@ function paymentStatusLabel(status) {
   }[status] || "处理中";
 }
 
+function forumReportStatusLabel(status) {
+  return {
+    open: "待处理",
+    processed: "已处理",
+    rejected: "未采纳",
+  }[status] || "待处理";
+}
+
 function formatActiveTime(seconds) {
   const total = Number(seconds || 0);
   const hours = Math.floor(total / 3600);
@@ -1643,6 +1762,37 @@ async function submitPaymentTicketDecision() {
     dialogStore.alert(error.response?.data?.message || "工单处理失败");
   } finally {
     paymentTicketSaving.value = false;
+  }
+}
+
+function openForumReportModal(report, status, banPost = false) {
+  selectedForumReport.value = report;
+  forumReportDecision.value = status;
+  forumReportBanPost.value = banPost;
+  forumReportNote.value = banPost
+    ? "已核实举报内容，帖子已封禁。"
+    : status === "rejected"
+      ? "经核查暂未达到封禁标准，举报不予采纳。"
+      : "举报已处理完成。";
+  showForumReportModal.value = true;
+}
+
+async function submitForumReportDecision() {
+  if (!selectedForumReport.value) return;
+  forumReportSaving.value = true;
+  try {
+    await paperpilotApi.updateForumReport(selectedForumReport.value.id, {
+      status: forumReportDecision.value,
+      adminNote: forumReportNote.value,
+      banPost: forumReportBanPost.value,
+    });
+    showForumReportModal.value = false;
+    await fetchAllData();
+    window.dispatchEvent(new Event("paperpilot:forum-posts-changed"));
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "举报处理失败");
+  } finally {
+    forumReportSaving.value = false;
   }
 }
 
@@ -2141,6 +2291,101 @@ async function removeSiteMessage(message) {
   border-radius: 14px;
   color: #64748b;
   font-size: .88rem;
+}
+
+.forum-report-list {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 16px;
+}
+
+.forum-report-row {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.forum-report-row.status-open {
+  background: linear-gradient(135deg, #fff7ed, #fff);
+  border-color: rgba(251, 146, 60, .28);
+}
+
+.forum-report-row.status-processed {
+  background: linear-gradient(135deg, #f0fdf4, #fff);
+  border-color: rgba(34, 197, 94, .22);
+}
+
+.forum-report-row.status-rejected {
+  background: linear-gradient(135deg, #f8fafc, #fff);
+}
+
+.forum-report-row.banned {
+  border-color: rgba(220, 38, 38, .28);
+}
+
+.forum-report-row header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.forum-report-row header span,
+.forum-report-row small,
+.forum-report-row em {
+  display: block;
+  color: #64748b;
+  font-size: .76rem;
+  line-height: 1.5;
+  font-style: normal;
+}
+
+.forum-report-row strong {
+  display: block;
+  margin: 4px 0;
+  color: #0f172a;
+  font-size: .98rem;
+  line-height: 1.35;
+}
+
+.forum-report-row header b {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: #c2410c;
+  background: #ffedd5;
+  font-size: .75rem;
+}
+
+.forum-report-row.status-processed header b {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.forum-report-row.status-rejected header b {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.forum-report-row p {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: #334155;
+  background: rgba(255, 255, 255, .72);
+  font-size: .86rem;
+  line-height: 1.65;
+}
+
+.forum-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .form-group textarea {

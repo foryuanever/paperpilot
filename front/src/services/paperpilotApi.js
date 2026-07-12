@@ -416,6 +416,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.post(`/api/forum/posts/${id}/like`);
     return data;
   },
+  async reportForumPost(id, payload) {
+    const { data } = await apiClient.post(`/api/forum/posts/${id}/report`, payload, { timeout: 15000 });
+    return data;
+  },
   async viewForumPost(id) {
     const { data } = await apiClient.post(`/api/forum/posts/${id}/view`);
     return data;
@@ -446,6 +450,14 @@ export const paperpilotApi = {
   },
   async getUserCard(userId) {
     const { data } = await apiClient.get(`/api/friends/profile/${userId}`);
+    return data;
+  },
+  async getForumReports() {
+    const { data } = await apiClient.get("/api/admin/forum/reports", { timeout: 15000 });
+    return data;
+  },
+  async updateForumReport(id, payload) {
+    const { data } = await apiClient.patch(`/api/admin/forum/reports/${id}`, payload, { timeout: 15000 });
     return data;
   },
   async getUserCardByEmail(email) {

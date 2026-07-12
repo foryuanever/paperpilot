@@ -22,7 +22,7 @@
                   <strong class="member-name" :class="membershipClass(post.authorMembershipPlan)">{{ post.author }}</strong>
                   <small>
                     <span class="type-label" :class="typeClass(post.postType)">{{ post.postType }}</span>
-                    <span>{{ post.direction }}</span>
+                    <span v-if="post.direction" class="direction-pill">{{ post.direction }}</span>
                   </small>
                 </div>
               </div>
@@ -75,6 +75,7 @@
                 <span class="like-flame">🔥</span>
                 赞同 {{ post.likes }}
               </button>
+              <button class="report-action" @click="openReportModal">举报</button>
               <span>{{ post.replies.length }} 条评论</span>
             </footer>
           </article>
@@ -128,7 +129,7 @@
             <h3>主题信息</h3>
             <dl>
               <div><dt>帖子类型</dt><dd>{{ post.postType }}</dd></div>
-              <div><dt>所属方向</dt><dd>{{ post.direction }}</dd></div>
+              <div v-if="post.direction"><dt>方向标签</dt><dd>{{ post.direction }}</dd></div>
               <div><dt>发布时间</dt><dd>{{ post.time }}</dd></div>
             </dl>
           </section>
@@ -144,6 +145,27 @@
     <div v-if="previewImage" class="preview-overlay" @click="previewImage = ''">
       <button @click="previewImage = ''">×</button>
       <img :src="previewImage" alt="图片预览" @click.stop />
+    </div>
+
+    <div v-if="showReportModal" class="preview-overlay report-overlay" @click="closeReportModal">
+      <section class="report-card" @click.stop>
+        <header>
+          <span>REPORT TOPIC</span>
+          <h3>举报帖子</h3>
+          <p>{{ post.title }}</p>
+        </header>
+        <label>
+          <span>违规详情</span>
+          <textarea v-model.trim="reportDetail" rows="5" maxlength="800" placeholder="请描述违规原因，例如：广告引流、辱骂攻击、虚假资源、违法内容等。"></textarea>
+          <small>{{ reportDetail.length }}/800，至少 6 个字。</small>
+        </label>
+        <footer>
+          <button @click="closeReportModal">取消</button>
+          <button :disabled="reporting || reportDetail.length < 6" @click="submitReport">
+            {{ reporting ? "提交中..." : "提交举报" }}
+          </button>
+        </footer>
+      </section>
     </div>
   </div>
 </template>
@@ -164,6 +186,9 @@ const submitting = ref(false);
 const previewImage = ref("");
 const replyTarget = ref(null);
 const likeBurst = ref(false);
+const showReportModal = ref(false);
+const reportDetail = ref("");
+const reporting = ref(false);
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
 const defaultValidateLink = markdown.validateLink;
 markdown.validateLink = (url) => /^data:(image|application|text)\//i.test(url) || defaultValidateLink(url);
@@ -181,7 +206,8 @@ function typeClass(type) {
     "科研羊毛": "benefit",
     "论文期刊": "paper",
     "研究讨论": "research",
-    "比赛组队": "competition"
+    "比赛组队": "competition",
+    "摸鱼专区": "fish"
   }[type] || "research";
 }
 
@@ -225,6 +251,27 @@ async function submitReply() {
   }
 }
 
+function openReportModal() {
+  showReportModal.value = true;
+  reportDetail.value = "";
+}
+
+function closeReportModal() {
+  showReportModal.value = false;
+  reportDetail.value = "";
+}
+
+async function submitReport() {
+  if (!post.value || reportDetail.value.length < 6 || reporting.value) return;
+  reporting.value = true;
+  try {
+    await forumStore.reportPost(post.value.id, { detail: reportDetail.value });
+    closeReportModal();
+  } finally {
+    reporting.value = false;
+  }
+}
+
 function setReplyTarget(reply) {
   replyTarget.value = reply;
   replyContent.value = replyContent.value || `@${reply.author} `;
@@ -259,6 +306,8 @@ button, textarea { font: inherit; }
 .type-label.paper { color: #6554d9; background: #eeeaff; }
 .type-label.research { color: #087d5e; background: #ddf7ef; }
 .type-label.competition { color: #c83e5d; background: #ffe8ee; }
+.type-label.fish { color: #0f766e; background: #dff7f2; }
+.direction-pill { padding: 3px 7px; border-radius: 999px; color: #385b85; background: #eef5fb; font-size: 11px; font-weight: 850; }
 .state-badge { padding: 5px 9px; border-radius: 7px; font-size: 11px; font-weight: 900; }
 .pin-badge { color: #b91c1c; background: #fee2e2; border: 1px solid #fecaca; }
 .ban-badge { color: #b4233a; background: #fff0f2; }
@@ -327,6 +376,8 @@ button, textarea { font: inherit; }
 .article-actions button { padding: 7px 12px; border: 0; border-radius: 8px; color: #697589; background: #f2f5f8; cursor: pointer; }
 .article-actions button.active { color: #0865ee; background: #eaf2ff; }
 .article-actions span { margin-left: auto; color: #8b95a5; font-size: 11px; }
+.article-actions .report-action { color: #9b4553; background: #fff4f5; }
+.article-actions .report-action:hover { color: #be123c; background: #ffe8ec; }
 .like-action {
   position: relative;
   display: inline-flex;
@@ -404,6 +455,20 @@ aside { position: sticky; top: 116px; display: flex; flex-direction: column; gap
 .preview-overlay { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 40px; background: rgba(14, 22, 37, .84); }
 .preview-overlay img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 12px; }
 .preview-overlay button { position: absolute; top: 24px; right: 24px; width: 40px; height: 40px; border: 0; border-radius: 50%; color: #fff; background: rgba(255,255,255,.16); font-size: 26px; }
+.report-overlay { background: rgba(15, 23, 42, .55); }
+.report-card { width: min(520px, calc(100vw - 32px)); padding: 22px; border-radius: 18px; background: #fff; box-shadow: 0 24px 70px rgba(14, 27, 52, .28); }
+.report-card header span { color: #ef4565; font-size: 10px; font-weight: 900; letter-spacing: .14em; }
+.report-card h3 { margin: 5px 0 4px; font-size: 20px; }
+.report-card p { margin: 0; color: #64748b; font-size: 12px; line-height: 1.6; }
+.report-card label { display: grid; gap: 8px; margin-top: 18px; color: #334155; font-size: 12px; font-weight: 850; }
+.report-card textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 12px; border: 1px solid #dfe5ee; border-radius: 12px; outline: 0; color: #172033; line-height: 1.6; }
+.report-card textarea:focus { border-color: #ef8fa0; box-shadow: 0 0 0 3px #fff1f3; }
+.report-card small { color: #94a3b8; font-size: 11px; font-weight: 500; }
+.report-card footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.report-card footer button { position: static; width: auto; height: 38px; padding: 0 16px; border-radius: 10px; font-size: 12px; font-weight: 850; }
+.report-card footer button:first-child { border: 1px solid #dfe4ec; color: #64748b; background: #fff; }
+.report-card footer button:last-child { color: #fff; background: #be123c; }
+.report-card footer button:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width: 900px) {
   .detail-layout { grid-template-columns: 1fr; }
   aside { position: static; }

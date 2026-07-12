@@ -9,6 +9,8 @@ import com.paperpilot.server.entity.SiteMessageEntity;
 import com.paperpilot.server.entity.TranslationRecordEntity;
 import com.paperpilot.server.entity.PaymentOrderEntity;
 import com.paperpilot.server.entity.PaymentTicketEntity;
+import com.paperpilot.server.entity.ForumPostEntity;
+import com.paperpilot.server.entity.ForumPostReportEntity;
 import com.paperpilot.server.repository.AppUserRepository;
 import com.paperpilot.server.repository.AiUsageRecordRepository;
 import com.paperpilot.server.repository.RechargeRecordRepository;
@@ -19,9 +21,12 @@ import com.paperpilot.server.repository.PaperRepository;
 import com.paperpilot.server.repository.TranslationRecordRepository;
 import com.paperpilot.server.repository.PaymentOrderRepository;
 import com.paperpilot.server.repository.PaymentTicketRepository;
+import com.paperpilot.server.repository.ForumPostRepository;
+import com.paperpilot.server.repository.ForumPostReportRepository;
 import com.paperpilot.server.service.AuthService;
 import com.paperpilot.server.service.BillingService;
 import com.paperpilot.server.service.MembershipService;
+import com.paperpilot.server.service.NotificationService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -49,6 +54,9 @@ public class AdminController {
     private final MembershipService membershipService;
     private final PaymentOrderRepository paymentOrderRepository;
     private final PaymentTicketRepository paymentTicketRepository;
+    private final ForumPostRepository forumPostRepository;
+    private final ForumPostReportRepository forumPostReportRepository;
+    private final NotificationService notificationService;
 
     public AdminController(
         AppUserRepository appUserRepository,
@@ -63,7 +71,10 @@ public class AdminController {
         BillingService billingService,
         MembershipService membershipService,
         PaymentOrderRepository paymentOrderRepository,
-        PaymentTicketRepository paymentTicketRepository
+        PaymentTicketRepository paymentTicketRepository,
+        ForumPostRepository forumPostRepository,
+        ForumPostReportRepository forumPostReportRepository,
+        NotificationService notificationService
     ) {
         this.appUserRepository = appUserRepository;
         this.aiUsageRecordRepository = aiUsageRecordRepository;
@@ -78,6 +89,9 @@ public class AdminController {
         this.membershipService = membershipService;
         this.paymentOrderRepository = paymentOrderRepository;
         this.paymentTicketRepository = paymentTicketRepository;
+        this.forumPostRepository = forumPostRepository;
+        this.forumPostReportRepository = forumPostReportRepository;
+        this.notificationService = notificationService;
     }
 
     // --- Dynamic Global Statistics ---
@@ -332,6 +346,47 @@ public class AdminController {
         return paymentTicketToMap(saved);
     }
 
+    @GetMapping("/forum/reports")
+    public List<Map<String, Object>> getForumReports() {
+        return forumPostReportRepository.findTop160ByOrderByCreatedAtDesc().stream()
+            .map(this::forumReportToMap)
+            .toList();
+    }
+
+    @PatchMapping("/forum/reports/{id}")
+    public Map<String, Object> updateForumReport(
+        @PathVariable("id") Long id,
+        @RequestBody Map<String, Object> body,
+        HttpServletRequest request
+    ) {
+        ForumPostReportEntity report = forumPostReportRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "举报不存在"));
+        String status = String.valueOf(body.getOrDefault("status", "processed")).trim().toLowerCase();
+        if (!List.of("open", "processed", "rejected").contains(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "举报状态仅支持 open、processed 或 rejected");
+        }
+        String note = String.valueOf(body.getOrDefault("adminNote", "")).trim();
+        boolean banPost = Boolean.TRUE.equals(body.get("banPost")) || "true".equalsIgnoreCase(String.valueOf(body.get("banPost")));
+        report.setStatus(status);
+        report.setAdminNote(note);
+        report.setProcessedAt(status.equals("open") ? null : LocalDateTime.now());
+
+        ForumPostEntity post = forumPostRepository.findById(report.getPostId()).orElse(null);
+        if (post != null && banPost) {
+            post.setBanned(true);
+            forumPostRepository.save(post);
+            notificationService.createSystemNotice(post.getUserId(), null, "forum_ban", post.getId(),
+                "你的帖子已被封禁", "管理员根据举报处理结果封禁了《" + post.getTitle() + "》。");
+        }
+        ForumPostReportEntity saved = forumPostReportRepository.save(report);
+        if (saved.getReporterId() != null) {
+            notificationService.createSystemNotice(saved.getReporterId(), null, "forum_report_processed", saved.getPostId(),
+                "举报已处理", "你提交的举报已处理：" + forumReportStatusLabel(saved.getStatus()));
+        }
+        authService.logAction("处理论坛举报 #" + saved.getId() + ": " + forumReportStatusLabel(saved.getStatus()), "info", getClientIp(request));
+        return forumReportToMap(saved);
+    }
+
     // --- Teams ---
 
     @GetMapping("/teams")
@@ -530,6 +585,33 @@ public class AdminController {
             case "processed" -> "已处理";
             case "rejected" -> "已驳回";
             default -> "处理中";
+        };
+    }
+
+    private Map<String, Object> forumReportToMap(ForumPostReportEntity report) {
+        Map<String, Object> row = new java.util.LinkedHashMap<>();
+        ForumPostEntity post = forumPostRepository.findById(report.getPostId()).orElse(null);
+        row.put("id", report.getId());
+        row.put("postId", "post-" + report.getPostId());
+        row.put("postTitle", post == null ? "帖子已删除" : post.getTitle());
+        row.put("postType", post == null ? "" : post.getPostType());
+        row.put("postBanned", post != null && post.isBanned());
+        row.put("author", post == null ? "—" : post.getAuthor());
+        row.put("reporterId", report.getReporterId());
+        row.put("reporterName", report.getReporterName());
+        row.put("detail", report.getDetail());
+        row.put("status", report.getStatus());
+        row.put("adminNote", report.getAdminNote());
+        row.put("createdAt", report.getCreatedAt());
+        row.put("processedAt", report.getProcessedAt());
+        return row;
+    }
+
+    private String forumReportStatusLabel(String status) {
+        return switch (status) {
+            case "processed" -> "已处理";
+            case "rejected" -> "未采纳";
+            default -> "待处理";
         };
     }
 

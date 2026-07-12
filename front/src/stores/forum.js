@@ -81,6 +81,12 @@ export const useForumStore = defineStore("forum", () => {
     }
   }
 
+  async function reportPost(postId, payload) {
+    const result = await paperpilotApi.reportForumPost(postId, payload);
+    await fetchPosts({ silent: true });
+    return result;
+  }
+
   async function viewPost(postId) {
     const post = state.posts.find(item => item.id === postId);
     try {
@@ -120,5 +126,5 @@ export const useForumStore = defineStore("forum", () => {
 
   fetchPosts();
 
-  return { state, fetchPosts, addPost, updatePost, deletePost, togglePin, toggleBan, addReply, likePost, viewPost, bookmarkPost, likeReply };
+  return { state, fetchPosts, addPost, updatePost, deletePost, togglePin, toggleBan, addReply, likePost, reportPost, viewPost, bookmarkPost, likeReply };
 });

@@ -52,12 +52,20 @@
       <main class="community-main">
         <section class="filter-panel">
           <div class="search-row">
+            <div class="search-mode-switch" aria-label="搜索模式">
+              <button :class="{ active: searchMode === 'content' }" @click="searchMode = 'content'">搜内容</button>
+              <button :class="{ active: searchMode === 'tag' }" @click="searchMode = 'tag'">搜标签</button>
+            </div>
             <label class="community-search">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                 <circle cx="11" cy="11" r="6"></circle>
                 <path d="M20 20l-3.5-3.5"></path>
               </svg>
-              <input v-model="searchQuery" type="search" placeholder="搜索研究问题、数据集、论文、期刊或标签" />
+              <input
+                v-model="searchQuery"
+                type="search"
+                :placeholder="searchMode === 'tag' ? '输入方向标签或话题标签，例如 人工智能 / 组会吐槽' : '搜索标题、正文、作者、论文或期刊'"
+              />
             </label>
             <select v-model="sortMode" class="sort-select" aria-label="排序方式">
               <option value="latest">最新发布</option>
@@ -66,17 +74,17 @@
             </select>
           </div>
 
-          <div class="filter-row">
-            <span class="filter-label">方向</span>
-            <button
-              v-for="item in directions"
-              :key="item"
-              class="filter-button"
-              :class="{ active: activeDirection === item }"
-              @click="activeDirection = item"
-            >
-              {{ item }}
-            </button>
+          <div class="time-filter-row">
+            <span>时间段</span>
+            <label>
+              <small>开始</small>
+              <input v-model="dateStart" type="date" />
+            </label>
+            <label>
+              <small>结束</small>
+              <input v-model="dateEnd" type="date" />
+            </label>
+            <button v-if="dateStart || dateEnd" @click="dateStart = ''; dateEnd = ''">清除时间</button>
           </div>
 
           <div v-if="hasFilters" class="filter-summary">
@@ -117,7 +125,7 @@
                   <button
                     v-if="post.direction"
                     class="direction-label"
-                    @click="activeDirection = post.direction"
+                    @click="searchByTag(post.direction)"
                   >
                     {{ post.direction }}
                   </button>
@@ -275,7 +283,7 @@
             <div class="manager-post-copy">
               <div>
                 <span>{{ post.postType }}</span>
-                <span>{{ post.direction }}</span>
+                <span v-if="post.direction">{{ post.direction }}</span>
                 <time>{{ post.time }}</time>
               </div>
               <strong>{{ post.title }}</strong>
@@ -326,26 +334,15 @@
           </div>
 
           <div class="form-section">
-            <h3><span>2</span> 选择所属方向</h3>
-            <label class="wide-field direction-combobox">
-              <span>所属方向 <em v-if="isFishPostType(form.postType)">摸鱼专区可不选</em></span>
+            <h3><span>2</span> 添加方向标签</h3>
+            <label class="wide-field direction-combobox tag-field">
+              <span>方向标签 <em>可选，不超过 10 字</em></span>
               <input
-                v-model="directionQuery"
-                :placeholder="isFishPostType(form.postType) ? '可选：不选则显示为闲聊' : '输入关键词搜索方向，例如 工学 / 理学 / 医学'"
-                @focus="directionPickerOpen = true"
+                v-model.trim="form.direction"
+                maxlength="10"
+                :placeholder="isFishPostType(form.postType) ? '例如：组会吐槽' : '例如：人工智能'"
               />
-              <div v-if="directionPickerOpen" class="direction-suggestion-panel">
-                <button
-                  v-for="item in filteredDirectionOptions"
-                  :key="item"
-                  type="button"
-                  :class="{ active: form.direction === item }"
-                  @click="chooseDirection(item)"
-                >
-                  {{ item }}
-                </button>
-              </div>
-              <small>当前：{{ form.direction || "未选择方向" }}</small>
+              <small>用于帖子卡片上的小标签，也可被搜索栏的“搜标签”检索。</small>
             </label>
           </div>
 
@@ -476,6 +473,30 @@
         <span>{{ previewImage.name }}</span>
       </div>
     </div>
+
+    <div v-if="reportTarget" class="modal-overlay" @click.self="closeReportModal">
+      <section class="report-modal">
+        <header>
+          <div>
+            <span>REPORT TOPIC</span>
+            <h2>举报帖子</h2>
+            <p>{{ reportTarget.title }}</p>
+          </div>
+          <button class="modal-close" @click="closeReportModal">×</button>
+        </header>
+        <label>
+          <span>违规详情</span>
+          <textarea v-model.trim="reportDetail" rows="5" maxlength="800" placeholder="请描述违规原因，例如：广告引流、辱骂攻击、虚假资源、违法内容等。"></textarea>
+          <small>{{ reportDetail.length }}/800，至少 6 个字。</small>
+        </label>
+        <footer>
+          <button class="cancel-button" @click="closeReportModal">取消</button>
+          <button class="submit-button" :disabled="reporting || reportDetail.length < 6" @click="submitReport">
+            {{ reporting ? "提交中..." : "提交举报" }}
+          </button>
+        </footer>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -502,23 +523,6 @@ const postModules = [
   { value: "摸鱼专区", label: "摸鱼专区", short: "鱼", description: "科研间隙闲聊与轻松分享", action: "发一条轻松动态", className: "fish" }
 ];
 
-const directionOptions = [
-  "工学",
-  "理学",
-  "医学",
-  "农学",
-  "管理学",
-  "经济学",
-  "法学",
-  "教育学",
-  "文学",
-  "艺术学",
-  "哲学",
-  "历史学",
-  "交叉学科"
-];
-
-const directions = ["全部方向", ...directionOptions];
 const announcementTemplate = [
   "一句话写清楚这次分享、求助或讨论的核心信息。",
   "",
@@ -534,20 +538,23 @@ const announcementTemplate = [
   "这里放联系方式、数据说明、复现实验条件或后续更新。"
 ].join("\n");
 const searchQuery = ref("");
+const searchMode = ref("content");
 const activeType = ref("");
-const activeDirection = ref("全部方向");
 const activeTag = ref("");
+const dateStart = ref("");
+const dateEnd = ref("");
 const sortMode = ref("latest");
 const showCreateModal = ref(false);
 const publishing = ref(false);
 const moderationError = ref("");
 const previewImage = ref(null);
 const showMyPostsManager = ref(false);
-const directionQuery = ref("人工智能");
-const directionPickerOpen = ref(false);
 const contentEditor = ref(null);
 const markdownMode = ref("edit");
 const editingPost = ref(null);
+const reportTarget = ref(null);
+const reportDetail = ref("");
+const reporting = ref(false);
 const moderationBusy = reactive({});
 const postPage = ref(1);
 const postPageSize = 15;
@@ -565,7 +572,7 @@ markdown.validateLink = (url) => /^data:(image|application|text)\//i.test(url) |
 
 const blankForm = () => ({
   postType: "数据集求助",
-  direction: "工学",
+  direction: "",
   title: "",
   content: announcementTemplate,
   tagsRaw: "",
@@ -585,20 +592,20 @@ onMounted(async () => {
 const filteredPosts = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   const result = forumStore.state.posts.filter(post => {
-    const searchText = [
+    const tagText = [post.direction, ...(post.tags || [])].filter(Boolean).join(" ").toLowerCase();
+    const contentText = [
       post.title,
       post.content,
       post.author,
       post.paperTitle,
       post.venueName,
-      post.postType,
-      post.direction,
-      ...(post.tags || [])
+      post.postType
     ].filter(Boolean).join(" ").toLowerCase();
+    const searchText = searchMode.value === "tag" ? tagText : `${contentText} ${tagText}`;
     return (!query || searchText.includes(query))
       && (!activeType.value || post.postType === activeType.value)
-      && (activeDirection.value === "全部方向" || post.direction === activeDirection.value)
-      && (!activeTag.value || post.tags?.includes(activeTag.value));
+      && (!activeTag.value || post.tags?.includes(activeTag.value) || post.direction === activeTag.value)
+      && isInDateRange(post);
   });
   return result.sort((a, b) => {
     if (sortMode.value === "popular") return b.replies.length - a.replies.length;
@@ -608,7 +615,7 @@ const filteredPosts = computed(() => {
 });
 
 const totalReplies = computed(() => forumStore.state.posts.reduce((sum, post) => sum + post.replies.length, 0));
-const hasFilters = computed(() => Boolean(searchQuery.value || activeType.value || activeTag.value || activeDirection.value !== "全部方向"));
+const hasFilters = computed(() => Boolean(searchQuery.value || activeType.value || activeTag.value || dateStart.value || dateEnd.value));
 const isAdmin = computed(() => authStore.profile.role === "管理员" || authStore.session?.role === "管理员");
 const myPosts = computed(() => forumStore.state.posts.filter(post => isMine(post)));
 const postPageCount = computed(() => Math.max(1, Math.ceil(filteredPosts.value.length / postPageSize)));
@@ -618,25 +625,21 @@ const visiblePostPages = computed(() => {
   const start = Math.max(1, Math.min(postPage.value - 2, total - 4));
   return Array.from({ length: Math.min(5, total) }, (_, index) => start + index);
 });
-const filteredDirectionOptions = computed(() => {
-  const q = directionQuery.value.trim().toLowerCase();
-  const list = directions.slice(1);
-  if (!q) return list.slice(0, 18);
-  return list.filter(item => item.toLowerCase().includes(q)).slice(0, 18);
-});
 const activePageCount = computed(() => Math.max(1, Math.ceil(activeUsers.value.length / activePageSize)));
 const paginatedActiveUsers = computed(() => activeUsers.value.slice((activePage.value - 1) * activePageSize, activePage.value * activePageSize));
 
 const popularTags = computed(() => {
   const counts = {};
-  forumStore.state.posts.flatMap(post => post.tags || []).forEach(tag => {
+  forumStore.state.posts
+    .flatMap(post => [post.direction, ...(post.tags || [])].filter(Boolean))
+    .forEach(tag => {
     counts[tag] = (counts[tag] || 0) + 1;
   });
   return Object.entries(counts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 10);
 });
 
 const selectedPaper = computed(() => libraryStore.state.documents.find(doc => String(doc.id) === String(form.paperId)));
-const canSubmit = computed(() => form.title.trim() && form.content.trim().length > 5 && form.postType && (isFishPostType(form.postType) || form.direction));
+const canSubmit = computed(() => form.title.trim() && form.content.trim().length > 5 && form.postType && form.direction.length <= 10);
 const editorLineNumbers = computed(() => {
   const count = Math.max(1, String(form.content || "").split("\n").length);
   return Array.from({ length: count }, (_, index) => index + 1);
@@ -656,13 +659,6 @@ function isFishPostType(type) {
 
 function choosePostType(type) {
   form.postType = type;
-  if (isFishPostType(type)) {
-    form.direction = "";
-    directionQuery.value = "";
-  } else if (!form.direction) {
-    form.direction = "工学";
-    directionQuery.value = form.direction;
-  }
 }
 
 function getTypeCount(type) {
@@ -675,9 +671,11 @@ function toggleType(type) {
 
 function clearFilters() {
   searchQuery.value = "";
+  searchMode.value = "content";
   activeType.value = "";
-  activeDirection.value = "全部方向";
   activeTag.value = "";
+  dateStart.value = "";
+  dateEnd.value = "";
 }
 
 function openPost(postId) {
@@ -691,8 +689,6 @@ function normalizeLink(value) {
 function openCreateModal(type = "") {
   Object.assign(form, blankForm());
   editingPost.value = null;
-  directionQuery.value = form.direction;
-  directionPickerOpen.value = false;
   markdownMode.value = "split";
   moderationError.value = "";
   if (type) choosePostType(type);
@@ -713,7 +709,7 @@ async function submitPost() {
     content: form.content.trim(),
     author: authStore.profile.name,
     postType: form.postType,
-    direction: form.direction,
+    direction: form.direction.trim().slice(0, 10),
     tags,
     paperTitle: selectedPaper.value?.title || form.paperTitle || "",
     publishYear: selectedPaper.value?.publishYear || selectedPaper.value?.year || form.publishYear || "",
@@ -747,12 +743,6 @@ async function submitPost() {
   }
 }
 
-function chooseDirection(item) {
-  form.direction = item;
-  directionQuery.value = item;
-  directionPickerOpen.value = false;
-}
-
 async function fetchActiveUsers() {
   activeUsersLoading.value = true;
   try {
@@ -770,7 +760,7 @@ function openEditPost(post) {
   editingPost.value = post;
   Object.assign(form, blankForm(), {
     postType: post.postType || "数据集求助",
-    direction: post.direction || (isFishPostType(post.postType) ? "" : "工学"),
+    direction: post.direction || "",
     title: post.title || "",
     content: post.content || "",
     tagsRaw: (post.tags || []).join(" "),
@@ -780,7 +770,6 @@ function openEditPost(post) {
     images: Array.isArray(post.images) ? [...post.images] : [],
     attachments: Array.isArray(post.attachments) ? [...post.attachments] : []
   });
-  directionQuery.value = form.direction;
   markdownMode.value = "split";
   moderationError.value = "";
   showMyPostsManager.value = false;
@@ -912,6 +901,62 @@ async function toggleModeration(post, action) {
   }
 }
 
+function searchByTag(tag) {
+  searchMode.value = "tag";
+  searchQuery.value = tag;
+  activeTag.value = "";
+}
+
+function isInDateRange(post) {
+  const value = parseForumTime(post?.time);
+  if (!value) return true;
+  if (dateStart.value) {
+    const start = new Date(`${dateStart.value}T00:00:00`);
+    if (value < start) return false;
+  }
+  if (dateEnd.value) {
+    const end = new Date(`${dateEnd.value}T23:59:59`);
+    if (value > end) return false;
+  }
+  return true;
+}
+
+function parseForumTime(value) {
+  if (!value) return null;
+  const normalized = String(value)
+    .replace(/^(\d{2})-(\d{2})/, `${new Date().getFullYear()}-$1-$2`)
+    .replace(" ", "T");
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function openReportModal(post) {
+  reportTarget.value = post;
+  reportDetail.value = "";
+}
+
+function closeReportModal() {
+  reportTarget.value = null;
+  reportDetail.value = "";
+}
+
+async function submitReport() {
+  if (!reportTarget.value || reportDetail.value.length < 6 || reporting.value) return;
+  reporting.value = true;
+  try {
+    await forumStore.reportPost(reportTarget.value.id, { detail: reportDetail.value });
+    authStore.addNotification({
+      title: "举报已提交",
+      desc: "管理员会在后台查看并处理。"
+    });
+    closeReportModal();
+  } catch (error) {
+    moderationError.value = error?.response?.data?.message || error?.response?.data?.detail || "举报提交失败，请稍后重试。";
+  } finally {
+    reporting.value = false;
+  }
+}
+
 function avatarUrlFor(postOrReply) {
   if (String(postOrReply?.authorUserId || "") === String(authStore.profile.userId || "")) {
     return authStore.profile.avatarUrl || "";
@@ -993,7 +1038,7 @@ function readFile(file) {
   });
 }
 
-watch([searchQuery, activeType, activeDirection, activeTag, sortMode], () => {
+watch([searchQuery, searchMode, activeType, activeTag, sortMode, dateStart, dateEnd], () => {
   postPage.value = 1;
 });
 
@@ -1119,7 +1164,32 @@ button { cursor: pointer; }
   box-shadow: 0 8px 28px rgba(38, 57, 91, .045);
 }
 .filter-panel { padding: 18px 20px; margin-bottom: 16px; }
-.search-row { display: grid; grid-template-columns: 1fr 126px; gap: 12px; }
+.search-row { display: grid; grid-template-columns: auto minmax(0, 1fr) 126px; gap: 12px; }
+.search-mode-switch {
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #dfe7f2;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+.search-mode-switch button {
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  color: #64748b;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 850;
+}
+.search-mode-switch button.active {
+  color: #075ee5;
+  background: #fff;
+  box-shadow: 0 5px 14px rgba(34, 91, 172, .1);
+}
 .community-search { height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: #f6f8fb; border: 1px solid #e5e9f0; border-radius: 12px; }
 .community-search svg { width: 19px; color: #8490a3; }
 .community-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: #172033; }
@@ -1135,6 +1205,50 @@ button { cursor: pointer; }
 .filter-label { width: 40px; color: #8993a5; font-size: 12px; font-weight: 700; }
 .filter-button { flex: 0 0 auto; padding: 6px 10px; border: 0; border-radius: 8px; background: transparent; color: #59657a; font-size: 12px; }
 .filter-button:hover, .filter-button.active { color: #075ee5; background: #eaf2ff; font-weight: 700; }
+.time-filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #edf1f6;
+  border-radius: 13px;
+  background: #fbfcfe;
+}
+.time-filter-row > span {
+  color: #6b7688;
+  font-size: 12px;
+  font-weight: 850;
+}
+.time-filter-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.time-filter-row small {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 800;
+}
+.time-filter-row input {
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid #dfe7f2;
+  border-radius: 9px;
+  color: #334155;
+  background: #fff;
+}
+.time-filter-row button {
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  color: #075ee5;
+  background: #edf4ff;
+  font-size: 11px;
+  font-weight: 850;
+}
 .filter-summary { display: flex; justify-content: space-between; margin-top: 13px; padding-top: 12px; border-top: 1px solid #edf0f5; color: #818da0; font-size: 12px; }
 .filter-summary button, .sidebar-title-row button { border: 0; background: transparent; color: #0865ee; }
 
@@ -1391,6 +1505,29 @@ button { cursor: pointer; }
 .publish-form textarea { padding: 12px; resize: vertical; line-height: 1.6; box-sizing: border-box; }
 .publish-form input:focus, .publish-form select:focus, .publish-form textarea:focus { border-color: #75a6f6; box-shadow: 0 0 0 3px #edf4ff; }
 .wide-field + .wide-field { margin-top: 12px; }
+.tag-field {
+  padding: 14px;
+  border: 1px solid #e5ecf6;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfdff, #f7faff);
+}
+.tag-field > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tag-field em {
+  color: #8b98aa;
+  font-style: normal;
+  font-weight: 600;
+}
+.tag-field input {
+  background: #fff;
+}
+.tag-field small {
+  color: #718096 !important;
+  line-height: 1.55;
+}
 .upload-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 14px; }
 .upload-card { min-height: 82px; display: flex !important; flex-direction: row !important; align-items: center; gap: 12px !important; padding: 13px; border: 1px dashed #bfd0ea; border-radius: 12px; background: #f8fbff; cursor: pointer; }
 .upload-card:hover { border-color: #6fa0ee; background: #f2f7ff; }
@@ -1417,6 +1554,70 @@ button { cursor: pointer; }
 .image-preview-card { position: relative; width: min(1100px, calc(100vw - 48px)); height: min(82vh, 820px); display: grid; place-items: center; }
 .image-preview-card img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 12px; box-shadow: 0 24px 80px rgba(0, 0, 0, .32); }
 .image-preview-card button { position: absolute; top: 0; right: 0; width: 38px; height: 38px; border: 0; border-radius: 50%; color: #fff; background: rgba(255, 255, 255, .18); font-size: 24px; }
+
+.report-modal {
+  width: min(520px, calc(100vw - 32px));
+  padding: 22px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(14, 27, 52, .26);
+}
+.report-modal header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+.report-modal header span {
+  color: #be123c;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+.report-modal h2 {
+  margin: 5px 0 4px;
+  font-size: 20px;
+}
+.report-modal p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.report-modal label {
+  display: grid;
+  gap: 8px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 850;
+}
+.report-modal textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid #dfe5ee;
+  border-radius: 12px;
+  color: #172033;
+  line-height: 1.6;
+  outline: 0;
+  resize: vertical;
+}
+.report-modal textarea:focus {
+  border-color: #ef8fa0;
+  box-shadow: 0 0 0 3px #fff1f3;
+}
+.report-modal small {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 500;
+}
+.report-modal footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
 
 @media (max-width: 1180px) {
   .community-hero { grid-template-columns: 1fr auto; }

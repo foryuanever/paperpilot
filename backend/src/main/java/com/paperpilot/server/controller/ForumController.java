@@ -4,10 +4,12 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paperpilot.server.entity.AppUserEntity;
 import com.paperpilot.server.entity.ForumPostEntity;
+import com.paperpilot.server.entity.ForumPostReportEntity;
 import com.paperpilot.server.entity.ForumPostViewEntity;
 import com.paperpilot.server.entity.ForumReplyEntity;
 import com.paperpilot.server.repository.AppUserRepository;
 import com.paperpilot.server.repository.ForumPostRepository;
+import com.paperpilot.server.repository.ForumPostReportRepository;
 import com.paperpilot.server.repository.ForumPostViewRepository;
 import com.paperpilot.server.repository.ForumReplyRepository;
 import com.paperpilot.server.service.CurrentUserService;
@@ -31,6 +33,7 @@ public class ForumController {
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private final ForumPostRepository forumPostRepository;
     private final ForumPostViewRepository forumPostViewRepository;
+    private final ForumPostReportRepository forumPostReportRepository;
     private final ForumReplyRepository forumReplyRepository;
     private final AppUserRepository appUserRepository;
     private final CurrentUserService currentUserService;
@@ -40,6 +43,7 @@ public class ForumController {
     public ForumController(
         ForumPostRepository forumPostRepository,
         ForumPostViewRepository forumPostViewRepository,
+        ForumPostReportRepository forumPostReportRepository,
         ForumReplyRepository forumReplyRepository,
         AppUserRepository appUserRepository,
         CurrentUserService currentUserService,
@@ -48,6 +52,7 @@ public class ForumController {
     ) {
         this.forumPostRepository = forumPostRepository;
         this.forumPostViewRepository = forumPostViewRepository;
+        this.forumPostReportRepository = forumPostReportRepository;
         this.forumReplyRepository = forumReplyRepository;
         this.appUserRepository = appUserRepository;
         this.currentUserService = currentUserService;
@@ -179,6 +184,28 @@ public class ForumController {
         }
     }
 
+    @PostMapping("/posts/{id}/report")
+    public Map<String, Object> reportPost(@PathVariable String id, @RequestBody Map<String, Object> body) {
+        AppUserEntity actor = currentUserService.getOrCreateDefaultUser();
+        ForumPostEntity post = findPost(id);
+        String detail = text(body, "detail");
+        if (!StringUtils.hasText(detail) || detail.length() < 6) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写至少 6 个字的违规详情");
+        }
+        if (detail.length() > 800) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "举报详情不能超过 800 字");
+        }
+        ForumPostReportEntity report = new ForumPostReportEntity();
+        report.setPostId(post.getId());
+        report.setReporterId(actor.getId());
+        report.setReporterName(actor.getUsername());
+        report.setDetail(detail);
+        forumPostReportRepository.save(report);
+        notificationService.createSystemNotice(actor.getId(), null, "forum_report_submitted", post.getId(),
+            "举报已提交", "你对《" + post.getTitle() + "》的举报已进入管理员处理队列。");
+        return Map.of("message", "举报已提交");
+    }
+
     @PostMapping("/posts/{id}/reply")
     public Map<String, Object> replyPost(@PathVariable String id, @RequestBody Map<String, Object> body) {
         AppUserEntity actor = currentUserService.getOrCreateDefaultUser();
@@ -267,9 +294,9 @@ public class ForumController {
         map.put("authorMembershipPlan", membershipPlan(authorUserId));
         String postType = fallback(post.getPostType(), inferPostType(post));
         map.put("postType", postType);
-        map.put("direction", fallback(post.getResearchArea(), "摸鱼专区".equals(postType) ? "" : "工学"));
+        map.put("direction", fallback(post.getResearchArea(), ""));
         map.put("discipline", fallback(post.getDiscipline(), "计算机科学"));
-        map.put("researchArea", fallback(post.getResearchArea(), "摸鱼专区".equals(postType) ? "" : "工学"));
+        map.put("researchArea", fallback(post.getResearchArea(), ""));
         map.put("tags", splitTags(post.getTags()));
         map.put("paperTitle", post.getPaperTitle());
         map.put("publishYear", post.getPublishYear());
@@ -289,6 +316,7 @@ public class ForumController {
         map.put("canAdminManage", isAdmin(currentUser));
         map.put("pinned", post.isPinned());
         map.put("banned", post.isBanned());
+        map.put("openReportCount", forumPostReportRepository.countByPostIdAndStatus(post.getId(), "open"));
         map.put("time", post.getCreatedAt().format(FORMATTER));
         List<Map<String, Object>> replies = new ArrayList<>();
         for (ForumReplyEntity reply : forumReplyRepository.findAllByPostIdOrderByCreatedAtAsc(post.getId())) {
@@ -323,8 +351,8 @@ public class ForumController {
         String postType = defaultText(body, "postType", "研究讨论");
         post.setPostType(postType);
         String direction = text(body, "direction");
-        if (!StringUtils.hasText(direction) && !"摸鱼专区".equals(postType)) {
-            direction = defaultText(body, "researchArea", "工学");
+        if (direction.length() > 10) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "方向标签不能超过 10 个字");
         }
         post.setResearchArea(direction);
         post.setDiscipline(defaultText(body, "discipline", "综合研究"));
