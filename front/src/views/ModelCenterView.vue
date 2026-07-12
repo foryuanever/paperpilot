@@ -76,7 +76,10 @@
             </div>
             <div v-for="row in planRows(plan)" :key="row.label" class="ladder-row">
               <span class="row-icon">{{ row.icon }}</span>
-              <strong>{{ row.label }}</strong>
+              <strong>
+                <span>{{ row.label }}</span>
+                <small v-if="row.description">{{ row.description }}</small>
+              </strong>
               <em>{{ row.level }}</em>
               <b>{{ row.value }}</b>
             </div>
@@ -257,12 +260,16 @@ function planCopy(id) {
 }
 
 function planRows(plan) {
+  const hasPaidName = plan.id !== "free";
+  const hasWave = ["lab", "team"].includes(plan.id);
   return [
-    { icon: "导", label: "论文导入与基础翻译", level: "免费", value: "不限次" },
-    { icon: "综", label: "论文综述生成", level: plan.reviewQuota > 0 ? "包含" : "未含", value: `${plan.reviewQuota || 0} 次` },
-    { icon: "P", label: "组会 PPT 生成", level: plan.pptQuota > 0 ? "重任务" : "未含", value: `${plan.pptQuota || 0} 次` },
-    { icon: "问", label: "AI 文章对话", level: plan.chatQuota > 80 ? "高频" : "常规", value: `${plan.chatQuota || 0} 次` },
-    { icon: "团", label: "团队共享席位", level: plan.teamShared ? "导师共享" : "基础", value: `${plan.teamSeats || 8} 席` },
+    { icon: "导", label: "论文导入与基础翻译", description: "文献入库、PDF 管理、基础翻译", level: "免费", value: "不限次" },
+    { icon: "综", label: "论文综述生成", description: "规范分点综述，可保存复用", level: plan.reviewQuota > 0 ? "包含" : "未含", value: `${plan.reviewQuota || 0} 次` },
+    { icon: "P", label: "组会 PPT 生成", description: "PPT Master Agent 重任务", level: plan.pptQuota > 0 ? "重任务" : "未含", value: `${plan.pptQuota || 0} 次` },
+    { icon: "问", label: "AI 文章对话", description: "围绕论文内容连续追问", level: plan.chatQuota > 80 ? "高频" : "常规", value: `${plan.chatQuota || 0} 次` },
+    { icon: "名", label: "论坛姓名颜色", description: "发帖与评论展示会员色", level: hasPaidName ? "专属" : "无", value: hasPaidName ? "已含" : "未含" },
+    { icon: "浪", label: "发帖波浪特权", description: "帖子列表从左到右高级波浪", level: hasWave ? "高级" : "未含", value: hasWave ? "已含" : "未含" },
+    { icon: "团", label: "团队共享席位", description: plan.teamShared ? "导师开通，全队共享权益" : "基础团队席位", level: plan.teamShared ? "导师共享" : "基础", value: `${plan.teamSeats || 8} 席` },
   ];
 }
 
@@ -680,10 +687,10 @@ button {
 .ladder-head,
 .ladder-row {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 56px 66px;
+  grid-template-columns: 28px minmax(145px, 1fr) 54px 66px;
   gap: 8px;
   align-items: center;
-  min-height: 42px;
+  min-height: 50px;
   padding: 0 12px;
   border-bottom: 1px solid rgba(125, 145, 176, .16);
 }
@@ -701,11 +708,28 @@ button {
 }
 
 .ladder-row strong {
-  overflow: hidden;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
   color: #243048;
-  font-size: 13px;
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+
+.ladder-row strong span {
+  white-space: normal;
+}
+
+.ladder-row strong small {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ladder-row strong small {
+  color: #718096;
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .ladder-row em {

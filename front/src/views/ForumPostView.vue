@@ -13,7 +13,7 @@
     <template v-else>
       <div class="detail-layout">
         <main>
-          <article class="post-article">
+          <article class="post-article" :class="{ 'premium-wave-post': hasPremiumWave(post) }">
             <div class="author-row">
               <div class="author-profile-trigger" :data-user-id="post.authorUserId" title="查看个人卡片">
                 <img v-if="avatarUrlFor(post)" :src="avatarUrlFor(post)" class="avatar-img" :alt="post.author" />
@@ -240,6 +240,10 @@ function avatarUrlFor(postOrReply) {
 function membershipClass(plan) {
   return `member-${plan || "free"}`;
 }
+
+function hasPremiumWave(post) {
+  return ["lab", "team"].includes(post?.authorMembershipPlan);
+}
 </script>
 
 <style scoped>
@@ -249,7 +253,27 @@ button, textarea { font: inherit; }
 .back-button:hover { color: #0865ee; }
 .detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 18px; align-items: start; }
 .post-article, .comments-card, .side-card, .detail-status { background: #fff; border: 1px solid #e5eaf1; border-radius: 20px; box-shadow: 0 10px 32px rgba(36, 57, 94, .05); }
-.post-article { padding: 26px 34px 24px; }
+.post-article { position: relative; overflow: hidden; padding: 26px 34px 24px; }
+.post-article.premium-wave-post::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 0%, rgba(124, 58, 237, .075) 34%, rgba(37, 99, 235, .11) 50%, rgba(124, 58, 237, .075) 66%, transparent 100%);
+  transform: translateX(-120%);
+  animation: forum-detail-premium-wave 8.5s linear infinite;
+}
+@keyframes forum-detail-premium-wave {
+  0%, 12% { transform: translateX(-120%); }
+  88%, 100% { transform: translateX(120%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .post-article.premium-wave-post::before {
+    animation: none;
+    transform: translateX(0);
+    opacity: .35;
+  }
+}
 .label-row { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; color: #59667b; font-size: 11px; }
 .label-row > span { padding: 5px 9px; border-radius: 7px; background: #eef2f7; font-weight: 700; }
 .type-label { display: inline-flex; align-items: center; padding: 3px 7px; border-radius: 6px; font-size: 11px; font-weight: 900; }
@@ -274,8 +298,8 @@ button, textarea { font: inherit; }
 .member-free { color: #667085; }
 .member-light { color: #12815f; }
 .member-study { color: #2463eb; }
-.member-lab { color: #7c3aed; }
-.member-team { color: #d35f12; }
+.member-lab { color: #7c3aed; text-shadow: 0 0 14px rgba(124, 58, 237, .14); }
+.member-team { color: #c2410c; text-shadow: 0 0 14px rgba(194, 65, 12, .14); }
 .author-row small { display: flex; align-items: center; gap: 7px; color: #96a0b0; }
 .article-meta-stack { display: grid; justify-items: end; gap: 8px; color: #929dae; font-size: 12px; }
 .article-meta-stack > div { display: flex; align-items: center; gap: 8px; }

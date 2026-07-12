@@ -873,7 +873,7 @@ function membershipClass(plan) {
 }
 
 function hasPremiumWave(post) {
-  return post?.authorMembershipPlan === "lab";
+  return ["lab", "team"].includes(post?.authorMembershipPlan);
 }
 
 function isHotPost(post) {
@@ -1439,6 +1439,14 @@ button { cursor: pointer; }
   88%, 100% { transform: translateX(120%); }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .research-post.premium-wave-post::before {
+    animation: none;
+    transform: translateX(0);
+    opacity: .35;
+  }
+}
+
 .forum-row-avatar {
   width: 46px;
   height: 46px;
@@ -1549,19 +1557,21 @@ button { cursor: pointer; }
 }
 
 .member-light {
-  color: #12815f;
+  color: #059669;
 }
 
 .member-study {
-  color: #2463eb;
+  color: #1d4ed8;
 }
 
 .member-lab {
   color: #7c3aed;
+  text-shadow: 0 0 14px rgba(124, 58, 237, .14);
 }
 
 .member-team {
-  color: #d35f12;
+  color: #c2410c;
+  text-shadow: 0 0 14px rgba(194, 65, 12, .14);
 }
 
 .forum-meta-line time {
