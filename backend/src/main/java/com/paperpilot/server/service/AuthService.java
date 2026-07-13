@@ -10,7 +10,11 @@ import com.paperpilot.server.repository.SystemLogRepository;
 import com.paperpilot.server.repository.PaperRepository;
 import com.paperpilot.server.repository.TranslationRecordRepository;
 import com.paperpilot.server.vo.AuthSessionVO;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -18,8 +22,10 @@ import org.springframework.web.server.ResponseStatusException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthService {
@@ -29,19 +35,27 @@ public class AuthService {
     private final SystemLogRepository systemLogRepository;
     private final PaperRepository paperRepository;
     private final TranslationRecordRepository translationRecordRepository;
+    private final ObjectProvider<JavaMailSender> mailSenderProvider;
+    private final String mailUsername;
+    private static final SecureRandom CODE_RANDOM = new SecureRandom();
+    private static final java.time.Duration VERIFICATION_TTL = java.time.Duration.ofMinutes(10);
 
     public AuthService(
         AppUserRepository appUserRepository,
         InviteCodeRepository inviteCodeRepository,
         SystemLogRepository systemLogRepository,
         PaperRepository paperRepository,
-        TranslationRecordRepository translationRecordRepository
+        TranslationRecordRepository translationRecordRepository,
+        ObjectProvider<JavaMailSender> mailSenderProvider,
+        @Value("${spring.mail.username:}") String mailUsername
     ) {
         this.appUserRepository = appUserRepository;
         this.inviteCodeRepository = inviteCodeRepository;
         this.systemLogRepository = systemLogRepository;
         this.paperRepository = paperRepository;
         this.translationRecordRepository = translationRecordRepository;
+        this.mailSenderProvider = mailSenderProvider;
+        this.mailUsername = mailUsername;
     }
 
     public void logAction(String message, String level, String ipAddress) {
@@ -60,10 +74,15 @@ public class AuthService {
 
     @Transactional
     public AuthSessionVO register(RegisterRequest request, String ipAddress) {
-        if (inviteCodeRepository.findByCodeAndActiveTrue(request.getInviteCode()).isEmpty()) {
+        String email = normalizeEmail(request.getEmail());
+        ensureQqEmail(email);
+        verifyRegisterCode(email, request.getVerificationCode());
+
+        String inviteCode = text(request.getInviteCode());
+        if (!inviteCode.isBlank() && inviteCodeRepository.findByCodeAndActiveTrue(inviteCode).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "邀请码无效");
         }
-        if (appUserRepository.findByEmail(request.getEmail()).isPresent()) {
+        if (appUserRepository.findByEmail(email).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "该邮箱已注册");
         }
 
@@ -82,13 +101,14 @@ public class AuthService {
 
         AppUserEntity user = new AppUserEntity();
         user.setUsername(request.getName());
-        user.setEmail(request.getEmail());
-        user.setInviteCode(request.getInviteCode());
+        user.setEmail(email);
+        user.setInviteCode(inviteCode.isBlank() ? "NO-INVITE" : inviteCode);
         user.setRole(chosenRole);
         user.setPasswordHash(hash(request.getPassword()));
         user.setPlainPassword(request.getPassword());
         user.setLastIp(ipAddress);
         AppUserEntity saved = appUserRepository.save(user);
+        registerVerificationCodes.remove(email);
 
         logAction("成功注册新用户: " + saved.getUsername() + " (" + saved.getEmail() + "), 身份: " + saved.getRole(), "info", ipAddress);
         return toSession(saved);
@@ -221,39 +241,125 @@ public class AuthService {
         logAction("管理员移除了系统用户 " + user.getUsername() + " (" + user.getEmail() + ")", "warn", ip);
     }
 
-    private final java.util.Map<String, String> verificationCodes = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, VerificationEntry> passwordVerificationCodes = new ConcurrentHashMap<>();
+    private final Map<String, VerificationEntry> registerVerificationCodes = new ConcurrentHashMap<>();
+
+    public void sendRegisterVerificationCode(String email) {
+        String normalizedEmail = normalizeEmail(email);
+        ensureQqEmail(normalizedEmail);
+        if (appUserRepository.findByEmail(normalizedEmail).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "该邮箱已注册，一个邮箱只能注册一个账号");
+        }
+        String code = generateCode();
+        registerVerificationCodes.put(normalizedEmail, new VerificationEntry(code, LocalDateTime.now().plus(VERIFICATION_TTL)));
+        sendVerificationMail(
+            normalizedEmail,
+            "PaperSolver 注册验证码",
+            "你的 PaperSolver 注册验证码是：" + code + "。验证码 10 分钟内有效，请勿转发给他人。",
+            "REGISTER"
+        );
+    }
 
     public void sendVerificationCode(String email) {
-        appUserRepository.findByEmail(email)
+        String normalizedEmail = normalizeEmail(email);
+        appUserRepository.findByEmail(normalizedEmail)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "该邮箱用户不存在"));
 
-        // Generate 6-digit random code
-        String code = String.format("%06d", (int)(Math.random() * 1000000));
-        verificationCodes.put(email, code);
+        String code = generateCode();
+        passwordVerificationCodes.put(normalizedEmail, new VerificationEntry(code, LocalDateTime.now().plus(VERIFICATION_TTL)));
 
-        System.out.println("[FORGOT-PASSWORD] Sent verification code to " + email + ": [" + code + "]");
+        sendVerificationMail(
+            normalizedEmail,
+            "PaperSolver 密码重置验证码",
+            "你的 PaperSolver 密码重置验证码是：" + code + "。验证码 10 分钟内有效，如非本人操作请忽略。",
+            "FORGOT-PASSWORD"
+        );
     }
 
     @Transactional
     public void resetPasswordWithCode(String email, String code, String newPassword) {
-        String savedCode = verificationCodes.get(email);
-        if (savedCode == null || !savedCode.equals(code)) {
+        String normalizedEmail = normalizeEmail(email);
+        VerificationEntry savedCode = passwordVerificationCodes.get(normalizedEmail);
+        if (!isValidCode(savedCode, code)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "验证码无效或已过期");
         }
 
-        AppUserEntity user = appUserRepository.findByEmail(email)
+        AppUserEntity user = appUserRepository.findByEmail(normalizedEmail)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
 
         user.setPasswordHash(hash(newPassword));
         user.setPlainPassword(newPassword);
         appUserRepository.save(user);
-        verificationCodes.remove(email);
+        passwordVerificationCodes.remove(normalizedEmail);
 
         logAction("用户重置密码成功 (通过验证码): " + user.getUsername() + " (" + user.getEmail() + ")", "info", user.getLastIp());
     }
 
+    private void verifyRegisterCode(String email, String code) {
+        VerificationEntry entry = registerVerificationCodes.get(email);
+        if (!isValidCode(entry, code)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "验证码无效或已过期");
+        }
+    }
+
+    private boolean isValidCode(VerificationEntry entry, String code) {
+        return entry != null
+            && !LocalDateTime.now().isAfter(entry.expiresAt())
+            && entry.code().equals(text(code));
+    }
+
+    private String generateCode() {
+        return String.format("%06d", CODE_RANDOM.nextInt(1_000_000));
+    }
+
+    private void sendVerificationMail(String email, String subject, String content, String logPrefix) {
+        JavaMailSender sender = mailSenderProvider.getIfAvailable();
+        if (sender == null || mailUsername == null || mailUsername.isBlank()) {
+            System.out.println("[" + logPrefix + "] Mail is not configured. Verification code for " + email + ": " + extractCode(content));
+            return;
+        }
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(mailUsername);
+            message.setTo(email);
+            message.setSubject(subject);
+            message.setText(content);
+            sender.send(message);
+            System.out.println("[" + logPrefix + "] Sent verification code to " + email);
+        } catch (Exception exception) {
+            System.out.println("[" + logPrefix + "] Mail send failed. Verification code for " + email + ": " + extractCode(content));
+            logAction("验证码邮件发送失败，已写入后端日志: " + email + "，原因: " + exception.getMessage(), "warn", null);
+        }
+    }
+
+    private String extractCode(String content) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d{6})").matcher(content);
+        return matcher.find() ? matcher.group(1) : "UNKNOWN";
+    }
+
+    private String normalizeEmail(String email) {
+        return text(email).toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private void ensureQqEmail(String email) {
+        if (!email.matches("^[1-9][0-9]{4,11}@qq\\.com$")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "注册邮箱必须是 QQ 邮箱，例如 123456@qq.com");
+        }
+    }
+
+    private record VerificationEntry(String code, LocalDateTime expiresAt) {}
+
     private AuthSessionVO toSession(AppUserEntity user) {
-        return new AuthSessionVO(user.getId(), user.getUsername(), user.getEmail(), user.getInviteCode(), user.getRole(), user.getAvatarUrl(), user.getBackgroundUrl());
+        return new AuthSessionVO(
+            user.getId(),
+            user.getUsername(),
+            user.getEmail(),
+            user.getInviteCode(),
+            user.getRole(),
+            user.getAvatarUrl(),
+            user.getBackgroundUrl(),
+            user.getFruitScore() != null ? user.getFruitScore() : 0
+        );
     }
 
     private String text(Object value) {

@@ -23,6 +23,7 @@ import com.paperpilot.server.repository.PaymentOrderRepository;
 import com.paperpilot.server.repository.PaymentTicketRepository;
 import com.paperpilot.server.repository.ForumPostRepository;
 import com.paperpilot.server.repository.ForumPostReportRepository;
+import com.paperpilot.server.repository.CheckinRepository;
 import com.paperpilot.server.service.AuthService;
 import com.paperpilot.server.service.BillingService;
 import com.paperpilot.server.service.MembershipService;
@@ -56,6 +57,7 @@ public class AdminController {
     private final PaymentTicketRepository paymentTicketRepository;
     private final ForumPostRepository forumPostRepository;
     private final ForumPostReportRepository forumPostReportRepository;
+    private final CheckinRepository checkinRepository;
     private final NotificationService notificationService;
 
     public AdminController(
@@ -74,6 +76,7 @@ public class AdminController {
         PaymentTicketRepository paymentTicketRepository,
         ForumPostRepository forumPostRepository,
         ForumPostReportRepository forumPostReportRepository,
+        CheckinRepository checkinRepository,
         NotificationService notificationService
     ) {
         this.appUserRepository = appUserRepository;
@@ -91,6 +94,7 @@ public class AdminController {
         this.paymentTicketRepository = paymentTicketRepository;
         this.forumPostRepository = forumPostRepository;
         this.forumPostReportRepository = forumPostReportRepository;
+        this.checkinRepository = checkinRepository;
         this.notificationService = notificationService;
     }
 
@@ -209,6 +213,15 @@ public class AdminController {
         }
         membershipService.activate(user, planId, cycle);
         return user;
+    }
+
+    @PostMapping("/checkins/reset")
+    @jakarta.transaction.Transactional
+    public Map<String, Object> resetAllCheckins() {
+        long checkinCount = checkinRepository.count();
+        checkinRepository.deleteAllInBatch();
+        int userCount = appUserRepository.resetAllFruitScores();
+        return Map.of("deletedCheckins", checkinCount, "resetFruitUsers", userCount);
     }
 
     @PatchMapping("/users/{id}/role")
@@ -594,7 +607,9 @@ public class AdminController {
         row.put("id", report.getId());
         row.put("postId", "post-" + report.getPostId());
         row.put("postTitle", post == null ? "帖子已删除" : post.getTitle());
+        row.put("postContent", post == null ? "" : post.getContent());
         row.put("postType", post == null ? "" : post.getPostType());
+        row.put("postTime", post == null || post.getCreatedAt() == null ? "" : post.getCreatedAt());
         row.put("postBanned", post != null && post.isBanned());
         row.put("author", post == null ? "—" : post.getAuthor());
         row.put("reporterId", report.getReporterId());

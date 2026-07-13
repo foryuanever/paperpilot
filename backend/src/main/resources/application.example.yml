@@ -23,6 +23,17 @@ spring:
         format_sql: true
         jdbc:
           time_zone: Asia/Shanghai
+  mail:
+    host: ${PAPERPILOT_MAIL_HOST:}
+    port: ${PAPERPILOT_MAIL_PORT:587}
+    username: ${PAPERPILOT_MAIL_USERNAME:}
+    password: ${PAPERPILOT_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 paperpilot:
   ai:

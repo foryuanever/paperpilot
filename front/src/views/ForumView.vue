@@ -104,7 +104,7 @@
             v-for="post in paginatedPosts"
             :key="post.id"
             class="research-post"
-            :class="[membershipClass(post.authorMembershipPlan), { 'premium-wave-post': hasPremiumWave(post) }]"
+            :class="[membershipClass(post.authorMembershipPlan), { 'premium-wave-post': hasPremiumWave(post), 'pinned-post': post.pinned }]"
           >
             <div class="forum-row-avatar" :data-user-id="post.authorUserId" title="查看个人卡片">
               <img v-if="avatarUrlFor(post)" :src="avatarUrlFor(post)" class="post-avatar-img" :alt="post.author" />
@@ -208,31 +208,28 @@
         <section class="sidebar-card active-board">
           <div class="sidebar-title-row">
             <div>
-              <span class="card-kicker">DAILY ACTIVE</span>
-              <h3>日活跃榜单</h3>
+              <span class="card-kicker">HOT TOPICS</span>
+              <h3>帖子热度榜</h3>
             </div>
-            <small>{{ activeUsers.length }} 人</small>
+            <small>{{ hotPosts.length }} 条</small>
           </div>
-          <div v-if="activeUsersLoading" class="active-board-empty">正在统计今日浏览...</div>
-          <div v-else-if="paginatedActiveUsers.length" class="active-user-list">
-            <article v-for="user in paginatedActiveUsers" :key="user.userId">
-              <span class="active-rank" :class="{ top: user.rank <= 3 }">{{ user.rank }}</span>
-              <img v-if="user.avatarUrl" :src="user.avatarUrl" :alt="user.username" />
-              <b v-else>{{ String(user.username || "U").slice(0, 1).toUpperCase() }}</b>
+          <div v-if="hotPosts.length" class="active-user-list hot-post-list">
+            <article v-for="item in paginatedHotPosts" :key="item.id" @click="openPost(item.id)">
+              <span class="active-rank" :class="{ top: item.rank <= 3 }">{{ item.rank }}</span>
               <div>
-                <strong class="member-name" :class="membershipClass(user.membershipPlan)">{{ user.username }}</strong>
-                <small>浏览 {{ user.viewedPosts }} 个帖子</small>
+                <strong :class="{ pinned: item.pinned }">{{ item.title }}</strong>
+                <small>热度 {{ item.heat }} · {{ item.views || 0 }} 浏览</small>
               </div>
             </article>
           </div>
           <div v-else class="active-board-empty">
-            <strong>今日还没有浏览记录</strong>
-            <p>打开帖子后会进入日活统计。</p>
+            <strong>暂无热度数据</strong>
+            <p>有浏览、点赞或回复后会自动生成榜单。</p>
           </div>
-          <nav v-if="activePageCount > 1" class="active-board-pager">
+          <nav v-if="hotPostPageCount > 1" class="active-board-pager">
             <button :disabled="activePage <= 1" @click="activePage -= 1">‹</button>
-            <span>{{ activePage }} / {{ activePageCount }}</span>
-            <button :disabled="activePage >= activePageCount" @click="activePage += 1">›</button>
+            <span>{{ activePage }} / {{ hotPostPageCount }}</span>
+            <button :disabled="activePage >= hotPostPageCount" @click="activePage += 1">›</button>
           </nav>
         </section>
 
@@ -558,8 +555,6 @@ const reporting = ref(false);
 const moderationBusy = reactive({});
 const postPage = ref(1);
 const postPageSize = 15;
-const activeUsers = ref([]);
-const activeUsersLoading = ref(false);
 const activePage = ref(1);
 const activePageSize = 6;
 const markdown = new MarkdownIt({
@@ -586,7 +581,7 @@ const blankForm = () => ({
 const form = reactive(blankForm());
 
 onMounted(async () => {
-  await Promise.all([forumStore.fetchPosts(), libraryStore.hydrateLibrary(), fetchActiveUsers()]);
+  await Promise.all([forumStore.fetchPosts(), libraryStore.hydrateLibrary()]);
 });
 
 const filteredPosts = computed(() => {
@@ -625,8 +620,17 @@ const visiblePostPages = computed(() => {
   const start = Math.max(1, Math.min(postPage.value - 2, total - 4));
   return Array.from({ length: Math.min(5, total) }, (_, index) => start + index);
 });
-const activePageCount = computed(() => Math.max(1, Math.ceil(activeUsers.value.length / activePageSize)));
-const paginatedActiveUsers = computed(() => activeUsers.value.slice((activePage.value - 1) * activePageSize, activePage.value * activePageSize));
+const hotPosts = computed(() => forumStore.state.posts
+  .map((post) => ({
+    ...post,
+    heat: Number(post.likes || 0) * 3 + Number(post.replies?.length || 0) * 5 + Number(post.views || 0),
+  }))
+  .filter((post) => post.heat > 0)
+  .sort((a, b) => b.heat - a.heat)
+  .slice(0, 30)
+  .map((post, index) => ({ ...post, rank: index + 1 })));
+const hotPostPageCount = computed(() => Math.max(1, Math.ceil(hotPosts.value.length / activePageSize)));
+const paginatedHotPosts = computed(() => hotPosts.value.slice((activePage.value - 1) * activePageSize, activePage.value * activePageSize));
 
 const popularTags = computed(() => {
   const counts = {};
@@ -731,7 +735,6 @@ async function submitPost() {
       desc: `《${form.title.slice(0, 18)}》已${editingPost.value ? "保存" : "发布"}。`
     });
     window.dispatchEvent(new Event("paperpilot:forum-posts-changed"));
-    fetchActiveUsers();
   } catch (error) {
     console.error("Failed to publish forum post:", error);
     moderationError.value = error?.response?.data?.message
@@ -740,19 +743,6 @@ async function submitPost() {
       || "帖子保存失败，请稍后重试。";
   } finally {
     publishing.value = false;
-  }
-}
-
-async function fetchActiveUsers() {
-  activeUsersLoading.value = true;
-  try {
-    activeUsers.value = await paperpilotApi.getForumActiveUsers();
-    if (activePage.value > activePageCount.value) activePage.value = activePageCount.value;
-  } catch (error) {
-    console.warn("Failed to load forum active users:", error);
-    activeUsers.value = [];
-  } finally {
-    activeUsersLoading.value = false;
   }
 }
 
@@ -990,7 +980,7 @@ function membershipClass(plan) {
 }
 
 function hasPremiumWave(post) {
-  return ["lab", "team"].includes(post?.authorMembershipPlan);
+  return ["lab", "team_plus"].includes(post?.authorMembershipPlan);
 }
 
 function isHotPost(post) {
@@ -1676,6 +1666,15 @@ button { cursor: pointer; }
 .ban-badge { color: #b4233a; background: #fff0f2; }
 .title-icon { margin-right: 4px; font-size: 14px; }
 
+.research-post.pinned-post .forum-title-line h2,
+.hot-post-list strong.pinned {
+  color: #c81e1e;
+}
+
+.hot-post-list article {
+  cursor: pointer;
+}
+
 .post-author-row {
   justify-content: space-between;
 }
@@ -2013,6 +2012,11 @@ button { cursor: pointer; }
 .member-team {
   color: #c2410c;
   text-shadow: 0 0 14px rgba(194, 65, 12, .14);
+}
+
+.member-team_plus {
+  color: #a855f7;
+  text-shadow: 0 0 14px rgba(168, 85, 247, .16);
 }
 
 .forum-meta-line time {

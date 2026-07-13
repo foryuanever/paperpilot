@@ -35,7 +35,8 @@ public class TeamDataController {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final ZoneId CN_ZONE = ZoneId.of("Asia/Shanghai");
     private static final int BASE_TEAM_SEATS = 8;
-    private static final int TEAM_MEMBER_SEATS = 20;
+    private static final int TEAM_MEMBER_SEATS = 8;
+    private static final int TEAM_PLUS_SEATS = 15;
 
     public TeamDataController(
         AppUserRepository appUserRepository,
@@ -83,6 +84,9 @@ public class TeamDataController {
             map.put("status", "online"); 
             map.put("tokenUsed", user.getTokenUsed() != null ? user.getTokenUsed() : 0L);
             map.put("tokenLimit", user.getTokenLimit() != null ? user.getTokenLimit() : 5000000L);
+            map.put("fruitScore", user.getFruitScore() != null ? user.getFruitScore() : 0);
+            map.put("membershipPlan", user.getMembershipPlan() != null ? user.getMembershipPlan() : "free");
+            map.put("membershipExpiresAt", user.getMembershipExpiresAt());
             map.put("activeTime", user.getActiveTime() != null ? user.getActiveTime() : 0L);
             map.put("registerTime", user.getCreatedAt() != null ? user.getCreatedAt().format(DATE_FORMATTER) : "2026-06-08");
             result.add(map);
@@ -445,10 +449,35 @@ public class TeamDataController {
             map.put("memberId", c.getMemberId());
             map.put("time", c.getTime());
             map.put("status", c.getStatus());
+            map.put("fruitAward", c.getFruitAward() != null ? c.getFruitAward() : 0);
             map.put("streak", calculateStreak(c.getMemberId()));
             result.add(map);
         }
         return result;
+    }
+
+    @GetMapping("/checkins/history")
+    public List<Map<String, Object>> getCheckinHistory(
+        @RequestParam(name = "memberId") String memberId,
+        @RequestParam(name = "year", required = false) Integer year
+    ) {
+        if (memberId == null || memberId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "成员ID不能为空");
+        }
+        int targetYear = year != null ? year : LocalDate.now(CN_ZONE).getYear();
+        String start = LocalDate.of(targetYear, 1, 1).format(DATE_FORMATTER);
+        String end = LocalDate.of(targetYear, 12, 31).format(DATE_FORMATTER);
+        return checkinRepository.findAllByMemberIdAndDateBetweenOrderByDateAsc(memberId, start, end).stream()
+            .map(item -> {
+                Map<String, Object> map = new HashMap<>();
+                map.put("memberId", item.getMemberId());
+                map.put("date", item.getDate());
+                map.put("time", item.getTime());
+                map.put("status", item.getStatus());
+                map.put("fruitAward", item.getFruitAward() != null ? item.getFruitAward() : 0);
+                return map;
+            })
+            .toList();
     }
 
     @PostMapping("/checkins")
@@ -461,28 +490,53 @@ public class TeamDataController {
         }
 
         String today = LocalDate.now(CN_ZONE).format(DATE_FORMATTER);
-        CheckinEntity checkin = checkinRepository.findByMemberIdAndDate(memberId, today)
-            .orElse(new CheckinEntity());
+        java.util.Optional<CheckinEntity> existing = checkinRepository.findByMemberIdAndDate(memberId, today);
+        CheckinEntity checkin = existing.orElse(new CheckinEntity());
+        boolean firstCheckinToday = existing.isEmpty();
+        int previousStreak = firstCheckinToday ? calculateStreak(memberId) : Math.max(0, calculateStreak(memberId) - 1);
+        int fruitAward = firstCheckinToday ? rollFruitAward(previousStreak) : (checkin.getFruitAward() != null ? checkin.getFruitAward() : 0);
             
         checkin.setMemberId(memberId);
         checkin.setDate(today);
         checkin.setStatus(status != null ? status : "已打卡");
         checkin.setTime(LocalDateTime.now(CN_ZONE).format(TIME_FORMATTER));
+        checkin.setFruitAward(fruitAward);
 
         CheckinEntity saved = checkinRepository.save(checkin);
+        if (firstCheckinToday) {
+            appUserRepository.findByEmail(memberId).or(() -> appUserRepository.findByUsername(memberId)).ifPresent(user -> {
+                user.setFruitScore((user.getFruitScore() != null ? user.getFruitScore() : 0) + fruitAward);
+                appUserRepository.save(user);
+            });
+        }
         
         Map<String, Object> res = new HashMap<>();
         res.put("memberId", saved.getMemberId());
         res.put("status", saved.getStatus());
         res.put("time", saved.getTime());
+        res.put("fruitAward", saved.getFruitAward() != null ? saved.getFruitAward() : 0);
         res.put("streak", calculateStreak(saved.getMemberId()));
         return res;
+    }
+
+    private int rollFruitAward(int previousStreak) {
+        java.util.concurrent.ThreadLocalRandom random = java.util.concurrent.ThreadLocalRandom.current();
+        if (previousStreak >= 10) return random.nextInt(6, 11);
+        if (previousStreak >= 5) return random.nextInt(4, 11);
+        return random.nextInt(1, 11);
     }
 
     private int effectiveSeatLimit(TeamEntity team) {
         if (team == null || team.getId() == null) return BASE_TEAM_SEATS;
         LocalDateTime now = LocalDateTime.now(CN_ZONE);
-        boolean hasTeamPlan = appUserRepository.findByTeamIdOrderByCreatedAtAsc(team.getId()).stream()
+        List<AppUserEntity> members = appUserRepository.findByTeamIdOrderByCreatedAtAsc(team.getId());
+        boolean hasTeamPlusPlan = members.stream()
+            .anyMatch(user -> "导师".equals(user.getRole())
+                && "team_plus".equals(user.getMembershipPlan())
+                && user.getMembershipExpiresAt() != null
+                && user.getMembershipExpiresAt().isAfter(now));
+        if (hasTeamPlusPlan) return TEAM_PLUS_SEATS;
+        boolean hasTeamPlan = members.stream()
             .anyMatch(user -> "导师".equals(user.getRole())
                 && "team".equals(user.getMembershipPlan())
                 && user.getMembershipExpiresAt() != null

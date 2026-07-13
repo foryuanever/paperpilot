@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 
 public class RegisterRequest {
 
-    @NotBlank
     private String inviteCode;
 
     @NotBlank
@@ -21,6 +20,9 @@ public class RegisterRequest {
     private String role;
 
     private String mentorInviteCode;
+
+    @NotBlank
+    private String verificationCode;
 
     public String getInviteCode() {
         return inviteCode;
@@ -68,5 +70,13 @@ public class RegisterRequest {
 
     public void setMentorInviteCode(String mentorInviteCode) {
         this.mentorInviteCode = mentorInviteCode;
+    }
+
+    public String getVerificationCode() {
+        return verificationCode;
+    }
+
+    public void setVerificationCode(String verificationCode) {
+        this.verificationCode = verificationCode;
     }
 }

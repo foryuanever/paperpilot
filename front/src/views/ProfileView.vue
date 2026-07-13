@@ -37,8 +37,8 @@
           <div class="hero-stats">
             <article class="hero-stat">
               <span>科研等级</span>
-              <strong>Lv.{{ levelInfo.level }}</strong>
-              <small>{{ levelInfo.title }}</small>
+              <strong>LV{{ levelInfo.level }}</strong>
+              <small>{{ levelInfo.current }} / 100 硕果</small>
             </article>
             <article class="hero-stat">
               <span>在线时长</span>
@@ -46,9 +46,9 @@
               <small>持续积累中的科研活跃度</small>
             </article>
             <article class="hero-stat">
-              <span>Token 用量</span>
-              <strong>{{ formatTokens(currentUserMember.tokenUsed) }}</strong>
-              <small>/ {{ formatTokens(currentUserMember.tokenLimit) }}</small>
+              <span>累计硕果</span>
+              <strong>{{ fruitScore }}</strong>
+              <small>签到、发帖与置顶奖励</small>
             </article>
           </div>
         </div>
@@ -89,14 +89,13 @@
 
             <div class="quota-panel">
               <div class="quota-head">
-                <span>额度进度</span>
-                <strong>{{ quotaRatio }}%</strong>
+                <span>等级进度</span>
+                <strong>{{ levelInfo.current }} / 100</strong>
               </div>
               <div class="progress-track">
                 <span
                   class="progress-fill"
-                  :class="getQuotaColorClass((currentUserMember.tokenUsed || 0) / (currentUserMember.tokenLimit || 1))"
-                  :style="{ width: `${quotaRatio}%` }"
+                  :style="{ width: `${levelInfo.percent}%` }"
                 ></span>
               </div>
             </div>
@@ -197,27 +196,26 @@
           <article class="panel contribution-panel">
             <div class="panel-head contribution-head">
               <div>
-                <span class="panel-eyebrow">Reading activity</span>
-                <h2>文献阅读贡献</h2>
-                <p>颜色越深，表示当天完成阅读的文献越多。</p>
+                <span class="panel-eyebrow">Check-in activity</span>
+                <h2>签到热力分布</h2>
+                <p>按真实签到日期展示，颜色越深表示当天获得的硕果越多。</p>
               </div>
               <label class="year-select">
                 <span>年份</span>
                 <select v-model="contributionYear">
-                  <option :value="2026">2026</option>
-                  <option :value="2025">2025</option>
+                  <option v-for="year in contributionYears" :key="year" :value="year">{{ year }}</option>
                 </select>
               </label>
             </div>
 
             <div class="contribution-summary">
-              <span><strong>{{ annualReadingTotal }}</strong>篇年度阅读</span>
-              <span><strong>{{ activeReadingDays }}</strong>个活跃日</span>
-              <span><strong>{{ longestReadingStreak }}</strong>天最长连续</span>
-              <span><strong>{{ currentReadingStreak }}</strong>天当前连续</span>
+              <span><strong>{{ annualFruitTotal }}</strong>枚年度硕果</span>
+              <span><strong>{{ activeCheckinDays }}</strong>个签到日</span>
+              <span><strong>{{ longestCheckinStreak }}</strong>天最长连续</span>
+              <span><strong>{{ currentCheckinStreak }}</strong>天当前连续</span>
             </div>
 
-            <div class="heatmap-scroll" aria-label="每日文献阅读贡献热力图">
+            <div class="heatmap-scroll" aria-label="每日签到硕果热力图">
               <div class="heatmap-months">
                 <span v-for="month in heatmapMonths" :key="month">{{ month }}</span>
               </div>
@@ -231,15 +229,15 @@
                     :key="day.date"
                     class="heatmap-cell"
                     :class="`level-${day.level}`"
-                    :title="`${day.date}：阅读 ${day.count} 篇文献`"
-                    :aria-label="`${day.date} 阅读 ${day.count} 篇文献`"
+                    :title="`${day.date}：签到获得 ${day.count} 枚硕果`"
+                    :aria-label="`${day.date} 签到获得 ${day.count} 枚硕果`"
                   ></button>
                 </div>
               </div>
             </div>
 
             <footer class="heatmap-footer">
-              <span>{{ contributionYear }} 年阅读轨迹</span>
+              <span>{{ contributionYear }} 年签到轨迹</span>
               <div class="heatmap-legend"><span>少</span><i class="level-0"></i><i class="level-1"></i><i class="level-2"></i><i class="level-3"></i><i class="level-4"></i><span>多</span></div>
             </footer>
           </article>
@@ -319,7 +317,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useTeamStore } from "../stores/team";
 import { useForumStore } from "../stores/forum";
@@ -344,7 +342,9 @@ const passwordSuccess = ref("");
 const isSubmittingPassword = ref(false);
 const editingPost = ref(null);
 const savingPost = ref(false);
-const contributionYear = ref(2026);
+const contributionYear = ref(new Date().getFullYear());
+const checkinHistory = ref([]);
+const contributionYears = computed(() => [new Date().getFullYear(), new Date().getFullYear() - 1]);
 const editForm = ref({ title: "", direction: "", content: "" });
 const directions = [
   "计算机", "人工智能", "软件工程", "自动化", "电气工程", "电子信息", "通信工程",
@@ -363,6 +363,7 @@ const currentUserMember = computed(() => {
     registerTime: "2026-06-24",
     tokenUsed: 0,
     tokenLimit: 1,
+    fruitScore: authStore.profile.fruitScore || 0,
     status: "offline",
   };
 });
@@ -377,13 +378,8 @@ const pageBackgroundStyle = computed(() => {
   };
 });
 
-const levelInfo = computed(() => getMemberLevelInfo(currentUserMember.value?.activeTime || 0));
-
-const quotaRatio = computed(() => {
-  const limit = currentUserMember.value?.tokenLimit || 1;
-  const used = currentUserMember.value?.tokenUsed || 0;
-  return Math.min(100, Math.round((used / limit) * 100));
-});
+const fruitScore = computed(() => Number(currentUserMember.value?.fruitScore ?? authStore.profile.fruitScore ?? 0));
+const levelInfo = computed(() => getMemberLevelInfo(fruitScore.value));
 
 const myPosts = computed(() => {
   const currentName = authStore.profile.name || "";
@@ -395,32 +391,32 @@ const myPosts = computed(() => {
 const totalLikes = computed(() => myPosts.value.reduce((sum, post) => sum + (post.likes || 0), 0));
 const totalReplies = computed(() => myPosts.value.reduce((sum, post) => sum + (post.replies?.length || 0), 0));
 const heatmapMonths = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
+const checkinByDate = computed(() => {
+  const map = new Map();
+  checkinHistory.value.forEach((item) => {
+    if (item.date) map.set(item.date, Number(item.fruitAward || 0));
+  });
+  return map;
+});
 const readingContribution = computed(() => {
   const start = new Date(contributionYear.value, 0, 1);
   const end = new Date(contributionYear.value, 11, 31);
-  const today = new Date(2026, 5, 24);
   const cells = [];
   for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
-    const dayIndex = Math.floor((date - start) / 86400000);
-    const weekday = date.getDay();
-    const isFuture = date > today;
-    const seed = (dayIndex * 37 + contributionYear.value * 13) % 19;
-    const restDay = weekday === 0 || (weekday === 6 && seed < 12);
-    const count = isFuture || restDay || seed < 5
-      ? 0
-      : Math.min(9, 1 + (seed % 6) + (dayIndex % 17 === 0 ? 2 : 0));
-    const level = count === 0 ? 0 : count <= 2 ? 1 : count <= 4 ? 2 : count <= 6 ? 3 : 4;
+    const dateKey = formatDateKey(date);
+    const count = checkinByDate.value.get(dateKey) || 0;
+    const level = count === 0 ? 0 : count <= 2 ? 1 : count <= 5 ? 2 : count <= 8 ? 3 : 4;
     cells.push({
-      date: date.toLocaleDateString("zh-CN", { month: "long", day: "numeric" }),
+      date: dateKey,
       count,
       level,
     });
   }
   return cells;
 });
-const annualReadingTotal = computed(() => readingContribution.value.reduce((sum, day) => sum + day.count, 0));
-const activeReadingDays = computed(() => readingContribution.value.filter((day) => day.count > 0).length);
-const longestReadingStreak = computed(() => {
+const annualFruitTotal = computed(() => readingContribution.value.reduce((sum, day) => sum + day.count, 0));
+const activeCheckinDays = computed(() => readingContribution.value.filter((day) => day.count > 0).length);
+const longestCheckinStreak = computed(() => {
   let longest = 0;
   let streak = 0;
   readingContribution.value.forEach((day) => {
@@ -429,7 +425,7 @@ const longestReadingStreak = computed(() => {
   });
   return longest;
 });
-const currentReadingStreak = computed(() => {
+const currentCheckinStreak = computed(() => {
   let streak = 0;
   const lastActiveIndex = readingContribution.value.findLastIndex((day) => day.count > 0);
   for (let index = lastActiveIndex; index >= 0; index -= 1) {
@@ -441,7 +437,10 @@ const currentReadingStreak = computed(() => {
 
 onMounted(() => {
   tempName.value = authStore.profile.name;
+  loadCheckinHistory();
 });
+
+watch(contributionYear, loadCheckinHistory);
 
 function flash(setter, message) {
   setter.value = message;
@@ -559,27 +558,29 @@ function getRoleClass(role) {
   return "role-student";
 }
 
-function getQuotaColorClass(ratio) {
-  if (ratio > 0.85) return "fill-danger";
-  if (ratio > 0.6) return "fill-warning";
-  return "fill-safe";
+function getMemberLevelInfo(score) {
+  const value = Math.max(0, Number(score || 0));
+  const level = Math.floor(value / 100) + 1;
+  const current = value % 100;
+  return { level, title: `LV${level}`, current, percent: current };
 }
 
-function getMemberLevelInfo(activeTime) {
-  const level = Math.floor((activeTime || 0) / 300) + 1;
-  let title = "科研萌新";
-  if (level >= 15) title = "科研主宰";
-  else if (level >= 10) title = "科研宗师";
-  else if (level >= 6) title = "学术专家";
-  else if (level >= 3) title = "科研骨干";
-  return { level, title };
+function formatDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
-function formatTokens(value) {
-  const n = Number(value || 0);
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${Math.round(n / 1000)}K`;
-  return String(n);
+async function loadCheckinHistory() {
+  const memberId = authStore.profile.email || currentUserMember.value?.email;
+  if (!memberId) return;
+  try {
+    checkinHistory.value = await paperpilotApi.getTeamCheckinHistory(memberId, contributionYear.value);
+  } catch (error) {
+    console.warn("Failed to load checkin history:", error);
+    checkinHistory.value = [];
+  }
 }
 
 function formatActiveTime(seconds) {

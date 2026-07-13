@@ -23,6 +23,9 @@ public class CheckinEntity {
     @Column(nullable = false, length = 32)
     private String date; // e.g. "2026-06-10"
 
+    @Column(name = "fruit_award")
+    private Integer fruitAward = 0;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -75,5 +78,13 @@ public class CheckinEntity {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Integer getFruitAward() {
+        return fruitAward;
+    }
+
+    public void setFruitAward(Integer fruitAward) {
+        this.fruitAward = fruitAward;
     }
 }

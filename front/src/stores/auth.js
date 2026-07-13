@@ -56,6 +56,7 @@ export const useAuthStore = defineStore("auth", () => {
           role: saved.role || session.user.role || "学生",
           avatarUrl: saved.avatarUrl || "",
           backgroundUrl: saved.backgroundUrl || "",
+          fruitScore: saved.fruitScore || session.user.fruitScore || 0,
         };
         session.role = session.user.role;
         persist();
@@ -77,6 +78,7 @@ export const useAuthStore = defineStore("auth", () => {
       role: user.role || "学生",
       avatarUrl: user.avatarUrl || "",
       backgroundUrl: user.backgroundUrl || "",
+      fruitScore: user.fruitScore || 0,
     };
     // Provide a direct shortcut for role checks used throughout the app
     session.role = session.user.role;
@@ -119,7 +121,7 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
-  async function register({ inviteCode, name, email, password, role, mentorInviteCode }) {
+  async function register({ inviteCode, name, email, password, role, mentorInviteCode, verificationCode }) {
     try {
       const user = await paperpilotApi.register({
         inviteCode,
@@ -128,6 +130,7 @@ export const useAuthStore = defineStore("auth", () => {
         password,
         role,
         mentorInviteCode,
+        verificationCode,
       });
       applySession(user);
     } catch (error) {

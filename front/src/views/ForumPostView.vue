@@ -13,7 +13,7 @@
     <template v-else>
       <div class="detail-layout">
         <main>
-          <article class="post-article">
+          <article class="post-article" :class="{ pinned: post.pinned }">
             <div class="author-row">
               <div class="author-profile-trigger" :data-user-id="post.authorUserId" title="查看个人卡片">
                 <img v-if="avatarUrlFor(post)" :src="avatarUrlFor(post)" class="avatar-img" :alt="post.author" />
@@ -94,9 +94,14 @@
                 正在回复 {{ replyTarget.author }}
                 <button @click="replyTarget = null">取消</button>
               </div>
-              <textarea v-model="replyContent" rows="4" placeholder="提供数据线索、方法建议或可验证的研究观点"></textarea>
+              <textarea
+                v-model="replyContent"
+                rows="4"
+                placeholder="提供数据线索、方法建议或可验证的研究观点；可直接粘贴图片"
+                @paste="handleReplyPaste"
+              ></textarea>
               <div>
-                <span>以 {{ authStore.profile.name }} 身份回复</span>
+                <span>{{ replyPasteHint || `以 ${authStore.profile.name} 身份回复` }}</span>
                 <button :disabled="!replyContent.trim() || submitting" @click="submitReply">
                   {{ submitting ? "发表中..." : "发表评论" }}
                 </button>
@@ -189,6 +194,7 @@ const likeBurst = ref(false);
 const showReportModal = ref(false);
 const reportDetail = ref("");
 const reporting = ref(false);
+const replyPasteHint = ref("");
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
 const defaultValidateLink = markdown.validateLink;
 markdown.validateLink = (url) => /^data:(image|application|text)\//i.test(url) || defaultValidateLink(url);
@@ -277,6 +283,32 @@ function setReplyTarget(reply) {
   replyContent.value = replyContent.value || `@${reply.author} `;
 }
 
+async function handleReplyPaste(event) {
+  const items = Array.from(event.clipboardData?.items || []);
+  const imageItem = items.find((item) => item.type?.startsWith("image/"));
+  if (!imageItem) return;
+  const file = imageItem.getAsFile();
+  if (!file) return;
+  event.preventDefault();
+  if (file.size > 4 * 1024 * 1024) {
+    replyPasteHint.value = "图片超过 4MB，请压缩后再粘贴。";
+    return;
+  }
+  const dataUrl = await fileToDataUrl(file);
+  replyContent.value = `${replyContent.value.trim()}\n\n![粘贴图片](${dataUrl})\n\n`;
+  replyPasteHint.value = "图片已插入回复正文。";
+  window.setTimeout(() => { replyPasteHint.value = ""; }, 2200);
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 function avatarUrlFor(postOrReply) {
   if (String(postOrReply?.authorUserId || "") === String(authStore.profile.userId || "")) {
     return authStore.profile.avatarUrl || "";
@@ -313,6 +345,7 @@ button, textarea { font: inherit; }
 .ban-badge { color: #b4233a; background: #fff0f2; }
 .label-row time { margin-left: auto; color: #97a1b1; }
 .post-article h1 { max-width: 760px; margin: 22px 0 18px 56px; font-size: 24px; line-height: 1.45; letter-spacing: 0; text-wrap: balance; }
+.post-article.pinned h1 { color: #c81e1e; }
 .author-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 14px; border-bottom: 1px solid #edf0f4; }
 .author-profile-trigger { display: flex; align-items: center; gap: 10px; margin-left: -4px; padding: 4px 8px 4px 4px; border-radius: 11px; transition: color .18s ease, background-color .18s ease; }
 .author-profile-trigger[data-user-id]:hover { color: #075ee5; background: #f1f6ff; }
@@ -326,6 +359,7 @@ button, textarea { font: inherit; }
 .member-study { color: #2463eb; }
 .member-lab { color: #7c3aed; text-shadow: 0 0 14px rgba(124, 58, 237, .14); }
 .member-team { color: #c2410c; text-shadow: 0 0 14px rgba(194, 65, 12, .14); }
+.member-team_plus { color: #a855f7; text-shadow: 0 0 14px rgba(168, 85, 247, .16); }
 .author-row small { display: flex; align-items: center; gap: 7px; color: #96a0b0; }
 .article-meta-stack { display: grid; justify-items: end; gap: 8px; color: #929dae; font-size: 12px; }
 .article-meta-stack > div { display: flex; align-items: center; gap: 8px; }

@@ -12,7 +12,7 @@
             <span class="seats-count-badge">{{ teamStore.usedSeats }} / {{ teamStore.totalSeats }}</span>
           </div>
           <p class="seats-helper-text">
-            团队席位用于协作任务、公告同步和共享材料管理。
+            团队席位用于协作任务、公告同步和共享材料管理；导师车队可开放团队成员加入。
           </p>
           <div class="seats-avatar-row">
             <div
@@ -54,8 +54,8 @@
             <button
               v-else-if="hasWriteAccess"
               class="seat-circle-avatar empty-seat-btn locked-seat-btn"
-              @click="showToast('默认团队含 8 个席位，继续加人需开通导师车队会员')"
-              title="开通导师车队会员后可扩展团队席位"
+              @click="showToast('席位已满，继续加人需开通或升级团队会员')"
+              title="开通导师车队或团队 Plus 后可管理团队席位"
             >
               <span class="avatar-inner-wrapper"><span class="plus-symbol">+</span></span>
               <span class="seat-member-name">升级</span>
@@ -65,8 +65,8 @@
 
         <div class="seats-right-container">
           <div class="team-plan-flag" :class="{ active: hasTeamFleetPlan }">
-            <span>{{ hasTeamFleetPlan ? "导师车队会员" : "基础团队" }}</span>
-            <strong>{{ hasTeamFleetPlan ? "全队共享权益" : "团队协作中" }}</strong>
+            <span>{{ teamFleetLabel }}</span>
+            <strong>{{ hasTeamFleetPlan ? "全队共享权益" : "待开通团队权益" }}</strong>
           </div>
           <div class="team-identity-plate">
             <span class="plate-label">团队标示号</span>
@@ -1069,7 +1069,10 @@ const currentCheckinItem = computed(() => {
   return teamStore.checkins.find((item) => item.memberId === currentMemberId.value);
 });
 
-const hasTeamFleetPlan = computed(() => Number(teamStore.totalSeats || TEAM_BASE_SEATS) > TEAM_BASE_SEATS);
+const teamTutor = computed(() => teamStore.members.find((member) => member.role === "导师"));
+const teamFleetPlan = computed(() => teamTutor.value?.membershipPlan || "free");
+const hasTeamFleetPlan = computed(() => ["team", "team_plus"].includes(teamFleetPlan.value));
+const teamFleetLabel = computed(() => teamFleetPlan.value === "team_plus" ? "团队 Plus" : hasTeamFleetPlan.value ? "导师车队会员" : "未开通团队套餐");
 
 const completedTaskCount = computed(() => {
   return teamStore.tasks.filter((task) => task.status === "已完成").length;

@@ -104,6 +104,7 @@ public class ForumController {
         post.setAuthor(defaultText(body, "author", currentUser.getUsername()));
         post.setAvatar(avatar("", post.getAuthor()));
         ForumPostEntity saved = forumPostRepository.save(post);
+        addFruitScore(currentUser.getId(), 2);
         return Map.of(
             "id", "post-" + saved.getId(),
             "title", saved.getTitle(),
@@ -245,6 +246,7 @@ public class ForumController {
         ForumPostEntity post = findPost(id);
         post.setPinned(!post.isPinned());
         forumPostRepository.save(post);
+        if (post.isPinned()) addFruitScore(post.getUserId(), 10);
         if (post.getUserId() != null) {
             notificationService.createSystemNotice(post.getUserId(), actor.getId(), "forum_pin", post.getId(),
                 post.isPinned() ? "你的帖子已被置顶" : "你的帖子已被降级",
@@ -446,6 +448,14 @@ public class ForumController {
     private String text(Map<String, Object> body, String key) { return body.get(key) == null ? "" : String.valueOf(body.get(key)).trim(); }
     private String defaultText(Map<String, Object> body, String key, String fallback) { return fallback(text(body, key), fallback); }
     private String avatar(String value, String author) { return fallback(value, !StringUtils.hasText(author) ? "U" : author.substring(0, 1).toUpperCase()); }
+
+    private void addFruitScore(Long userId, int delta) {
+        if (userId == null || delta <= 0) return;
+        appUserRepository.findById(userId).ifPresent(user -> {
+            user.setFruitScore((user.getFruitScore() != null ? user.getFruitScore() : 0) + delta);
+            appUserRepository.save(user);
+        });
+    }
 
     private Long parseId(String value, String prefix) {
         try { return Long.parseLong(value.startsWith(prefix) ? value.substring(prefix.length()) : value); }

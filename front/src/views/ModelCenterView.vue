@@ -69,22 +69,16 @@
             <span>{{ cycleLabel(selectedCycle) }}</span>
           </div>
 
-          <div class="benefit-ladder">
-            <div class="ladder-head">
-              <span>权益阶梯</span>
-              <b>{{ selectedCycle === "monthly" ? "当期有效" : cycleLabel(selectedCycle) }}</b>
-            </div>
-            <div v-for="row in planRows(plan)" :key="row.label" class="ladder-row">
-              <span class="row-icon">{{ row.icon }}</span>
-              <strong>
-                <span>{{ row.label }}</span>
-                <small v-if="row.description">{{ row.description }}</small>
-              </strong>
-              <em>{{ row.level }}</em>
-              <b>{{ row.value }}</b>
-            </div>
-            <p class="settlement-note">未使用次数到期清零，续费后重新获得当期权益。</p>
-          </div>
+          <ul class="center-plan-features">
+            <li v-for="row in planRows(plan)" :key="row.label">
+              <span class="feature-check">✓</span>
+              <div>
+                <strong>{{ row.label }}：{{ row.value }}</strong>
+                <small>{{ row.description }}</small>
+              </div>
+            </li>
+          </ul>
+          <p class="settlement-note">未使用次数到期清零，续费后重新获得当期权益。</p>
 
           <button class="plan-buy-button" @click.stop="selectAndCheckout(plan.id)">
             开通该套餐
@@ -178,7 +172,7 @@ const plans = computed(() => usageStore.state.plans || []);
 const displayPlans = computed(() => plans.value.filter((item) => item.id !== "free"));
 const membership = computed(() => usageStore.state.membership || { id: "free", name: "未开通会员", benefits: {} });
 const selectedPlanInfo = computed(() => displayPlans.value.find((item) => item.id === selectedPlan.value) || displayPlans.value[0] || { name: "研读会员", monthlyPrice: 19.9, reviewQuota: 10, pptQuota: 2, chatQuota: 80 });
-const planInitial = computed(() => ({ free: "B", light: "L", study: "R", lab: "P", team: "T" })[membership.value.id] || "B");
+const planInitial = computed(() => ({ free: "B", light: "L", study: "R", lab: "P", team: "T", team_plus: "T+" })[membership.value.id] || "B");
 const benefitItems = computed(() => {
   const benefits = membership.value.benefits || {};
   const row = (key, label) => ({ key, label, ...(benefits[key] || { quota: 0, used: 0, remaining: 0 }) });
@@ -239,37 +233,43 @@ function cycleShortLabel(cycle) {
 }
 
 function planBadge(id) {
-  return ({ light: "L", study: "R", lab: "P", team: "T" })[id] || "M";
+  return ({ light: "L", study: "R", lab: "P", team: "T", team_plus: "T+" })[id] || "M";
 }
 
 function planBadgeLabel(id) {
-  return ({ light: "推荐", study: "热销", lab: "超值", team: "导师车队" })[id] || "套餐";
+  return ({ light: "入门", study: "热销", lab: "特权", team: "导师车队", team_plus: "团队Plus" })[id] || "套餐";
 }
 
 function planCardTitle(id) {
-  return ({ light: "轻享月卡", study: "尊享月卡", lab: "课题月卡", team: "导师车队卡" })[id] || "会员套餐";
+  return ({ light: "轻享月卡", study: "研读月卡", lab: "课题月卡", team: "导师车队卡", team_plus: "团队 Plus" })[id] || "会员套餐";
 }
 
 function planCopy(id) {
   return ({
-    light: "适合轻量阅读和偶尔生成综述，保留低门槛入口。",
-    study: "适合每周组会和课程论文，PPT 次数与综述次数更均衡。",
-    lab: "适合课题组高频使用，给更多 PPT 与 AI 对话余量。",
-    team: "导师一人开通，全队共享席位与组会生成权益。",
+    light: "适合个人轻量阅读、翻译和偶尔生成论文综述。",
+    study: "适合课程论文、周会准备和稳定的论文问答。",
+    lab: "适合课题高频推进，并解锁论坛彩名与发帖波浪。",
+    team: "导师一人开通，全队共享 8 个席位与组会生成权益。",
+    team_plus: "面向更大的实验室车队，15 个席位并拥有最高次数与论坛特权。",
   })[id] || "按任务次数使用。";
 }
 
 function planRows(plan) {
-  const hasPaidName = plan.id !== "free";
-  const hasWave = ["lab", "team"].includes(plan.id);
+  const forumIdentity = ["lab", "team_plus"].includes(plan.id)
+    ? "彩色姓名 + 发帖波浪"
+    : plan.id === "free"
+      ? "未含"
+      : plan.id === "team"
+        ? "团队共享，不含波浪"
+        : "未含";
+  const hasTeamSeats = Number(plan.teamSeats || 0) > 0;
   return [
     { icon: "导", label: "论文导入与基础翻译", description: "文献入库、PDF 管理、基础翻译", level: "免费", value: "不限次" },
     { icon: "综", label: "论文综述生成", description: "规范分点综述，可保存复用", level: plan.reviewQuota > 0 ? "包含" : "未含", value: `${plan.reviewQuota || 0} 次` },
-    { icon: "P", label: "组会 PPT 生成", description: "PPT Master Agent 重任务", level: plan.pptQuota > 0 ? "重任务" : "未含", value: `${plan.pptQuota || 0} 次` },
+    { icon: "P", label: "组会 PPT 生成", description: "PPT Master Agent 重任务流程", level: plan.pptQuota > 0 ? "重任务" : "未含", value: `${plan.pptQuota || 0} 次` },
     { icon: "问", label: "AI 文章对话", description: "围绕论文内容连续追问", level: plan.chatQuota > 80 ? "高频" : "常规", value: `${plan.chatQuota || 0} 次` },
-    { icon: "名", label: "论坛姓名颜色", description: "发帖与评论展示会员色", level: hasPaidName ? "专属" : "无", value: hasPaidName ? "已含" : "未含" },
-    { icon: "浪", label: "发帖波浪特权", description: "帖子列表从左到右高级波浪", level: hasWave ? "高级" : "未含", value: hasWave ? "已含" : "未含" },
-    { icon: "团", label: "团队共享席位", description: plan.teamShared ? "导师开通，全队共享权益" : "基础团队席位", level: plan.teamShared ? "导师共享" : "基础", value: `${plan.teamSeats || 8} 席` },
+    { icon: "名", label: "论坛身份与发帖特效", description: "只有课题月卡与团队 Plus 拥有发帖波浪", level: ["lab", "team_plus"].includes(plan.id) ? "专属" : "未含", value: forumIdentity },
+    { icon: "团", label: "团队共享席位", description: hasTeamSeats ? "导师开通，全队共享权益" : "个人套餐不开放扩展席位", level: hasTeamSeats ? "导师共享" : "未含", value: hasTeamSeats ? `${plan.teamSeats} 席` : "未开放" },
   ];
 }
 
@@ -563,45 +563,52 @@ button {
 
 .plan-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
   margin-top: 18px;
+  padding-bottom: 4px;
 }
 
 .plan-card {
   --tier: #14946f;
-  --tier-soft: #effbf6;
-  --tier-line: #9edfc9;
+  --tier-soft: #ffffff;
+  --tier-line: #e2e8f0;
   min-width: 0;
-  padding: 20px;
+  padding: 24px;
   border: 1px solid var(--tier-line);
-  border-radius: 12px;
-  background: linear-gradient(180deg, var(--tier-soft), #fff 52%);
+  border-radius: 16px;
+  background: var(--tier-soft);
   transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
 
 .plan-card.study {
   --tier: #2563eb;
-  --tier-soft: #eff6ff;
+  --tier-soft: #f8fbff;
   --tier-line: #a8c7ff;
 }
 
 .plan-card.lab {
   --tier: #7c3aed;
-  --tier-soft: #f7f2ff;
+  --tier-soft: #fbf8ff;
   --tier-line: #cbb6ff;
 }
 
 .plan-card.team {
   --tier: #e06d1b;
-  --tier-soft: #fff5ed;
+  --tier-soft: #fffaf5;
   --tier-line: #f2bc8f;
+}
+
+.plan-card.team_plus {
+  --tier: #b45309;
+  --tier-soft: #fff8ed;
+  --tier-line: #e9b86f;
 }
 
 .plan-card:hover,
 .plan-card.active {
   transform: translateY(-2px);
-  box-shadow: 0 12px 26px rgba(31, 48, 84, .09);
+  box-shadow: 0 8px 18px rgba(31, 48, 84, .08);
 }
 
 .plan-card.active {
@@ -651,7 +658,7 @@ button {
   flex: 0 0 auto;
   border-radius: 10px;
   color: var(--tier);
-  background: rgba(255, 255, 255, .78);
+  background: rgba(255, 255, 255, .9);
   font-weight: 900;
 }
 
@@ -677,92 +684,53 @@ button {
   font-weight: 800;
 }
 
-.benefit-ladder {
-  overflow: hidden;
-  border: 1px solid var(--tier-line);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, .72);
-}
-
-.ladder-head,
-.ladder-row {
+.center-plan-features {
   display: grid;
-  grid-template-columns: 28px minmax(145px, 1fr) 54px 66px;
-  gap: 8px;
-  align-items: center;
-  min-height: 50px;
-  padding: 0 12px;
-  border-bottom: 1px solid rgba(125, 145, 176, .16);
+  gap: 12px;
+  min-height: 250px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.ladder-head {
-  grid-template-columns: minmax(0, 1fr) auto;
-  color: #243048;
-  background: rgba(255, 255, 255, .68);
+.center-plan-features li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.feature-check {
+  color: #16b981;
+  font-size: 16px;
   font-weight: 900;
+  line-height: 1.4;
 }
 
-.ladder-head b {
-  color: var(--tier);
+.center-plan-features strong {
+  display: block;
+  color: #23304a;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.center-plan-features small {
+  display: block;
+  margin-top: 2px;
+  color: #66758b;
   font-size: 12px;
-}
-
-.ladder-row strong {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  color: #243048;
-  font-size: 12.5px;
-  line-height: 1.25;
-}
-
-.ladder-row strong span {
-  white-space: normal;
-}
-
-.ladder-row strong small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ladder-row strong small {
-  color: #718096;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.ladder-row em {
-  color: #f36a22;
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 850;
-}
-
-.ladder-row b {
-  color: var(--tier);
-  text-align: right;
-  font-size: 13px;
-}
-
-.row-icon {
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border-radius: 7px;
-  color: #fff;
-  background: var(--tier);
-  font-size: 11px;
-  font-weight: 900;
+  line-height: 1.5;
 }
 
 .settlement-note {
-  margin: 0;
-  padding: 11px 12px;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #e7edf5;
+  border-radius: 10px;
   color: #6c7890;
   text-align: center;
   font-size: 12px;
+  background: #fff;
 }
 
 .plan-buy-button,

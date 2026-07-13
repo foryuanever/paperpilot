@@ -9,6 +9,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.post("/api/auth/register", payload, { timeout: 5000 });
     return data;
   },
+  async sendRegisterCode(email) {
+    const { data } = await apiClient.post(`/api/auth/register/send-code?email=${encodeURIComponent(email)}`);
+    return data;
+  },
   async changePassword(payload) {
     const { data } = await apiClient.post("/api/auth/change-password", payload);
     return data;
@@ -566,6 +570,10 @@ export const paperpilotApi = {
   },
   async performTeamCheckin(payload) {
     const { data } = await apiClient.post("/api/team/checkins", payload);
+    return data;
+  },
+  async getTeamCheckinHistory(memberId, year) {
+    const { data } = await apiClient.get("/api/team/checkins/history", { params: { memberId, year } });
     return data;
   },
   async createPaymentOrder(payload) {

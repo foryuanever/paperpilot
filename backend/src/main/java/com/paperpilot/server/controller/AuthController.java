@@ -40,6 +40,11 @@ public class AuthController {
         return authService.register(request, ip);
     }
 
+    @PostMapping("/register/send-code")
+    public void sendRegisterCode(@org.springframework.web.bind.annotation.RequestParam String email) {
+        authService.sendRegisterVerificationCode(email);
+    }
+
     @PostMapping("/change-password")
     public void changePassword(@Valid @RequestBody ChangePasswordRequest request) {
         Long userId = currentUserService.getOrCreateDefaultUserId();

@@ -166,6 +166,9 @@ public class AppUserEntity {
     @Column(name = "chat_used")
     private Integer chatUsed = 0;
 
+    @Column(name = "fruit_score")
+    private Integer fruitScore = 0;
+
     public String getMembershipPlan() { return membershipPlan; }
     public void setMembershipPlan(String membershipPlan) { this.membershipPlan = membershipPlan; }
     public String getMembershipCycle() { return membershipCycle; }
@@ -184,6 +187,8 @@ public class AppUserEntity {
     public void setChatQuota(Integer chatQuota) { this.chatQuota = chatQuota; }
     public Integer getChatUsed() { return chatUsed; }
     public void setChatUsed(Integer chatUsed) { this.chatUsed = chatUsed; }
+    public Integer getFruitScore() { return fruitScore; }
+    public void setFruitScore(Integer fruitScore) { this.fruitScore = fruitScore; }
 
     @Column(name = "last_ip", length = 128)
     private String lastIp;

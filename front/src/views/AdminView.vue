@@ -76,13 +76,6 @@
           </button>
           <button
             class="tab-btn"
-            :class="{ active: activeTab === 'billing' }"
-            @click="activeTab = 'billing'"
-          >
-            计费规则
-          </button>
-          <button
-            class="tab-btn"
             :class="{ active: activeTab === 'teams' }"
             @click="activeTab = 'teams'"
           >
@@ -343,83 +336,6 @@
                 <button :disabled="rechargePage <= 1" @click="rechargePage -= 1">上一页</button>
                 <strong>{{ rechargePage }} / {{ rechargePageCount }}</strong>
                 <button :disabled="rechargePage >= rechargePageCount" @click="rechargePage += 1">下一页</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="activeTab === 'billing'" class="tab-pane">
-          <div class="pane-header-row">
-            <div>
-              <h3>计费规则与扣费明细</h3>
-              <p class="pane-description">这里是管理员可见的计费口径。用户侧只看到余额、充值入口和扣费结果。</p>
-            </div>
-          </div>
-
-          <div class="billing-rule-grid">
-            <article class="billing-rule-card spatial-glass-panel">
-              <span>基础单价</span>
-              <input v-model.number="billingForm.unitPrice" type="number" min="0.0001" step="0.0001" />
-              <p>每 1000 Token 的用户售价，当前 ¥{{ formatMoney(billingSettings.unitPrice) }}</p>
-            </article>
-            <article class="billing-rule-card spatial-glass-panel">
-              <span>当前倍率</span>
-              <input v-model.number="billingForm.multiplier" type="number" min="0.01" step="0.01" />
-              <p>当前 {{ Number(billingSettings.multiplier || 1).toFixed(2) }}x</p>
-            </article>
-            <article class="billing-rule-card spatial-glass-panel wide">
-              <span>扣费公式</span>
-              <strong>{{ billingSettings.formula }}</strong>
-              <p>Token 必须按供应商 usage 原值入账；管理员只通过基础单价和倍率控制用户侧售价。</p>
-              <button class="spatial-btn spatial-btn-accent compact-btn billing-save-btn" :disabled="billingSaving" @click="saveBillingSettings">
-                {{ billingSaving ? "保存中..." : "保存计费规则" }}
-              </button>
-            </article>
-          </div>
-
-          <div class="table-container spatial-glass-panel">
-            <table class="admin-table">
-              <thead>
-                <tr>
-                  <th>时间</th>
-                  <th>功能</th>
-                  <th>论文 / 任务</th>
-                  <th>输入</th>
-                  <th>输出</th>
-                  <th>Token</th>
-                  <th>单价</th>
-                  <th>倍率</th>
-                  <th>扣费</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in paginatedBillingCharges" :key="`${row.time}-${row.paper}-${row.tokens}`">
-                  <td>{{ row.time || "—" }}</td>
-                  <td>{{ cleanActionName(row.action) }}</td>
-                  <td>{{ row.paper || "当前论文" }}</td>
-                  <td>{{ formatTokens(row.promptTokens) }}</td>
-                  <td>{{ formatTokens(row.completionTokens) }}</td>
-                  <td>{{ formatTokens(row.tokens) }}</td>
-                  <td>¥{{ formatMoney(row.unitPrice) }}</td>
-                  <td>{{ Number(row.billingMultiplier || 1).toFixed(2) }}x</td>
-                  <td>¥{{ formatMoney(row.chargeAmount) }}</td>
-                </tr>
-                <tr v-if="!billingCharges.length">
-                  <td colspan="9" style="text-align: center; color: #64748b; padding: 32px 0;">暂无扣费明细</td>
-                </tr>
-              </tbody>
-            </table>
-            <div v-if="billingCharges.length" class="admin-pagination">
-              <span>{{ paginationText(billingCharges.length, billingPage, billingPageSize) }}</span>
-              <div>
-                <select v-model.number="billingPageSize" class="pagination-size-select">
-                  <option :value="8">8 条/页</option>
-                  <option :value="12">12 条/页</option>
-                  <option :value="20">20 条/页</option>
-                </select>
-                <button :disabled="billingPage <= 1" @click="billingPage -= 1">上一页</button>
-                <strong>{{ billingPage }} / {{ billingPageCount }}</strong>
-                <button :disabled="billingPage >= billingPageCount" @click="billingPage += 1">下一页</button>
               </div>
             </div>
           </div>
@@ -751,6 +667,12 @@
               <div class="forum-report-actions">
                 <button
                   class="spatial-btn spatial-btn-ghost compact-btn"
+                  @click="openForumReportDetail(report)"
+                >
+                  查看详情
+                </button>
+                <button
+                  class="spatial-btn spatial-btn-ghost compact-btn"
                   :disabled="report.status !== 'open'"
                   @click="openForumReportModal(report, 'processed', false)"
                 >
@@ -815,6 +737,7 @@
               <option value="study">研读会员</option>
               <option value="lab">课题会员</option>
               <option value="team">导师车队会员</option>
+              <option value="team_plus">团队 Plus 会员</option>
             </select>
           </div>
           <div v-if="selectedMembershipPlan !== 'free'" class="form-group" style="margin-top: 12px;">
@@ -879,7 +802,7 @@
             <label>充值金额 (¥)</label>
             <input id="recharge-amount" name="recharge-amount" v-model.number="newRecharge.amount" type="number" placeholder="100" />
           </div>
-          <p class="form-hint" style="margin-top: 12px;">入账后会增加用户现金余额，后续 AI 调用按后台计费规则自动扣除。</p>
+          <p class="form-hint" style="margin-top: 12px;">历史余额入口仅用于兼容旧订单；新用户请通过会员套餐开通权益。</p>
           <div class="modal-actions" style="margin-top: 24px;">
             <button class="spatial-btn spatial-btn-ghost" @click="showAddRechargeModal = false">取消</button>
             <button class="spatial-btn spatial-btn-accent" @click="addRecharge">确认入账</button>
@@ -999,6 +922,35 @@
         </div>
       </div>
     </Transition>
+
+    <Transition name="fade">
+      <div v-if="showForumReportDetailModal" class="admin-modal-overlay" @click="showForumReportDetailModal = false">
+        <div class="admin-modal-card forum-report-detail-card spatial-glass-panel" @click.stop>
+          <h4>举报详情</h4>
+          <p class="form-hint" style="margin-top: 8px;">{{ selectedForumReportDetail?.postTitle }} · 举报 #{{ selectedForumReportDetail?.id }}</p>
+          <div class="forum-report-detail-grid">
+            <article>
+              <span>举报人说明</span>
+              <p>{{ selectedForumReportDetail?.detail || "—" }}</p>
+            </article>
+            <article>
+              <span>原帖内容</span>
+              <p>{{ selectedForumReportDetail?.postContent || "帖子已删除或无正文" }}</p>
+            </article>
+          </div>
+          <div class="modal-actions" style="margin-top: 24px;">
+            <button class="spatial-btn spatial-btn-ghost" @click="showForumReportDetailModal = false">关闭</button>
+            <button
+              v-if="selectedForumReportDetail?.status === 'open'"
+              class="spatial-btn spatial-btn-accent"
+              @click="showForumReportDetailModal = false; openForumReportModal(selectedForumReportDetail, 'processed', true)"
+            >
+              处理并封禁
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -1030,8 +982,6 @@ const orderPage = ref(1);
 const orderPageSize = ref(5);
 const rechargePage = ref(1);
 const rechargePageSize = ref(8);
-const billingPage = ref(1);
-const billingPageSize = ref(8);
 const logPage = ref(1);
 const logPageSize = ref(20);
 const forumReportPage = ref(1);
@@ -1051,6 +1001,7 @@ const showAddTeamModal = ref(false);
 const showViewTeamModal = ref(false);
 const showPaymentTicketModal = ref(false);
 const showForumReportModal = ref(false);
+const showForumReportDetailModal = ref(false);
 const siteMessagePublishing = ref(false);
 
 const selectedUser = ref(null);
@@ -1064,6 +1015,7 @@ const paymentTicketDecision = ref("processed");
 const paymentTicketNote = ref("");
 const paymentTicketSaving = ref(false);
 const selectedForumReport = ref(null);
+const selectedForumReportDetail = ref(null);
 const forumReportDecision = ref("processed");
 const forumReportBanPost = ref(false);
 const forumReportNote = ref("");
@@ -1098,16 +1050,6 @@ const translationProviders = ref([]);
 const siteMessages = ref([]);
 const forumReports = ref([]);
 const modelPool = ref([]);
-const billingSettings = ref({
-  unitPrice: 0.01,
-  multiplier: 1,
-  pptAgentMinCharge: 0,
-  formula: "Token 用量按供应商返回的 usage 原值记录；费用 = 真实 Token × 站内单价 × 收费倍率 / 1000",
-  currency: "CNY",
-});
-const billingForm = ref({ unitPrice: 0.01, multiplier: 1 });
-const billingCharges = ref([]);
-const billingSaving = ref(false);
 const modelPoolRefreshing = ref(false);
 const modelPoolSeeding = ref(false);
 const modelPoolCleaning = ref(false);
@@ -1213,7 +1155,6 @@ const userPageCount = computed(() => getPageCount(filteredUsers.value.length, us
 const ticketPageCount = computed(() => getPageCount(paymentTickets.value.length, ticketPageSize.value));
 const orderPageCount = computed(() => getPageCount(paymentOrders.value.length, orderPageSize.value));
 const rechargePageCount = computed(() => getPageCount(filteredRecharges.value.length, rechargePageSize.value));
-const billingPageCount = computed(() => getPageCount(billingCharges.value.length, billingPageSize.value));
 const logPageCount = computed(() => getPageCount(systemLogs.value.length, logPageSize.value));
 const forumReportPageCount = computed(() => getPageCount(forumReports.value.length, forumReportPageSize.value));
 const siteMessagePageCount = computed(() => getPageCount(siteMessages.value.length, siteMessagePageSize.value));
@@ -1221,7 +1162,6 @@ const paginatedUsers = computed(() => paginateRows(filteredUsers.value, userPage
 const paginatedPaymentTickets = computed(() => paginateRows(paymentTickets.value, ticketPage.value, ticketPageSize.value));
 const paginatedPaymentOrders = computed(() => paginateRows(paymentOrders.value, orderPage.value, orderPageSize.value));
 const paginatedRecharges = computed(() => paginateRows(filteredRecharges.value, rechargePage.value, rechargePageSize.value));
-const paginatedBillingCharges = computed(() => paginateRows(billingCharges.value, billingPage.value, billingPageSize.value));
 const paginatedSystemLogs = computed(() => paginateRows(systemLogs.value, logPage.value, logPageSize.value));
 const paginatedForumReports = computed(() => paginateRows(forumReports.value, forumReportPage.value, forumReportPageSize.value));
 const paginatedSiteMessages = computed(() => paginateRows(siteMessages.value, siteMessagePage.value, siteMessagePageSize.value));
@@ -1232,10 +1172,9 @@ watch([searchQuery, roleFilter, userPageSize], () => {
 watch([rechargeQuery, rechargePageSize], () => {
   rechargePage.value = 1;
 });
-watch([ticketPageSize, orderPageSize, billingPageSize, logPageSize, forumReportPageSize, siteMessagePageSize], () => {
+watch([ticketPageSize, orderPageSize, logPageSize, forumReportPageSize, siteMessagePageSize], () => {
   ticketPage.value = 1;
   orderPage.value = 1;
-  billingPage.value = 1;
   logPage.value = 1;
   forumReportPage.value = 1;
   siteMessagePage.value = 1;
@@ -1244,7 +1183,6 @@ watch(userPageCount, () => keepPageInRange(userPage, userPageCount));
 watch(ticketPageCount, () => keepPageInRange(ticketPage, ticketPageCount));
 watch(orderPageCount, () => keepPageInRange(orderPage, orderPageCount));
 watch(rechargePageCount, () => keepPageInRange(rechargePage, rechargePageCount));
-watch(billingPageCount, () => keepPageInRange(billingPage, billingPageCount));
 watch(logPageCount, () => keepPageInRange(logPage, logPageCount));
 watch(forumReportPageCount, () => keepPageInRange(forumReportPage, forumReportPageCount));
 watch(siteMessagePageCount, () => keepPageInRange(siteMessagePage, siteMessagePageCount));
@@ -1386,6 +1324,16 @@ async function fetchAllData() {
       tokenLimit: u.tokenLimit || 5000000,
       tokenUsed: u.tokenUsed || 0,
       balanceAmount: u.balanceAmount || 0,
+      membershipPlan: u.membershipPlan || "free",
+      membershipCycle: u.membershipCycle || "monthly",
+      membershipExpiresAt: u.membershipExpiresAt || null,
+      reviewQuota: u.reviewQuota || 0,
+      reviewUsed: u.reviewUsed || 0,
+      pptQuota: u.pptQuota || 0,
+      pptUsed: u.pptUsed || 0,
+      chatQuota: u.chatQuota || 0,
+      chatUsed: u.chatUsed || 0,
+      fruitScore: u.fruitScore || 0,
       createdTime: formatDate(u.createdAt),
     }));
 
@@ -1423,14 +1371,6 @@ async function fetchAllData() {
     // 5. Fetch Global Stats
     const statsData = await paperpilotApi.getAdminStats();
     globalStats.value = statsData;
-
-    const billingData = await paperpilotApi.getBillingSettings();
-    billingSettings.value = billingData;
-    billingForm.value = {
-      unitPrice: Number(billingData.unitPrice || 0.01),
-      multiplier: Number(billingData.multiplier || 1),
-    };
-    billingCharges.value = billingData.recentCharges || [];
 
     // 6. Fetch Translation Providers Configuration Status
     const providersData = await paperpilotApi.getTranslationProviders();
@@ -1585,6 +1525,7 @@ function membershipPlanName(plan) {
     study: "研读会员",
     lab: "课题会员",
     team: "导师车队会员",
+    team_plus: "团队 Plus 会员",
   }[plan || "free"] || "未开通";
 }
 
@@ -1777,6 +1718,11 @@ function openForumReportModal(report, status, banPost = false) {
   showForumReportModal.value = true;
 }
 
+function openForumReportDetail(report) {
+  selectedForumReportDetail.value = report;
+  showForumReportDetailModal.value = true;
+}
+
 async function submitForumReportDecision() {
   if (!selectedForumReport.value) return;
   forumReportSaving.value = true;
@@ -1793,28 +1739,6 @@ async function submitForumReportDecision() {
     dialogStore.alert(error.response?.data?.message || "举报处理失败");
   } finally {
     forumReportSaving.value = false;
-  }
-}
-
-async function saveBillingSettings() {
-  if (Number(billingForm.value.unitPrice || 0) <= 0 || Number(billingForm.value.multiplier || 0) <= 0) {
-    dialogStore.alert("单价和倍率必须大于 0");
-    return;
-  }
-  billingSaving.value = true;
-  try {
-    billingSettings.value = await paperpilotApi.updateBillingSettings({
-      unitPrice: Number(billingForm.value.unitPrice),
-      multiplier: Number(billingForm.value.multiplier),
-      pptAgentMinCharge: 0,
-    });
-    const refreshed = await paperpilotApi.getBillingSettings();
-    billingSettings.value = refreshed;
-    billingCharges.value = refreshed.recentCharges || [];
-  } catch (error) {
-    dialogStore.alert(error.response?.data?.message || "计费规则保存失败");
-  } finally {
-    billingSaving.value = false;
   }
 }
 
@@ -2535,6 +2459,12 @@ async function removeSiteMessage(message) {
   color: #b45309;
   background: #fff5dd;
   border-color: #fde7ad;
+}
+
+.membership-plan-pill.plan-team_plus {
+  color: #9333ea;
+  background: #f5edff;
+  border-color: #dfc7ff;
 }
 
 .membership-cycle-cell,
@@ -3359,6 +3289,40 @@ async function removeSiteMessage(message) {
   margin: 5px 0 0;
   color: #64748b;
   font-size: 0.82rem;
+}
+
+.forum-report-detail-card {
+  width: min(760px, calc(100vw - 48px));
+}
+
+.forum-report-detail-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.forum-report-detail-grid article {
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, .25);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, .74);
+}
+
+.forum-report-detail-grid span {
+  display: block;
+  margin-bottom: 8px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.forum-report-detail-grid p {
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  color: #243044;
+  line-height: 1.8;
+  white-space: pre-wrap;
 }
 
 .site-message-admin-grid {

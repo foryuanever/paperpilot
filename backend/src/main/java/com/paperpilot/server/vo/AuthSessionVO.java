@@ -9,8 +9,13 @@ public class AuthSessionVO {
     private String role;
     private String avatarUrl;
     private String backgroundUrl;
+    private Integer fruitScore;
 
     public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl) {
+        this(userId, name, email, inviteCode, role, avatarUrl, backgroundUrl, 0);
+    }
+
+    public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl, Integer fruitScore) {
         this.userId = userId;
         this.name = name;
         this.email = email;
@@ -18,6 +23,7 @@ public class AuthSessionVO {
         this.role = role;
         this.avatarUrl = avatarUrl;
         this.backgroundUrl = backgroundUrl;
+        this.fruitScore = fruitScore;
     }
 
     public Long getUserId() {
@@ -46,5 +52,9 @@ public class AuthSessionVO {
 
     public String getBackgroundUrl() {
         return backgroundUrl;
+    }
+
+    public Integer getFruitScore() {
+        return fruitScore;
     }
 }

@@ -139,7 +139,7 @@
     <section id="chapter-pricing" class="spatial-chapter">
       <div class="spatial-chapter-inner">
         <span class="spatial-chapter-eyebrow" data-reveal>订阅定价</span>
-        <h2 class="spatial-chapter-title" data-reveal style="margin-bottom:48px;max-width:20ch">透明额度方案，限制终结于自由创作</h2>
+        <h2 class="spatial-chapter-title" data-reveal style="margin-bottom:48px;max-width:20ch">按月开通会员，按功能次数使用</h2>
         
         <div class="home-pricing-grid" data-reveal data-reveal-delay="1">
           <article
@@ -154,7 +154,7 @@
               <strong>{{ plan.price }}</strong>
               <span>{{ plan.period }}</span>
             </div>
-            <p class="plan-quota">{{ formatTokens(plan.tokenQuota) }} Token</p>
+            <p class="plan-quota">{{ plan.tier }}会员权益</p>
             <ul class="plan-features">
               <li v-for="feat in plan.features" :key="feat">
                 <span class="feat-check">✓</span> {{ feat }}
@@ -208,19 +208,29 @@
 
       <div v-else-if="authMode === 'register'">
         <span class="spatial-chapter-eyebrow" style="color: var(--spatial-accent, #0066ff)">REGISTER</span>
-        <h3 class="modal-title">内测邀请注册</h3>
+        <h3 class="modal-title">QQ 邮箱注册</h3>
         <div class="form-grid auth-popover-form" style="max-height: 70vh; overflow-y: auto; padding-right: 8px;">
           <div class="form-group">
-            <label style="color: #1e293b; font-weight: 600;">邀请码</label>
-            <input v-model="inviteCode" placeholder="PAPERSLOVER2026" />
+            <label style="color: #1e293b; font-weight: 600;">QQ 邮箱</label>
+            <div class="register-code-row">
+              <input v-model="email" type="email" placeholder="123456@qq.com" />
+              <button
+                type="button"
+                class="spatial-btn spatial-btn-ghost register-code-btn"
+                :disabled="sendingRegisterCode || registerCodeCooldown > 0"
+                @click="sendRegisterCode"
+              >
+                {{ registerCodeButtonText }}
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label style="color: #1e293b; font-weight: 600;">6 位验证码</label>
+            <input v-model="verificationCode" inputmode="numeric" maxlength="6" placeholder="输入邮箱验证码" />
           </div>
           <div class="form-group">
             <label style="color: #1e293b; font-weight: 600;">昵称</label>
             <input v-model="name" placeholder="你的昵称" />
-          </div>
-          <div class="form-group">
-            <label style="color: #1e293b; font-weight: 600;">邮箱</label>
-            <input v-model="email" type="email" placeholder="you@example.com" />
           </div>
           <div class="form-group">
             <label style="color: #1e293b; font-weight: 600;">密码</label>
@@ -230,6 +240,10 @@
                 <span v-html="showPassword ? eyeOffIcon : eyeIcon"></span>
               </button>
             </div>
+          </div>
+          <div class="form-group">
+            <label style="color: #1e293b; font-weight: 600;">邀请码 <span style="color:#94a3b8;font-weight:500;">可选</span></label>
+            <input v-model="inviteCode" placeholder="有邀请码可填写，没有可留空" />
           </div>
           <div class="form-group">
             <label style="color: #1e293b; font-weight: 600;">身份角色</label>
@@ -268,6 +282,7 @@
             <label style="color: #1e293b; font-weight: 600;">管理员专属邀请码</label>
             <input v-model="mentorInviteCode" type="password" placeholder="请输入管理员特权邀请码 (ADMIN2026)" />
           </div>
+          <div v-if="registerSuccessText" style="color: #10b981; font-size: 0.85rem; font-weight: 500; text-align: center; margin-top: 8px;">{{ registerSuccessText }}</div>
           <div v-if="errorText" class="auth-error">{{ errorText }}</div>
           <button class="spatial-btn spatial-btn-accent auth-submit" :disabled="loading" @click="submitRegister">
             {{ loading ? "注册中..." : "创建账号并进入" }}
@@ -315,7 +330,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useScrollReveal } from "../composables/useScrollReveal";
 import { useAuthStore } from "../stores/auth";
@@ -333,12 +348,17 @@ const showAuthModal = ref(false);
 const authMode = ref("login"); // 'login' or 'register'
 const email = ref("");
 const password = ref("");
-const inviteCode = ref("PAPERSLOVER2026");
+const inviteCode = ref("");
 const name = ref("");
 const role = ref("学生");
 const mentorInviteCode = ref("");
+const verificationCode = ref("");
 const errorText = ref("");
 const loading = ref(false);
+const sendingRegisterCode = ref(false);
+const registerCodeCooldown = ref(0);
+const registerSuccessText = ref("");
+let registerCodeTimer = null;
 
 // Forgot Password States
 const forgotEmail = ref("");
@@ -346,6 +366,49 @@ const forgotCode = ref("");
 const forgotNewPassword = ref("");
 const sendingCode = ref(false);
 const forgotSuccessText = ref("");
+
+const registerCodeButtonText = computed(() => {
+  if (sendingRegisterCode.value) return "发送中";
+  if (registerCodeCooldown.value > 0) return `${registerCodeCooldown.value}s`;
+  return "获取验证码";
+});
+
+function isQqEmail(value) {
+  return /^[1-9][0-9]{4,11}@qq\.com$/i.test(String(value || "").trim());
+}
+
+function startRegisterCodeCooldown() {
+  registerCodeCooldown.value = 60;
+  if (registerCodeTimer) clearInterval(registerCodeTimer);
+  registerCodeTimer = setInterval(() => {
+    registerCodeCooldown.value -= 1;
+    if (registerCodeCooldown.value <= 0) {
+      clearInterval(registerCodeTimer);
+      registerCodeTimer = null;
+    }
+  }, 1000);
+}
+
+async function sendRegisterCode() {
+  const normalizedEmail = email.value.trim().toLowerCase();
+  if (!isQqEmail(normalizedEmail)) {
+    errorText.value = "请填写 QQ 邮箱，例如 123456@qq.com";
+    return;
+  }
+  sendingRegisterCode.value = true;
+  errorText.value = "";
+  registerSuccessText.value = "";
+  try {
+    await paperpilotApi.sendRegisterCode(normalizedEmail);
+    email.value = normalizedEmail;
+    registerSuccessText.value = "验证码已发送到 QQ 邮箱，10 分钟内有效。";
+    startRegisterCodeCooldown();
+  } catch (error) {
+    errorText.value = error.response?.data?.message || error.message;
+  } finally {
+    sendingRegisterCode.value = false;
+  }
+}
 
 async function sendForgotCode() {
   if (!forgotEmail.value) {
@@ -407,6 +470,8 @@ function formatTokens(n) {
 function openModal(mode) {
   authMode.value = mode;
   errorText.value = "";
+  registerSuccessText.value = "";
+  forgotSuccessText.value = "";
   showPassword.value = false;
   // Seed default credentials for easier user testing
   if (mode === "login") {
@@ -415,6 +480,9 @@ function openModal(mode) {
   } else {
     email.value = "";
     password.value = "";
+    verificationCode.value = "";
+    inviteCode.value = "";
+    name.value = "";
   }
   showAuthModal.value = true;
 }
@@ -443,6 +511,14 @@ async function submitLogin() {
 }
 
 async function submitRegister() {
+  if (!isQqEmail(email.value)) {
+    errorText.value = "注册必须使用 QQ 邮箱，例如 123456@qq.com";
+    return;
+  }
+  if (!verificationCode.value || verificationCode.value.length !== 6) {
+    errorText.value = "请输入 6 位邮箱验证码";
+    return;
+  }
   loading.value = true;
   errorText.value = "";
   try {
@@ -453,6 +529,7 @@ async function submitRegister() {
       password: password.value,
       role: role.value,
       mentorInviteCode: mentorInviteCode.value,
+      verificationCode: verificationCode.value,
     });
     if (authStore.session.role === "管理员") {
       router.push("/admin");
@@ -623,6 +700,21 @@ onMounted(() => {
 .flow-card-info span {
   font-size: 12px;
   color: #64748b;
+}
+
+.register-code-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 118px;
+  gap: 10px;
+  align-items: center;
+}
+
+.register-code-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  white-space: nowrap;
+  font-size: 0.86rem;
+  border-radius: 12px;
 }
 
 /* Pricing Grid */
