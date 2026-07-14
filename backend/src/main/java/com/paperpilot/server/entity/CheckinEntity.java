@@ -26,6 +26,9 @@ public class CheckinEntity {
     @Column(name = "fruit_award")
     private Integer fruitAward = 0;
 
+    @Column(name = "fruit_claimed")
+    private Boolean fruitClaimed = false;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -86,5 +89,13 @@ public class CheckinEntity {
 
     public void setFruitAward(Integer fruitAward) {
         this.fruitAward = fruitAward;
+    }
+
+    public Boolean getFruitClaimed() {
+        return fruitClaimed;
+    }
+
+    public void setFruitClaimed(Boolean fruitClaimed) {
+        this.fruitClaimed = fruitClaimed;
     }
 }

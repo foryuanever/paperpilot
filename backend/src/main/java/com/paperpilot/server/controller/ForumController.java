@@ -13,6 +13,7 @@ import com.paperpilot.server.repository.ForumPostReportRepository;
 import com.paperpilot.server.repository.ForumPostViewRepository;
 import com.paperpilot.server.repository.ForumReplyRepository;
 import com.paperpilot.server.service.CurrentUserService;
+import com.paperpilot.server.service.ForumModerationService;
 import com.paperpilot.server.service.NotificationService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -37,6 +38,7 @@ public class ForumController {
     private final ForumReplyRepository forumReplyRepository;
     private final AppUserRepository appUserRepository;
     private final CurrentUserService currentUserService;
+    private final ForumModerationService forumModerationService;
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
 
@@ -47,6 +49,7 @@ public class ForumController {
         ForumReplyRepository forumReplyRepository,
         AppUserRepository appUserRepository,
         CurrentUserService currentUserService,
+        ForumModerationService forumModerationService,
         NotificationService notificationService,
         ObjectMapper objectMapper
     ) {
@@ -56,6 +59,7 @@ public class ForumController {
         this.forumReplyRepository = forumReplyRepository;
         this.appUserRepository = appUserRepository;
         this.currentUserService = currentUserService;
+        this.forumModerationService = forumModerationService;
         this.notificationService = notificationService;
         this.objectMapper = objectMapper;
     }
@@ -98,6 +102,10 @@ public class ForumController {
     @PostMapping("/posts")
     public Map<String, Object> createPost(@RequestBody Map<String, Object> body) {
         AppUserEntity currentUser = currentUserService.getOrCreateDefaultUser();
+        ForumModerationService.ModerationResult review = forumModerationService.review(body);
+        if (!review.approved()) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, review.reason());
+        }
         ForumPostEntity post = new ForumPostEntity();
         applyPostFields(post, body);
         post.setUserId(currentUser.getId());
@@ -108,7 +116,9 @@ public class ForumController {
         return Map.of(
             "id", "post-" + saved.getId(),
             "title", saved.getTitle(),
-            "message", "帖子已发布"
+            "message", "AI 审核通过，帖子已发布",
+            "reviewer", review.reviewer(),
+            "reviewReason", review.reason()
         );
     }
 
@@ -134,7 +144,12 @@ public class ForumController {
 
     @PostMapping("/posts/review")
     public Map<String, Object> reviewPost(@RequestBody Map<String, Object> body) {
-        return Map.of("approved", true, "reason", "论坛审核已暂时关闭", "reviewer", "local");
+        ForumModerationService.ModerationResult review = forumModerationService.review(body);
+        return Map.of(
+            "approved", review.approved(),
+            "reason", review.reason(),
+            "reviewer", review.reviewer()
+        );
     }
 
     @PostMapping("/posts/{id}/like")
@@ -294,6 +309,7 @@ public class ForumController {
         map.put("avatar", avatar(post.getAvatar(), post.getAuthor()));
         map.put("avatarUrl", avatarUrl(authorUserId));
         map.put("authorMembershipPlan", membershipPlan(authorUserId));
+        map.put("authorSchoolName", authorSchoolName(authorUserId));
         String postType = fallback(post.getPostType(), inferPostType(post));
         map.put("postType", postType);
         map.put("direction", fallback(post.getResearchArea(), ""));
@@ -443,6 +459,14 @@ public class ForumController {
             .map(AppUserEntity::getMembershipPlan)
             .filter(StringUtils::hasText)
             .orElse("free");
+    }
+    private String authorSchoolName(Long userId) {
+        if (userId == null) return "";
+        return appUserRepository.findById(userId)
+            .filter(AppUserEntity::isCampusVerified)
+            .map(AppUserEntity::getSchoolName)
+            .filter(StringUtils::hasText)
+            .orElse("");
     }
     private String fallback(String value, String fallback) { return StringUtils.hasText(value) ? value : fallback; }
     private String text(Map<String, Object> body, String key) { return body.get(key) == null ? "" : String.valueOf(body.get(key)).trim(); }

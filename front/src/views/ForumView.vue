@@ -1,51 +1,22 @@
 <template>
   <div class="research-community">
-    <section class="community-hero">
-      <div class="notice-heading">
-        <span class="notice-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <path d="M12 3 3.8 6.5v5.3c0 4.8 3.4 8 8.2 9.2 4.8-1.2 8.2-4.4 8.2-9.2V6.5L12 3Z"></path>
-            <path d="M12 8v4.5M12 16h.01"></path>
-          </svg>
-        </span>
-        <div>
-          <span class="eyebrow">COMMUNITY NOTICE</span>
-          <h1>站内发帖须知</h1>
-          <p>共同维护真实、专业、可信的学术交流环境</p>
-        </div>
-      </div>
-      <div class="notice-rules">
-        <div><span>01</span><p><strong>尊重学术真实</strong>不得伪造论文、数据、成果或身份信息</p></div>
-        <div><span>02</span><p><strong>保持内容相关</strong>不可发布与科研学习无关或无实际意义的帖子</p></div>
-        <div><span>03</span><p><strong>遵守内容规范</strong>严禁暴力、色情、违法及攻击性内容</p></div>
-        <div><span>04</span><p><strong>谨慎私下交易</strong>任何交易均与本站无关，违规内容发现即封号</p></div>
-      </div>
-      <div class="hero-action-stack">
-        <button class="hero-publish-button" @click="openCreateModal">
-          <span class="plus-icon">+</span>
-          我已知晓，去发帖
+    <section class="forum-module-area">
+      <section class="module-strip">
+        <button
+          v-for="module in postModules"
+          :key="module.value"
+          class="module-card"
+          :class="[module.className, { active: activeType === module.value }]"
+          @click="toggleType(module.value)"
+        >
+          <span class="module-mark">{{ module.short }}</span>
+          <span class="module-copy">
+            <strong>{{ module.label }}</strong>
+            <small>{{ module.description }}</small>
+          </span>
+          <span class="module-count">{{ getTypeCount(module.value) }}</span>
         </button>
-        <button class="hero-manage-button" @click="showMyPostsManager = true">
-          管理帖子
-        </button>
-      </div>
-    </section>
-
-    <section class="module-strip">
-      <button
-        v-for="module in postModules"
-        :key="module.value"
-        class="module-card"
-        :class="[module.className, { active: activeType === module.value }]"
-        @click="toggleType(module.value)"
-      >
-        <span class="module-mark">{{ module.short }}</span>
-        <span class="module-copy">
-          <strong>{{ module.label }}</strong>
-          <small>{{ module.description }}</small>
-        </span>
-        <span class="module-count">{{ getTypeCount(module.value) }}</span>
-      </button>
+      </section>
     </section>
 
     <div class="community-layout">
@@ -85,6 +56,18 @@
               <input v-model="dateEnd" type="date" />
             </label>
             <button v-if="dateStart || dateEnd" @click="dateStart = ''; dateEnd = ''">清除时间</button>
+            <div class="forum-action-buttons">
+              <button class="hero-campus-button" :class="{ active: campusCircleActive }" @click="openCampusCircle">
+                {{ campusCircleActive ? "退出校园圈" : "校园圈" }}
+              </button>
+              <button class="hero-publish-button" @click="openCreateModal">
+                <span class="plus-icon">+</span>
+                发布帖子
+              </button>
+              <button class="hero-manage-button" @click="showMyPostsManager = true">
+                管理帖子
+              </button>
+            </div>
           </div>
 
           <div v-if="hasFilters" class="filter-summary">
@@ -104,7 +87,8 @@
             v-for="post in paginatedPosts"
             :key="post.id"
             class="research-post"
-            :class="[membershipClass(post.authorMembershipPlan), { 'premium-wave-post': hasPremiumWave(post), 'pinned-post': post.pinned }]"
+            :class="[membershipClass(post.authorMembershipPlan), { 'premium-wave-post': hasPremiumWave(post), 'pinned-post': post.pinned, 'new-post-insert': newestPostId === post.id, 'campus-post': campusCircleActive && Boolean(post.authorSchoolName) }]"
+            :data-school="post.authorSchoolName || ''"
           >
             <div class="forum-row-avatar" :data-user-id="post.authorUserId" title="查看个人卡片">
               <img v-if="avatarUrlFor(post)" :src="avatarUrlFor(post)" class="post-avatar-img" :alt="post.author" />
@@ -157,6 +141,7 @@
             </div>
 
             <div class="forum-row-side">
+              <span v-if="campusCircleActive && post.authorSchoolName" class="campus-watermark">{{ post.authorSchoolName }}</span>
               <div v-if="replyAvatars(post).length" class="reply-avatar-strip" aria-label="评论参与者">
                 <span
                   v-for="avatar in replyAvatars(post)"
@@ -214,11 +199,42 @@
             <small>{{ hotPosts.length }} 条</small>
           </div>
           <div v-if="hotPosts.length" class="active-user-list hot-post-list">
-            <article v-for="item in paginatedHotPosts" :key="item.id" @click="openPost(item.id)">
-              <span class="active-rank" :class="{ top: item.rank <= 3 }">{{ item.rank }}</span>
-              <div>
+            <article
+              v-for="item in paginatedHotPosts"
+              :key="item.id"
+              class="hot-post-item"
+              :class="`rank-${Math.min(item.rank, 4)}`"
+              @click="openPost(item.id)"
+            >
+              <span class="active-rank" :class="hotRankClass(item.rank)">
+                <span v-if="item.rank <= 3" class="rank-icon" aria-hidden="true">
+                  <svg v-if="item.rank === 1" viewBox="0 0 24 24">
+                    <path d="M7 4h10v3.2c0 3.4-2 6.1-5 7-3-0.9-5-3.6-5-7V4Z"></path>
+                    <path d="M7.2 6H4.5c.2 3.1 1.6 5 4.1 5.6M16.8 6h2.7c-.2 3.1-1.6 5-4.1 5.6"></path>
+                    <path d="M10 14h4v3h3v3H7v-3h3v-3Z"></path>
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24">
+                    <path d="M8 3h8l-2 5h-4L8 3Z"></path>
+                    <circle cx="12" cy="14" r="5"></circle>
+                    <path d="M10.6 14.2 12 12.8l1.4 1.4"></path>
+                  </svg>
+                </span>
+                <b>{{ item.rank }}</b>
+                <small v-if="item.rank <= 3">{{ hotRankLabel(item.rank) }}</small>
+              </span>
+              <div class="hot-post-copy">
                 <strong :class="{ pinned: item.pinned }">{{ item.title }}</strong>
-                <small>热度 {{ item.heat }} · {{ item.views || 0 }} 浏览</small>
+                <small>
+                  <span>{{ item.postType }}</span>
+                  <span>{{ item.replies?.length || 0 }} 回复</span>
+                  <span>{{ item.views || 0 }} 浏览</span>
+                </small>
+              </div>
+              <div class="hot-post-score">
+                <strong>{{ item.heat }}</strong>
+                <span class="hot-score-track">
+                  <i :style="{ width: `${hotHeatPercent(item.heat)}%` }"></i>
+                </span>
               </div>
             </article>
           </div>
@@ -264,6 +280,69 @@
       </aside>
     </div>
 
+    <div v-if="showCampusModal" class="modal-overlay" @click.self="showCampusModal = false">
+      <section class="campus-modal">
+        <header>
+          <div>
+            <span>CAMPUS CIRCLE</span>
+            <h2>校园圈认证</h2>
+            <p>完成认证后解锁校园圈入口，个人主页会展示你的学校。</p>
+          </div>
+          <button class="modal-close" @click="showCampusModal = false">×</button>
+        </header>
+
+        <div v-if="authStore.profile.campusVerified" class="campus-verified-panel">
+          <b>已通过校园认证</b>
+          <strong>{{ authStore.profile.schoolName || campusStatus?.schoolName || "已认证学校" }}</strong>
+          <p>校园圈已解锁，后续同校内容、校园求助和校内动态会优先在这里聚合。</p>
+          <button @click="showCampusModal = false">进入校园圈</button>
+        </div>
+
+        <form v-else class="campus-form" @submit.prevent="submitCampusVerification">
+          <div v-if="campusStatus?.status === 'pending'" class="campus-status pending">
+            <strong>认证审核中</strong>
+            <span>管理员审核通过后，会在站内通知里提醒你。</span>
+          </div>
+          <div v-else-if="campusStatus?.status === 'rejected'" class="campus-status rejected">
+            <strong>上次认证未通过</strong>
+            <span>{{ campusStatus.adminNote || "请检查学校、学号和学生证照片后重新提交。" }}</span>
+          </div>
+
+          <label>
+            <span>学校名称</span>
+            <input v-model.trim="campusForm.schoolName" maxlength="128" placeholder="例如：北京大学" />
+          </label>
+          <label>
+            <span>学号</span>
+            <input v-model.trim="campusForm.studentNo" maxlength="64" placeholder="请输入本人学号" />
+          </label>
+
+          <div class="campus-upload-grid">
+            <label class="campus-upload-card">
+              <input type="file" accept="image/*" @change="handleCampusCardUpload('front', $event)" />
+              <span>学生证正面</span>
+              <img v-if="campusForm.studentCardFront" :src="campusForm.studentCardFront" alt="学生证正面预览" />
+              <small v-else>上传照片</small>
+            </label>
+            <label class="campus-upload-card">
+              <input type="file" accept="image/*" @change="handleCampusCardUpload('back', $event)" />
+              <span>学生证反面</span>
+              <img v-if="campusForm.studentCardBack" :src="campusForm.studentCardBack" alt="学生证反面预览" />
+              <small v-else>上传照片</small>
+            </label>
+          </div>
+
+          <p v-if="campusError" class="campus-error">{{ campusError }}</p>
+          <footer>
+            <span>仅用于校园认证审核，审核通过后只公开学校名称。</span>
+            <button type="submit" :disabled="campusSubmitting">
+              {{ campusSubmitting ? "提交中..." : "提交认证" }}
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
+
     <div v-if="showMyPostsManager" class="modal-overlay" @click.self="showMyPostsManager = false">
       <section class="post-manager-modal">
         <header>
@@ -304,17 +383,26 @@
       </section>
     </div>
 
-    <div v-if="showCreateModal" class="modal-overlay" @click.self="closeCreateModal">
+    <div v-if="showCreateModal" class="modal-overlay" @click.self="publishing ? null : closeCreateModal()">
       <section class="publish-modal">
         <header>
           <div>
             <span>{{ editingPost ? "EDIT RESEARCH TOPIC" : "CREATE RESEARCH TOPIC" }}</span>
             <h2>{{ editingPost ? "编辑研究主题" : "发布研究主题" }}</h2>
           </div>
-          <button class="modal-close" @click="closeCreateModal">×</button>
+          <button class="modal-close" :disabled="publishing" @click="closeCreateModal">×</button>
         </header>
 
         <div class="publish-form">
+          <section class="publish-notice-box">
+            <strong>发帖须知</strong>
+            <p>请确保内容真实、专业、与科研学习相关；不得伪造论文、数据、成果或身份信息；严禁暴力、色情、违法及攻击性内容；任何私下交易均与本站无关，违规内容发现即封号。</p>
+            <label>
+              <input v-model="noticeAccepted" type="checkbox" />
+              <span>我已阅读并同意以上发帖须知</span>
+            </label>
+          </section>
+
           <div class="form-section">
             <h3><span>1</span> 选择研究模块</h3>
             <div class="type-picker">
@@ -452,11 +540,11 @@
         </div>
 
         <footer>
-          <span>{{ publishing ? "正在提交并同步列表..." : editingPost ? "保存后立即更新帖子" : "发布后立即公开展示" }}</span>
+          <span>{{ publishFooterText }}</span>
           <div>
-            <button class="cancel-button" @click="closeCreateModal">取消</button>
+            <button class="cancel-button" :disabled="publishing" @click="closeCreateModal">取消</button>
             <button class="submit-button" :disabled="!canSubmit || publishing" @click="submitPost">
-              {{ publishing ? "提交中..." : editingPost ? "保存修改" : "发布帖子" }}
+              {{ publishing ? (editingPost ? "保存中..." : "AI审核中...") : editingPost ? "保存修改" : "发布帖子" }}
             </button>
           </div>
         </footer>
@@ -549,10 +637,23 @@ const showMyPostsManager = ref(false);
 const contentEditor = ref(null);
 const markdownMode = ref("edit");
 const editingPost = ref(null);
+const noticeAccepted = ref(false);
+const newestPostId = ref("");
 const reportTarget = ref(null);
 const reportDetail = ref("");
 const reporting = ref(false);
 const moderationBusy = reactive({});
+const showCampusModal = ref(false);
+const campusSubmitting = ref(false);
+const campusStatus = ref(null);
+const campusError = ref("");
+const campusCircleActive = ref(false);
+const campusForm = reactive({
+  schoolName: "",
+  studentNo: "",
+  studentCardFront: "",
+  studentCardBack: ""
+});
 const postPage = ref(1);
 const postPageSize = 15;
 const activePage = ref(1);
@@ -586,6 +687,7 @@ onMounted(async () => {
 
 const filteredPosts = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
+  const school = campusSchoolName.value;
   const result = forumStore.state.posts.filter(post => {
     const tagText = [post.direction, ...(post.tags || [])].filter(Boolean).join(" ").toLowerCase();
     const contentText = [
@@ -598,6 +700,7 @@ const filteredPosts = computed(() => {
     ].filter(Boolean).join(" ").toLowerCase();
     const searchText = searchMode.value === "tag" ? tagText : `${contentText} ${tagText}`;
     return (!query || searchText.includes(query))
+      && (!campusCircleActive.value || (school && post.authorSchoolName === school))
       && (!activeType.value || post.postType === activeType.value)
       && (!activeTag.value || post.tags?.includes(activeTag.value) || post.direction === activeTag.value)
       && isInDateRange(post);
@@ -631,6 +734,8 @@ const hotPosts = computed(() => forumStore.state.posts
   .map((post, index) => ({ ...post, rank: index + 1 })));
 const hotPostPageCount = computed(() => Math.max(1, Math.ceil(hotPosts.value.length / activePageSize)));
 const paginatedHotPosts = computed(() => hotPosts.value.slice((activePage.value - 1) * activePageSize, activePage.value * activePageSize));
+const maxHotHeat = computed(() => Math.max(1, hotPosts.value[0]?.heat || 1));
+const campusSchoolName = computed(() => authStore.profile.campusVerified ? (authStore.profile.schoolName || campusStatus.value?.schoolName || "") : "");
 
 const popularTags = computed(() => {
   const counts = {};
@@ -643,7 +748,12 @@ const popularTags = computed(() => {
 });
 
 const selectedPaper = computed(() => libraryStore.state.documents.find(doc => String(doc.id) === String(form.paperId)));
-const canSubmit = computed(() => form.title.trim() && form.content.trim().length > 5 && form.postType && form.direction.length <= 10);
+const canSubmit = computed(() => form.title.trim() && form.content.trim().length > 5 && form.postType && form.direction.length <= 10 && noticeAccepted.value);
+const publishFooterText = computed(() => {
+  if (publishing.value) return editingPost.value ? "正在保存修改..." : "正在进入 AI 发帖审核，预计约 1 分钟，请不要关闭窗口";
+  if (!noticeAccepted.value) return "请先勾选发帖须知";
+  return editingPost.value ? "保存后立即更新帖子" : "提交后先进入 AI 审核，通过后自动发布";
+});
 const editorLineNumbers = computed(() => {
   const count = Math.max(1, String(form.content || "").split("\n").length);
   return Array.from({ length: count }, (_, index) => index + 1);
@@ -673,6 +783,24 @@ function toggleType(type) {
   activeType.value = activeType.value === type ? "" : type;
 }
 
+function hotHeatPercent(heat) {
+  return Math.max(8, Math.min(100, Math.round((Number(heat || 0) / maxHotHeat.value) * 100)));
+}
+
+function hotRankClass(rank) {
+  if (rank === 1) return "top first";
+  if (rank === 2) return "top second";
+  if (rank === 3) return "top third";
+  return "";
+}
+
+function hotRankLabel(rank) {
+  if (rank === 1) return "TOP";
+  if (rank === 2) return "02";
+  if (rank === 3) return "03";
+  return "";
+}
+
 function clearFilters() {
   searchQuery.value = "";
   searchMode.value = "content";
@@ -680,6 +808,87 @@ function clearFilters() {
   activeTag.value = "";
   dateStart.value = "";
   dateEnd.value = "";
+}
+
+async function openCampusCircle() {
+  campusError.value = "";
+  if (authStore.profile.campusVerified && campusSchoolName.value) {
+    campusCircleActive.value = !campusCircleActive.value;
+    postPage.value = 1;
+    if (campusCircleActive.value) {
+      authStore.addNotification({
+        title: "已进入校园圈",
+        desc: `当前只显示 ${campusSchoolName.value} 的帖子。`
+      });
+    }
+    return;
+  }
+  showCampusModal.value = true;
+  try {
+    const status = await paperpilotApi.getCampusVerificationMe();
+    campusStatus.value = status;
+    if (status.campusVerified && authStore.session.user) {
+      authStore.session.user.schoolName = status.schoolName || "";
+      authStore.session.user.campusVerified = true;
+      authStore.persist();
+      showCampusModal.value = false;
+      campusCircleActive.value = true;
+      postPage.value = 1;
+      return;
+    }
+    campusForm.schoolName = status.submittedSchoolName || status.schoolName || campusForm.schoolName || "";
+    campusForm.studentNo = status.studentNo || campusForm.studentNo || "";
+  } catch (error) {
+    campusError.value = error?.response?.data?.message || "暂时无法读取校园认证状态，请稍后重试。";
+  }
+}
+
+async function handleCampusCardUpload(side, event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  if (!file.type?.startsWith("image/")) {
+    campusError.value = "请上传图片格式的学生证。";
+    return;
+  }
+  if (file.size > 4 * 1024 * 1024) {
+    campusError.value = "学生证图片不能超过 4MB，请压缩后上传。";
+    return;
+  }
+  const image = await readFile(file);
+  if (side === "front") {
+    campusForm.studentCardFront = image.data;
+  } else {
+    campusForm.studentCardBack = image.data;
+  }
+  campusError.value = "";
+}
+
+async function submitCampusVerification() {
+  if (campusSubmitting.value) return;
+  if (!campusForm.schoolName || !campusForm.studentNo || !campusForm.studentCardFront || !campusForm.studentCardBack) {
+    campusError.value = "请填写学校、学号，并上传学生证正反面。";
+    return;
+  }
+  campusSubmitting.value = true;
+  campusError.value = "";
+  try {
+    const saved = await paperpilotApi.submitCampusVerification({
+      schoolName: campusForm.schoolName,
+      studentNo: campusForm.studentNo,
+      studentCardFront: campusForm.studentCardFront,
+      studentCardBack: campusForm.studentCardBack
+    });
+    campusStatus.value = { ...campusStatus.value, ...saved, submittedSchoolName: saved.schoolName };
+    authStore.addNotification({
+      title: "校园认证已提交",
+      desc: "管理员审核通过后，会在站内通知里提醒你。"
+    });
+  } catch (error) {
+    campusError.value = error?.response?.data?.message || "校园认证提交失败，请稍后重试。";
+  } finally {
+    campusSubmitting.value = false;
+  }
 }
 
 function openPost(postId) {
@@ -693,6 +902,7 @@ function normalizeLink(value) {
 function openCreateModal(type = "") {
   Object.assign(form, blankForm());
   editingPost.value = null;
+  noticeAccepted.value = false;
   markdownMode.value = "split";
   moderationError.value = "";
   if (type) choosePostType(type);
@@ -707,6 +917,7 @@ async function submitPost() {
   if (!canSubmit.value || publishing.value) return;
   publishing.value = true;
   moderationError.value = "";
+  let createdPostId = "";
   const tags = [form.direction, form.postType, ...form.title.split(/[\s,，#：:]+/)].map(tag => tag.trim()).filter(Boolean).slice(0, 8);
   const payload = {
     title: form.title.trim(),
@@ -727,9 +938,23 @@ async function submitPost() {
     if (editingPost.value) {
       await forumStore.updatePost(editingPost.value.id, payload);
     } else {
-      await forumStore.addPost(payload);
+      const created = await forumStore.addPost(payload);
+      createdPostId = String(created?.id || created?.postId || "");
+      if (!createdPostId) {
+        createdPostId = String(forumStore.state.posts.find(post =>
+          post.title === payload.title && post.author === payload.author
+        )?.id || "");
+      }
+      sortMode.value = "latest";
+      postPage.value = 1;
     }
     closeCreateModal();
+    if (createdPostId) {
+      newestPostId.value = createdPostId;
+      window.setTimeout(() => {
+        if (newestPostId.value === createdPostId) newestPostId.value = "";
+      }, 2400);
+    }
     authStore.addNotification({
       title: editingPost.value ? "研究主题已更新" : "研究主题发布成功",
       desc: `《${form.title.slice(0, 18)}》已${editingPost.value ? "保存" : "发布"}。`
@@ -739,7 +964,7 @@ async function submitPost() {
     console.error("Failed to publish forum post:", error);
     moderationError.value = error?.response?.data?.message
       || error?.response?.data?.detail
-      || (error?.code === "ECONNABORTED" ? "保存超时：请确认后端已启动，或减少正文里的大图后重试。" : "")
+      || (error?.code === "ECONNABORTED" ? "AI 审核超过 90 秒仍未返回，请稍后重试，或联系管理员检查发帖审核模型路由。" : "")
       || "帖子保存失败，请稍后重试。";
   } finally {
     publishing.value = false;
@@ -761,6 +986,7 @@ function openEditPost(post) {
     attachments: Array.isArray(post.attachments) ? [...post.attachments] : []
   });
   markdownMode.value = "split";
+  noticeAccepted.value = false;
   moderationError.value = "";
   showMyPostsManager.value = false;
   showCreateModal.value = true;
@@ -956,7 +1182,7 @@ function avatarUrlFor(postOrReply) {
 
 function replyAvatars(post) {
   const seen = new Set();
-  return (post.replies || []).slice(-6).reverse().map(reply => ({
+  return (post.replies || []).filter(reply => !reply.parentReplyId && !reply.replyToId && !reply.parentId).slice(0, 3).map(reply => ({
     key: reply.id,
     name: reply.author,
     text: reply.avatar || String(reply.author || "U").slice(0, 1).toUpperCase(),
@@ -966,7 +1192,7 @@ function replyAvatars(post) {
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, 5);
+  }).slice(0, 3);
 }
 
 function lastActiveName(post) {
@@ -976,11 +1202,15 @@ function lastActiveName(post) {
 }
 
 function membershipClass(plan) {
-  return `member-${plan || "free"}`;
+  return `member-${normalizeMembershipPlan(plan)}`;
 }
 
 function hasPremiumWave(post) {
-  return ["lab", "team_plus"].includes(post?.authorMembershipPlan);
+  return ["pro", "max", "team_pro"].includes(normalizeMembershipPlan(post?.authorMembershipPlan));
+}
+
+function normalizeMembershipPlan(plan) {
+  return ({ light: "lite", study: "plus", lab: "pro", team: "team_plus" })[plan] || plan || "free";
 }
 
 function isHotPost(post) {
@@ -1048,7 +1278,7 @@ function formatFileSize(bytes) {
 .research-community {
   width: min(1480px, calc(100vw - 48px));
   margin: 0 auto;
-  padding: 28px 0 80px;
+  padding: 10px 0 80px;
   color: #172033;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
 }
@@ -1056,18 +1286,12 @@ function formatFileSize(bytes) {
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 
-.community-hero {
-  min-height: 168px;
-  padding: 28px 32px;
-  border-radius: 28px;
-  display: grid;
-  grid-template-columns: minmax(220px, .72fr) minmax(520px, 1.65fr) auto;
+.forum-action-buttons {
+  margin-left: auto;
+  display: flex;
   align-items: center;
-  gap: 28px;
-  color: #17243e;
-  background: linear-gradient(120deg, #f8fbff 0%, #eef5ff 57%, #f8faff 100%);
-  border: 1px solid #d9e6f8;
-  box-shadow: 0 16px 42px rgba(42, 74, 124, .09);
+  gap: 10px;
+  flex: 0 0 auto;
 }
 
 .eyebrow, .card-kicker, .publish-modal header span {
@@ -1078,17 +1302,8 @@ button { cursor: pointer; }
   color: #75aaff;
 }
 
-.notice-heading { display: flex; align-items: center; gap: 16px; }
-.notice-icon { width: 54px; height: 54px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 16px; color: #0865ee; background: #fff; box-shadow: 0 8px 22px rgba(34, 91, 172, .12); }
-.notice-icon svg { width: 28px; height: 28px; }
-.notice-heading h1 { margin: 6px 0 4px; font-size: 26px; letter-spacing: -.03em; }
-.notice-heading p { margin: 0; color: #75839a; font-size: 12px; line-height: 1.6; }
-.notice-rules { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 12px; }
-.notice-rules > div { min-width: 0; display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border: 1px solid rgba(180, 201, 231, .62); border-radius: 12px; background: rgba(255,255,255,.72); }
-.notice-rules > div > span { flex: 0 0 auto; color: #0865ee; font-size: 10px; font-weight: 900; letter-spacing: .06em; }
-.notice-rules p { margin: 0; color: #68758a; font-size: 10px; line-height: 1.55; }
-.notice-rules strong { display: block; margin-bottom: 1px; color: #26344c; font-size: 11px; }
-.hero-publish-button {
+.hero-publish-button,
+.hero-campus-button {
   flex: 0 0 auto;
   height: 48px;
   padding: 0 18px;
@@ -1103,13 +1318,33 @@ button { cursor: pointer; }
   font-size: 12px;
   box-shadow: 0 10px 22px rgba(8, 101, 238, .22);
 }
+
+.hero-campus-button {
+  color: #5b21b6;
+  border: 1px solid #c4b5fd;
+  background: #f5f3ff;
+  box-shadow: none;
+}
+
+.hero-campus-button:hover,
+.hero-campus-button.active {
+  color: #ffffff;
+  border-color: #7c3aed;
+  background: #7c3aed;
+  box-shadow: 0 10px 22px rgba(124, 58, 237, .2);
+}
+
 .plus-icon { font-size: 24px; line-height: 1; }
+
+.forum-module-area {
+  position: relative;
+}
 
 .module-strip {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
-  margin: 18px 0;
+  margin: 0 0 18px;
 }
 .module-card {
   min-width: 0;
@@ -1239,6 +1474,27 @@ button { cursor: pointer; }
   font-size: 11px;
   font-weight: 850;
 }
+.time-filter-row .forum-action-buttons {
+  margin-left: auto;
+  min-height: 44px;
+  justify-content: flex-end;
+}
+.time-filter-row .hero-publish-button,
+.time-filter-row .hero-manage-button {
+  height: 40px;
+  padding: 0 16px;
+  font-size: 12px;
+}
+.time-filter-row .hero-publish-button {
+  color: #fff;
+  background: #0865ee;
+  box-shadow: 0 10px 22px rgba(8, 101, 238, .18);
+}
+.time-filter-row .hero-manage-button {
+  color: #075ee5;
+  background: #fff;
+  border: 1px solid #cfe0fb;
+}
 .filter-summary { display: flex; justify-content: space-between; margin-top: 13px; padding-top: 12px; border-top: 1px solid #edf0f5; color: #818da0; font-size: 12px; }
 .filter-summary button, .sidebar-title-row button { border: 0; background: transparent; color: #0865ee; }
 
@@ -1358,29 +1614,86 @@ button { cursor: pointer; }
 
 .active-user-list article {
   display: grid;
-  grid-template-columns: 26px 34px minmax(0, 1fr);
+  grid-template-columns: 56px minmax(0, 1fr) 92px;
   align-items: center;
-  gap: 9px;
-  min-height: 50px;
-  padding: 7px 0;
+  gap: 12px;
+  min-height: 72px;
+  padding: 10px 0;
   border-top: 1px solid #edf0f4;
 }
 
 .active-rank {
-  width: 24px;
-  height: 24px;
+  width: 44px;
+  height: 44px;
   display: grid;
+  grid-template-rows: auto auto auto;
   place-items: center;
-  border-radius: 8px;
+  align-content: center;
+  justify-content: center;
+  gap: 0;
+  border: 1px solid transparent;
+  border-radius: 12px;
   color: #6b7280;
   background: #f4f6fa;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.active-rank b {
+  margin-top: 1px;
+  line-height: 1;
+}
+
+.active-rank small {
+  margin-top: 2px;
+  font-size: 7px;
+  font-weight: 950;
+  letter-spacing: .04em;
+  line-height: 1;
 }
 
 .active-rank.top {
-  color: #a16207;
+  height: 50px;
+  color: #7a4b00;
   background: #fff3ca;
+}
+
+.rank-icon {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+}
+
+.rank-icon svg {
+  width: 18px;
+  height: 18px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.active-rank.first {
+  border-color: #f2c35b;
+  color: #5f3700;
+  background: linear-gradient(180deg, #fff4be, #ffd76c);
+  box-shadow: inset 0 -2px 0 rgba(160, 96, 0, .16);
+}
+
+.active-rank.second {
+  border-color: #d8e0ea;
+  color: #48566a;
+  background: linear-gradient(180deg, #f8fafc, #dfe6ef);
+}
+
+.active-rank.third {
+  border-color: #efc08b;
+  color: #7b3f15;
+  background: linear-gradient(180deg, #ffe4c7, #f2b879);
 }
 
 .active-user-list img,
@@ -1397,7 +1710,8 @@ button { cursor: pointer; }
   font-weight: 900;
 }
 
-.active-user-list div {
+.active-user-list div,
+.hot-post-copy {
   min-width: 0;
   display: grid;
   gap: 2px;
@@ -1414,6 +1728,73 @@ button { cursor: pointer; }
   color: #8b95a6;
   font-size: 10px;
 }
+
+.hot-post-list {
+  gap: 0;
+}
+
+.hot-post-list article {
+  cursor: pointer;
+  transition: background-color .16s ease, transform .16s ease;
+}
+
+.hot-post-list article:hover {
+  background: #f8fbff;
+  transform: translateX(2px);
+}
+
+.hot-post-list .rank-1 {
+  min-height: 82px;
+}
+
+.hot-post-list .rank-1 .hot-post-copy strong {
+  font-size: 14px;
+}
+
+.hot-post-copy strong {
+  display: block;
+  color: #172033;
+}
+
+.hot-post-copy small {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 9px;
+  line-height: 1.35;
+}
+
+.hot-post-score {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+  min-width: 0;
+}
+
+.hot-post-score strong {
+  color: #1d2a3f;
+  font-size: 15px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+.hot-score-track {
+  width: 88px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf2f7;
+}
+
+.hot-score-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #7aa7f8;
+}
+
+.rank-1 .hot-score-track i { background: #f2b84b; }
+.rank-2 .hot-score-track i { background: #94a3b8; }
+.rank-3 .hot-score-track i { background: #d89557; }
 
 .active-board-empty {
   padding: 18px 0 4px;
@@ -1472,13 +1853,48 @@ button { cursor: pointer; }
 .empty-state h2 { margin: 10px 0 7px; color: #243048; }
 .empty-state p { margin: 0 0 20px; }
 
-.modal-overlay { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 24px; background: rgba(16, 25, 43, .48); }
-.publish-modal { width: min(820px, calc(100vw - 32px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; overflow: hidden; background: #fff; border-radius: 22px; box-shadow: 0 28px 80px rgba(14, 27, 52, .28); }
+.modal-overlay { position: fixed; inset: 78px 0 0; z-index: 45; display: grid; place-items: center; padding: 18px 24px 24px; background: rgba(16, 25, 43, .48); }
+.publish-modal { width: min(820px, calc(100vw - 32px)); max-height: calc(100vh - 118px); display: flex; flex-direction: column; overflow: hidden; background: #fff; border-radius: 22px; box-shadow: 0 28px 80px rgba(14, 27, 52, .28); }
 .publish-modal > header, .publish-modal > footer { flex: 0 0 auto; padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .publish-modal > header { border-bottom: 1px solid #e8ecf2; }
 .publish-modal header h2 { margin: 4px 0 0; font-size: 22px; }
 .modal-close { width: 36px; height: 36px; border: 0; border-radius: 10px; background: #f1f3f7; color: #657084; font-size: 24px; }
+.modal-close:disabled { opacity: .45; cursor: wait; }
 .publish-form { padding: 22px 24px; overflow-y: auto; }
+.publish-notice-box {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 22px;
+  padding: 14px 16px;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  color: #991b1b;
+  background: #fff5f5;
+}
+.publish-notice-box strong {
+  font-size: 14px;
+  font-weight: 950;
+}
+.publish-notice-box p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.7;
+}
+.publish-notice-box label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+  color: #7f1d1d;
+  font-size: 12px;
+  font-weight: 900;
+}
+.publish-notice-box input {
+  width: 16px;
+  height: 16px;
+  accent-color: #dc2626;
+}
 .form-section + .form-section { margin-top: 24px; padding-top: 21px; border-top: 1px solid #edf0f4; }
 .form-section h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 14px; }
 .form-section h3 > span { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #0865ee; font-size: 10px; }
@@ -1539,8 +1955,52 @@ button { cursor: pointer; }
 .cancel-button, .submit-button { height: 40px; padding: 0 18px; border-radius: 10px; font-weight: 700; font-size: 12px; }
 .cancel-button { border: 1px solid #dfe4ec; background: #fff; color: #59657a; }
 .submit-button { border: 0; background: #0865ee; color: #fff; }
+.cancel-button:disabled { opacity: .45; cursor: wait; }
 .submit-button:disabled { opacity: .45; cursor: not-allowed; }
-.image-preview-overlay { background: rgba(14, 22, 37, .82); }
+
+.campus-modal {
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 118px);
+  overflow: auto;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .24);
+}
+.campus-modal > header {
+  padding: 22px 24px 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #edf1f7;
+}
+.campus-modal header span {
+  display: block;
+  color: #0f766e;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+.campus-modal h2 { margin: 4px 0 6px; font-size: 24px; }
+.campus-modal p { margin: 0; color: #64748b; }
+.campus-form { padding: 22px 24px 24px; display: grid; gap: 14px; }
+.campus-form label { display: grid; gap: 8px; color: #24324a; font-weight: 800; }
+.campus-form input { height: 46px; border: 1px solid #dce4ef; border-radius: 12px; padding: 0 14px; color: #172033; background: #fbfdff; }
+.campus-upload-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.campus-upload-card { min-height: 150px; padding: 14px; border: 1px dashed #b9c7da; border-radius: 14px; background: #f8fbff; place-items: center; text-align: center; overflow: hidden; cursor: pointer; }
+.campus-upload-card input { display: none; }
+.campus-upload-card img { width: 100%; height: 120px; object-fit: cover; border-radius: 10px; border: 1px solid #e2e8f0; }
+.campus-upload-card small { color: #0f766e; }
+.campus-status { padding: 12px 14px; display: grid; gap: 4px; border-radius: 12px; border: 1px solid #dbeafe; background: #eff6ff; color: #1d4ed8; }
+.campus-status.rejected { border-color: #fecaca; background: #fff1f2; color: #b91c1c; }
+.campus-error { margin: 0; color: #b91c1c; font-weight: 800; }
+.campus-form footer { margin-top: 4px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #64748b; font-size: 13px; }
+.campus-form footer button,
+.campus-verified-panel button { border: 0; border-radius: 12px; padding: 12px 18px; background: #0f766e; color: #fff; font-weight: 900; }
+.campus-form footer button:disabled { opacity: .6; }
+.campus-verified-panel { margin: 24px; padding: 26px; display: grid; gap: 12px; border: 1px solid #b9eee4; border-radius: 16px; background: #ecfdf8; color: #0f766e; }
+.campus-verified-panel strong { color: #123047; font-size: 28px; }
+
+.image-preview-overlay { inset: 0; z-index: 10000; background: rgba(14, 22, 37, .82); }
 .image-preview-card { position: relative; width: min(1100px, calc(100vw - 48px)); height: min(82vh, 820px); display: grid; place-items: center; }
 .image-preview-card img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 12px; box-shadow: 0 24px 80px rgba(0, 0, 0, .32); }
 .image-preview-card button { position: absolute; top: 0; right: 0; width: 38px; height: 38px; border: 0; border-radius: 50%; color: #fff; background: rgba(255, 255, 255, .18); font-size: 24px; }
@@ -1610,20 +2070,20 @@ button { cursor: pointer; }
 }
 
 @media (max-width: 1180px) {
-  .community-hero { grid-template-columns: 1fr auto; }
-  .notice-rules { grid-column: 1 / -1; }
   .module-strip { grid-template-columns: repeat(3, 1fr); }
   .community-layout { grid-template-columns: 1fr; }
   .community-sidebar { position: static; display: grid; grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 760px) {
-  .research-community { width: min(100% - 24px, 1480px); padding-top: 16px; }
-  .community-hero { padding: 22px; grid-template-columns: 1fr; align-items: flex-start; }
-  .notice-rules { grid-column: auto; grid-template-columns: 1fr; }
+  .research-community { width: min(100% - 24px, 1480px); padding-top: 12px; }
+  .forum-action-buttons { width: 100%; }
+  .forum-action-buttons button { flex: 1 1 0; }
   .module-strip { grid-template-columns: 1fr 1fr; }
   .community-sidebar { grid-template-columns: 1fr; }
   .search-row, .form-grid { grid-template-columns: 1fr; }
   .upload-grid { grid-template-columns: 1fr; }
+  .campus-upload-grid { grid-template-columns: 1fr; }
+  .campus-form footer { align-items: flex-start; flex-direction: column; }
   .type-picker { grid-template-columns: repeat(2, 1fr); }
   .post-label-row { align-items: flex-start; }
   .resource-panel, .post-footer { align-items: flex-start; flex-direction: column; }
@@ -1831,6 +2291,28 @@ button { cursor: pointer; }
   overflow: hidden;
 }
 
+.research-post.campus-post {
+  position: relative;
+  overflow: hidden;
+}
+
+.campus-watermark {
+  align-self: end;
+  justify-self: end;
+  max-width: 180px;
+  overflow: hidden;
+  padding: 4px 8px;
+  border: 1px solid rgba(124, 58, 237, .14);
+  border-radius: 999px;
+  color: rgba(91, 33, 182, .34);
+  background: rgba(245, 243, 255, .62);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .research-post.premium-wave-post::before {
   content: "";
   position: absolute;
@@ -1841,9 +2323,47 @@ button { cursor: pointer; }
   animation: forum-premium-wave 8.5s linear infinite;
 }
 
+.research-post.new-post-insert {
+  position: relative;
+  overflow: hidden;
+  animation: forum-new-post-in 680ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.research-post.new-post-insert::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(8, 101, 238, .18), rgba(8, 101, 238, .06) 42%, transparent 72%);
+  transform: translateX(-100%);
+  animation: forum-new-post-sweep 1200ms cubic-bezier(.22, 1, .36, 1) 120ms both;
+}
+
 @keyframes forum-premium-wave {
   0%, 12% { transform: translateX(-120%); }
   88%, 100% { transform: translateX(120%); }
+}
+
+@keyframes forum-new-post-in {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+    background: #edf5ff;
+  }
+  58% {
+    opacity: 1;
+    transform: translateX(0);
+    background: #edf5ff;
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes forum-new-post-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1851,6 +2371,10 @@ button { cursor: pointer; }
     animation: none;
     transform: translateX(0);
     opacity: .35;
+  }
+  .research-post.new-post-insert,
+  .research-post.new-post-insert::after {
+    animation: none;
   }
 }
 
@@ -1883,10 +2407,13 @@ button { cursor: pointer; }
   align-items: center;
   gap: 8px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .research-post h2 {
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: min(760px, calc(100% - 150px));
   margin: 0;
   color: #373b43;
   font-size: 17px;
@@ -1905,7 +2432,9 @@ button { cursor: pointer; }
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  flex: none;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 40%;
 }
 
 .forum-row-badges .state-badge,
@@ -1996,25 +2525,34 @@ button { cursor: pointer; }
   color: #667085;
 }
 
+.member-lite,
 .member-light {
   color: #059669;
 }
 
+.member-plus,
 .member-study {
   color: #1d4ed8;
 }
 
+.member-pro,
 .member-lab {
   color: #7c3aed;
   text-shadow: 0 0 14px rgba(124, 58, 237, .14);
 }
 
-.member-team {
+.member-max {
+  color: #be185d;
+  text-shadow: 0 0 14px rgba(190, 24, 93, .16);
+}
+
+.member-team,
+.member-team_plus {
   color: #c2410c;
   text-shadow: 0 0 14px rgba(194, 65, 12, .14);
 }
 
-.member-team_plus {
+.member-team_pro {
   color: #a855f7;
   text-shadow: 0 0 14px rgba(168, 85, 247, .16);
 }
@@ -2059,12 +2597,6 @@ button { cursor: pointer; }
   padding: 0 9px;
   border-radius: 7px;
   font-size: 10px;
-}
-
-.hero-action-stack {
-  display: grid;
-  gap: 10px;
-  justify-items: stretch;
 }
 
 .hero-manage-button {

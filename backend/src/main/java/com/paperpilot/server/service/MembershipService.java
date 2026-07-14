@@ -13,18 +13,19 @@ import java.util.Map;
 
 @Service
 public class MembershipService {
-    public static final String PLAN_LIGHT = "light";
-    public static final String PLAN_STUDY = "study";
-    public static final String PLAN_LAB = "lab";
-    public static final String PLAN_TEAM = "team";
+    public static final String PLAN_LITE = "lite";
+    public static final String PLAN_PLUS = "plus";
+    public static final String PLAN_PRO = "pro";
+    public static final String PLAN_MAX = "max";
     public static final String PLAN_TEAM_PLUS = "team_plus";
+    public static final String PLAN_TEAM_PRO = "team_pro";
 
     private final AppUserRepository users;
 
     public MembershipService(AppUserRepository users) { this.users = users; }
 
     public List<Map<String, Object>> catalog() {
-        return List.of(plan(PLAN_LIGHT), plan(PLAN_STUDY), plan(PLAN_LAB), plan(PLAN_TEAM), plan(PLAN_TEAM_PLUS));
+        return List.of(plan(PLAN_LITE), plan(PLAN_PLUS), plan(PLAN_PRO), plan(PLAN_MAX), plan(PLAN_TEAM_PLUS), plan(PLAN_TEAM_PRO));
     }
 
     public Map<String, Object> membership(AppUserEntity user) {
@@ -34,7 +35,7 @@ public class MembershipService {
             expireIfNeeded(owner);
         }
         Map<String, Object> result = new LinkedHashMap<>();
-        String id = safe(owner.getMembershipPlan(), "free");
+        String id = normalizePlanId(owner.getMembershipPlan());
         result.put("id", id);
         result.put("name", owner.getId() != null && !owner.getId().equals(user.getId()) ? planName(id) + "（团队共享）" : planName(id));
         result.put("cycle", safe(owner.getMembershipCycle(), "monthly"));
@@ -46,13 +47,14 @@ public class MembershipService {
             "review", allowance(owner.getReviewQuota(), owner.getReviewUsed()),
             "ppt", allowance(owner.getPptQuota(), owner.getPptUsed()),
             "chat", allowance(owner.getChatQuota(), owner.getChatUsed()),
-            "teamSeats", Map.of("quota", teamSeats(id), "shared", PLAN_TEAM.equals(id) || PLAN_TEAM_PLUS.equals(id))
+            "teamSeats", Map.of("quota", teamSeats(id), "shared", isTeamPlan(id))
         ));
         return result;
     }
 
     public void activate(AppUserEntity user, String planId, String cycle) {
-        if (!List.of(PLAN_LIGHT, PLAN_STUDY, PLAN_LAB, PLAN_TEAM, PLAN_TEAM_PLUS).contains(planId)) {
+        planId = normalizePlanId(planId);
+        if (!List.of(PLAN_LITE, PLAN_PLUS, PLAN_PRO, PLAN_MAX, PLAN_TEAM_PLUS, PLAN_TEAM_PRO).contains(planId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择有效会员套餐");
         }
         int months = cycleMonths(cycle);
@@ -130,7 +132,7 @@ public class MembershipService {
             LocalDateTime now = LocalDateTime.now();
             AppUserEntity teamSponsor = users.findByTeamIdOrderByCreatedAtAsc(user.getTeamId()).stream()
                 .filter(item -> "导师".equals(item.getRole()))
-                .filter(item -> PLAN_TEAM.equals(item.getMembershipPlan()) || PLAN_TEAM_PLUS.equals(item.getMembershipPlan()))
+                .filter(item -> isTeamPlan(item.getMembershipPlan()))
                 .filter(item -> item.getMembershipExpiresAt() != null && item.getMembershipExpiresAt().isAfter(now))
                 .findFirst()
                 .orElse(null);
@@ -142,17 +144,20 @@ public class MembershipService {
     }
 
     private Map<String, Object> plan(String id) {
+        id = normalizePlanId(id);
         Map<String, Object> item = new LinkedHashMap<>();
-        if (PLAN_LIGHT.equals(id)) {
-            item.put("id", id); item.put("name", "轻享会员"); item.put("monthlyPrice", 9.9); item.put("reviewQuota", 3); item.put("pptQuota", 0); item.put("chatQuota", 20); item.put("teamSeats", 0); item.put("teamShared", false);
-        } else if (PLAN_STUDY.equals(id)) {
-            item.put("id", id); item.put("name", "研读会员"); item.put("monthlyPrice", 19.9); item.put("reviewQuota", 10); item.put("pptQuota", 2); item.put("chatQuota", 80); item.put("teamSeats", 0); item.put("teamShared", false);
-        } else if (PLAN_TEAM.equals(id)) {
-            item.put("id", id); item.put("name", "导师车队会员"); item.put("monthlyPrice", 69.9); item.put("reviewQuota", 60); item.put("pptQuota", 12); item.put("chatQuota", 360); item.put("teamSeats", 8); item.put("teamShared", true);
+        if (PLAN_LITE.equals(id)) {
+            item.put("id", id); item.put("name", "个人 Lite"); item.put("monthlyPrice", 9.9); item.put("reviewQuota", 3); item.put("pptQuota", 0); item.put("chatQuota", 60); item.put("teamSeats", 0); item.put("teamShared", false);
+        } else if (PLAN_PLUS.equals(id)) {
+            item.put("id", id); item.put("name", "个人 Plus"); item.put("monthlyPrice", 19.9); item.put("reviewQuota", 10); item.put("pptQuota", 1); item.put("chatQuota", 180); item.put("teamSeats", 0); item.put("teamShared", false);
+        } else if (PLAN_PRO.equals(id)) {
+            item.put("id", id); item.put("name", "个人 Pro"); item.put("monthlyPrice", 39.9); item.put("reviewQuota", 25); item.put("pptQuota", 4); item.put("chatQuota", 500); item.put("teamSeats", 0); item.put("teamShared", false);
+        } else if (PLAN_MAX.equals(id)) {
+            item.put("id", id); item.put("name", "个人 Max"); item.put("monthlyPrice", 69.9); item.put("reviewQuota", 60); item.put("pptQuota", 10); item.put("chatQuota", 1200); item.put("teamSeats", 0); item.put("teamShared", false);
         } else if (PLAN_TEAM_PLUS.equals(id)) {
-            item.put("id", id); item.put("name", "团队 Plus 会员"); item.put("monthlyPrice", 99.9); item.put("reviewQuota", 120); item.put("pptQuota", 24); item.put("chatQuota", 720); item.put("teamSeats", 15); item.put("teamShared", true);
+            item.put("id", id); item.put("name", "团队 Plus"); item.put("monthlyPrice", 129.0); item.put("reviewQuota", 120); item.put("pptQuota", 16); item.put("chatQuota", 2600); item.put("teamSeats", 8); item.put("teamShared", true);
         } else {
-            item.put("id", id); item.put("name", "课题会员"); item.put("monthlyPrice", 29.9); item.put("reviewQuota", 25); item.put("pptQuota", 5); item.put("chatQuota", 180); item.put("teamSeats", 0); item.put("teamShared", false);
+            item.put("id", PLAN_TEAM_PRO); item.put("name", "团队 Pro"); item.put("monthlyPrice", 229.0); item.put("reviewQuota", 260); item.put("pptQuota", 36); item.put("chatQuota", 6000); item.put("teamSeats", 15); item.put("teamShared", true);
         }
         return item;
     }
@@ -167,6 +172,25 @@ public class MembershipService {
     private Map<String, Object> allowance(Integer quota, Integer used) { int q = number(quota); int u = number(used); return Map.of("quota", q, "used", u, "remaining", Math.max(0, q - u)); }
     private int number(Integer value) { return value == null ? 0 : value; }
     private String safe(String value, String fallback) { return value == null || value.isBlank() ? fallback : value; }
-    private int teamSeats(String id) { return PLAN_TEAM_PLUS.equals(id) ? 15 : PLAN_TEAM.equals(id) ? 8 : 0; }
-    private String planName(String id) { return "light".equals(id) ? "轻享会员" : "study".equals(id) ? "研读会员" : "lab".equals(id) ? "课题会员" : "team".equals(id) ? "导师车队会员" : "team_plus".equals(id) ? "团队 Plus 会员" : "未开通会员"; }
+    private boolean isTeamPlan(String id) { String normalized = normalizePlanId(id); return PLAN_TEAM_PLUS.equals(normalized) || PLAN_TEAM_PRO.equals(normalized); }
+    private int teamSeats(String id) { String normalized = normalizePlanId(id); return PLAN_TEAM_PRO.equals(normalized) ? 15 : PLAN_TEAM_PLUS.equals(normalized) ? 8 : 0; }
+    private String normalizePlanId(String id) {
+        String value = safe(id, "free");
+        if ("light".equals(value)) return PLAN_LITE;
+        if ("study".equals(value)) return PLAN_PLUS;
+        if ("lab".equals(value)) return PLAN_PRO;
+        if ("team".equals(value)) return PLAN_TEAM_PLUS;
+        return value;
+    }
+    private String planName(String id) {
+        return switch (normalizePlanId(id)) {
+            case PLAN_LITE -> "个人 Lite";
+            case PLAN_PLUS -> "个人 Plus";
+            case PLAN_PRO -> "个人 Pro";
+            case PLAN_MAX -> "个人 Max";
+            case PLAN_TEAM_PLUS -> "团队 Plus";
+            case PLAN_TEAM_PRO -> "团队 Pro";
+            default -> "未开通会员";
+        };
+    }
 }

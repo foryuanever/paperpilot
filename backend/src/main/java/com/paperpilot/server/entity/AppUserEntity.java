@@ -244,4 +244,26 @@ public class AppUserEntity {
     public void setBackgroundUrl(String backgroundUrl) {
         this.backgroundUrl = backgroundUrl;
     }
+
+    @Column(name = "school_name", length = 128)
+    private String schoolName;
+
+    public String getSchoolName() {
+        return schoolName;
+    }
+
+    public void setSchoolName(String schoolName) {
+        this.schoolName = schoolName;
+    }
+
+    @Column(name = "campus_verified")
+    private Boolean campusVerified = false;
+
+    public boolean isCampusVerified() {
+        return Boolean.TRUE.equals(campusVerified);
+    }
+
+    public void setCampusVerified(boolean campusVerified) {
+        this.campusVerified = campusVerified;
+    }
 }

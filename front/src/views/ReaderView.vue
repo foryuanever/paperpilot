@@ -2,26 +2,62 @@
   <div class="reader-workbench">
     <header class="reader-toolbar">
       <div class="reader-toolbar-start">
-        <router-link class="reader-back" to="/library" title="返回文献库">‹</router-link>
+        <router-link class="reader-back" to="/library" title="返回文献库" aria-label="返回文献库">←</router-link>
+        <div class="reader-document-meta">
+          <span class="reader-document-title" :title="activePaper.title">{{ activePaper.title }}</span>
+          <small class="reader-document-source">{{ paperSourceLabel || "文献阅读" }}</small>
+        </div>
       </div>
 
-      <span class="reader-document-title" :title="activePaper.title">{{ activePaper.title }}</span>
-
-      <div class="reader-tools">
-        <button :class="{ active: autoTranslate }" @click="toggleTranslation">
-          全文逐段翻译
+      <div class="reader-tools" role="toolbar" aria-label="阅读设置">
+        <button
+          class="reader-translate-toggle"
+          :class="{ active: autoTranslate }"
+          :aria-pressed="autoTranslate"
+          :title="autoTranslate ? '关闭全文翻译' : '开启全文翻译'"
+          @click="toggleTranslation"
+        >
+          <span class="reader-translate-icon" aria-hidden="true">
+            <span class="lang-mark-source">文</span>
+            <span class="lang-mark-target">A</span>
+          </span>
+          <span class="reader-translate-label">全文翻译</span>
         </button>
-        <button :class="{ active: compactText }" @click="compactText = !compactText">文字</button>
-        <span class="tool-divider"></span>
-        <button title="缩小" @click="contentScale = Math.max(0.8, contentScale - 0.1)">−</button>
-        <span class="scale-value">{{ Math.round(contentScale * 100) }}%</span>
-        <button title="放大" @click="contentScale = Math.min(1.5, contentScale + 0.1)">＋</button>
+        <button
+          class="reader-eraser-button"
+          :class="{ restorable: !annotations.length && clearedAnnotationSnapshot.length }"
+          :title="!annotations.length && clearedAnnotationSnapshot.length ? '恢复刚清除的标注' : '清除全部标注'"
+          :aria-label="!annotations.length && clearedAnnotationSnapshot.length ? '恢复刚清除的标注' : '清除全部标注'"
+          @click="clearAllAnnotations"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M16.7 3.9 21 8.2a2 2 0 0 1 0 2.8l-8.1 8.1H6.5L3 15.6a2 2 0 0 1 0-2.8l10.9-8.9a2 2 0 0 1 2.8 0Z" />
+            <path d="m11.2 6.1 6.7 6.7" />
+            <path d="M3 21h18" />
+          </svg>
+        </button>
+        <div class="reader-zoom-control" role="group" aria-label="正文缩放">
+          <button title="缩小正文" aria-label="缩小正文" @click="contentScale = Math.max(0.8, contentScale - 0.1)">−</button>
+          <span class="scale-value">{{ Math.round(contentScale * 100) }}%</span>
+          <button title="放大正文" aria-label="放大正文" @click="contentScale = Math.min(1.5, contentScale + 0.1)">＋</button>
+        </div>
       </div>
 
       <div class="reader-toolbar-end">
-        <span>{{ readingProgress }}%</span>
-        <span>{{ loadedPages }}/{{ totalPages || "−" }} 页</span>
-        <button title="打开原始 PDF" @click="openOriginalPdf">原文 PDF</button>
+        <div class="reader-status" aria-label="阅读状态">
+          <span class="reader-status-item">
+            <small>进度</small>
+            <strong>{{ readingProgress }}%</strong>
+          </span>
+          <span class="reader-status-item">
+            <small>页码</small>
+            <strong>{{ loadedPages }}/{{ totalPages || "−" }}</strong>
+          </span>
+        </div>
+        <button class="reader-pdf-action" title="打开原始 PDF" @click="openOriginalPdf">
+          <span class="pdf-label-long">原文 PDF</span>
+          <span class="pdf-label-short">PDF</span>
+        </button>
       </div>
       <div class="reader-progress-track" aria-label="阅读进度">
         <div class="reader-progress-fill" :style="{ width: `${readingProgress}%` }"></div>
@@ -90,7 +126,6 @@
       <main ref="readingScroll" class="reading-stage" @mouseup="captureSelection" @contextmenu.prevent="openColorMenu" @scroll="handleReadingScroll" @click="closeColorMenu">
         <div
           class="reading-column"
-          :class="{ compact: compactText }"
           :style="{ '--reader-scale': contentScale }"
         >
           <div v-if="loadingPdf" class="reader-state reader-loading-state">
@@ -105,12 +140,19 @@
 
           <article v-else class="reflow-document">
             <header class="paper-heading">
-              <span class="paper-source">{{ activePaper.source || "Academic paper" }}</span>
+              <span class="paper-source">{{ paperSourceLabel || "Academic paper" }}</span>
               <h1>{{ activePaper.title }}</h1>
               <p>{{ activePaper.authors }}</p>
               <div v-if="hasAbstract && !structuredHasAbstract" class="paper-abstract">
                 <strong>Abstract</strong>
-                <p class="source-paragraph selectable-paragraph" data-block-id="abstract">{{ abstractText }}</p>
+                <p class="source-paragraph selectable-paragraph" data-block-id="abstract">
+                  <template v-for="segment in annotationSegments('abstract', abstractText)" :key="segment.key">
+                    <span v-if="segment.annotated" class="annotation-highlight" :title="segment.note" @click="editAnnotation(segment.annotation, $event)">
+                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button>
+                    </span>
+                    <template v-else>{{ segment.text }}</template>
+                  </template>
+                </p>
                 <p v-if="autoTranslate" class="translated-paragraph selectable-paragraph" data-block-id="abstract" :class="{ pending: abstractTranslating || !abstractTranslation }">
                   {{ abstractTranslating ? "摘要重新翻译中…" : abstractTranslation || "摘要译文准备中…" }}<button
                     v-if="!abstractTranslating"
@@ -125,10 +167,12 @@
                   v-if="annotationForBlock('abstract')"
                   class="block-annotation-note"
                   :title="annotationForBlock('abstract').note"
-                  @click="editAnnotation(annotationForBlock('abstract'), $event)"
                 >
-                  <button type="button" aria-label="编辑摘要批注">✎</button>
-                  <p>{{ annotationForBlock('abstract').note }}</p>
+                  <div class="block-annotation-actions">
+                    <button type="button" aria-label="编辑摘要批注" title="编辑批注" @click.stop="editAnnotation(annotationForBlock('abstract'), $event)">✎</button>
+                    <button type="button" class="block-annotation-remove" aria-label="删除摘要批注" title="删除批注" @click.stop="removeAnnotation(annotationForBlock('abstract').id)">×</button>
+                  </div>
+                  <p @click="editAnnotation(annotationForBlock('abstract'), $event)">{{ annotationForBlock('abstract').note }}</p>
                 </aside>
               </div>
             </header>
@@ -159,8 +203,22 @@
                   </figcaption>
                 </figure>
                 <div v-else-if="block.kind === 'equation'" class="mineru-equation">{{ block.text }}</div>
-                <div v-else-if="block.kind === 'references'" class="reference-block selectable-paragraph" :data-block-id="block.id">{{ block.text }}</div>
-                <p v-else class="source-paragraph selectable-paragraph" :data-block-id="block.id">{{ block.text }}</p>
+                <div v-else-if="block.kind === 'references'" class="reference-block selectable-paragraph" :data-block-id="block.id">
+                  <template v-for="segment in annotationSegments(block.id, block.text)" :key="segment.key">
+                    <span v-if="segment.annotated" class="annotation-highlight" :title="segment.note" @click="editAnnotation(segment.annotation, $event)">
+                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button>
+                    </span>
+                    <template v-else>{{ segment.text }}</template>
+                  </template>
+                </div>
+                <p v-else class="source-paragraph selectable-paragraph" :data-block-id="block.id">
+                  <template v-for="segment in annotationSegments(block.id, block.text)" :key="segment.key">
+                    <span v-if="segment.annotated" class="annotation-highlight" :title="segment.note" @click="editAnnotation(segment.annotation, $event)">
+                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button>
+                    </span>
+                    <template v-else>{{ segment.text }}</template>
+                  </template>
+                </p>
                 <div v-if="autoTranslate && !['figure', 'table', 'equation', 'references'].includes(block.kind)" class="translation-unit">
                   <p
                     class="translated-paragraph selectable-paragraph"
@@ -181,10 +239,12 @@
                   v-if="annotationForBlock(block.id)"
                   class="block-annotation-note"
                   :title="annotationForBlock(block.id).note"
-                  @click="editAnnotation(annotationForBlock(block.id), $event)"
                 >
-                  <button type="button" aria-label="编辑本段批注">✎</button>
-                  <p>{{ annotationForBlock(block.id).note }}</p>
+                  <div class="block-annotation-actions">
+                    <button type="button" aria-label="编辑本段批注" title="编辑批注" @click.stop="editAnnotation(annotationForBlock(block.id), $event)">✎</button>
+                    <button type="button" class="block-annotation-remove" aria-label="删除本段批注" title="删除批注" @click.stop="removeAnnotation(annotationForBlock(block.id).id)">×</button>
+                  </div>
+                  <p @click="editAnnotation(annotationForBlock(block.id), $event)">{{ annotationForBlock(block.id).note }}</p>
                 </aside>
               </template>
             </section>
@@ -322,6 +382,10 @@
       </section>
     </Transition>
 
+    <Transition name="reader-toast">
+      <div v-if="readerToast" class="reader-toast">{{ readerToast }}</div>
+    </Transition>
+
     <div v-if="readerTour.open" class="reader-tour-layer">
       <div class="reader-tour-shade"></div>
       <div
@@ -384,7 +448,6 @@ const loadedPages = ref(0);
 const currentPage = ref(1);
 const readingProgress = ref(0);
 const autoTranslate = ref(true);
-const compactText = ref(false);
 const assistantCollapsed = ref(false);
 const assistantExpanded = ref(false);
 const assistantTab = ref("chat");
@@ -414,11 +477,15 @@ const selectionTranslator = reactive({
   error: "",
   loading: false,
   blockId: "",
+  start: -1,
+  end: -1,
   annotating: false,
   annotationDraft: "",
   editingAnnotationId: "",
 });
 const annotations = reactive([]);
+const clearedAnnotationSnapshot = ref([]);
+const readerToast = ref("");
 const paperChat = reactive({
   open: false,
   question: "",
@@ -430,7 +497,7 @@ const paperChat = reactive({
 });
 const tourSteps = [
   { selector: ".reader-assistant", title: "先看左侧论文内容详解", description: "整个左侧区域就是论文内容详解，集中展示研究背景、问题、方法、实验结论、创新与局限。" },
-  { selector: ".reader-tools", title: "开启逐段翻译", description: "这里可以开关全文逐段翻译、调整字体密度和阅读比例。" },
+  { selector: ".reader-tools", title: "开启全文翻译", description: "这里可以开关全文翻译并调整阅读比例。" },
   { selector: ".reading-column", title: "选中文字进行操作", description: "拖选原文或译文后，可以翻译、修改字体颜色，也可以写下批注。" },
   { selector: ".paper-chat-launcher", title: "使用学术问答", description: "右下角可以询问当前论文或其他学术相关问题，生活娱乐等非学术问题不会回答。" },
 ];
@@ -444,12 +511,20 @@ let activeTranslationJobs = 0;
 let figurePreviewQueue = Promise.resolve();
 const mineruAssetUrls = [];
 const translationWaiters = [];
+let readerToastTimer;
 
 const activePaper = computed(() => libraryStore.activeDocument || {
   title: "未选择文献",
   authors: "",
   source: "",
 });
+
+const paperSourceLabel = computed(() => String(activePaper.value?.source || "")
+  .replace(/&amp;/gi, "&")
+  .replace(/&quot;/gi, "\"")
+  .replace(/&#39;|&apos;/gi, "'")
+  .replace(/&lt;/gi, "<")
+  .replace(/&gt;/gi, ">"));
 
 const workspaceId = computed(() => String(activePaper.value?.workspaceId || activePaper.value?.id || ""));
 
@@ -928,8 +1003,117 @@ function persistAnnotations() {
   localStorage.setItem(annotationStorageKey(), JSON.stringify(annotations));
 }
 
+function showReaderToast(message) {
+  readerToast.value = message;
+  clearTimeout(readerToastTimer);
+  readerToastTimer = setTimeout(() => { readerToast.value = ""; }, 1800);
+}
+
+function removeAnnotation(id) {
+  const index = annotations.findIndex(item => item.id === id);
+  if (index < 0) return;
+  clearedAnnotationSnapshot.value = [];
+  annotations.splice(index, 1);
+  persistAnnotations();
+  closeSelectionTranslator();
+}
+
+function clearAllAnnotations() {
+  if (!annotations.length) {
+    if (clearedAnnotationSnapshot.value.length) {
+      annotations.push(...clearedAnnotationSnapshot.value);
+      clearedAnnotationSnapshot.value = [];
+      persistAnnotations();
+      showReaderToast("已恢复刚清除的标注");
+      return;
+    }
+    showReaderToast("当前没有可清除的标注");
+    return;
+  }
+  clearedAnnotationSnapshot.value = annotations.map(item => ({ ...item }));
+  annotations.splice(0, annotations.length);
+  persistAnnotations();
+  closeSelectionTranslator();
+  showReaderToast("全局内容已清除");
+}
+
 function annotationForBlock(blockId) {
   return annotations.find(item => item.blockId === blockId);
+}
+
+function annotationsForBlock(blockId) {
+  return annotations.filter(item => item.blockId === blockId);
+}
+
+function annotationRange(annotation, text) {
+  const source = String(text || "");
+  const quote = String(annotation?.quote || "");
+  let start = Number.isInteger(annotation?.start) ? annotation.start : -1;
+  let end = Number.isInteger(annotation?.end) ? annotation.end : -1;
+  if (start >= 0 && end > start && end <= source.length) {
+    return {
+      ...annotation,
+      start,
+      end,
+    };
+  }
+  if (start < 0 || end <= start) {
+    start = source.indexOf(quote);
+    end = start >= 0 ? start + quote.length : -1;
+  }
+  if (start < 0 || end <= start) return null;
+  return {
+    ...annotation,
+    start: Math.max(0, start),
+    end: Math.min(source.length, end),
+  };
+}
+
+function annotationSegments(blockId, text) {
+  const source = String(text || "");
+  const ranges = annotationsForBlock(blockId)
+    .map(item => annotationRange(item, source))
+    .filter(Boolean)
+    .sort((a, b) => a.start - b.start)
+    .reduce((items, item) => {
+      const previous = items[items.length - 1];
+      if (previous && item.start < previous.end) return items;
+      items.push(item);
+      return items;
+    }, []);
+  if (!ranges.length) return [{ key: `${blockId}-plain`, text: source, annotated: false }];
+  const segments = [];
+  let cursor = 0;
+  ranges.forEach((range, index) => {
+    if (range.start > cursor) {
+      segments.push({ key: `${blockId}-plain-${index}`, text: source.slice(cursor, range.start), annotated: false });
+    }
+    segments.push({
+      key: `${blockId}-anno-${range.id}`,
+      text: source.slice(range.start, range.end),
+      annotated: true,
+      note: range.note,
+      annotation: range,
+    });
+    cursor = range.end;
+  });
+  if (cursor < source.length) {
+    segments.push({ key: `${blockId}-plain-tail`, text: source.slice(cursor), annotated: false });
+  }
+  return segments;
+}
+
+function getSelectionOffsets(paragraphElement, range) {
+  if (!paragraphElement || !range) return null;
+  if (!paragraphElement.contains(range.startContainer) || !paragraphElement.contains(range.endContainer)) return null;
+  const before = range.cloneRange();
+  before.selectNodeContents(paragraphElement);
+  before.setEnd(range.startContainer, range.startOffset);
+  const start = before.toString().length;
+  return {
+    start,
+    end: start + range.toString().length,
+  };
 }
 
 function openAnnotationEditor() {
@@ -961,6 +1145,8 @@ function saveAnnotation() {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       blockId: selectionTranslator.blockId,
       quote: selectionTranslator.source,
+      start: selectionTranslator.start,
+      end: selectionTranslator.end,
       note,
       createdAt: new Date().toISOString(),
     });
@@ -978,6 +1164,8 @@ function editAnnotation(annotation, event) {
   selectionTranslator.annotating = true;
   selectionTranslator.annotationDraft = annotation.note;
   selectionTranslator.editingAnnotationId = annotation.id;
+  selectionTranslator.start = Number.isInteger(annotation.start) ? annotation.start : -1;
+  selectionTranslator.end = Number.isInteger(annotation.end) ? annotation.end : -1;
   selectionTranslator.x = Math.max(12, Math.min(window.innerWidth - 372, event.clientX - 340));
   selectionTranslator.y = Math.max(56, Math.min(window.innerHeight - 330, event.clientY - 60));
   selectionTranslator.open = true;
@@ -1258,6 +1446,7 @@ function captureSelection() {
   }
   const paragraphElement = documentRoot.closest?.(".selectable-paragraph")
     || range.startContainer.parentElement?.closest?.(".selectable-paragraph");
+  const selectionOffsets = getSelectionOffsets(paragraphElement, range);
   const paragraphText = normalizeText(paragraphElement?.innerText || selectedText);
   const rect = range.getBoundingClientRect();
   const popoverWidth = 360;
@@ -1268,6 +1457,8 @@ function captureSelection() {
   selectionTranslator.result = "";
   selectionTranslator.error = "";
   selectionTranslator.blockId = paragraphElement?.dataset?.blockId || "";
+  selectionTranslator.start = selectionOffsets?.start ?? -1;
+  selectionTranslator.end = selectionOffsets?.end ?? -1;
   selectionTranslator.annotating = false;
   selectionTranslator.annotationDraft = "";
   selectionTranslator.editingAnnotationId = "";
@@ -1404,6 +1595,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   destroyed = true;
+  clearTimeout(readerToastTimer);
   if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl);
   mineruAssetUrls.forEach(url => URL.revokeObjectURL(url));
   window.removeEventListener("resize", updateTourRect);
@@ -1413,25 +1605,31 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .reader-workbench {
+  --reader-accent: #2563eb;
+  --reader-accent-soft: #eef4ff;
+  --reader-canvas: #f3f6fa;
+  --reader-line: #e3e9f2;
+  --reader-panel: #f7f9fc;
+  --reader-toolbar-height: 60px;
   height: 100vh;
   overflow: hidden;
-  background: #f3f5f8;
+  background: var(--reader-canvas);
   color: #20242c;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
 }
 
 .reader-toolbar {
   position: relative;
-  height: 46px;
-  display: flex;
+  z-index: 30;
+  height: var(--reader-toolbar-height);
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto minmax(240px, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 0 14px;
+  gap: 18px;
+  padding: 0 16px;
   color: #263244;
   background: #ffffff;
-  border-bottom: 1px solid #dbe3ee;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, .03);
+  border-bottom: 0;
   box-sizing: border-box;
 }
 
@@ -1439,16 +1637,16 @@ onBeforeUnmount(() => {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: -1px;
-  height: 5px;
+  bottom: 0;
+  height: 0;
   overflow: hidden;
-  background: #e8eef7;
+  background: transparent;
 }
 
 .reader-progress-fill {
   width: 0;
   height: 100%;
-  background: #3b82f6;
+  background: var(--reader-accent);
   transition: width 120ms ease-out;
 }
 
@@ -1461,61 +1659,182 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.reader-toolbar-start { flex: 0 0 auto; }
-.reader-toolbar-end { flex: 1 1 0; justify-content: flex-end; color: #64748b; font-size: 12px; }
-.reader-tools { position: absolute; left: 70px; white-space: nowrap; }
+.reader-toolbar-start { gap: 10px; }
+.reader-toolbar-end { justify-content: flex-end; gap: 12px; color: #64748b; }
+.reader-tools {
+  gap: 18px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
 
 .reader-back,
 .reader-toolbar button,
 .reader-tools button {
-  height: 30px;
-  border: 0;
+  height: 32px;
+  border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
   color: #52637a;
   cursor: pointer;
-  font: 500 12px/1 Inter, "PingFang SC", sans-serif;
+  font: 600 12px/1 Inter, "PingFang SC", sans-serif;
 }
 
 .reader-back {
-  width: 30px;
+  width: 34px;
+  height: 34px;
   display: grid;
+  flex: 0 0 auto;
   place-items: center;
+  border: 1px solid var(--reader-line);
+  border-radius: 6px;
   text-decoration: none;
-  color: #2f6df6;
-  font-size: 24px;
+  color: #4b596d;
+  font-size: 17px;
+  font-weight: 700;
 }
 
-.reader-toolbar button:hover,
-.reader-tools button:hover,
-.reader-tools button.active {
-  background: #eef5ff;
-  color: #1743a8;
+.reader-back:hover { border-color: #b9c5d5; color: var(--reader-accent); background: var(--reader-panel); }
+
+.reader-toolbar button:hover {
+  color: #1d4ed8;
+  background: var(--reader-accent-soft);
+}
+
+.reader-document-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .reader-document-title {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 0;
-  width: min(48vw, 820px);
-  transform: translate(-50%, -50%);
+  display: block;
   overflow: hidden;
   color: #202938;
-  font: 800 15px/1.18 "Times New Roman", "Songti SC", serif;
-  letter-spacing: .005em;
-  text-align: center;
+  font-family: "Times New Roman", Georgia, "Songti SC", serif;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.05;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tool-divider { width: 1px; height: 18px; background: #d8e0eb; }
-.scale-value { width: 42px; text-align: center; color: #64748b; font-size: 11px; }
+
+.reader-document-source {
+  overflow: hidden;
+  color: #8290a3;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-translate-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 2px;
+  border-color: transparent !important;
+  background: transparent !important;
+  color: #66758a;
+  font-size: 14px !important;
+  font-weight: 750 !important;
+  transition: color 150ms ease;
+}
+.reader-translate-toggle:hover {
+  color: #4b5a70 !important;
+  background: transparent !important;
+}
+.reader-translate-toggle.active,
+.reader-translate-toggle.active:hover {
+  color: #4f46e5 !important;
+  background: transparent !important;
+}
+.reader-translate-icon {
+  position: relative;
+  display: inline-block;
+  width: 28px;
+  height: 22px;
+  flex: 0 0 auto;
+  color: currentColor;
+}
+.lang-mark-source,
+.lang-mark-target {
+  position: absolute;
+  font-family: Inter, "PingFang SC", sans-serif;
+  font-weight: 800;
+  line-height: 1;
+}
+.lang-mark-source {
+  left: 0;
+  top: 0;
+  font-size: 18px;
+}
+.lang-mark-target {
+  right: 0;
+  bottom: 0;
+  font-size: 14px;
+}
+.reader-translate-label { line-height: 1; }
+
+.reader-eraser-button {
+  display: inline-grid;
+  width: 30px;
+  place-items: center;
+  padding: 0;
+  color: #66758a !important;
+  background: transparent !important;
+}
+.reader-eraser-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.reader-eraser-button:hover {
+  color: #4f46e5 !important;
+  background: #eef2ff !important;
+}
+.reader-eraser-button.restorable {
+  color: #4f46e5 !important;
+  background: #eef2ff !important;
+}
+
+.reader-zoom-control {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  margin-left: 2px;
+  padding-left: 4px;
+  border-left: 1px solid var(--reader-line);
+}
+
+.reader-zoom-control button { width: 28px; height: 28px; padding: 0; font-size: 15px; }
+.scale-value { width: 40px; text-align: center; color: #66758a; font-size: 10px; font-variant-numeric: tabular-nums; }
+
+.reader-status { display: flex; align-items: center; height: 32px; }
+.reader-status-item { display: flex; align-items: baseline; gap: 5px; padding: 0 12px; border-right: 1px solid var(--reader-line); white-space: nowrap; }
+.reader-status-item:first-child { padding-left: 0; }
+.reader-status-item small { color: #8a96a7; font-size: 9px; font-weight: 650; }
+.reader-status-item strong { color: #46556a; font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.reader-pdf-action { padding: 0 11px; border-color: var(--reader-line) !important; color: #344256 !important; background: #fff !important; }
+.reader-pdf-action:hover { border-color: #aebbd0 !important; color: var(--reader-accent) !important; background: var(--reader-panel) !important; }
+.pdf-label-short { display: none; }
 
 .reader-body {
-  height: calc(100vh - 46px);
+  height: calc(100vh - var(--reader-toolbar-height));
   display: grid;
-  grid-template-columns: 284px minmax(0, 1fr) 42px;
+  grid-template-columns: 340px minmax(0, 1fr) 50px;
   min-height: 0;
+  background: linear-gradient(90deg, #f8fafc 0, #f7f9fc 300px, #f3f6fa 430px, #eef3f8 100%);
 }
 
 .reader-assistant {
@@ -1523,38 +1842,44 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-right: 1px solid #dfe3e8;
+  background: transparent;
+  border-right: 0;
+  box-shadow: none;
   transition: width 200ms cubic-bezier(.22, 1, .36, 1);
 }
 
-.reader-assistant.collapsed { width: 42px; }
-.reader-body:has(.reader-assistant.collapsed) { grid-template-columns: 42px minmax(0, 1fr) 42px; }
-.reader-body.assistant-wide { grid-template-columns: clamp(430px, 38vw, 560px) minmax(440px, 1fr) 42px; }
+.reader-assistant.collapsed { width: 46px; }
+.reader-body:has(.reader-assistant.collapsed) { grid-template-columns: 46px minmax(0, 1fr) 50px; }
+.reader-body.assistant-wide { grid-template-columns: clamp(440px, 38vw, 580px) minmax(440px, 1fr) 50px; }
 .reader-assistant.expanded { width: auto; }
 
 .assistant-tabs {
-  height: 40px;
+  height: 48px;
   display: flex;
   align-items: center;
-  border-bottom: 1px solid #e8ebef;
-  padding: 0 6px;
+  gap: 4px;
+  border-bottom: 0;
+  padding: 6px 12px 4px;
+  background: transparent;
   flex: 0 0 auto;
 }
 
 .assistant-tabs button {
-  height: 32px;
-  padding: 0 9px;
+  height: 34px;
+  padding: 0 12px;
   border: 0;
+  border-radius: 999px;
   background: transparent;
   color: #667085;
   font-size: 12px;
+  font-weight: 650;
   cursor: pointer;
 }
 
-.assistant-tabs button.active { color: #1769e0; border-bottom: 2px solid #1769e0; }
-.expand-button { margin-left: auto; color: #1769e0 !important; font-size: 20px !important; }
-.collapse-button { margin-left: auto; font-size: 18px !important; }
+.assistant-tabs button:hover { color: #334155; background: rgba(255, 255, 255, .66); }
+.assistant-tabs button.active { color: var(--reader-accent); background: rgba(47, 109, 246, .1); }
+.expand-button { margin-left: auto; color: var(--reader-accent) !important; font-size: 18px !important; }
+.collapse-button { margin-left: auto; font-size: 17px !important; }
 .expand-button + .collapse-button { margin-left: 2px; }
 .reader-assistant.collapsed .assistant-tabs button:not(.collapse-button) { display: none; }
 
@@ -1563,8 +1888,9 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-y: auto;
   padding: 16px;
+  background: transparent;
 }
-.assistant-scroll:has(.reader-report) { padding: 0; background: #f7f9fc; }
+.assistant-scroll:has(.reader-report) { padding: 0; background: transparent; }
 
 .assistant-scroll section { margin-bottom: 22px; }
 .assistant-scroll h3 { margin: 0 0 9px; font-size: 13px; color: #1f2937; }
@@ -1610,21 +1936,22 @@ onBeforeUnmount(() => {
 .reading-stage {
   min-width: 0;
   overflow: auto;
-  background: #f3f5f8;
+  background: transparent;
   scroll-behavior: smooth;
 }
 
 .reading-column {
-  width: min(100% - 64px, 1180px);
+  width: min(100% - 86px, 1120px);
   min-height: 100%;
   margin: 0 auto;
   padding: 34px 62px 100px;
+  border-right: 1px solid #e6ebf2;
+  border-left: 1px solid #e6ebf2;
   background: #fff;
   box-sizing: border-box;
+  box-shadow: 0 0 0 1px rgba(226, 232, 240, .28), 0 18px 44px rgba(35, 48, 70, .055);
   font-size: calc(16px * var(--reader-scale));
 }
-
-.reading-column.compact { width: min(100% - 48px, 1320px); padding-inline: 44px; }
 
 .paper-heading {
   padding-bottom: 24px;
@@ -1673,6 +2000,39 @@ onBeforeUnmount(() => {
 
 .source-paragraph { color: #303846; }
 .selectable-paragraph::selection { color: #172033; background: #c9f46a; }
+.annotation-highlight {
+  position: relative;
+  padding: 0 .08em .08em;
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(255,255,255,0) 38%, rgba(245, 158, 11, .32) 38%, rgba(245, 158, 11, .32) 88%, rgba(255,255,255,0) 88%);
+  box-shadow: inset 0 -1px rgba(217, 119, 6, .26);
+  cursor: pointer;
+}
+.annotation-highlight:hover {
+  background: linear-gradient(180deg, rgba(255,255,255,0) 32%, rgba(245, 158, 11, .46) 32%, rgba(245, 158, 11, .46) 90%, rgba(255,255,255,0) 90%);
+}
+.annotation-delete {
+  display: inline-grid;
+  width: 14px;
+  height: 14px;
+  margin-left: 3px;
+  padding: 0;
+  place-items: center;
+  vertical-align: 2px;
+  border: 1px solid rgba(180, 83, 9, .32);
+  border-radius: 50%;
+  color: #9a5a07;
+  background: #fffaf0;
+  font: 800 10px/1 Inter, "PingFang SC", sans-serif;
+  opacity: .72;
+  cursor: pointer;
+}
+.annotation-delete:hover {
+  color: #7c2d12;
+  border-color: rgba(180, 83, 9, .55);
+  background: #ffedd5;
+  opacity: 1;
+}
 .translation-block { margin: 3px 0 14px; padding: 0; border: 0; border-radius: 0; background: transparent; }
 .translation-unit { margin: 4px 0 16px; padding-left: 12px; border-left: 2px solid #b9c4d6; }
 .translated-paragraph {
@@ -1857,7 +2217,11 @@ onBeforeUnmount(() => {
   content: "";
   background: #cda960;
 }
-.block-annotation-note button {
+.block-annotation-actions {
+  display: grid;
+  gap: 6px;
+}
+.block-annotation-actions button {
   width: 31px;
   height: 31px;
   padding: 0;
@@ -1866,6 +2230,21 @@ onBeforeUnmount(() => {
   color: #7a581d;
   background: #fff8e8;
   cursor: pointer;
+}
+.block-annotation-actions button:hover {
+  color: #6f4306;
+  border-color: #b9892f;
+  background: #ffefd0;
+}
+.block-annotation-actions .block-annotation-remove {
+  color: #a63a25;
+  border-color: #efb0a5;
+  background: #fff1ef;
+}
+.block-annotation-actions .block-annotation-remove:hover {
+  color: #8c1d18;
+  border-color: #e07362;
+  background: #ffe3df;
 }
 .block-annotation-note p {
   max-height: 108px;
@@ -1942,6 +2321,25 @@ onBeforeUnmount(() => {
 .paper-chat-enter-from,
 .paper-chat-leave-to { opacity: 0; transform: translateY(8px) scale(.98); }
 @keyframes chat-dot { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+.reader-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 120;
+  transform: translateX(-50%);
+  padding: 9px 14px;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(23, 32, 51, .92);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, .18);
+  font-size: 12px;
+  font-weight: 650;
+}
+.reader-toast-enter-active,
+.reader-toast-leave-active { transition: opacity 160ms ease, transform 180ms ease; }
+.reader-toast-enter-from,
+.reader-toast-leave-to { opacity: 0; transform: translate(-50%, 8px); }
 .reader-tour-layer { position: fixed; inset: 0; z-index: 100; pointer-events: auto; }
 .reader-tour-shade { position: absolute; inset: 0; background: transparent; }
 .reader-tour-focus {
@@ -1956,23 +2354,21 @@ onBeforeUnmount(() => {
 .reader-tour-card > span { color: #2451a6; font-size: 10px; font-weight: 750; }
 
 @media (max-width: 1100px) {
-  .reader-toolbar { gap: 8px; padding-inline: 8px; }
-  .reader-tools { position: static; margin-right: auto; }
-  .reader-document-title { width: 42vw; font-size: 14px; }
-  .reader-body { grid-template-columns: 238px minmax(0, 1fr) 36px; }
-  .reader-body.assistant-wide { grid-template-columns: clamp(360px, 40vw, 440px) minmax(360px, 1fr) 36px; }
+  .reader-toolbar { grid-template-columns: minmax(180px, 1fr) auto auto; gap: 8px; padding-inline: 8px; }
+  .reader-document-source { display: none; }
+  .reader-status-item small { display: none; }
+  .reader-body { grid-template-columns: 260px minmax(0, 1fr) 50px; }
+  .reader-body.assistant-wide { grid-template-columns: clamp(360px, 40vw, 460px) minmax(360px, 1fr) 50px; }
   .reading-column { width: calc(100% - 32px); padding: 30px 36px 90px; }
   .block-annotation-note { width: 31px; margin-right: -28px; }
   .block-annotation-note p { display: none; }
 }
 
 @media (max-width: 820px) {
-  .reader-toolbar-end span { display: none; }
-  .reader-document-title { width: 40vw; font-size: 12px; }
-  .reader-tools .tool-divider,
-  .reader-tools .scale-value,
-  .reader-tools button[title="缩小"],
-  .reader-tools button[title="放大"] { display: none; }
+  .reader-toolbar { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .reader-document-title { font-size: 12px; }
+  .reader-status { display: none; }
+  .reader-zoom-control { display: none; }
   .reader-body { position: relative; grid-template-columns: minmax(0, 1fr); }
   .reader-page-rail { display: none; }
   .reader-assistant {
@@ -1986,19 +2382,23 @@ onBeforeUnmount(() => {
   .reader-body:has(.reader-assistant.collapsed),
   .reader-body.assistant-wide { grid-template-columns: minmax(0, 1fr); }
   .reader-assistant.expanded { width: min(88vw, 520px); }
-  .reading-column,
-  .reading-column.compact { width: 100%; padding: 26px 28px 86px; }
+  .reading-column { width: 100%; padding: 26px 28px 86px; }
   .selection-translate-popover { width: min(360px, calc(100vw - 20px)); }
 }
 
 @media (max-width: 560px) {
-  .reader-toolbar { height: 48px; }
-  .reader-body { height: calc(100vh - 48px); }
-  .reader-document-title { left: 50%; width: 43vw; font-size: 11px; }
-  .reader-tools button:not(:first-child) { display: none; }
-  .reader-toolbar-end button { padding-inline: 6px; font-size: 10px; }
-  .reading-column,
-  .reading-column.compact { padding: 22px 18px 82px; font-size: calc(15px * var(--reader-scale)); }
+  .reader-workbench { --reader-toolbar-height: 56px; }
+  .reader-toolbar { gap: 4px; padding-inline: 6px; }
+  .reader-toolbar-start { gap: 6px; }
+  .reader-back { width: 32px; height: 32px; }
+  .reader-document-title { font-size: 11px; }
+  .reader-tools { height: 34px; padding: 0; }
+  .reader-tools button { height: 28px; font-size: 10px; }
+  .reader-translate-toggle { gap: 5px; padding-inline: 2px; }
+  .reader-pdf-action { height: 32px !important; padding-inline: 8px; font-size: 10px !important; }
+  .pdf-label-long { display: none; }
+  .pdf-label-short { display: inline; }
+  .reading-column { padding: 22px 18px 82px; font-size: calc(15px * var(--reader-scale)); }
   .paper-heading h1 { font-size: 1.42em; }
   .block-annotation-note {
     float: none;
@@ -2082,15 +2482,16 @@ onBeforeUnmount(() => {
 .reader-page-rail {
   overflow-y: auto;
   padding: 8px 5px;
-  background: #fff;
-  border-left: 1px solid #dfe3e8;
+  background: var(--reader-panel);
+  border-left: 1px solid var(--reader-line);
 }
 
 .reader-page-rail button {
-  width: 30px;
-  height: 28px;
+  width: 40px;
+  height: 32px;
   margin-bottom: 4px;
   border: 0;
+  border-left: 2px solid transparent;
   border-radius: 4px;
   background: transparent;
   color: #7a8494;
@@ -2098,7 +2499,8 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.reader-page-rail button.active { background: #e8f1ff; color: #1769e0; font-weight: 700; }
+.reader-page-rail button:hover { color: #334155; background: #f1f4f8; }
+.reader-page-rail button.active { border-left-color: var(--reader-accent); background: var(--reader-accent-soft); color: var(--reader-accent); font-weight: 750; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 

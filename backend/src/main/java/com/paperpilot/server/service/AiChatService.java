@@ -95,7 +95,7 @@ public class AiChatService {
     }
 
     public ChatResult chatJson(String systemPrompt, String userPrompt, int maxOutputTokens) throws Exception {
-        ModelConfigEntity config = activeGeneralConfig();
+        ModelConfigEntity config = activeSceneConfig(inferModelConfigScene(systemPrompt, userPrompt));
         return send(
             config == null ? "https://api.openai.com/v1" : config.getBaseUrl(),
             config == null ? "" : config.getApiKey(),
@@ -135,7 +135,8 @@ public class AiChatService {
         List<String> fallbackModels,
         boolean accountUsage
     ) throws Exception {
-        ModelConfigEntity config = activeGeneralConfig();
+        String scene = inferModelConfigScene(systemPrompt, userPrompt);
+        ModelConfigEntity config = activeSceneConfig(scene);
         String baseUrl = config == null ? "https://api.openai.com/v1" : config.getBaseUrl();
         String apiKey = config == null ? "" : config.getApiKey();
         String apiFormat = config == null ? "openai_chat" : config.getApiFormat();
@@ -148,7 +149,7 @@ public class AiChatService {
             routes.add(new ModelRoute(baseUrl, apiKey, model, apiFormat, authType, fullUrl, customUserAgent));
         }
         int fallbackRouteCount = 0;
-        for (ModelConfigEntity row : modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(ModelConfigService.SCENE_GENERAL)) {
+        for (ModelConfigEntity row : modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(scene)) {
             if (config != null && Objects.equals(row.getId(), config.getId())) continue;
             if (!StringUtils.hasText(row.getApiKey()) || !StringUtils.hasText(row.getModelName()) || !StringUtils.hasText(row.getBaseUrl())) continue;
             if (fallbackRouteCount >= MAX_POOL_FALLBACK_ROUTES) break;
@@ -916,6 +917,23 @@ public class AiChatService {
         return "analyze";
     }
 
+    private String inferModelConfigScene(String systemPrompt, String userPrompt) {
+        String combined = ((systemPrompt == null ? "" : systemPrompt) + "\n" + (userPrompt == null ? "" : userPrompt)).toLowerCase();
+        if (combined.contains("内容审核") || combined.contains("审核员") || combined.contains("risklevel") || combined.contains("approved(boolean)")) {
+            return ModelConfigService.SCENE_FORUM_MODERATION;
+        }
+        if (combined.contains("meeting report") || combined.contains("组会") || combined.contains("ppt")) {
+            return ModelConfigService.SCENE_MEETING_DECK;
+        }
+        if (combined.contains("summary") || combined.contains("综述") || combined.contains("文献综述")) {
+            return ModelConfigService.SCENE_PAPER_REVIEW;
+        }
+        if (combined.contains("question") || combined.contains("问答") || combined.contains("qa") || combined.contains("回答用户")) {
+            return ModelConfigService.SCENE_PAPER_QA;
+        }
+        return ModelConfigService.SCENE_PAPER_QA;
+    }
+
     private String inferAction(String systemPrompt, String userPrompt) {
         String scene = inferScene(systemPrompt, userPrompt);
         return switch (scene) {
@@ -1038,6 +1056,11 @@ public class AiChatService {
     private ModelConfigEntity activeGeneralConfig() {
         return modelConfigRepository.findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(ModelConfigService.SCENE_GENERAL)
             .orElse(null);
+    }
+
+    private ModelConfigEntity activeSceneConfig(String scene) {
+        ModelConfigEntity config = modelConfigRepository.findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(scene).orElse(null);
+        return config == null ? activeGeneralConfig() : config;
     }
 
     private String normalizeFormat(String value) {

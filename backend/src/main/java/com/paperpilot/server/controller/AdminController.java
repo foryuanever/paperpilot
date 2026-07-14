@@ -11,6 +11,8 @@ import com.paperpilot.server.entity.PaymentOrderEntity;
 import com.paperpilot.server.entity.PaymentTicketEntity;
 import com.paperpilot.server.entity.ForumPostEntity;
 import com.paperpilot.server.entity.ForumPostReportEntity;
+import com.paperpilot.server.entity.TutorialArticleEntity;
+import com.paperpilot.server.entity.CampusVerificationEntity;
 import com.paperpilot.server.repository.AppUserRepository;
 import com.paperpilot.server.repository.AiUsageRecordRepository;
 import com.paperpilot.server.repository.RechargeRecordRepository;
@@ -24,6 +26,8 @@ import com.paperpilot.server.repository.PaymentTicketRepository;
 import com.paperpilot.server.repository.ForumPostRepository;
 import com.paperpilot.server.repository.ForumPostReportRepository;
 import com.paperpilot.server.repository.CheckinRepository;
+import com.paperpilot.server.repository.TutorialArticleRepository;
+import com.paperpilot.server.repository.CampusVerificationRepository;
 import com.paperpilot.server.service.AuthService;
 import com.paperpilot.server.service.BillingService;
 import com.paperpilot.server.service.MembershipService;
@@ -59,6 +63,8 @@ public class AdminController {
     private final ForumPostReportRepository forumPostReportRepository;
     private final CheckinRepository checkinRepository;
     private final NotificationService notificationService;
+    private final TutorialArticleRepository tutorialArticleRepository;
+    private final CampusVerificationRepository campusVerificationRepository;
 
     public AdminController(
         AppUserRepository appUserRepository,
@@ -77,7 +83,9 @@ public class AdminController {
         ForumPostRepository forumPostRepository,
         ForumPostReportRepository forumPostReportRepository,
         CheckinRepository checkinRepository,
-        NotificationService notificationService
+        NotificationService notificationService,
+        TutorialArticleRepository tutorialArticleRepository,
+        CampusVerificationRepository campusVerificationRepository
     ) {
         this.appUserRepository = appUserRepository;
         this.aiUsageRecordRepository = aiUsageRecordRepository;
@@ -96,6 +104,8 @@ public class AdminController {
         this.forumPostReportRepository = forumPostReportRepository;
         this.checkinRepository = checkinRepository;
         this.notificationService = notificationService;
+        this.tutorialArticleRepository = tutorialArticleRepository;
+        this.campusVerificationRepository = campusVerificationRepository;
     }
 
     // --- Dynamic Global Statistics ---
@@ -400,6 +410,48 @@ public class AdminController {
         return forumReportToMap(saved);
     }
 
+    @GetMapping("/campus-verifications")
+    public List<Map<String, Object>> getCampusVerifications() {
+        return campusVerificationRepository.findAllByOrderByCreatedAtDesc().stream()
+            .map(this::campusVerificationToMap)
+            .toList();
+    }
+
+    @PatchMapping("/campus-verifications/{id}")
+    public Map<String, Object> reviewCampusVerification(
+        @PathVariable("id") Long id,
+        @RequestBody Map<String, Object> body,
+        HttpServletRequest request
+    ) {
+        CampusVerificationEntity verification = campusVerificationRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "校园认证申请不存在"));
+        String status = String.valueOf(body.getOrDefault("status", "approved")).trim().toLowerCase();
+        if (!List.of("pending", "approved", "rejected").contains(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "审核状态仅支持 pending、approved 或 rejected");
+        }
+        String note = String.valueOf(body.getOrDefault("adminNote", "")).trim();
+        verification.setStatus(status);
+        verification.setAdminNote(note);
+        verification.setReviewedAt("pending".equals(status) ? null : LocalDateTime.now());
+
+        if ("approved".equals(status)) {
+            AppUserEntity user = appUserRepository.findById(verification.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "申请用户不存在"));
+            user.setSchoolName(verification.getSchoolName());
+            user.setCampusVerified(true);
+            appUserRepository.save(user);
+            notificationService.createSystemNotice(user.getId(), null, "campus_verified", verification.getId(),
+                "校园认证已通过", "你的校园认证已通过，个人主页已显示学校：" + verification.getSchoolName());
+        } else if ("rejected".equals(status)) {
+            notificationService.createSystemNotice(verification.getUserId(), null, "campus_rejected", verification.getId(),
+                "校园认证未通过", note.isBlank() ? "你的校园认证暂未通过，请检查资料后重新提交。" : note);
+        }
+
+        CampusVerificationEntity saved = campusVerificationRepository.save(verification);
+        authService.logAction("处理校园认证 #" + saved.getId() + ": " + campusVerificationStatusLabel(saved.getStatus()), "info", getClientIp(request));
+        return campusVerificationToMap(saved);
+    }
+
     // --- Teams ---
 
     @GetMapping("/teams")
@@ -499,10 +551,16 @@ public class AdminController {
         SiteMessageEntity message = new SiteMessageEntity();
         message.setTitle(title);
         message.setContent(content);
+        message.setMessageType(normalizeSiteMessageType(body.get("messageType")));
         message.setActiveFlag(true);
         SiteMessageEntity saved = siteMessageRepository.save(message);
         authService.logAction("发布全站消息: " + title, "info", getClientIp(request));
         return saved;
+    }
+
+    private String normalizeSiteMessageType(String value) {
+        if ("timeline".equalsIgnoreCase(value)) return "timeline";
+        return "notice";
     }
 
     @PatchMapping("/site-messages/{id}/status")
@@ -527,6 +585,58 @@ public class AdminController {
         authService.logAction("删除全站消息: " + message.getTitle(), "warn", getClientIp(request));
     }
 
+    // --- Tutorial Articles ---
+
+    @GetMapping("/tutorials")
+    public List<TutorialArticleEntity> getTutorials() {
+        return tutorialArticleRepository.findAllByOrderBySortOrderAscUpdatedAtDesc();
+    }
+
+    @PostMapping("/tutorials")
+    public TutorialArticleEntity publishTutorial(@RequestBody Map<String, Object> body, HttpServletRequest request) {
+        TutorialArticleEntity article = new TutorialArticleEntity();
+        applyTutorialBody(article, body);
+        TutorialArticleEntity saved = tutorialArticleRepository.save(article);
+        authService.logAction("发布使用教程: " + saved.getTitle(), "info", getClientIp(request));
+        return saved;
+    }
+
+    @PatchMapping("/tutorials/{id}")
+    public TutorialArticleEntity updateTutorial(
+        @PathVariable("id") Long id,
+        @RequestBody Map<String, Object> body,
+        HttpServletRequest request
+    ) {
+        TutorialArticleEntity article = tutorialArticleRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "教程不存在"));
+        applyTutorialBody(article, body);
+        TutorialArticleEntity saved = tutorialArticleRepository.save(article);
+        authService.logAction("更新使用教程: " + saved.getTitle(), "info", getClientIp(request));
+        return saved;
+    }
+
+    @PatchMapping("/tutorials/{id}/status")
+    public TutorialArticleEntity updateTutorialStatus(
+        @PathVariable("id") Long id,
+        @RequestBody Map<String, Boolean> body,
+        HttpServletRequest request
+    ) {
+        TutorialArticleEntity article = tutorialArticleRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "教程不存在"));
+        article.setActiveFlag(Boolean.TRUE.equals(body.get("active")));
+        TutorialArticleEntity saved = tutorialArticleRepository.save(article);
+        authService.logAction((saved.isActiveFlag() ? "上架" : "下架") + "使用教程: " + saved.getTitle(), "info", getClientIp(request));
+        return saved;
+    }
+
+    @DeleteMapping("/tutorials/{id}")
+    public void deleteTutorial(@PathVariable("id") Long id, HttpServletRequest request) {
+        TutorialArticleEntity article = tutorialArticleRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "教程不存在"));
+        tutorialArticleRepository.delete(article);
+        authService.logAction("删除使用教程: " + article.getTitle(), "warn", getClientIp(request));
+    }
+
     // --- Helper ---
 
     private String getClientIp(HttpServletRequest request) {
@@ -537,6 +647,42 @@ public class AdminController {
             }
         }
         return normalizeIp(request.getRemoteAddr());
+    }
+
+    private void applyTutorialBody(TutorialArticleEntity article, Map<String, Object> body) {
+        String title = textValue(body.get("title"));
+        String content = textValue(body.get("content"));
+        if (title.isBlank() || content.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "教程标题和 Markdown 内容不能为空");
+        }
+        article.setTitle(title);
+        article.setContent(content);
+        article.setCategory(defaultTextValue(body.get("category"), "使用教程"));
+        article.setSortOrder(numberValue(body.get("sortOrder"), 0));
+        if (body.containsKey("activeFlag")) {
+            article.setActiveFlag(Boolean.TRUE.equals(body.get("activeFlag")));
+        } else if (body.containsKey("active")) {
+            article.setActiveFlag(Boolean.TRUE.equals(body.get("active")));
+        }
+    }
+
+    private String textValue(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private String defaultTextValue(Object value, String fallback) {
+        String result = textValue(value);
+        return result.isBlank() ? fallback : result;
+    }
+
+    private Integer numberValue(Object value, Integer fallback) {
+        if (value instanceof Number number) return number.intValue();
+        if (value == null) return fallback;
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException exception) {
+            return fallback;
+        }
     }
 
     private String normalizeIp(String ip) {
@@ -620,6 +766,36 @@ public class AdminController {
         row.put("createdAt", report.getCreatedAt());
         row.put("processedAt", report.getProcessedAt());
         return row;
+    }
+
+    private Map<String, Object> campusVerificationToMap(CampusVerificationEntity verification) {
+        Map<String, Object> row = new java.util.LinkedHashMap<>();
+        row.put("id", verification.getId());
+        row.put("userId", verification.getUserId());
+        row.put("userName", verification.getUserName());
+        row.put("email", verification.getEmail());
+        row.put("schoolName", verification.getSchoolName());
+        row.put("studentNo", verification.getStudentNo());
+        row.put("studentCardFront", verification.getStudentCardFront());
+        row.put("studentCardBack", verification.getStudentCardBack());
+        row.put("status", verification.getStatus());
+        row.put("statusLabel", campusVerificationStatusLabel(verification.getStatus()));
+        row.put("adminNote", verification.getAdminNote());
+        row.put("createdAt", verification.getCreatedAt());
+        row.put("reviewedAt", verification.getReviewedAt());
+        appUserRepository.findById(verification.getUserId()).ifPresent(user -> {
+            row.put("currentSchoolName", user.getSchoolName());
+            row.put("campusVerified", user.isCampusVerified());
+        });
+        return row;
+    }
+
+    private String campusVerificationStatusLabel(String status) {
+        return switch (status) {
+            case "approved" -> "已通过";
+            case "rejected" -> "未通过";
+            default -> "待审核";
+        };
     }
 
     private String forumReportStatusLabel(String status) {

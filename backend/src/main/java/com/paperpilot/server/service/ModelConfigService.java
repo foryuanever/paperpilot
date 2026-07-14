@@ -24,7 +24,10 @@ import java.util.Set;
 public class ModelConfigService {
     private static final int MAX_POOL_REFRESH_CHECKS = 8;
     public static final String SCENE_GENERAL = "general";
+    public static final String SCENE_PAPER_REVIEW = "paper_review";
+    public static final String SCENE_PAPER_QA = "paper_qa";
     public static final String SCENE_MEETING_DECK = "meeting_deck";
+    public static final String SCENE_FORUM_MODERATION = "forum_moderation";
 
     private final ModelConfigRepository modelConfigRepository;
     private final CurrentUserService currentUserService;
@@ -89,7 +92,7 @@ public class ModelConfigService {
             return new ModelConfigVO(
                 "PPT 专用中转站",
                 "",
-                "gpt-5.5",
+                "gpt-5.4",
                 "openai_chat",
                 "bearer",
                 false,
@@ -311,6 +314,15 @@ public class ModelConfigService {
     public static String normalizeScene(String scene) {
         if (!StringUtils.hasText(scene)) return SCENE_GENERAL;
         String value = scene.trim().toLowerCase();
+        if (value.equals("paper_review") || value.equals("review") || value.equals("summary") || value.equals("综述")) {
+            return SCENE_PAPER_REVIEW;
+        }
+        if (value.equals("paper_qa") || value.equals("qa") || value.equals("chat") || value.equals("问答")) {
+            return SCENE_PAPER_QA;
+        }
+        if (value.equals("forum") || value.equals("forum_moderation") || value.equals("moderation") || value.equals("发帖审核")) {
+            return SCENE_FORUM_MODERATION;
+        }
         if (value.equals("ppt") || value.equals("deck") || value.equals("meeting") || value.equals("meeting_report") || value.equals("meeting_deck")) {
             return SCENE_MEETING_DECK;
         }
@@ -425,7 +437,7 @@ public class ModelConfigService {
                 "modelName", "deepseek-v4-flash",
                 "apiFormat", "openai_chat",
                 "status", "unconfigured",
-                "message", "DeepSeek 官方 OpenAI 兼容协议；需要 DeepSeek API Key，模型名不要填写 gpt-5.5。",
+                "message", "DeepSeek 官方 OpenAI 兼容协议；需要 DeepSeek API Key，模型名不要填写 gpt-5.4。",
                 "keyUrl", "https://platform.deepseek.com/api_keys",
                 "priority", "79-deepseek"
             ),

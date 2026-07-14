@@ -2,9 +2,9 @@
   <section class="reader-panel">
     <div class="reader-panel-header">
       <div>
-        <span class="section-eyebrow">全局 AI 路由</span>
-        <h3>免费模型与中转站</h3>
-        <p class="panel-intro">只维护一条全站模型路由。9Router 默认只开放 OpenCode Free 免费模型，避免误选慢模型。</p>
+        <span class="section-eyebrow">入口 AI 路由</span>
+        <h3>模型与中转站</h3>
+        <p class="panel-intro">每个业务入口单独保存模型路由。轻量任务用低价快模型，PPT 生成单独使用 gpt-5.4 级别强模型。</p>
       </div>
       <span class="badge">仅管理员可配置</span>
     </div>
@@ -81,7 +81,7 @@
     <div v-else-if="isDeepSeek" class="opencode-notice deepseek-notice">
       <div>
         <strong>DeepSeek 官方 API 使用 OpenAI Chat Completions 兼容协议</strong>
-        <span>这里不是 GPT 中转站，模型名应使用 deepseek-v4-flash / deepseek-v4-pro；不要填写 gpt-5.5。</span>
+        <span>这里不是 GPT 中转站，模型名应使用 deepseek-v4-flash / deepseek-v4-pro；不要填写 gpt-5.4。</span>
       </div>
       <button type="button" class="btn btn-secondary" @click="$emit('apply-preset', 'deepseek-official')">恢复推荐配置</button>
     </div>
@@ -134,7 +134,7 @@
           {{ testing ? "测试中..." : "测试连接" }}
         </button>
         <button type="button" class="btn btn-primary" :disabled="saving" @click="$emit('save-model')">
-          {{ saving ? "保存中..." : "保存并全站启用" }}
+          {{ saving ? "保存中..." : "保存并启用此入口" }}
         </button>
       </div>
 
@@ -253,7 +253,7 @@ function usageText(usage) {
 
 <style scoped>
 .panel-intro { margin: 5px 0 0; color: #687488; font-size: 12px; }
-.route-switch { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 18px 0 14px; }
+.route-switch { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 18px 0 14px; }
 .route-option { display: grid; gap: 4px; padding: 15px 16px; text-align: left; border: 1px solid #dfe5ee; border-radius: 12px; color: #344158; background: #fff; cursor: pointer; transition: border-color 180ms ease, background 180ms ease; }
 .route-option:hover { border-color: #9fc1f7; }
 .route-option.active { border-color: #1473e6; color: #075ee5; background: #f2f7ff; }

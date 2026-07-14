@@ -432,12 +432,12 @@
   flex-wrap: wrap;
   width: min(1480px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
-  margin: 0 auto 22px;
-  padding: 10px 12px;
-  background: var(--spatial-glass);
-  backdrop-filter: var(--spatial-blur);
-  border: 1px solid var(--spatial-line);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+  margin: 0 auto 18px;
+  padding: 8px 4px;
+  background: transparent;
+  backdrop-filter: none;
+  border: 0;
+  box-shadow: none;
 }
 
 .spatial-nav-float.reader-mode {
@@ -470,20 +470,41 @@
 }
 
 .spatial-nav-link {
-  padding: 7px 11px;
+  position: relative;
+  padding: 7px 8px;
   color: var(--spatial-gray);
   text-decoration: none;
   font-size: 13px;
   font-weight: 700;
-  border-radius: 9px;
+  border-radius: 0;
   border-bottom: 0;
-  transition: color 0.18s ease, background 0.18s ease;
+  transition: color 0.18s ease;
 }
 
 .spatial-nav-link:hover,
 .spatial-nav-link.active {
   color: var(--spatial-accent);
-  background: var(--spatial-accent-soft);
+  background: transparent;
+}
+
+.spatial-nav-link::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0;
+  transform: scaleX(.45);
+  transition: opacity .18s ease, transform .18s ease;
+}
+
+.spatial-nav-link:hover::after,
+.spatial-nav-link.active::after {
+  opacity: 1;
+  transform: scaleX(1);
 }
 
 .spatial-nav-actions {
@@ -714,13 +735,13 @@ body:has(.ai-reader-app) {
 }
 
 .spatial-nav-float {
-  border-radius: 12px;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .spatial-nav-link.active {
   color: var(--spatial-accent);
-  background: var(--spatial-accent-soft);
+  background: transparent;
   border-bottom-color: transparent;
 }
 

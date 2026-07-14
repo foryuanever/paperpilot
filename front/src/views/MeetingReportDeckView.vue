@@ -57,11 +57,36 @@
                 @change="persistMeetings"
               />
 
-              <label class="meeting-notes">
+              <label class="meeting-notes" :class="{ importing: importingReview && reviewModal.meeting?.id === meeting.id }">
                 <span>组会重点内容</span>
                 <textarea
                   v-model="meeting.notes"
                   placeholder="记录这次要讲清楚的核心问题、导师可能追问的点、需要讨论的实验或方法缺口。"
+                  @change="persistMeetings"
+                ></textarea>
+              </label>
+
+              <div class="meeting-detail-grid" aria-label="组会汇报细节">
+                <label
+                  v-for="field in meetingDetailFields"
+                  :key="field.key"
+                  class="meeting-detail-field"
+                  :class="{ importing: importingReview && reviewModal.meeting?.id === meeting.id && (field.key === 'objective' || field.key === 'questions') }"
+                >
+                  <span>{{ field.label }}</span>
+                  <textarea
+                    v-model="meeting.details[field.key]"
+                    :placeholder="field.placeholder"
+                    @change="persistMeetings"
+                  ></textarea>
+                </label>
+              </div>
+
+              <label class="meeting-advisor-note">
+                <span>导师建议修改</span>
+                <textarea
+                  v-model="meeting.advisorAdvice"
+                  placeholder="记录导师提出的修改意见，例如补实验、换图表、重写研究问题、增加对照或调整汇报顺序。"
                   @change="persistMeetings"
                 ></textarea>
               </label>
@@ -219,6 +244,9 @@
               <button type="button" class="primary-button" :disabled="reviewModal.generating" @click="generateReview">
                 {{ reviewModal.generating ? `生成中 ${reviewModal.progress}%` : reviewModal.generated ? "重新生成综述" : "生成论文综述" }}
               </button>
+              <button type="button" class="import-meeting-button" :disabled="!canImportReviewToMeeting || importingReview" @click="importReviewToMeeting">
+                {{ importingReview ? "AI 整理中..." : "一键导入组会" }}
+              </button>
               <button type="button" class="soft-button" :disabled="reviewModal.saving" @click="saveReview">
                 {{ reviewModal.saving ? "保存中" : "保存编辑" }}
               </button>
@@ -269,6 +297,18 @@ const DECK_STORAGE_KEY = "paperpilot-meeting-deck-jobs-v1";
 const REVIEW_STORAGE_KEY = "paperpilot-meeting-review-jobs-v1";
 const DEFAULT_MEETING_TITLE = "新组会汇报";
 const DEFAULT_MEETING_NOTES = "本次重点：先讲清研究问题，再讨论方法路线、证据质量和后续可推进方向。";
+const DEFAULT_MEETING_DETAILS = {
+  objective: "",
+  questions: "",
+  evidence: "",
+  discussion: "",
+};
+const meetingDetailFields = [
+  { key: "objective", label: "汇报目标", placeholder: "这次汇报希望导师/组员重点判断什么？例如选题是否成立、方法是否可行。" },
+  { key: "questions", label: "关键问题", placeholder: "列出 2-3 个必须讲清的问题，避免 PPT 只复述论文。" },
+  { key: "evidence", label: "实验与数据", placeholder: "需要展示的数据、实验设置、指标、图表页码或待补的证据。" },
+  { key: "discussion", label: "待讨论决策", placeholder: "本次组会需要拍板的下一步：补实验、改方向、换数据、投稿策略等。" },
+];
 
 const reviewSections = [
   { key: "basicInfo", title: "基本信息", hint: "题录、来源与研究对象", placeholder: "作者、年份、期刊/会议、研究对象、数据来源。" },
@@ -287,6 +327,7 @@ const loadingPapers = ref(false);
 const uploading = ref(false);
 const activeMeetingId = ref("");
 const toastMessage = ref("");
+const importingReview = ref(false);
 const deckJobs = reactive({});
 const reviewJobs = reactive({});
 const paperPicker = reactive({ open: false, meeting: null });
@@ -311,6 +352,9 @@ const confirmOpened = ref("");
 let pendingConfirmWindow = null;
 
 const sortedMeetings = computed(() => [...meetings.value].sort((a, b) => new Date(b.meetingTime) - new Date(a.meetingTime)));
+const canImportReviewToMeeting = computed(() => Boolean(
+  reviewModal.meeting && reviewSections.some(section => String(reviewModal.sections?.[section.key] || "").trim()),
+));
 
 const filteredPapers = computed(() => {
   const query = keyword.value.trim().toLowerCase();
@@ -391,6 +435,8 @@ function createMeeting(paperIds = []) {
     meetingTime: toDatetimeLocal(now),
     title: DEFAULT_MEETING_TITLE,
     notes: DEFAULT_MEETING_NOTES,
+    details: { ...DEFAULT_MEETING_DETAILS },
+    advisorAdvice: "",
     tags: ["待汇报"],
     tagDraft: "",
     params: {
@@ -410,6 +456,8 @@ function normalizeMeeting(meeting = {}) {
     meetingTime: meeting.meetingTime || toDatetimeLocal(new Date()),
     title: meeting.title || DEFAULT_MEETING_TITLE,
     notes: meeting.notes || "",
+    details: normalizeMeetingDetails(meeting.details),
+    advisorAdvice: meeting.advisorAdvice || "",
     tags: Array.isArray(meeting.tags) ? meeting.tags : [],
     tagDraft: "",
     params: {
@@ -420,6 +468,46 @@ function normalizeMeeting(meeting = {}) {
     papers: paperIds,
     primaryPaperId: meeting.primaryPaperId || paperIds[0] || "",
   };
+}
+
+function normalizeMeetingDetails(details = {}) {
+  return {
+    ...DEFAULT_MEETING_DETAILS,
+    ...(details && typeof details === "object" ? details : {}),
+  };
+}
+
+function meetingFocusText(meeting) {
+  const lines = [
+    ["组会重点", meeting.notes],
+    ...meetingDetailFields.map(field => [field.label, meeting.details?.[field.key]]),
+    ["导师建议修改", meeting.advisorAdvice],
+  ]
+    .map(([label, value]) => `${label}：${String(value || "").trim()}`)
+    .filter(line => !/：$/.test(line));
+  return lines.join("\n");
+}
+
+function compactReviewText(value = "", maxLength = 220) {
+  const text = String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/^[·•\-\d.\s]+/g, "")
+    .trim();
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function joinReviewParts(parts, maxLength = 360, itemLength = 150) {
+  const text = parts.map(item => compactReviewText(item, itemLength)).filter(Boolean).join("\n");
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function formatMeetingBullets(items, maxItems = 3) {
+  return items
+    .map(item => compactReviewText(item, 130))
+    .filter(Boolean)
+    .slice(0, maxItems)
+    .map((item, index) => `${index + 1}. ${item}`)
+    .join("\n");
 }
 
 function addMeeting() {
@@ -841,6 +929,41 @@ async function copyReviewSection(section) {
   }
 }
 
+async function importReviewToMeeting() {
+  const meeting = reviewModal.meeting;
+  if (!meeting) {
+    showToast("未找到当前组会");
+    return;
+  }
+  if (importingReview.value) return;
+  importingReview.value = true;
+  showToast("AI 正在整理组会字段");
+  await new Promise(resolve => window.setTimeout(resolve, 700));
+  const sections = reviewModal.sections || {};
+  meeting.details = normalizeMeetingDetails(meeting.details);
+  meeting.notes = formatMeetingBullets([
+    sections.overview && `研究问题：${sections.overview}`,
+    sections.method && `方法路线：${sections.method}`,
+    sections.results && `结果证据：${sections.results}`,
+  ], 3) || meeting.notes;
+  meeting.details.objective = formatMeetingBullets([
+    sections.overview && `判断选题与研究问题是否成立：${sections.overview}`,
+    sections.method && `确认方法路线是否可作为后续课题推进基础：${sections.method}`,
+    sections.conclusion && `讨论贡献、局限与下一步修改方向：${sections.conclusion}`,
+  ], 3);
+  meeting.details.questions = formatMeetingBullets([
+    sections.overview && `本文真正回答的核心问题是什么？${sections.overview}`,
+    sections.method && `方法设计是否足以支撑研究问题？${sections.method}`,
+    sections.results && `结果证据是否充分，哪些部分需要补充？${sections.results}`,
+  ], 3);
+  meeting.details.evidence = "";
+  meeting.details.discussion = "";
+  activeMeetingId.value = meeting.id;
+  persistMeetings();
+  importingReview.value = false;
+  showToast("已整理并导入前三个组会字段");
+}
+
 async function makePpt(meeting) {
   const paper = primaryPaper(meeting);
   if (!paper || !hasPdf(paper) || isDeckBusy(meeting)) return;
@@ -865,7 +988,7 @@ async function makePpt(meeting) {
       paperIds: meeting.papers,
       slideCount: meeting.params.slideCount,
       audience: meeting.params.audience,
-      focus: meeting.notes,
+      focus: meetingFocusText(meeting),
       templateName: meeting.params.reportType,
     });
     applyDeckJob(meeting, result, paper);
@@ -1057,6 +1180,7 @@ function showToast(message) {
 .add-meeting-button,
 .primary-button,
 .download-button,
+.import-meeting-button,
 .soft-button,
 .upload-inline {
   min-height: 42px;
@@ -1091,6 +1215,17 @@ function showToast(message) {
   border: 1px solid #cdd9e8;
   background: #fff;
   color: #172033;
+}
+
+.import-meeting-button {
+  border: 1px solid #bfdbfe;
+  color: #1746b8;
+  background: linear-gradient(180deg, #f8fbff, #eff6ff);
+}
+
+.import-meeting-button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
 }
 
 .download-button {
@@ -1311,7 +1446,9 @@ button:disabled {
   margin-top: 10px;
 }
 
-.meeting-notes span {
+.meeting-notes span,
+.meeting-detail-field span,
+.meeting-advisor-note span {
   color: #27364a;
   font-size: 13px;
   font-weight: 850;
@@ -1332,9 +1469,73 @@ button:disabled {
   font: 14px/1.75 inherit;
 }
 
+.meeting-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.meeting-detail-field,
+.meeting-advisor-note {
+  display: grid;
+  gap: 8px;
+}
+
+.meeting-detail-field textarea,
+.meeting-advisor-note textarea {
+  width: 100%;
+  min-height: 92px;
+  box-sizing: border-box;
+  border: 1px solid #d8e2ee;
+  border-radius: 12px;
+  padding: 12px 13px;
+  color: #243247;
+  background: rgba(255, 255, 255, .72);
+  outline: 0;
+  resize: vertical;
+  font: 13px/1.65 inherit;
+}
+
+.meeting-advisor-note {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #f0d4a4;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 250, 237, .86), rgba(255, 245, 220, .62));
+}
+
+.meeting-advisor-note textarea {
+  min-height: 94px;
+  border-color: #e7c887;
+  background: rgba(255, 255, 255, .78);
+}
+
+.meeting-notes textarea:focus,
+.meeting-detail-field textarea:focus,
+.meeting-advisor-note textarea:focus {
+  border-color: #8fb2ee;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .1);
+}
+
+.meeting-notes.importing textarea,
+.meeting-detail-field.importing textarea {
+  border-color: #93c5fd;
+  background:
+    linear-gradient(90deg, rgba(239, 246, 255, .88), rgba(255, 255, 255, .86), rgba(239, 246, 255, .88));
+  background-size: 220% 100%;
+  animation: field-buffer 780ms ease-in-out infinite;
+}
+
+@keyframes field-buffer {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+
 .meeting-side {
   display: grid;
   gap: 14px;
+  align-content: start;
 }
 
 .paper-box,
@@ -1399,8 +1600,8 @@ button:disabled {
 
 .generation-grid {
   grid-template-columns: 1fr 1fr;
-  align-items: stretch;
-  gap: 10px;
+  align-items: start;
+  gap: 12px;
 }
 
 .progress-label {
@@ -1408,7 +1609,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 9px;
+  margin-bottom: 7px;
 }
 
 .progress-label span {
@@ -1419,19 +1620,32 @@ button:disabled {
 
 .progress-label strong {
   color: #152033;
-  font-size: 16px;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
 }
 
 .generation-action {
+  position: relative;
+  overflow: hidden;
   display: grid;
-  grid-template-rows: auto auto auto 1fr;
-  min-height: 116px;
+  grid-template-rows: auto auto auto auto;
+  min-height: 0;
+  padding: 15px;
   border: 1px solid rgba(203, 216, 231, .72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .82);
+}
+
+.generation-action::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #2563eb, #8fb2ff);
+  content: "";
 }
 
 .generation-step {
-  min-height: 34px;
-  margin: 0 0 9px;
+  min-height: 0;
+  margin: 0 0 12px;
   color: #52637a;
   font-size: 12px;
   line-height: 1.45;
@@ -1452,9 +1666,17 @@ button:disabled {
   background: linear-gradient(180deg, #f6fffb, #ecfdf5);
 }
 
+.generation-action[data-status="generated"]::before {
+  background: linear-gradient(90deg, #16a36a, #10b981);
+}
+
 .generation-action[data-status="failed"] {
   border-color: #fecaca;
   background: linear-gradient(180deg, #fffafa, #fff1f2);
+}
+
+.generation-action[data-status="failed"]::before {
+  background: linear-gradient(90deg, #dc2626, #ef4444);
 }
 
 .generation-action[data-status="failed"] .progress-label span,
@@ -1464,7 +1686,6 @@ button:disabled {
 }
 
 .generation-action[data-status="failed"] .generation-step {
-  min-height: 68px;
   -webkit-line-clamp: 4;
 }
 
@@ -1481,8 +1702,8 @@ button:disabled {
 }
 
 .generation-progress {
-  height: 6px;
-  margin: 0 0 11px;
+  height: 7px;
+  margin: 0 0 14px;
   border-radius: 999px;
   background: #d9e4f5;
   overflow: hidden;
@@ -1503,7 +1724,7 @@ button:disabled {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
-  align-self: end;
+  align-self: start;
 }
 
 .deck-action-row:has(.confirm-link-button) {
@@ -1514,8 +1735,8 @@ button:disabled {
 .generation-action a {
   width: 100%;
   box-sizing: border-box;
-  min-height: 38px;
-  border-radius: 9px;
+  min-height: 42px;
+  border-radius: 10px;
 }
 
 .confirm-link-button {
@@ -1539,13 +1760,14 @@ button:disabled {
 
 .generation-action .soft-button {
   border-color: #c7d8ef;
-  background: #f8fbff;
+  background: #fff;
   color: #194fbf;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, .08);
 }
 
 .generation-action .primary-button,
 .generation-action .download-button {
-  box-shadow: none;
+  box-shadow: 0 10px 22px rgba(16, 153, 111, .18);
 }
 
 .modal-backdrop {
@@ -1708,6 +1930,7 @@ button:disabled {
 .review-modal-actions {
   display: flex;
   gap: 10px;
+  align-items: center;
 }
 
 .review-point-list {
@@ -1853,6 +2076,7 @@ button:disabled {
   }
 
   .generation-grid,
+  .meeting-detail-grid,
   .picker-tools,
   .picker-paper-list,
   .paper-loading,

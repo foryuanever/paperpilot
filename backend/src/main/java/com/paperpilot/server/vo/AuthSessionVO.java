@@ -10,12 +10,18 @@ public class AuthSessionVO {
     private String avatarUrl;
     private String backgroundUrl;
     private Integer fruitScore;
+    private String schoolName;
+    private boolean campusVerified;
 
     public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl) {
         this(userId, name, email, inviteCode, role, avatarUrl, backgroundUrl, 0);
     }
 
     public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl, Integer fruitScore) {
+        this(userId, name, email, inviteCode, role, avatarUrl, backgroundUrl, fruitScore, null, false);
+    }
+
+    public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl, Integer fruitScore, String schoolName, boolean campusVerified) {
         this.userId = userId;
         this.name = name;
         this.email = email;
@@ -24,6 +30,8 @@ public class AuthSessionVO {
         this.avatarUrl = avatarUrl;
         this.backgroundUrl = backgroundUrl;
         this.fruitScore = fruitScore;
+        this.schoolName = schoolName;
+        this.campusVerified = campusVerified;
     }
 
     public Long getUserId() {
@@ -56,5 +64,13 @@ public class AuthSessionVO {
 
     public Integer getFruitScore() {
         return fruitScore;
+    }
+
+    public String getSchoolName() {
+        return schoolName;
+    }
+
+    public boolean isCampusVerified() {
+        return campusVerified;
     }
 }

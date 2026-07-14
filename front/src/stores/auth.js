@@ -32,7 +32,7 @@ export const useAuthStore = defineStore("auth", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
   }
 
-  const profile = computed(() => session.user || { name: "Guest", email: "", inviteCode: "", avatarUrl: "", backgroundUrl: "" });
+  const profile = computed(() => session.user || { name: "Guest", email: "", inviteCode: "", avatarUrl: "", backgroundUrl: "", schoolName: "", campusVerified: false });
   const unreadCount = computed(() => session.notifications.length);
 
   function persist() {
@@ -57,6 +57,8 @@ export const useAuthStore = defineStore("auth", () => {
           avatarUrl: saved.avatarUrl || "",
           backgroundUrl: saved.backgroundUrl || "",
           fruitScore: saved.fruitScore || session.user.fruitScore || 0,
+          schoolName: saved.schoolName || session.user.schoolName || "",
+          campusVerified: Boolean(saved.campusVerified ?? session.user.campusVerified),
         };
         session.role = session.user.role;
         persist();
@@ -79,6 +81,8 @@ export const useAuthStore = defineStore("auth", () => {
       avatarUrl: user.avatarUrl || "",
       backgroundUrl: user.backgroundUrl || "",
       fruitScore: user.fruitScore || 0,
+      schoolName: user.schoolName || "",
+      campusVerified: Boolean(user.campusVerified),
     };
     // Provide a direct shortcut for role checks used throughout the app
     session.role = session.user.role;
@@ -101,6 +105,8 @@ export const useAuthStore = defineStore("auth", () => {
       email,
       inviteCode: "DEMO MODE",
       role: payload.role || defaultRole,
+      schoolName: "",
+      campusVerified: false,
     };
   }
 
@@ -180,7 +186,9 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   async function markNotificationRead(id) {
-    await paperpilotApi.markNotificationRead(id);
+    if (!String(id).startsWith("n-")) {
+      await paperpilotApi.markNotificationRead(id);
+    }
     session.notifications = session.notifications.filter((item) => item.id !== id);
     persist();
   }

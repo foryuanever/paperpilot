@@ -387,7 +387,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
       syncState.modelTest = null;
       syncState.modelSaveResult = {
         success: true,
-        message: `保存成功，${response.providerName} / ${response.modelName} 已全站启用`,
+        message: `保存成功，${response.providerName} / ${response.modelName} 已启用于当前入口`,
       };
       return response;
     } catch (error) {
@@ -572,7 +572,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
           : normalizedProviderName === "DeepSeek 官方" || /api\.deepseek\.com/i.test(active.baseUrl || "")
             ? [...deepSeekOfficialModels]
           : [];
-      syncState.lastSyncMessage = scene === "meeting_deck" ? "已读取 PPT 生成专用模型配置。" : "已读取通用模型配置。";
+      syncState.lastSyncMessage = scene === "meeting_deck" ? "已读取 PPT 生成专用模型配置。" : "已读取当前入口模型配置。";
     } catch {
       syncState.lastSyncMessage = "未读取到后端配置，已回退到本地缓存。";
     }

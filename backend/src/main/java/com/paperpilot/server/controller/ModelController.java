@@ -3,6 +3,7 @@ package com.paperpilot.server.controller;
 import com.paperpilot.server.dto.ModelConfigRequest;
 import com.paperpilot.server.dto.ModelChatRequest;
 import com.paperpilot.server.service.ModelConfigService;
+import com.paperpilot.server.service.ModelRelayResearchService;
 import com.paperpilot.server.vo.ModelConfigVO;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,9 +22,11 @@ import java.util.List;
 public class ModelController {
 
     private final ModelConfigService modelConfigService;
+    private final ModelRelayResearchService modelRelayResearchService;
 
-    public ModelController(ModelConfigService modelConfigService) {
+    public ModelController(ModelConfigService modelConfigService, ModelRelayResearchService modelRelayResearchService) {
         this.modelConfigService = modelConfigService;
+        this.modelRelayResearchService = modelRelayResearchService;
     }
 
     @PostMapping
@@ -77,5 +80,10 @@ public class ModelController {
         @RequestParam(value = "scene", required = false) String scene
     ) {
         return modelConfigService.activatePoolRoute(id, scene);
+    }
+
+    @GetMapping("/relay-research/top")
+    public Map<String, Object> relayResearchTop() {
+        return modelRelayResearchService.topRelays();
     }
 }

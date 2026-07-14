@@ -152,7 +152,7 @@ public class AiUsageService {
             ModelConfigService.SCENE_MEETING_DECK,
             "组会 PPT Agent",
             "PPT 专用中转站",
-            "gpt-5.5",
+            "gpt-5.4",
             "PPT 生成完成后按日志与材料入账"
         );
         addActiveModel(

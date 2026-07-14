@@ -444,12 +444,12 @@ onUnmounted(() => {
   --report-accent-line: #b8cdfd;
   min-height: 100%;
   color: #344054;
-  background: #f7f8fa;
+  background: transparent;
 }
 .review-scope {
-  padding: 12px 14px 13px;
-  border-bottom: 1px solid #dfe6ef;
-  background: #fff;
+  padding: 10px 16px 14px;
+  border-bottom: 0;
+  background: transparent;
 }
 .review-scope > strong {
   display: -webkit-box;
@@ -471,16 +471,13 @@ onUnmounted(() => {
   line-height: 1.4;
 }
 .report-head {
-  position: sticky;
-  top: 0;
-  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #fff;
+  padding: 10px 16px 8px;
+  border-bottom: 0;
+  background: transparent;
 }
 .report-head div { display: grid; gap: 3px; }
 .report-head strong { color: #182230; font-size: 13px; }

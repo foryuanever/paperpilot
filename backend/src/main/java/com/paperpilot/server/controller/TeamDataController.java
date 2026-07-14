@@ -450,6 +450,7 @@ public class TeamDataController {
             map.put("time", c.getTime());
             map.put("status", c.getStatus());
             map.put("fruitAward", c.getFruitAward() != null ? c.getFruitAward() : 0);
+            map.put("fruitClaimed", Boolean.TRUE.equals(c.getFruitClaimed()));
             map.put("streak", calculateStreak(c.getMemberId()));
             result.add(map);
         }
@@ -475,6 +476,7 @@ public class TeamDataController {
                 map.put("time", item.getTime());
                 map.put("status", item.getStatus());
                 map.put("fruitAward", item.getFruitAward() != null ? item.getFruitAward() : 0);
+                map.put("fruitClaimed", Boolean.TRUE.equals(item.getFruitClaimed()));
                 return map;
             })
             .toList();
@@ -493,30 +495,80 @@ public class TeamDataController {
         java.util.Optional<CheckinEntity> existing = checkinRepository.findByMemberIdAndDate(memberId, today);
         CheckinEntity checkin = existing.orElse(new CheckinEntity());
         boolean firstCheckinToday = existing.isEmpty();
-        int previousStreak = firstCheckinToday ? calculateStreak(memberId) : Math.max(0, calculateStreak(memberId) - 1);
-        int fruitAward = firstCheckinToday ? rollFruitAward(previousStreak) : (checkin.getFruitAward() != null ? checkin.getFruitAward() : 0);
             
         checkin.setMemberId(memberId);
         checkin.setDate(today);
         checkin.setStatus(status != null ? status : "已打卡");
         checkin.setTime(LocalDateTime.now(CN_ZONE).format(TIME_FORMATTER));
-        checkin.setFruitAward(fruitAward);
+        if (firstCheckinToday) {
+            checkin.setFruitAward(0);
+            checkin.setFruitClaimed(false);
+        }
 
         CheckinEntity saved = checkinRepository.save(checkin);
-        if (firstCheckinToday) {
-            appUserRepository.findByEmail(memberId).or(() -> appUserRepository.findByUsername(memberId)).ifPresent(user -> {
-                user.setFruitScore((user.getFruitScore() != null ? user.getFruitScore() : 0) + fruitAward);
-                appUserRepository.save(user);
-            });
-        }
         
         Map<String, Object> res = new HashMap<>();
         res.put("memberId", saved.getMemberId());
         res.put("status", saved.getStatus());
         res.put("time", saved.getTime());
         res.put("fruitAward", saved.getFruitAward() != null ? saved.getFruitAward() : 0);
+        res.put("fruitClaimed", Boolean.TRUE.equals(saved.getFruitClaimed()));
         res.put("streak", calculateStreak(saved.getMemberId()));
+        findUserByMemberId(memberId).ifPresent(user -> res.put("fruitScore", user.getFruitScore() != null ? user.getFruitScore() : 0));
         return res;
+    }
+
+    @PostMapping("/checkins/draw")
+    public Map<String, Object> drawCheckinFruit(@RequestBody Map<String, Object> body) {
+        String memberId = (String) body.get("memberId");
+        if (memberId == null || memberId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "成员ID不能为空");
+        }
+
+        String today = LocalDate.now(CN_ZONE).format(DATE_FORMATTER);
+        CheckinEntity checkin = checkinRepository.findByMemberIdAndDate(memberId, today)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "今天还没有签到，不能抽取硕果"));
+        if (!"已打卡".equals(checkin.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "今天还没有完成签到");
+        }
+        if (Boolean.TRUE.equals(checkin.getFruitClaimed())) {
+            return checkinResponse(checkin);
+        }
+
+        int previousStreak = Math.max(0, calculateStreak(memberId) - 1);
+        int fruitAward = rollFruitAward(previousStreak);
+        checkin.setFruitAward(fruitAward);
+        checkin.setFruitClaimed(true);
+        CheckinEntity saved = checkinRepository.save(checkin);
+        findUserByMemberId(memberId).ifPresent(user -> {
+            user.setFruitScore((user.getFruitScore() != null ? user.getFruitScore() : 0) + fruitAward);
+            appUserRepository.save(user);
+        });
+        return checkinResponse(saved);
+    }
+
+    private Map<String, Object> checkinResponse(CheckinEntity saved) {
+        Map<String, Object> res = new HashMap<>();
+        res.put("memberId", saved.getMemberId());
+        res.put("status", saved.getStatus());
+        res.put("time", saved.getTime());
+        res.put("fruitAward", saved.getFruitAward() != null ? saved.getFruitAward() : 0);
+        res.put("fruitClaimed", Boolean.TRUE.equals(saved.getFruitClaimed()));
+        res.put("streak", calculateStreak(saved.getMemberId()));
+        findUserByMemberId(saved.getMemberId()).ifPresent(user -> res.put("fruitScore", user.getFruitScore() != null ? user.getFruitScore() : 0));
+        return res;
+    }
+
+    private java.util.Optional<AppUserEntity> findUserByMemberId(String memberId) {
+        if (memberId == null || memberId.isBlank()) return java.util.Optional.empty();
+        if (memberId.startsWith("m-")) {
+            try {
+                return appUserRepository.findById(Long.parseLong(memberId.substring(2)));
+            } catch (NumberFormatException ignored) {
+                return java.util.Optional.empty();
+            }
+        }
+        return appUserRepository.findByEmail(memberId).or(() -> appUserRepository.findByUsername(memberId));
     }
 
     private int rollFruitAward(int previousStreak) {

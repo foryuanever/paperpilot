@@ -40,7 +40,7 @@ public class ForumModerationService {
         }
 
         if (!hasConfiguredModel()) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "管理员尚未启用可用的全站 AI 路由，请联系管理员后再发布帖子。");
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "管理员尚未启用可用的发帖审核 AI 路由，请联系管理员后再发布帖子。");
         }
 
         try {
@@ -62,13 +62,14 @@ public class ForumModerationService {
             if (exception instanceof ResponseStatusException responseStatusException) {
                 throw responseStatusException;
             }
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "AI 审核调用失败，请联系管理员检查全站模型路由或稍后重试。");
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "AI 审核调用失败，请联系管理员检查发帖审核模型路由或稍后重试。");
         }
     }
 
     private boolean hasConfiguredModel() {
         ModelConfigEntity config = modelConfigRepository
-            .findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(ModelConfigService.SCENE_GENERAL)
+            .findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(ModelConfigService.SCENE_FORUM_MODERATION)
+            .or(() -> modelConfigRepository.findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(ModelConfigService.SCENE_GENERAL))
             .orElse(null);
         if (config == null || !StringUtils.hasText(config.getBaseUrl()) || !StringUtils.hasText(config.getModelName())) {
             return false;

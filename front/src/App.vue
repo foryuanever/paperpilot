@@ -31,28 +31,10 @@
         </router-link>
 
         <div class="topbar-menu-wrap">
-          <button class="icon-button notification-button" @click.stop="uiStore.toggleNotifications">
+          <button class="icon-button notification-button" @click.stop="openAnnouncementCenter">
             <span v-html="chromeIcons.bell"></span>
-            <span v-if="authStore.unreadCount" class="notification-badge">{{ authStore.unreadCount }}</span>
+            <span v-if="announcementUnreadCount" class="notification-badge">{{ announcementUnreadCount }}</span>
           </button>
-          <div v-if="uiStore.layout.showNotifications" class="popover-panel app-popover notification-popover">
-            <div class="popover-header">
-              <div class="popover-title">消息通知</div>
-              <router-link class="auth-link" to="/library">查看文献库</router-link>
-            </div>
-            <div class="notification-list">
-              <div v-if="authStore.session.notifications.length === 0" class="popover-empty">暂无新消息</div>
-              <button
-                v-for="item in authStore.session.notifications"
-                :key="item.id"
-                class="notification-item"
-                @click="openNotification(item)"
-              >
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.desc }}</span>
-              </button>
-            </div>
-          </div>
         </div>
 
         <div class="topbar-menu-wrap">
@@ -82,10 +64,10 @@
 
             <!-- Level Banner -->
             <div class="profile-popover-level-banner">
-              <div class="popover-level-num">Lv.{{ getMemberLevelInfo(currentUserMember.activeTime).level }}</div>
+              <div class="popover-level-num">Lv.{{ getFruitLevelInfo(currentFruitScore).level }}</div>
               <div class="popover-level-info">
-                <div class="popover-level-title">{{ getMemberLevelInfo(currentUserMember.activeTime).title }}</div>
-                <div class="popover-level-sub">活跃在线: {{ formatActiveTime(currentUserMember.activeTime) }}</div>
+                <div class="popover-level-title">{{ getFruitLevelInfo(currentFruitScore).title }}</div>
+                <div class="popover-level-sub">累计硕果: {{ currentFruitScore }} 枚</div>
               </div>
             </div>
 
@@ -135,16 +117,99 @@
 
     <Teleport to="body">
       <Transition name="announcement-modal">
-        <div v-if="activeSiteMessage" class="announcement-backdrop" @click.self="markSiteMessageRead">
+        <div v-if="showAnnouncementCenter" class="announcement-backdrop" @click.self="closeAnnouncementCenter">
           <section class="announcement-dialog" role="dialog" aria-modal="true" aria-labelledby="site-announcement-title">
-            <header>
-              <span>系统公告（{{ activeSiteMessageIndex + 1 }}/{{ unreadSiteMessages.length }}）</span>
-              <button type="button" aria-label="关闭系统公告" @click="markSiteMessageRead">×</button>
+            <header class="announcement-hero">
+              <h2 id="site-announcement-title">系统公告</h2>
+              <p>最新平台更新和通知</p>
             </header>
+            <nav class="announcement-tabs" aria-label="系统公告分类">
+              <button
+                v-for="tab in announcementTabs"
+                :key="tab.key"
+                type="button"
+                :class="{ active: activeAnnouncementTab === tab.key }"
+                @click="activeAnnouncementTab = tab.key"
+              >
+                <span v-html="tab.icon"></span>
+                {{ tab.label }}
+                <b v-if="tab.count">{{ tab.count }}</b>
+              </button>
+            </nav>
+
             <div class="announcement-content">
-              <div v-if="unreadSiteMessages.length > 1" class="announcement-switcher" aria-label="公告列表">
+              <section v-if="activeAnnouncementTab === 'forum'" class="announcement-section">
+                <article class="announcement-intro">
+                  <strong>站内通知</strong>
+                  <span>论坛回复、举报反馈、校园认证结果和管理员处理消息都会在这里集中显示。</span>
+                </article>
+                <div v-if="siteNoticeItems.length" class="announcement-card-list">
+                  <button
+                    v-for="item in siteNoticeItems"
+                    :key="item.id"
+                    type="button"
+                    class="announcement-card"
+                    @click="openNotification(item)"
+                  >
+                    <span class="announcement-card-mark">{{ siteNoticeMark(item.type) }}</span>
+                    <span>
+                      <strong>{{ item.title }}</strong>
+                      <small>{{ item.desc }}</small>
+                      <time>{{ formatSiteMessageTime(item.createdAt) }}</time>
+                    </span>
+                  </button>
+                </div>
+                <div v-else class="announcement-empty">暂无新的站内通知。</div>
+              </section>
+
+              <section v-else-if="activeAnnouncementTab === 'timeline'" class="announcement-section">
+                <article class="announcement-intro">
+                  <strong>版本时间线更新</strong>
+                  <span>用于发布功能更新、模型接入、补丁说明和平台调整。</span>
+                </article>
+                <div v-if="timelineNoticeItems.length" class="timeline-feed">
+                  <article
+                    v-for="message in timelineNoticeItems"
+                    :key="message.id"
+                    class="timeline-feed-item"
+                    :class="{ active: activeSiteMessage?.id === message.id }"
+                    @click="activeSiteMessage = message"
+                  >
+                    <time>{{ formatSiteMessageTime(message.createdAt) }}</time>
+                    <h3>{{ message.title }}</h3>
+                    <p>{{ message.content }}</p>
+                  </article>
+                </div>
+                <div v-else class="announcement-empty">暂无版本更新公告。</div>
+              </section>
+
+              <section v-else class="announcement-section">
+                <article class="announcement-intro">
+                  <strong>组内通知</strong>
+                  <span>导师发布任务和任务截止时间提醒会在这里同步。</span>
+                </article>
+                <div v-if="teamNoticeItems.length" class="announcement-card-list">
+                  <router-link
+                    v-for="item in teamNoticeItems"
+                    :key="item.id"
+                    class="announcement-card team-notice-card"
+                    to="/team"
+                    @click="closeAnnouncementCenter"
+                  >
+                    <span class="announcement-card-mark">{{ item.mark }}</span>
+                    <span>
+                      <strong>{{ item.title }}</strong>
+                      <small>{{ item.desc }}</small>
+                      <time>{{ item.time }}</time>
+                    </span>
+                  </router-link>
+                </div>
+                <div v-else class="announcement-empty">暂无组内任务通知。</div>
+              </section>
+
+              <div v-if="activeAnnouncementTab === 'timeline' && unreadTimelineMessages.length > 1" class="announcement-switcher" aria-label="公告列表">
                 <button
-                  v-for="(message, index) in unreadSiteMessages"
+                  v-for="(message, index) in unreadTimelineMessages"
                   :key="message.id"
                   type="button"
                   :class="{ active: message.id === activeSiteMessage.id }"
@@ -153,15 +218,12 @@
                   {{ index + 1 }}
                 </button>
               </div>
-              <h2 id="site-announcement-title">{{ activeSiteMessage.title }}</h2>
-              <time>{{ formatSiteMessageTime(activeSiteMessage.createdAt) }}</time>
-              <p>{{ activeSiteMessage.content }}</p>
             </div>
             <footer>
-              <button v-if="unreadSiteMessages.length > 1" type="button" class="announcement-ghost" @click="showPreviousSiteMessage">上一条</button>
-              <button v-if="unreadSiteMessages.length > 1" type="button" class="announcement-ghost" @click="showNextSiteMessage">下一条</button>
-              <button v-if="unreadSiteMessages.length > 1" type="button" class="announcement-ghost" @click="markAllSiteMessagesRead">全部已读</button>
-              <button type="button" @click="markSiteMessageRead">本条已读</button>
+              <button v-if="activeAnnouncementTab === 'timeline' && unreadTimelineMessages.length > 1" type="button" class="announcement-ghost" @click="showPreviousSiteMessage">上一条</button>
+              <button v-if="activeAnnouncementTab === 'timeline' && unreadTimelineMessages.length > 1" type="button" class="announcement-ghost" @click="showNextSiteMessage">下一条</button>
+              <button v-if="unreadTimelineMessages.length || siteNoticeItems.length" type="button" class="announcement-ghost" @click="markVisibleAnnouncementRead">全部已读</button>
+              <button type="button" @click="closeAnnouncementCenter">关闭</button>
             </footer>
           </section>
         </div>
@@ -287,6 +349,8 @@ const chromeIcons = {
 const messageUnreadCount = ref(0);
 const forumUnreadCount = ref(0);
 const latestForumSignature = ref("");
+const announcementCenterOpen = ref(false);
+const activeAnnouncementTab = ref("forum");
 
 document.documentElement.removeAttribute("data-theme");
 localStorage.removeItem("papersolver-theme");
@@ -343,6 +407,10 @@ async function openNotification(item) {
     router.push("/messages");
     return;
   }
+  if (item.type?.startsWith("campus_")) {
+    router.push("/profile");
+    return;
+  }
   if (item.type?.startsWith("forum_") && item.referenceId) {
     router.push(`/forum/post/post-${item.referenceId}`);
   }
@@ -367,13 +435,15 @@ const currentUserMember = computed(() => {
   };
 });
 
-function getMemberLevelInfo(activeTime) {
-  const level = Math.floor((activeTime || 0) / 300) + 1; // 1 level per 5 minutes active
-  let title = "科研萌新";
-  if (level >= 15) title = "科研主宰";
-  else if (level >= 10) title = "科研宗师";
-  else if (level >= 6) title = "学术专家";
-  else if (level >= 3) title = "科研骨干";
+const currentFruitScore = computed(() => Number(currentUserMember.value?.fruitScore ?? authStore.profile.fruitScore ?? 0));
+
+function getFruitLevelInfo(score) {
+  const level = Math.floor((Number(score) || 0) / 100) + 1;
+  let title = "LV" + level;
+  if (level >= 20) title = "LV" + level + " · 科研主宰";
+  else if (level >= 12) title = "LV" + level + " · 科研宗师";
+  else if (level >= 6) title = "LV" + level + " · 学术专家";
+  else if (level >= 3) title = "LV" + level + " · 科研骨干";
   return { level, title };
 }
 
@@ -424,49 +494,130 @@ let notificationTimer = null;
 let siteMessageTimer = null;
 const siteMessages = ref([]);
 const activeSiteMessage = ref(null);
+const readSiteMessageIds = ref(new Set());
+const announcementIcons = {
+  forum: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7.5h14M5 12h10M5 16.5h7"/><path d="M4 4h16v12H8l-4 4V4Z"/></svg>`,
+  timeline: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l10-3v16L8 17H4V7Z"/><path d="M8 7v10"/><path d="M20 9.5c1.2 1.2 1.2 3.8 0 5"/></svg>`,
+  team: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1.5c0-1.8-1.8-3.2-4-3.2s-4 1.4-4 3.2V19"/><circle cx="12" cy="8" r="3"/><path d="M4 18v-1c0-1.3 1.1-2.4 2.7-2.8"/><path d="M20 18v-1c0-1.3-1.1-2.4-2.7-2.8"/><path d="M6.5 10.5a2.2 2.2 0 1 1 1.2-4"/><path d="M17.5 10.5a2.2 2.2 0 1 0-1.2-4"/></svg>`,
+};
+
+const siteNoticeItems = computed(() => authStore.session.notifications.filter(item => {
+  const type = String(item.type || "");
+  const title = `${item.title || ""}${item.desc || ""}`;
+  return type.startsWith("forum_")
+    || type.startsWith("campus_")
+    || /回复|置顶|封禁|举报|发帖|帖子|校园认证|学校/.test(title);
+}));
+
+const timelineNoticeItems = computed(() => siteMessages.value.filter(item => item.messageType === "timeline").sort((a, b) => {
+  const unreadA = readSiteMessageIds.value.has(siteMessageReadKey(a)) ? 0 : 1;
+  const unreadB = readSiteMessageIds.value.has(siteMessageReadKey(b)) ? 0 : 1;
+  if (unreadA !== unreadB) return unreadB - unreadA;
+  return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+}));
+
+
+const teamNoticeItems = computed(() => {
+  const notices = [];
+  const now = Date.now();
+  [...teamStore.tasks]
+    .sort((a, b) => new Date(b.createdAt || b.deadline || 0) - new Date(a.createdAt || a.deadline || 0))
+    .slice(0, 5)
+    .forEach((task) => {
+      const deadline = parseDateValue(task.deadline);
+      notices.push({
+        id: `task-${task.id}`,
+        mark: "任",
+        title: `导师发布任务：${task.title || "未命名任务"}`,
+        desc: task.description || "请前往团队页面查看任务要求。",
+        time: deadline ? `截止 ${formatSiteMessageTime(deadline)}` : "暂无截止时间",
+      });
+      if (deadline) {
+        const diff = deadline.getTime() - now;
+        if (diff <= 72 * 60 * 60 * 1000) {
+          notices.push({
+            id: `deadline-${task.id}`,
+            mark: diff < 0 ? "逾" : "截",
+            title: `任务截止提醒：${task.title || "未命名任务"}`,
+            desc: diff < 0 ? "该任务已超过截止时间，请尽快处理。" : getDeadlineNoticeText(diff),
+            time: `截止 ${formatSiteMessageTime(deadline)}`,
+          });
+        }
+      }
+    });
+  return notices.slice(0, 8);
+});
+
+const announcementTabs = computed(() => [
+  { key: "forum", label: "站内通知", icon: announcementIcons.forum, count: siteNoticeItems.value.length },
+  { key: "timeline", label: "时间线", icon: announcementIcons.timeline, count: unreadTimelineMessages.value.length },
+  { key: "team", label: "组内通知", icon: announcementIcons.team, count: urgentTeamNoticeCount.value },
+]);
+
+const urgentTeamNoticeCount = computed(() => teamNoticeItems.value.filter(item => item.mark === "截" || item.mark === "逾").length);
+const unreadTimelineMessages = computed(() => timelineNoticeItems.value.filter(message => !readSiteMessageIds.value.has(siteMessageReadKey(message))));
+const announcementUnreadCount = computed(() => siteNoticeItems.value.length + unreadTimelineMessages.value.length + urgentTeamNoticeCount.value);
+const showAnnouncementCenter = computed(() => announcementCenterOpen.value || Boolean(activeSiteMessage.value));
 
 const unreadSiteMessages = computed(() => siteMessages.value.filter(
-  message => sessionStorage.getItem(siteMessageReadKey(message)) !== "read",
+  message => !readSiteMessageIds.value.has(siteMessageReadKey(message)),
 ));
 
 const activeSiteMessageIndex = computed(() => {
   if (!activeSiteMessage.value) return 0;
-  return Math.max(0, unreadSiteMessages.value.findIndex(message => message.id === activeSiteMessage.value.id));
+  return Math.max(0, unreadTimelineMessages.value.findIndex(message => message.id === activeSiteMessage.value.id));
 });
 
 function siteMessageReadKey(message) {
   const userId = authStore.session.user?.userId || authStore.profile.email || "guest";
-  const loginSerial = authStore.session.loginSerial || "current";
-  return `papersolver-site-message-read:${userId}:${loginSerial}:${message.id}`;
+  return `papersolver-site-message-read:${userId}:${message.id}`;
+}
+
+function loadSiteMessageReadState() {
+  const userId = authStore.session.user?.userId || authStore.profile.email || "guest";
+  try {
+    readSiteMessageIds.value = new Set(JSON.parse(localStorage.getItem(`papersolver-site-message-read-list:${userId}`) || "[]"));
+  } catch {
+    readSiteMessageIds.value = new Set();
+  }
+}
+
+function persistSiteMessageReadState() {
+  const userId = authStore.session.user?.userId || authStore.profile.email || "guest";
+  localStorage.setItem(`papersolver-site-message-read-list:${userId}`, JSON.stringify([...readSiteMessageIds.value]));
 }
 
 function chooseUnreadSiteMessage() {
-  activeSiteMessage.value = unreadSiteMessages.value[0] || null;
+  const timelineNotice = unreadSiteMessages.value.find(message => message.messageType === "timeline");
+  activeSiteMessage.value = timelineNotice || null;
+  if (activeSiteMessage.value) activeAnnouncementTab.value = "timeline";
 }
 
 function markSiteMessageRead() {
   if (!activeSiteMessage.value) return;
-  sessionStorage.setItem(siteMessageReadKey(activeSiteMessage.value), "read");
+  readSiteMessageIds.value = new Set([...readSiteMessageIds.value, siteMessageReadKey(activeSiteMessage.value)]);
+  persistSiteMessageReadState();
   activeSiteMessage.value = null;
   chooseUnreadSiteMessage();
 }
 
 function markAllSiteMessagesRead() {
-  unreadSiteMessages.value.forEach(message => {
-    sessionStorage.setItem(siteMessageReadKey(message), "read");
-  });
+  const next = new Set(readSiteMessageIds.value);
+  unreadSiteMessages.value.forEach(message => next.add(siteMessageReadKey(message)));
+  readSiteMessageIds.value = next;
+  persistSiteMessageReadState();
   activeSiteMessage.value = null;
 }
 
 function showPreviousSiteMessage() {
-  const items = unreadSiteMessages.value;
+  const items = unreadTimelineMessages.value;
   if (!items.length) return;
   const previous = (activeSiteMessageIndex.value - 1 + items.length) % items.length;
   activeSiteMessage.value = items[previous];
 }
 
 function showNextSiteMessage() {
-  const items = unreadSiteMessages.value;
+  const items = unreadTimelineMessages.value;
   if (!items.length) return;
   const next = (activeSiteMessageIndex.value + 1) % items.length;
   activeSiteMessage.value = items[next];
@@ -474,12 +625,65 @@ function showNextSiteMessage() {
 
 function formatSiteMessageTime(value) {
   if (!value) return "";
-  const date = new Date(value);
+  const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   return new Intl.DateTimeFormat("zh-CN", {
     year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit", hour12: false,
   }).format(date).replace(/\//g, "-");
+}
+
+function parseDateValue(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getDeadlineNoticeText(diffMs) {
+  const hours = Math.max(1, Math.ceil(diffMs / (60 * 60 * 1000)));
+  if (hours >= 24) return `距离截止还有 ${Math.ceil(hours / 24)} 天，请安排提交。`;
+  return `距离截止还有 ${hours} 小时，请尽快处理。`;
+}
+
+function siteNoticeMark(type) {
+  if (type === "campus_verified") return "校";
+  if (type === "campus_rejected") return "驳";
+  if (type === "forum_reply") return "回";
+  if (type === "forum_pinned") return "顶";
+  if (type === "forum_banned") return "封";
+  if (type === "forum_report") return "举";
+  return "站";
+}
+
+function pickAnnouncementTab() {
+  if (siteNoticeItems.value.length) return "forum";
+  if (unreadTimelineMessages.value.length || timelineNoticeItems.value.length) return "timeline";
+  return "team";
+}
+
+function openAnnouncementCenter() {
+  activeAnnouncementTab.value = pickAnnouncementTab();
+  announcementCenterOpen.value = true;
+  uiStore.closeOverlays();
+}
+
+async function markVisibleAnnouncementRead() {
+  if (activeAnnouncementTab.value === "forum") {
+    await Promise.allSettled(siteNoticeItems.value.map(item => authStore.markNotificationRead(item.id)));
+    return;
+  }
+  if (activeAnnouncementTab.value === "timeline") {
+    const next = new Set(readSiteMessageIds.value);
+    timelineNoticeItems.value.forEach(message => next.add(siteMessageReadKey(message)));
+    readSiteMessageIds.value = next;
+    persistSiteMessageReadState();
+    activeSiteMessage.value = null;
+  }
+}
+
+function closeAnnouncementCenter() {
+  announcementCenterOpen.value = false;
+  activeSiteMessage.value = null;
 }
 
 async function refreshSiteMessages() {
@@ -500,6 +704,7 @@ watch(
   () => authStore.session.loginSerial,
   (loginSerial, previousSerial) => {
     if (!loginSerial || loginSerial === previousSerial || !authStore.session.isAuthenticated) return;
+    loadSiteMessageReadState();
     activeSiteMessage.value = null;
     siteMessages.value = [];
     refreshSiteMessages();
@@ -545,16 +750,7 @@ onMounted(() => {
     if (authStore.session.isAuthenticated) {
       if (hasCheckedIn.value) {
         const timeIdle = Date.now() - lastActiveTime.value;
-        if (timeIdle >= 600000) { // 10 minutes of inactivity
-          const user = currentUserMember.value;
-          if (user && user.id) {
-            teamStore.persist();
-          }
-          logout();
-          dialogStore.alert("登录已过期：由于您已打卡且连续 10 分钟没有操作，系统已自动为您退出登录。", {
-            title: "登录已过期",
-          });
-        } else if (timeIdle < 60000) {
+        if (timeIdle < 60000) {
           const user = currentUserMember.value;
           if (user && user.id) {
             teamStore.incrementActiveTime(user.id, 1);
@@ -567,6 +763,7 @@ onMounted(() => {
   if (authStore.session.isAuthenticated) usageStore.fetchSummary().catch(() => {});
   refreshMessageUnread();
   refreshForumNavSignal();
+  loadSiteMessageReadState();
   refreshSiteMessages();
   notificationTimer = setInterval(() => {
     authStore.refreshNotifications().catch(() => {});
@@ -687,6 +884,10 @@ async function submitPasswordChange() {
   width: min(1480px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
   overflow: visible;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .spatial-nav-brand {
@@ -728,8 +929,10 @@ async function submitPasswordChange() {
 .spatial-nav-link {
   position: relative;
   flex: 0 0 auto;
-  padding-inline: 12px;
+  padding-inline: 9px;
   white-space: nowrap;
+  background: transparent !important;
+  border-radius: 0;
 }
 
 .nav-forum-alert {
@@ -754,10 +957,38 @@ async function submitPasswordChange() {
   flex-wrap: nowrap;
   justify-self: end;
   overflow: visible;
+  gap: 8px;
 }
 
 .global-search-bar {
   width: clamp(160px, 13vw, 220px);
+  height: 34px;
+  padding-inline: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #5f6c80;
+}
+
+.global-search-bar input {
+  font-size: 12px;
+}
+
+.icon-button,
+.profile-button {
+  min-width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #26344c;
+  box-shadow: none;
+}
+
+.icon-button:hover,
+.profile-button:hover {
+  color: #075ee5;
+  background: transparent;
 }
 
 .app-profile-button .profile-name {
@@ -891,55 +1122,269 @@ async function submitPasswordChange() {
   z-index: 90;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: 18px;
   box-sizing: border-box;
-  background: rgba(15, 23, 42, .46);
+  background: rgba(15, 23, 42, .36);
 }
 
 .announcement-dialog {
-  width: min(576px, 100%);
-  max-height: min(690px, calc(100vh - 40px));
+  width: min(560px, 100%);
+  min-height: min(560px, calc(100vh - 36px));
+  max-height: calc(100vh - 36px);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   overflow: hidden;
-  border-radius: 14px;
-  color: #242a35;
+  border-radius: 0;
+  color: #08090b;
   background: #fff;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, .18);
+  box-shadow: 0 22px 70px rgba(15, 23, 42, .2);
 }
 
-.announcement-dialog > header {
-  min-height: 58px;
-  display: flex;
+.announcement-hero {
+  padding: 22px 22px 14px;
+}
+
+.announcement-hero h2 {
+  margin: 0;
+  color: #070707;
+  font-size: 24px;
+  line-height: 1.15;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.announcement-hero p {
+  margin: 14px 0 0;
+  color: #6d6d6d;
+  font-size: 17px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+.announcement-tabs {
+  margin: 4px 14px 16px;
+  padding: 5px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  border-radius: 26px;
+  background: #f0f0f0;
+}
+
+.announcement-tabs button {
+  min-width: 0;
+  height: 42px;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  border-bottom: 1px solid #edf0f3;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 23px;
+  color: #6b6b6b;
+  background: transparent;
   font-size: 15px;
-  font-weight: 750;
+  font-weight: 900;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
-.announcement-dialog > header button {
-  width: 30px;
-  height: 30px;
-  border: 0;
-  border-radius: 7px;
-  color: #667085;
-  background: #f2f4f7;
-  font-size: 20px;
-  cursor: pointer;
+.announcement-tabs button.active {
+  color: #08090b;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .13);
+}
+
+.announcement-tabs svg {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+}
+
+.announcement-tabs b {
+  min-width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: #111;
+  font-size: 10px;
+  line-height: 1;
 }
 
 .announcement-content {
   overflow-y: auto;
-  padding: 22px 24px 26px;
+  padding: 0 22px 20px;
+}
+
+.announcement-section {
+  display: grid;
+  gap: 14px;
+}
+
+.announcement-intro {
+  display: grid;
+  gap: 6px;
+}
+
+.announcement-intro strong {
+  color: #111;
+  font-size: 20px;
+  line-height: 1.25;
+  font-weight: 900;
+}
+
+.announcement-intro span {
+  color: #444;
+  font-size: 13px;
+  line-height: 1.65;
+  font-weight: 650;
+}
+
+.announcement-card-list {
+  display: grid;
+  gap: 10px;
+}
+
+.announcement-card {
+  width: 100%;
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  color: #111;
+  background: #fff;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.announcement-card:hover {
+  border-color: #d8d8d8;
+  background: #fafafa;
+}
+
+.announcement-card-mark {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  color: #111;
+  background: #f2f2f2;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.announcement-card strong {
+  display: block;
+  overflow: hidden;
+  color: #111;
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.announcement-card small,
+.announcement-card time {
+  display: block;
+  margin-top: 4px;
+  color: #606060;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 650;
+}
+
+.team-notice-card .announcement-card-mark {
+  color: #0a5cff;
+  background: #eaf1ff;
+}
+
+.timeline-feed {
+  position: relative;
+  display: grid;
+  gap: 0;
+}
+
+.timeline-feed::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  background: #ececec;
+}
+
+.timeline-feed-item {
+  position: relative;
+  padding: 0 0 24px 42px;
+  cursor: pointer;
+}
+
+.timeline-feed-item::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 8px;
+  width: 16px;
+  height: 16px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #111;
+  box-shadow: 0 0 0 2px #e6e6e6;
+}
+
+.timeline-feed-item.active::before {
+  background: #0a5cff;
+  box-shadow: 0 0 0 2px #bcd2ff;
+}
+
+.timeline-feed-item time {
+  color: #777;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.timeline-feed-item h3 {
+  margin: 6px 0 8px;
+  color: #111;
+  font-size: 17px;
+  line-height: 1.35;
+  font-weight: 900;
+}
+
+.timeline-feed-item p {
+  margin: 0;
+  color: #111;
+  font-size: 16px;
+  line-height: 1.72;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.announcement-empty {
+  min-height: 140px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed #dedede;
+  border-radius: 14px;
+  color: #777;
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .announcement-switcher {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
-  margin: 0 0 16px;
+  margin: 0;
 }
 
 .announcement-switcher button {
@@ -960,40 +1405,31 @@ async function submitPasswordChange() {
   background: #0066ff;
 }
 
-.announcement-content h2 { margin: 0 0 10px; color: #171b24; font-size: 17px; line-height: 1.45; }
-.announcement-content time { color: #8a94a3; font-size: 12px; }
-.announcement-content p {
-  margin: 18px 0 0;
-  color: #404957;
-  font-size: 14px;
-  line-height: 1.95;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 .announcement-dialog > footer {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
-  padding: 12px 24px 18px;
-  border-top: 1px solid #edf0f3;
+  padding: 10px 22px 18px;
+  border-top: 0;
 }
 
 .announcement-dialog > footer button {
-  min-width: 78px;
-  min-height: 36px;
+  min-width: 82px;
+  min-height: 40px;
   border: 0;
-  border-radius: 18px;
+  border-radius: 14px;
   color: #fff;
-  background: #128b70;
-  font-weight: 700;
+  background: #050505;
+  font-size: 15px;
+  font-weight: 900;
   cursor: pointer;
 }
 
 .announcement-dialog > footer .announcement-ghost {
-  color: #334155;
-  background: #eef3f8;
+  color: #111;
+  background: #f0f0f0;
+  font-size: 15px;
 }
 
 .announcement-modal-enter-active,

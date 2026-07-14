@@ -24,12 +24,26 @@
   <div class="spatial-page library-spatial">
     <section class="spatial-chapter library-workbench-head" data-reveal="off">
       <div class="spatial-chapter-inner library-head-inner" data-reveal="off">
-        <div class="library-head-copy" data-reveal>
-          <span class="spatial-chapter-eyebrow">文献库</span>
-          <h1 class="spatial-chapter-title">论文工作台</h1>
-          <p class="spatial-chapter-lead">管理导入、PDF、阅读进度与笔记，重点始终留给论文内容。</p>
+        <div class="library-head-actions" data-reveal>
+          <CheckinLottery @toast="showToast" />
         </div>
-        <div class="library-head-stats" data-reveal data-reveal-delay="1">
+      </div>
+    </section>
+
+    <section class="spatial-chapter-inner">
+      <div class="library-nav-row">
+        <nav class="library-subnav" aria-label="文献库二级导航">
+          <button
+            v-for="item in libraryTabs"
+            :key="item.id"
+            :class="{ active: activeTab === item.id }"
+            @click="selectTab(item.id)"
+          >
+            <strong>{{ item.label }}</strong>
+            <small>{{ item.description }}</small>
+          </button>
+        </nav>
+        <div class="library-head-stats library-stats-row">
           <div class="library-head-stat">
             <span>{{ libraryStore.state.documents.length }}</span>
             <small>总文献</small>
@@ -44,23 +58,9 @@
           </div>
         </div>
       </div>
-    </section>
-
-    <section class="spatial-chapter-inner">
-      <nav class="library-subnav" aria-label="文献库二级导航">
-        <button
-          v-for="item in libraryTabs"
-          :key="item.id"
-          :class="{ active: activeTab === item.id }"
-          @click="selectTab(item.id)"
-        >
-          <strong>{{ item.label }}</strong>
-          <small>{{ item.description }}</small>
-        </button>
-      </nav>
 
       <template v-if="activeTab === 'papers'">
-      <div class="spatial-command-strip spatial-glass-panel library-toolbar">
+      <div class="spatial-command-strip library-toolbar">
         <div class="library-toolbar-left">
           <input v-model="keyword" class="toolbar-search" placeholder="搜索标题、作者、备注..." />
           <div class="library-filters">
@@ -445,6 +445,7 @@ import { useLibraryStore } from "../stores/library";
 import { useAuthStore } from "../stores/auth";
 import { paperpilotApi } from "../services/paperpilotApi";
 import { rememberLastReading } from "../utils/readingMemory";
+import CheckinLottery from "../components/CheckinLottery.vue";
 
 useScrollReveal(".library-spatial");
 
@@ -1104,34 +1105,55 @@ onUnmounted(() => {
 }
 
 .library-workbench-head {
-  padding-top: 12px !important;
-  padding-bottom: 18px !important;
+  padding-top: 8px !important;
+  padding-bottom: 16px !important;
 }
 
 .library-head-inner {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
+  display: block;
 }
 
-.library-head-copy {
+.library-head-actions {
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 12px;
+  width: 100%;
   min-width: 0;
+}
+
+.library-nav-row {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0;
+  border-bottom: 1px solid var(--spatial-line);
 }
 
 .library-head-stats {
   display: flex;
   align-items: stretch;
-  gap: 10px;
+  gap: 8px;
   flex: 0 0 auto;
 }
 
+.library-stats-row {
+  justify-content: flex-end;
+  align-self: stretch;
+  margin: 0;
+}
+
 .library-head-stat {
-  min-width: 92px;
-  padding: 12px 14px;
-  border: 1px solid var(--spatial-line);
-  border-radius: 12px;
-  background: var(--spatial-surface);
+  width: 86px;
+  min-height: 68px;
+  display: grid;
+  align-content: center;
+  padding: 0 16px;
+  border: 0;
+  border-left: 1px solid var(--spatial-line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .library-head-stat span {
@@ -1157,7 +1179,7 @@ onUnmounted(() => {
   min-height: 32px;
   padding: 0 10px;
   border: 1px solid var(--spatial-line);
-  border-radius: 999px;
+  border-radius: 4px;
   color: var(--spatial-gray);
   background: var(--spatial-surface);
   font-size: 12px;
@@ -1167,27 +1189,49 @@ onUnmounted(() => {
 .library-subnav {
   display: flex;
   align-items: stretch;
-  gap: 4px;
-  margin: 0 0 18px;
-  padding: 4px;
-  border-bottom: 1px solid var(--spatial-line);
+  gap: 0;
+  flex: 0 0 min(860px, calc(100% - 310px));
+  min-width: 0;
+  margin: 0;
+  padding: 0;
 }
 
 .library-subnav button {
-  min-width: 150px;
+  position: relative;
+  min-width: 0;
+  flex: 1 1 0;
   display: grid;
-  gap: 3px;
-  padding: 10px 14px;
+  gap: 4px;
+  align-content: center;
+  min-height: 68px;
+  padding: 10px 18px;
   border: 0;
-  border-radius: 9px;
+  border-radius: 0;
   color: var(--spatial-gray);
   background: transparent;
   text-align: left;
   cursor: pointer;
+  transition: color .15s ease, background-color .15s ease;
 }
 
-.library-subnav button:hover { background: var(--spatial-warm-2); }
-.library-subnav button.active { color: var(--spatial-accent); background: var(--spatial-accent-soft); }
+.library-subnav button::after {
+  position: absolute;
+  right: 18px;
+  bottom: -1px;
+  left: 18px;
+  height: 2px;
+  background: transparent;
+  content: "";
+}
+
+.library-subnav button:hover { color: var(--spatial-graphite); background: color-mix(in srgb, var(--spatial-warm-2) 55%, transparent); }
+.library-subnav button.active { color: var(--spatial-accent); background: transparent; }
+.library-subnav button.active::after { background: var(--spatial-accent); }
+.library-subnav button:focus-visible {
+  z-index: 1;
+  outline: 2px solid var(--spatial-accent);
+  outline-offset: -2px;
+}
 .library-subnav strong { font-size: 13px; }
 .library-subnav small { color: inherit; font-size: 10px; opacity: .78; }
 
@@ -1466,7 +1510,7 @@ onUnmounted(() => {
   width: min(360px, 100%);
   min-height: 40px;
   border: 1px solid var(--spatial-line);
-  border-radius: 10px;
+  border-radius: 4px;
   padding: 0 12px;
   color: var(--spatial-graphite);
   background: var(--spatial-surface);
@@ -1476,24 +1520,24 @@ onUnmounted(() => {
 }
 
 .toolbar-search:focus {
-  border-color: color-mix(in srgb, var(--spatial-accent) 48%, var(--spatial-line));
-  box-shadow: 0 0 0 3px var(--spatial-accent-soft);
+  border-color: var(--spatial-accent);
+  box-shadow: 0 0 0 2px var(--spatial-accent-soft);
 }
 
 .toolbar-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
+  min-height: 36px;
   padding: 0 12px;
-  border: 1px solid transparent;
-  border-radius: 999px;
+  border: 1px solid var(--spatial-line);
+  border-radius: 4px;
   color: var(--spatial-gray);
-  background: var(--spatial-warm-2);
+  background: var(--spatial-surface);
   font-size: 12px;
   font-weight: 750;
   cursor: pointer;
-  transition: all .15s ease;
+  transition: color .15s ease, border-color .15s ease, background-color .15s ease;
 }
 
 .toolbar-chip em {
@@ -1504,17 +1548,18 @@ onUnmounted(() => {
 
 .toolbar-chip:hover {
   color: var(--spatial-graphite);
-  background: #e6ecf3;
+  border-color: color-mix(in srgb, var(--spatial-gray) 40%, var(--spatial-line));
+  background: var(--spatial-warm-2);
 }
 
 .toolbar-chip.active {
-  color: #fff;
-  background: #7c3aed;
-  border-color: #6d28d9;
+  color: var(--spatial-accent);
+  background: var(--spatial-accent-soft);
+  border-color: color-mix(in srgb, var(--spatial-accent) 45%, var(--spatial-line));
 }
 
 .toolbar-chip.active em {
-  color: #fff;
+  color: var(--spatial-accent);
   opacity: .9;
 }
 
@@ -1525,9 +1570,9 @@ onUnmounted(() => {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .9);
-  color: #6d28d9;
+  border-radius: 3px;
+  background: var(--spatial-surface);
+  color: var(--spatial-accent);
   font-size: 10px;
   font-weight: 800;
 }
@@ -1537,7 +1582,20 @@ onUnmounted(() => {
   z-index: 50;
   isolation: isolate;
   min-height: 64px;
+  margin: 0;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--spatial-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
   contain: layout paint;
+}
+
+.library-toolbar .spatial-btn-ghost {
+  border-radius: 4px;
+  box-shadow: none;
 }
 
 .library-filters {
@@ -1573,10 +1631,10 @@ onUnmounted(() => {
 }
 
 .library-filter-menu-portal {
-  min-width: 200px;
+  min-width: 150px;
   max-height: 320px;
   overflow-y: auto;
-  padding: 8px;
+  padding: 7px;
   border: 1px solid var(--spatial-line);
   border-radius: 12px;
   background: var(--spatial-surface);
@@ -1584,13 +1642,15 @@ onUnmounted(() => {
 }
 
 .library-filter-option {
-  display: flex;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  min-width: max-content;
-  padding: 6px 8px;
+  column-gap: 10px;
+  min-width: 0;
+  padding: 8px 10px;
   border-radius: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
+  font-weight: 650;
   color: var(--spatial-graphite);
   cursor: pointer;
   white-space: nowrap;
@@ -1599,8 +1659,10 @@ onUnmounted(() => {
 
 .library-filter-option span {
   display: inline-block;
+  min-width: 0;
   white-space: nowrap;
   word-break: keep-all;
+  text-align: left;
 }
 
 .library-filter-option:hover {
@@ -1608,6 +1670,9 @@ onUnmounted(() => {
 }
 
 .library-filter-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
   accent-color: #7c3aed;
 }
 
@@ -2269,13 +2334,30 @@ onUnmounted(() => {
 
 @media (max-width: 900px) {
   .library-head-inner {
-    align-items: stretch;
+    display: block;
+  }
+
+  .library-head-actions {
     flex-direction: column;
   }
 
   .library-head-stats {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .library-nav-row {
+    display: block;
+  }
+
+  .library-stats-row {
+    border-top: 1px solid var(--spatial-line);
+  }
+
+  .library-head-stat {
+    width: auto;
+    min-height: 58px;
   }
 
   .library-head-stat {
@@ -2295,7 +2377,11 @@ onUnmounted(() => {
     width: 100%;
   }
 
-  .library-subnav { overflow-x: auto; }
+  .library-subnav {
+    width: 100%;
+    overflow-x: auto;
+    flex: none;
+  }
   .library-subnav button { min-width: 138px; }
   .zotero-import-panel { grid-template-columns: 1fr; }
   .personal-paper-form { grid-template-columns: 1fr; }
@@ -2305,7 +2391,9 @@ onUnmounted(() => {
 
 @media (max-width: 560px) {
   .library-head-stats {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .library-head-stat { padding: 0 12px; }
 }
 </style>

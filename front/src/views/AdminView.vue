@@ -104,6 +104,13 @@
           </button>
           <button
             class="tab-btn"
+            :class="{ active: activeTab === 'campusVerifications' }"
+            @click="activeTab = 'campusVerifications'"
+          >
+            校园认证审核
+          </button>
+          <button
+            class="tab-btn"
             :class="{ active: activeTab === 'messages' }"
             @click="activeTab = 'messages'"
           >
@@ -508,6 +515,160 @@
             </div>
           </section>
 
+          <section class="relay-research-panel spatial-glass-panel">
+            <div class="relay-research-header">
+              <div>
+                <h4>中转站价格与选型研究</h4>
+                <p>{{ relayResearch.pricingNote || "从 MODELOC 刷新前 20 个候选中转站；公开接口未给出的价格需登录对应官网核价。" }}</p>
+              </div>
+              <div class="relay-research-actions">
+                <span v-if="relayResearch.fetchedAt">刷新时间 {{ formatDateTime(relayResearch.fetchedAt) }}</span>
+                <button class="spatial-btn spatial-btn-accent compact-btn" :disabled="relayResearchLoading" @click="loadRelayResearch">
+                  {{ relayResearchLoading ? "刷新中..." : "刷新前20" }}
+                </button>
+              </div>
+            </div>
+
+            <div class="relay-summary-grid">
+              <article v-for="item in relayRecommendationCards" :key="item.key">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.text }}</p>
+              </article>
+            </div>
+
+            <div class="relay-purchase-grid">
+              <article v-for="plan in relayPurchasePlan" :key="plan.scene">
+                <span>{{ plan.scene }}</span>
+                <strong>{{ plan.primary }}</strong>
+                <p>备用：{{ plan.backup }} · {{ plan.budget }}</p>
+                <small>{{ plan.reason }}</small>
+              </article>
+            </div>
+
+            <div class="economy-routing-grid">
+              <article v-for="route in relaySceneRoutingPlan" :key="route.scene">
+                <span>{{ route.scene }}</span>
+                <strong>{{ route.primary }}</strong>
+                <p>备用：{{ route.backup }}</p>
+                <p>降级：{{ route.fallback }}</p>
+                <small>{{ route.strategy }}</small>
+              </article>
+            </div>
+
+            <div class="economy-model-heading">
+              <div>
+                <h5>经济模型家族最优报价</h5>
+                <p>每个家族保留当前前 20 中人民币综合成本最低的公开候选；低价不等于已验证，仍需小额压测。</p>
+              </div>
+              <strong>{{ relayEconomyModels.length }} 个模型家族</strong>
+            </div>
+            <div class="economy-table-wrap">
+              <table class="economy-table">
+                <thead>
+                  <tr>
+                    <th>家族 / 模型</th>
+                    <th>中转站</th>
+                    <th>分组倍率</th>
+                    <th>输入 / 输出每1M</th>
+                    <th>适用入口</th>
+                    <th>入池要求</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="model in relayEconomyModels" :key="`${model.domain}-${model.family}`">
+                    <td><b>{{ model.family }}</b><small>{{ model.model }}</small></td>
+                    <td><b>{{ model.station }}</b><small>MODELOC {{ model.stationScore || "—" }}</small></td>
+                    <td>{{ Number(model.groupRatio || 0).toFixed(3).replace(/0+$/, "").replace(/\.$/, "") }}x<small>{{ model.group }}</small></td>
+                    <td><b>入 ¥{{ formatRelayMoney(model.inputCny) }} / 出 ¥{{ formatRelayMoney(model.outputCny) }}</b></td>
+                    <td>{{ (model.scenes || []).join("、") }}</td>
+                    <td>{{ model.risk }}</td>
+                  </tr>
+                  <tr v-if="!relayEconomyModels.length">
+                    <td colspan="6" class="relay-empty">当前前 20 没有可公开计算人民币成本的经济模型。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="relay-table-wrap">
+              <table class="relay-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>中转站</th>
+                    <th>采购状态</th>
+                    <th>MODELOC</th>
+                    <th>公开充值</th>
+                    <th>有效倍率</th>
+                    <th>其他低价模型</th>
+                    <th>GPT-5.4 人民币成本</th>
+                    <th>DeepSeek 人民币成本</th>
+                    <th>多少钱买多少</th>
+                    <th>采购结论</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(relay, index) in relayRows" :key="relay.domain">
+                    <td>{{ index + 1 }}</td>
+                    <td>
+                      <strong>{{ relay.name }}</strong>
+                      <a v-if="relay.website" :href="relay.website" target="_blank" rel="noreferrer">{{ relay.domain }}</a>
+                      <span v-else>{{ relay.domain }}</span>
+                    </td>
+                    <td>
+                      <span class="relay-status" :class="{ 'is-open': relay.procurementStatus === '可注册采购' }">
+                        {{ relay.procurementStatus || "需核验" }}
+                      </span>
+                    </td>
+                    <td>
+                      <b>{{ relay.score || "—" }}</b>
+                      <small>{{ relay.models }} 模型 · {{ relay.runs }} 次检测</small>
+                    </td>
+                    <td>
+                      <b>{{ relay.publicPrice }}</b>
+                      <small>{{ relay.pricingSource }}</small>
+                    </td>
+                    <td>{{ relay.multiplier }}</td>
+                    <td class="relay-economy-cell">
+                      <template v-if="relay.economyModels?.length">
+                        <span v-for="model in relay.economyModels.slice(0, 3)" :key="model.family">
+                          <b>{{ model.family }}</b>
+                          <small>{{ model.model }} · {{ model.cost }}</small>
+                        </span>
+                      </template>
+                      <small v-else>未发现公开经济模型报价</small>
+                    </td>
+                    <td class="relay-cost-cell">
+                      <b>{{ relay.gpt54Cost }}</b>
+                      <small v-if="relay.gpt54Model">{{ relay.gpt54Model }}<template v-if="relay.gpt54ModelocScore"> · 实测 {{ relay.gpt54ModelocScore }}</template></small>
+                      <small v-else>{{ relay.detectedGpt54 ? "MODELOC 检测到 GPT-5.4，价格需登录" : "未发现完整 GPT-5.4" }}</small>
+                    </td>
+                    <td class="relay-cost-cell">
+                      <b>{{ relay.deepSeekCost }}</b>
+                      <small v-if="relay.deepSeekModel">{{ relay.deepSeekModel }}</small>
+                      <small v-else>{{ relay.detectedDeepSeek ? "MODELOC 已检测" : "未发现公开 DeepSeek 报价" }}</small>
+                    </td>
+                    <td>{{ relay.buyExample }}</td>
+                    <td><span class="relay-suggestion">{{ relay.suggestion }}</span></td>
+                  </tr>
+                  <tr v-if="!relayRows.length">
+                    <td colspan="11" class="relay-empty">暂无数据。点击“刷新前20”自动调研 MODELOC 与各站公开价格接口。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="membership-recommendation-grid">
+              <article v-for="plan in relayMembershipPlans" :key="plan.name">
+                <strong>{{ plan.name }}</strong>
+                <span>{{ plan.price }}</span>
+                <p>综述 {{ plan.review }} 次 · 问答 {{ plan.qa }} 次 · PPT {{ plan.ppt }} 次</p>
+                <small>{{ plan.positioning }}</small>
+              </article>
+            </div>
+          </section>
+
           <div class="models-grid">
             <div class="models-card-col spatial-glass-panel">
               <h4>翻译服务配置自检</h4>
@@ -517,7 +678,7 @@
                   <div class="status-details">
                     <strong>{{ prov.label }} ({{ prov.id.toUpperCase() }})</strong>
                     <span v-if="prov.id === 'google' || prov.id === 'youdao'">系统内置免密钥服务 · 随时可用</span>
-                    <span v-else-if="prov.id === 'ai'">遵循管理员配置的全站统一 AI 路由</span>
+                    <span v-else-if="prov.id === 'ai'">遵循管理员配置的当前入口 AI 路由</span>
                     <span v-else-if="prov.configured === 'true'">密钥已成功加载至本地服务 · 运行中</span>
                     <span v-else style="color: #ef4444;">未配置环境变量 · 无法直接使用</span>
                   </div>
@@ -578,20 +739,36 @@
           <div class="pane-header-row">
             <div>
               <h3>站内消息发布</h3>
-              <p class="pane-description">启用中的消息会出现在所有登录用户页面顶部，并自动循环滚动。</p>
+              <p class="pane-description">在这里发布系统公告或版本时间线；版本时间线会进入用户端“系统公告”的时间线栏目。</p>
             </div>
           </div>
 
           <div class="site-message-admin-grid">
             <form class="site-message-form spatial-glass-panel" @submit.prevent="publishSiteMessage">
               <h4>发布新消息</h4>
+              <div class="site-message-type-switch">
+                <button
+                  type="button"
+                  :class="{ active: newSiteMessage.messageType === 'notice' }"
+                  @click="newSiteMessage.messageType = 'notice'"
+                >
+                  系统公告
+                </button>
+                <button
+                  type="button"
+                  :class="{ active: newSiteMessage.messageType === 'timeline' }"
+                  @click="newSiteMessage.messageType = 'timeline'"
+                >
+                  版本时间线
+                </button>
+              </div>
               <label>
                 <span>消息标题</span>
-                <input v-model.trim="newSiteMessage.title" maxlength="120" placeholder="例如：系统维护通知" />
+                <input v-model.trim="newSiteMessage.title" maxlength="120" :placeholder="newSiteMessage.messageType === 'timeline' ? '例如：v1.8.0 模型配置中心更新' : '例如：系统维护通知'" />
               </label>
               <label>
                 <span>消息内容</span>
-                <textarea v-model.trim="newSiteMessage.content" maxlength="1000" placeholder="输入需要全站滚动展示的通知内容"></textarea>
+                <textarea v-model.trim="newSiteMessage.content" maxlength="1000" :placeholder="newSiteMessage.messageType === 'timeline' ? '输入本次版本新增、修复、优化内容' : '输入需要全站展示的通知内容'"></textarea>
               </label>
               <div class="site-message-form-footer">
                 <span>{{ newSiteMessage.content.length }}/1000</span>
@@ -610,6 +787,9 @@
                 <div>
                   <div class="site-message-title-row">
                     <strong>{{ message.title }}</strong>
+                    <span class="message-type-badge" :class="message.messageType === 'timeline' ? 'timeline' : 'notice'">
+                      {{ message.messageType === "timeline" ? "版本时间线" : "系统公告" }}
+                    </span>
                     <span :class="message.activeFlag ? 'message-active' : 'message-inactive'">
                       {{ message.activeFlag ? "展示中" : "已撤下" }}
                     </span>
@@ -706,6 +886,80 @@
                 <button :disabled="forumReportPage <= 1" @click="forumReportPage -= 1">上一页</button>
                 <strong>{{ forumReportPage }} / {{ forumReportPageCount }}</strong>
                 <button :disabled="forumReportPage >= forumReportPageCount" @click="forumReportPage += 1">下一页</button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Tab Content: Campus Verification -->
+        <div v-if="activeTab === 'campusVerifications'" class="tab-pane campus-verifications-pane">
+          <div class="pane-header-row">
+            <div>
+              <h3>校园认证审核</h3>
+              <p class="pane-description">审核用户提交的学校、学号与学生证照片。通过后用户个人主页显示学校，并收到站内通知。</p>
+            </div>
+            <button class="spatial-btn spatial-btn-ghost compact-btn" @click="fetchAllData">刷新</button>
+          </div>
+
+          <section class="campus-review-list spatial-glass-panel">
+            <article
+              v-for="request in paginatedCampusVerifications"
+              :key="request.id"
+              class="campus-review-row"
+              :class="`status-${request.status}`"
+            >
+              <header>
+                <div>
+                  <span>认证 #{{ request.id }} · {{ formatDateTime(request.createdAt) }}</span>
+                  <strong>{{ request.schoolName }}</strong>
+                  <small>{{ request.userName || "—" }} · {{ request.email || "—" }} · 学号 {{ request.studentNo }}</small>
+                </div>
+                <b>{{ request.statusLabel || campusVerificationStatusLabel(request.status) }}</b>
+              </header>
+              <div class="campus-card-preview-grid">
+                <figure>
+                  <button type="button" class="campus-image-button" @click="openCampusImage(request.studentCardFront, '学生证正面')">
+                    <img :src="request.studentCardFront" alt="学生证正面" />
+                  </button>
+                  <figcaption>学生证正面</figcaption>
+                </figure>
+                <figure>
+                  <button type="button" class="campus-image-button" @click="openCampusImage(request.studentCardBack, '学生证反面')">
+                    <img :src="request.studentCardBack" alt="学生证反面" />
+                  </button>
+                  <figcaption>学生证反面</figcaption>
+                </figure>
+              </div>
+              <em v-if="request.adminNote">审核备注：{{ request.adminNote }}</em>
+              <div class="forum-report-actions">
+                <button
+                  class="spatial-btn spatial-btn-ghost compact-btn"
+                  :disabled="request.status === 'approved'"
+                  @click="reviewCampusVerification(request, 'approved')"
+                >
+                  通过认证
+                </button>
+                <button
+                  class="spatial-btn spatial-btn-ghost compact-btn danger-lite"
+                  :disabled="request.status === 'rejected'"
+                  @click="reviewCampusVerification(request, 'rejected')"
+                >
+                  驳回
+                </button>
+              </div>
+            </article>
+            <div v-if="!campusVerifications.length" class="payment-empty">暂无校园认证申请。</div>
+            <div v-else class="admin-pagination compact-pagination">
+              <span>{{ paginationText(campusVerifications.length, campusVerificationPage, campusVerificationPageSize) }}</span>
+              <div>
+                <select v-model.number="campusVerificationPageSize" class="pagination-size-select">
+                  <option :value="4">4 条/页</option>
+                  <option :value="8">8 条/页</option>
+                  <option :value="12">12 条/页</option>
+                </select>
+                <button :disabled="campusVerificationPage <= 1" @click="campusVerificationPage -= 1">上一页</button>
+                <strong>{{ campusVerificationPage }} / {{ campusVerificationPageCount }}</strong>
+                <button :disabled="campusVerificationPage >= campusVerificationPageCount" @click="campusVerificationPage += 1">下一页</button>
               </div>
             </div>
           </section>
@@ -951,6 +1205,18 @@
         </div>
       </div>
     </Transition>
+
+    <Transition name="fade">
+      <div v-if="selectedCampusImage" class="admin-modal-overlay campus-image-overlay" @click="selectedCampusImage = null">
+        <div class="campus-image-preview" @click.stop>
+          <header>
+            <strong>{{ selectedCampusImage.title }}</strong>
+            <button class="modal-close" @click="selectedCampusImage = null">×</button>
+          </header>
+          <img :src="selectedCampusImage.src" :alt="selectedCampusImage.title" />
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -986,8 +1252,12 @@ const logPage = ref(1);
 const logPageSize = ref(20);
 const forumReportPage = ref(1);
 const forumReportPageSize = ref(6);
+const campusVerificationPage = ref(1);
+const campusVerificationPageSize = ref(4);
 const siteMessagePage = ref(1);
 const siteMessagePageSize = ref(5);
+const tutorialPage = ref(1);
+const tutorialPageSize = ref(5);
 
 
 // Initialize scroll reveal animations
@@ -1003,6 +1273,8 @@ const showPaymentTicketModal = ref(false);
 const showForumReportModal = ref(false);
 const showForumReportDetailModal = ref(false);
 const siteMessagePublishing = ref(false);
+const tutorialSaving = ref(false);
+const editingTutorialId = ref(null);
 
 const selectedUser = ref(null);
 const selectedMembershipPlan = ref("free");
@@ -1016,6 +1288,7 @@ const paymentTicketNote = ref("");
 const paymentTicketSaving = ref(false);
 const selectedForumReport = ref(null);
 const selectedForumReportDetail = ref(null);
+const selectedCampusImage = ref(null);
 const forumReportDecision = ref("processed");
 const forumReportBanPost = ref(false);
 const forumReportNote = ref("");
@@ -1037,7 +1310,14 @@ const newTeam = ref({
   name: "",
   identifier: "",
 });
-const newSiteMessage = ref({ title: "", content: "" });
+const newSiteMessage = ref({ title: "", content: "", messageType: "notice" });
+const tutorialForm = ref({
+  title: "",
+  category: "使用教程",
+  sortOrder: 0,
+  content: "",
+  activeFlag: true,
+});
 
 // Reactive Data
 const systemUsers = ref([]);
@@ -1048,24 +1328,38 @@ const teams = ref([]);
 const systemLogs = ref([]);
 const translationProviders = ref([]);
 const siteMessages = ref([]);
+const tutorials = ref([]);
 const forumReports = ref([]);
+const campusVerifications = ref([]);
 const modelPool = ref([]);
 const modelPoolRefreshing = ref(false);
 const modelPoolSeeding = ref(false);
 const modelPoolCleaning = ref(false);
 const showUnconfiguredPool = ref(false);
 const expandedPoolMessages = ref(new Set());
-const modelScene = ref("general");
+const relayResearch = ref({ items: [], recommendation: {}, purchasePlan: [], economyModelPlan: [], sceneRoutingPlan: [], membershipPlan: [] });
+const relayResearchLoading = ref(false);
+const modelScene = ref("paper_review");
 const modelSceneOptions = [
   {
-    value: "general",
-    label: "通用功能",
-    hint: "论文分析、翻译、问答等",
+    value: "paper_review",
+    label: "论文综述",
+    hint: "长文本总结、文献综述、报告初稿",
+  },
+  {
+    value: "paper_qa",
+    label: "AI论文问答",
+    hint: "读者对话、追问、解释公式和方法",
   },
   {
     value: "meeting_deck",
-    label: "组会汇报 / PPT生成",
-    hint: "多轮 Agent、论文精读、PPT 专用强模型",
+    label: "PPT生成",
+    hint: "必须配置 gpt-5.4 级别强模型",
+  },
+  {
+    value: "forum_moderation",
+    label: "AI发帖审核",
+    hint: "低价快模型，稳定输出 JSON",
   },
 ];
 const globalStats = ref({
@@ -1157,14 +1451,18 @@ const orderPageCount = computed(() => getPageCount(paymentOrders.value.length, o
 const rechargePageCount = computed(() => getPageCount(filteredRecharges.value.length, rechargePageSize.value));
 const logPageCount = computed(() => getPageCount(systemLogs.value.length, logPageSize.value));
 const forumReportPageCount = computed(() => getPageCount(forumReports.value.length, forumReportPageSize.value));
+const campusVerificationPageCount = computed(() => getPageCount(campusVerifications.value.length, campusVerificationPageSize.value));
 const siteMessagePageCount = computed(() => getPageCount(siteMessages.value.length, siteMessagePageSize.value));
+const tutorialPageCount = computed(() => getPageCount(tutorials.value.length, tutorialPageSize.value));
 const paginatedUsers = computed(() => paginateRows(filteredUsers.value, userPage.value, userPageSize.value));
 const paginatedPaymentTickets = computed(() => paginateRows(paymentTickets.value, ticketPage.value, ticketPageSize.value));
 const paginatedPaymentOrders = computed(() => paginateRows(paymentOrders.value, orderPage.value, orderPageSize.value));
 const paginatedRecharges = computed(() => paginateRows(filteredRecharges.value, rechargePage.value, rechargePageSize.value));
 const paginatedSystemLogs = computed(() => paginateRows(systemLogs.value, logPage.value, logPageSize.value));
 const paginatedForumReports = computed(() => paginateRows(forumReports.value, forumReportPage.value, forumReportPageSize.value));
+const paginatedCampusVerifications = computed(() => paginateRows(campusVerifications.value, campusVerificationPage.value, campusVerificationPageSize.value));
 const paginatedSiteMessages = computed(() => paginateRows(siteMessages.value, siteMessagePage.value, siteMessagePageSize.value));
+const paginatedTutorials = computed(() => paginateRows(tutorials.value, tutorialPage.value, tutorialPageSize.value));
 
 watch([searchQuery, roleFilter, userPageSize], () => {
   userPage.value = 1;
@@ -1172,12 +1470,13 @@ watch([searchQuery, roleFilter, userPageSize], () => {
 watch([rechargeQuery, rechargePageSize], () => {
   rechargePage.value = 1;
 });
-watch([ticketPageSize, orderPageSize, logPageSize, forumReportPageSize, siteMessagePageSize], () => {
+watch([ticketPageSize, orderPageSize, logPageSize, forumReportPageSize, siteMessagePageSize, tutorialPageSize], () => {
   ticketPage.value = 1;
   orderPage.value = 1;
   logPage.value = 1;
   forumReportPage.value = 1;
   siteMessagePage.value = 1;
+  tutorialPage.value = 1;
 });
 watch(userPageCount, () => keepPageInRange(userPage, userPageCount));
 watch(ticketPageCount, () => keepPageInRange(ticketPage, ticketPageCount));
@@ -1186,6 +1485,7 @@ watch(rechargePageCount, () => keepPageInRange(rechargePage, rechargePageCount))
 watch(logPageCount, () => keepPageInRange(logPage, logPageCount));
 watch(forumReportPageCount, () => keepPageInRange(forumReportPage, forumReportPageCount));
 watch(siteMessagePageCount, () => keepPageInRange(siteMessagePage, siteMessagePageCount));
+watch(tutorialPageCount, () => keepPageInRange(tutorialPage, tutorialPageCount));
 
 const engineUsageTrends = computed(() => {
   const stats = globalStats.value.engineStats || {};
@@ -1214,16 +1514,32 @@ const configuredModelRoutes = computed(() => modelPool.value.filter(route => rou
 const availableModelRoutes = computed(() => modelPool.value.filter(route => route.status === "available").length);
 const unconfiguredModelRoutes = computed(() => modelPool.value.filter(route => !route.keyConfigured || route.status === "unconfigured" || route.template).length);
 const modelSceneLabel = computed(() => modelSceneOptions.find(scene => scene.value === modelScene.value)?.label || "通用功能");
-const modelSceneDescription = computed(() =>
-  modelScene.value === "meeting_deck"
-    ? "PPT 生成使用独立模型配置，建议配置 GPT-5.5 / GPT-5 / Claude Sonnet / Gemini Pro 等强模型；不会影响论文分析和翻译。"
-    : "通用功能使用独立模型配置，供论文分析、翻译、问答、论坛审核等普通 AI 功能调用。"
-);
-const modelPoolDescription = computed(() =>
-  modelScene.value === "meeting_deck"
-    ? "这里只管理组会汇报和 PPT 生成专用池。PPT 多轮 Agent 只会读取这个池子，不再混用通用模型。"
-    : "这里只管理通用功能模型池。遇到限流、超时或上游失败时，会在通用池内尝试其他已配置路由。"
-);
+const modelSceneDescription = computed(() => ({
+  paper_review: "论文综述独立配置，适合长上下文、结构化综述、引用线索整理；建议用性价比强模型。",
+  paper_qa: "AI 论文问答独立配置，优先低延迟和低成本，保障用户愿意高频使用。",
+  meeting_deck: "PPT 生成使用独立强模型配置，必须配置 gpt-5.4 或更强模型；不会影响问答和审核。",
+  forum_moderation: "AI 发帖审核独立配置，适合低价快模型，重点是稳定 JSON 输出和审核延迟。",
+})[modelScene.value] || "模型入口独立配置，避免高成本任务和轻量任务混用。");
+const modelPoolDescription = computed(() => ({
+  paper_review: "这里只管理论文综述模型池。建议主路由选稳定强模型，备用路由选便宜模型。",
+  paper_qa: "这里只管理 AI 论文问答模型池。遇到限流、超时或上游失败时，会在问答池内尝试备用路由。",
+  meeting_deck: "这里只管理 PPT 生成专用池。PPT 多轮 Agent 只会读取这个池子，主模型建议 gpt-5.4。",
+  forum_moderation: "这里只管理发帖审核模型池。可以配置低价快模型，不必占用 PPT 强模型额度。",
+})[modelScene.value] || "这里只管理当前入口的模型池。");
+const relayRows = computed(() => relayResearch.value.items || []);
+const relayPurchasePlan = computed(() => relayResearch.value.purchasePlan || []);
+const relayEconomyModels = computed(() => relayResearch.value.economyModelPlan || []);
+const relaySceneRoutingPlan = computed(() => relayResearch.value.sceneRoutingPlan || []);
+const relayMembershipPlans = computed(() => relayResearch.value.membershipPlan || []);
+const relayRecommendationCards = computed(() => {
+  const recommendation = relayResearch.value.recommendation || {};
+  return [
+    { key: "paperReview", label: "论文综述", title: "稳价强模型", text: recommendation.paperReview || "优先长上下文、低幻觉模型。" },
+    { key: "paperQa", label: "AI论文问答", title: "低延迟低倍率", text: recommendation.paperQa || "问答可用便宜模型池，失败再切强模型。" },
+    { key: "meetingDeck", label: "PPT生成", title: "gpt-5.4 主路由", text: recommendation.meetingDeck || "多轮 Agent 成本高，次数要控。" },
+    { key: "forumModeration", label: "AI发帖审核", title: "快模型审核", text: recommendation.forumModeration || "用低价稳定 JSON 模型。" },
+  ];
+});
 const visibleModelPool = computed(() => {
   const rows = [...modelPool.value];
   if (showUnconfiguredPool.value) return rows;
@@ -1241,6 +1557,12 @@ function formatChars(n) {
   if (n >= 1000000) return `${(n / 1000000).toFixed(2)}M`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
   return String(n);
+}
+
+function formatRelayMoney(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "—";
+  return amount < 1 ? amount.toFixed(3).replace(/0+$/, "").replace(/\.$/, "") : amount.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 function poolStatusLabel(status) {
@@ -1382,8 +1704,12 @@ async function fetchAllData() {
     // 8. Fetch forum reports
     forumReports.value = await paperpilotApi.getForumReports();
 
-    // 9. Fetch AI model pool status
+    // 9. Fetch campus verification requests
+    campusVerifications.value = await paperpilotApi.getAdminCampusVerifications();
+
+    // 10. Fetch AI model pool status
     modelPool.value = await paperpilotApi.getModelPool(modelScene.value);
+    await loadRelayResearch();
 
   } catch (error) {
     console.error("Failed to fetch admin data from backend:", error);
@@ -1407,6 +1733,17 @@ async function loadCurrentModelScene() {
     modelPool.value = await paperpilotApi.getModelPool(modelScene.value);
   } catch (error) {
     dialogStore.alert(error.response?.data?.message || "模型场景加载失败");
+  }
+}
+
+async function loadRelayResearch() {
+  relayResearchLoading.value = true;
+  try {
+    relayResearch.value = await paperpilotApi.getRelayResearchTop();
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "中转站研究数据刷新失败");
+  } finally {
+    relayResearchLoading.value = false;
   }
 }
 
@@ -1580,6 +1917,19 @@ function forumReportStatusLabel(status) {
   }[status] || "待处理";
 }
 
+function campusVerificationStatusLabel(status) {
+  return {
+    pending: "待审核",
+    approved: "已通过",
+    rejected: "未通过",
+  }[status] || "待审核";
+}
+
+function openCampusImage(src, title) {
+  if (!src) return;
+  selectedCampusImage.value = { src, title };
+}
+
 function formatActiveTime(seconds) {
   const total = Number(seconds || 0);
   const hours = Math.floor(total / 3600);
@@ -1742,6 +2092,26 @@ async function submitForumReportDecision() {
   }
 }
 
+async function reviewCampusVerification(request, status) {
+  const isApprove = status === "approved";
+  let adminNote = isApprove ? "校园认证信息已核验通过。" : window.prompt("请输入驳回原因", request.adminNote || "学生证信息不清晰，请重新上传。");
+  if (!isApprove && adminNote === null) return;
+  if (!await dialogStore.confirm(`确定${isApprove ? "通过" : "驳回"} ${request.userName || request.email} 的校园认证吗？`, {
+    title: "校园认证审核",
+    confirmText: isApprove ? "通过" : "驳回",
+    danger: !isApprove,
+  })) return;
+  try {
+    await paperpilotApi.reviewCampusVerification(request.id, {
+      status,
+      adminNote: adminNote || "",
+    });
+    campusVerifications.value = await paperpilotApi.getAdminCampusVerifications();
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "校园认证审核失败");
+  }
+}
+
 function cleanActionName(value) {
   const text = String(value || "-");
   if (text.includes("PPT") || text.includes("Agent")) return "组会PPT Agent执行";
@@ -1827,7 +2197,7 @@ async function publishSiteMessage() {
   siteMessagePublishing.value = true;
   try {
     await paperpilotApi.publishSiteMessage(newSiteMessage.value);
-    newSiteMessage.value = { title: "", content: "" };
+    newSiteMessage.value = { title: "", content: "", messageType: "notice" };
     siteMessages.value = await paperpilotApi.getAdminSiteMessages();
     window.dispatchEvent(new Event("paperpilot:site-messages-changed"));
   } catch (error) {
@@ -1860,6 +2230,79 @@ async function removeSiteMessage(message) {
   } catch (error) {
     dialogStore.alert("站内消息删除失败");
   }
+}
+
+function resetTutorialForm() {
+  editingTutorialId.value = null;
+  tutorialForm.value = {
+    title: "",
+    category: "使用教程",
+    sortOrder: 0,
+    content: "",
+    activeFlag: true,
+  };
+}
+
+function editTutorial(article) {
+  editingTutorialId.value = article.id;
+  tutorialForm.value = {
+    title: article.title || "",
+    category: article.category || "使用教程",
+    sortOrder: article.sortOrder || 0,
+    content: article.content || "",
+    activeFlag: article.activeFlag !== false,
+  };
+  activeTab.value = "tutorials";
+}
+
+async function saveTutorial() {
+  if (!tutorialForm.value.title || !tutorialForm.value.content.trim()) {
+    dialogStore.alert("请填写教程标题和 Markdown 内容");
+    return;
+  }
+  tutorialSaving.value = true;
+  try {
+    if (editingTutorialId.value) {
+      await paperpilotApi.updateTutorial(editingTutorialId.value, tutorialForm.value);
+    } else {
+      await paperpilotApi.publishTutorial(tutorialForm.value);
+    }
+    tutorials.value = await paperpilotApi.getAdminTutorials();
+    resetTutorialForm();
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "教程保存失败");
+  } finally {
+    tutorialSaving.value = false;
+  }
+}
+
+async function toggleTutorial(article) {
+  try {
+    await paperpilotApi.updateTutorialStatus(article.id, !article.activeFlag);
+    tutorials.value = await paperpilotApi.getAdminTutorials();
+  } catch (error) {
+    dialogStore.alert("教程状态更新失败");
+  }
+}
+
+async function removeTutorial(article) {
+  if (!await dialogStore.confirm(`确定删除教程“${article.title}”吗？`, {
+    title: "删除教程",
+    confirmText: "删除",
+    danger: true,
+  })) return;
+  try {
+    await paperpilotApi.deleteTutorial(article.id);
+    tutorials.value = await paperpilotApi.getAdminTutorials();
+    if (editingTutorialId.value === article.id) resetTutorialForm();
+  } catch (error) {
+    dialogStore.alert("教程删除失败");
+  }
+}
+
+function truncateText(value, length = 100) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > length ? `${text.slice(0, length)}...` : text;
 }
 </script>
 
@@ -2310,6 +2753,145 @@ async function removeSiteMessage(message) {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.campus-review-list {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 16px;
+}
+
+.campus-review-row {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.campus-review-row.status-pending {
+  border-color: rgba(20, 184, 166, .28);
+  background: linear-gradient(135deg, #ecfdf8, #fff);
+}
+
+.campus-review-row.status-approved {
+  border-color: rgba(34, 197, 94, .22);
+  background: linear-gradient(135deg, #f0fdf4, #fff);
+}
+
+.campus-review-row.status-rejected {
+  background: linear-gradient(135deg, #fff1f2, #fff);
+  border-color: rgba(244, 63, 94, .2);
+}
+
+.campus-review-row header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.campus-review-row header span,
+.campus-review-row small,
+.campus-review-row em {
+  display: block;
+  color: #64748b;
+  font-size: .76rem;
+  line-height: 1.5;
+  font-style: normal;
+}
+
+.campus-review-row strong {
+  display: block;
+  margin: 4px 0;
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.campus-review-row header b {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: #0f766e;
+  background: #ccfbf1;
+  font-size: .75rem;
+}
+
+.campus-review-row.status-approved header b {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.campus-review-row.status-rejected header b {
+  color: #be123c;
+  background: #ffe4e6;
+}
+
+.campus-card-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.campus-card-preview-grid figure {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.campus-image-button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.campus-card-preview-grid img {
+  width: 100%;
+  height: 180px;
+  display: block;
+  object-fit: cover;
+}
+
+.campus-card-preview-grid figcaption {
+  padding: 8px 10px;
+  color: #64748b;
+  font-size: .76rem;
+}
+
+.campus-image-overlay {
+  background: rgba(15, 23, 42, .72);
+}
+
+.campus-image-preview {
+  width: min(980px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 28px 90px rgba(2, 6, 23, .34);
+}
+
+.campus-image-preview header {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.campus-image-preview img {
+  width: 100%;
+  max-height: calc(100vh - 126px);
+  object-fit: contain;
+  background: #0f172a;
 }
 
 .form-group textarea {
@@ -3345,6 +3927,33 @@ async function removeSiteMessage(message) {
   font-size: 1rem;
 }
 
+.site-message-type-switch {
+  margin-top: 16px;
+  padding: 4px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  border-radius: 12px;
+  background: rgba(226, 232, 240, .72);
+}
+
+.site-message-type-switch button {
+  height: 36px;
+  border: 0;
+  border-radius: 9px;
+  color: #64748b;
+  background: transparent;
+  font-size: .78rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.site-message-type-switch button.active {
+  color: #0f172a;
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, .08);
+}
+
 .site-message-form label {
   display: grid;
   gap: 7px;
@@ -3422,10 +4031,34 @@ async function removeSiteMessage(message) {
 }
 .message-active { color: #047857; background: rgba(16, 185, 129, 0.1); }
 .message-inactive { color: #64748b; background: rgba(100, 116, 139, 0.1); }
+.message-type-badge.notice { color: #2563eb; background: rgba(37, 99, 235, .1); }
+.message-type-badge.timeline { color: #7c3aed; background: rgba(124, 58, 237, .1); }
 .site-message-row p { margin: 7px 0; color: #64748b; font-size: 0.8rem; line-height: 1.55; }
 .site-message-row small { color: #94a3b8; font-size: 0.7rem; }
 .site-message-actions { align-self: center; gap: 12px; }
 .site-message-empty { padding: 46px 20px; color: #94a3b8; font-size: 0.84rem; text-align: center; }
+.tutorial-admin-grid {
+  grid-template-columns: minmax(360px, 0.9fr) minmax(520px, 1.1fr);
+}
+.tutorial-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, .5fr) 96px;
+  gap: 12px;
+}
+.tutorial-markdown-input {
+  min-height: 360px !important;
+  font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace !important;
+  line-height: 1.72;
+}
+.tutorial-form .site-message-form-footer > div {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.tutorial-admin-row p {
+  max-height: 3.2em;
+  overflow: hidden;
+}
 
 .quota-modal-snapshot {
   display: grid;
@@ -3446,9 +4079,314 @@ async function removeSiteMessage(message) {
   font-size: 1.05rem;
 }
 
+.relay-research-panel {
+  margin-top: 24px;
+  padding: 24px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.relay-research-header,
+.relay-research-actions {
+  display: flex;
+  align-items: center;
+}
+
+.relay-research-header {
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.relay-research-header h4 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.relay-research-header p {
+  max-width: 820px;
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.relay-research-actions {
+  justify-content: flex-end;
+  gap: 12px;
+  color: #64748b;
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.relay-summary-grid,
+.relay-purchase-grid,
+.economy-routing-grid,
+.membership-recommendation-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.relay-purchase-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.economy-routing-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.relay-summary-grid article,
+.relay-purchase-grid article,
+.economy-routing-grid article,
+.membership-recommendation-grid article {
+  padding: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.relay-summary-grid span,
+.relay-purchase-grid span,
+.economy-routing-grid span,
+.membership-recommendation-grid span {
+  display: block;
+  color: #2563eb;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.relay-summary-grid strong,
+.relay-purchase-grid strong,
+.economy-routing-grid strong,
+.membership-recommendation-grid strong {
+  display: block;
+  margin-top: 6px;
+  color: #0f172a;
+  font-size: 0.92rem;
+}
+
+.relay-summary-grid p,
+.relay-purchase-grid p,
+.relay-purchase-grid small,
+.economy-routing-grid p,
+.economy-routing-grid small,
+.membership-recommendation-grid p,
+.membership-recommendation-grid small {
+  display: block;
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.economy-model-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.economy-model-heading h5,
+.economy-model-heading p {
+  margin: 0;
+}
+
+.economy-model-heading h5 {
+  color: #0f172a;
+  font-size: 0.92rem;
+}
+
+.economy-model-heading p {
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 0.76rem;
+}
+
+.economy-model-heading > strong {
+  color: #2563eb;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.economy-table-wrap {
+  margin-top: 12px;
+  overflow-x: auto;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.economy-table {
+  width: 100%;
+  min-width: 1040px;
+  border-collapse: collapse;
+  color: #334155;
+  font-size: 0.76rem;
+}
+
+.economy-table th,
+.economy-table td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.economy-table th {
+  color: #64748b;
+  font-size: 0.68rem;
+  background: #f8fafc;
+}
+
+.economy-table td {
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.economy-table b,
+.economy-table small {
+  display: block;
+}
+
+.economy-table b {
+  color: #0f172a;
+}
+
+.economy-table small {
+  margin-top: 3px;
+  color: #94a3b8;
+}
+
+.relay-table-wrap {
+  margin-top: 18px;
+  overflow-x: auto;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.relay-table {
+  width: 100%;
+  min-width: 1540px;
+  border-collapse: collapse;
+  color: #334155;
+  font-size: 0.78rem;
+}
+
+.relay-table th {
+  padding: 11px 12px;
+  color: #64748b;
+  font-size: 0.7rem;
+  text-align: left;
+  background: #f8fafc;
+}
+
+.relay-table td {
+  padding: 13px 12px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  vertical-align: top;
+}
+
+.relay-table td:first-child {
+  color: #94a3b8;
+  font-weight: 800;
+}
+
+.relay-table strong,
+.relay-table b {
+  display: block;
+  color: #0f172a;
+}
+
+.relay-table a,
+.relay-table td span {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  text-decoration: none;
+}
+
+.relay-table small {
+  display: block;
+  margin-top: 3px;
+  color: #94a3b8;
+}
+
+.relay-status {
+  display: inline-flex !important;
+  margin-top: 0 !important;
+  padding: 4px 7px;
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  border-radius: 6px;
+  color: #b91c1c !important;
+  background: #fff7f7;
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.relay-status.is-open {
+  border-color: rgba(5, 150, 105, 0.2);
+  color: #047857 !important;
+  background: #f0fdf8;
+}
+
+.relay-cost-cell {
+  min-width: 180px;
+}
+
+.relay-economy-cell {
+  min-width: 240px;
+}
+
+.relay-economy-cell > span {
+  margin-top: 0 !important;
+  padding: 0 0 8px;
+}
+
+.relay-economy-cell > span + span {
+  padding-top: 8px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.relay-suggestion {
+  display: inline-flex !important;
+  width: max-content;
+  margin-top: 0 !important;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #075985 !important;
+  background: rgba(14, 165, 233, 0.1);
+  font-weight: 800;
+}
+
+.relay-empty {
+  padding: 28px !important;
+  color: #94a3b8;
+  text-align: center;
+}
+
 @media (max-width: 900px) {
   .site-message-admin-grid,
-  .payment-admin-grid {
+  .tutorial-admin-grid,
+  .payment-admin-grid,
+  .relay-summary-grid,
+  .relay-purchase-grid,
+  .economy-routing-grid,
+  .membership-recommendation-grid {
+    grid-template-columns: 1fr;
+  }
+  .relay-research-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .tutorial-form-row {
+    grid-template-columns: 1fr;
+  }
+  .campus-card-preview-grid {
     grid-template-columns: 1fr;
   }
 }

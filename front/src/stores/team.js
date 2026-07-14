@@ -183,6 +183,22 @@ export const useTeamStore = defineStore("team", () => {
     return saved;
   }
 
+  async function drawCheckinFruit(memberId) {
+    const saved = await paperpilotApi.drawTeamCheckinFruit({ memberId });
+    const index = state.checkins.findIndex(item => item.memberId === memberId);
+    if (index >= 0) state.checkins[index] = saved;
+    else state.checkins.push(saved);
+    const member = state.members.find(item => item.id === memberId);
+    if (member && saved.fruitScore !== undefined) {
+      member.fruitScore = saved.fruitScore;
+    }
+    if (member?.email === authStore.profile.email && saved.fruitScore !== undefined) {
+      authStore.session.user.fruitScore = saved.fruitScore;
+      authStore.persist();
+    }
+    return saved;
+  }
+
   async function incrementActiveTime(memberId, seconds) {
     const member = state.members.find(item => item.id === memberId);
     if (!member) return;
@@ -230,6 +246,7 @@ export const useTeamStore = defineStore("team", () => {
     updateAnnouncement,
     deleteAnnouncement,
     performCheckin,
+    drawCheckinFruit,
     incrementActiveTime,
     addResource,
     deleteResource,

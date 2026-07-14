@@ -391,34 +391,6 @@
       <div v-else class="dashboard-split-layout student-view">
         <!-- Student: Left Column (My Workbench) -->
         <div class="dashboard-col left-col">
-          <!-- Sign in Widget -->
-          <div class="student-glass-card workbench-sign-in">
-            <div class="sign-in-header">
-              <h3>实验室学术签到</h3>
-              <div class="checkin-clock">
-                <span>{{ currentResearchDate }}</span>
-                <strong>{{ currentResearchClock }}</strong>
-              </div>
-            </div>
-            <div class="sign-in-body">
-              <div class="sign-in-text">
-                <p v-if="currentCheckinItem?.status === '已打卡'">
-                  您今日已于 <strong>{{ currentCheckinItem.time }}</strong> 完成签到，已连续 <strong>{{ currentCheckinItem.streak || checkinStreak }}</strong> 天。
-                </p>
-                <p v-else>
-                  今天还没签到，快点击按钮记录今天的科研时长吧。
-                </p>
-              </div>
-              <button
-                class="student-primary-action-btn"
-                :class="{ 'already-checked': currentCheckinItem?.status === '已打卡' }"
-                @click="doCheckin"
-              >
-                {{ currentCheckinItem?.status === '已打卡' ? '查看打卡记录' : '立即签到打卡' }}
-              </button>
-            </div>
-          </div>
-
           <!-- My membership and research rhythm -->
           <div class="student-glass-card my-stats-panel">
             <div class="student-status-heading">
@@ -766,10 +738,31 @@
       <div v-if="showCheckinModal" class="overlay" @click="showCheckinModal = false">
         <div class="modal-card checkin-success-modal" @click.stop>
           <button class="close-btn modal-close-float" @click="showCheckinModal = false">关闭</button>
-          <div class="checkin-medal">✓</div>
+          <div class="fruit-wheel-wrap">
+            <div
+              class="fruit-wheel"
+              :class="{ spinning: fruitDrawSpinning }"
+              :style="{ transform: `rotate(${fruitWheelRotation}deg)` }"
+            >
+              <span v-for="value in fruitWheelValues" :key="value">+{{ value }}</span>
+            </div>
+            <i class="fruit-wheel-pointer"></i>
+          </div>
           <span class="panel-eyebrow">Daily Research Check-in</span>
           <h3>{{ checkinDialogTitle }}</h3>
           <p>{{ checkinMotivation }}</p>
+          <button
+            v-if="!currentCheckinItem?.fruitClaimed"
+            class="fruit-draw-btn"
+            :disabled="fruitDrawLoading"
+            @click="drawFruit"
+          >
+            {{ fruitDrawLoading ? "转盘抽取中..." : "抽取今日硕果" }}
+          </button>
+          <div v-else class="fruit-award-panel">
+            <span>今日获得</span>
+            <strong>+{{ currentCheckinItem?.fruitAward || fruitDrawAward || 0 }} 硕果</strong>
+          </div>
           <div class="checkin-streak-panel">
             <span>连续打卡</span>
             <strong>{{ checkinStreak }} 天</strong>
@@ -1042,6 +1035,11 @@ const showCheckinModal = ref(false);
 const checkinStreak = ref(0);
 const checkinDialogTitle = ref("今天的科研节奏已经记录");
 const checkinMotivation = ref("稳定推进比短暂冲刺更可靠。今天多走一步，下一次汇报就多一分底气。");
+const fruitWheelValues = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const fruitWheelRotation = ref(0);
+const fruitDrawLoading = ref(false);
+const fruitDrawSpinning = ref(false);
+const fruitDrawAward = ref(0);
 const checkinMessages = [
   "稳定推进比短暂冲刺更可靠。今天多走一步，下一次汇报就多一分底气。",
   "科研不是只靠灵感，更多时候靠每天把问题往前推一点。",
@@ -1070,9 +1068,13 @@ const currentCheckinItem = computed(() => {
 });
 
 const teamTutor = computed(() => teamStore.members.find((member) => member.role === "导师"));
-const teamFleetPlan = computed(() => teamTutor.value?.membershipPlan || "free");
-const hasTeamFleetPlan = computed(() => ["team", "team_plus"].includes(teamFleetPlan.value));
-const teamFleetLabel = computed(() => teamFleetPlan.value === "team_plus" ? "团队 Plus" : hasTeamFleetPlan.value ? "导师车队会员" : "未开通团队套餐");
+const teamFleetPlan = computed(() => normalizeMembershipPlan(teamTutor.value?.membershipPlan || "free"));
+const hasTeamFleetPlan = computed(() => ["team_plus", "team_pro"].includes(teamFleetPlan.value));
+const teamFleetLabel = computed(() => teamFleetPlan.value === "team_pro" ? "团队 Pro" : teamFleetPlan.value === "team_plus" ? "团队 Plus" : "未开通团队套餐");
+
+function normalizeMembershipPlan(plan) {
+  return ({ light: "lite", study: "plus", lab: "pro", team: "team_plus" })[plan] || plan || "free";
+}
 
 const completedTaskCount = computed(() => {
   return teamStore.tasks.filter((task) => task.status === "已完成").length;
@@ -1544,9 +1546,38 @@ function updateResearchClock() {
 function openCheckinDialog(saved = currentCheckinItem.value) {
   const streak = Number(saved?.streak || currentCheckinItem.value?.streak || 1);
   checkinStreak.value = Math.max(1, streak);
-  checkinDialogTitle.value = saved?.status === "已打卡" ? "今日打卡已完成" : "今天的科研节奏已经记录";
-  checkinMotivation.value = checkinMessages[(checkinStreak.value - 1) % checkinMessages.length];
+  fruitDrawAward.value = Number(saved?.fruitAward || currentCheckinItem.value?.fruitAward || 0);
+  const claimed = Boolean(saved?.fruitClaimed ?? currentCheckinItem.value?.fruitClaimed);
+  checkinDialogTitle.value = claimed ? "今日硕果已入账" : "签到成功，抽取今日硕果";
+  checkinMotivation.value = claimed
+    ? `今天已经获得 ${fruitDrawAward.value || 0} 枚硕果，继续保持。`
+    : "先完成签到，再亲手转动一次硕果转盘。连续签到越久，高额硕果概率越大。";
   showCheckinModal.value = true;
+}
+
+async function drawFruit() {
+  if (fruitDrawLoading.value || currentCheckinItem.value?.fruitClaimed) return;
+  fruitDrawLoading.value = true;
+  fruitDrawSpinning.value = true;
+  fruitWheelRotation.value += 720 + Math.floor(Math.random() * 240);
+  try {
+    const saved = await teamStore.drawCheckinFruit(currentMemberId.value);
+    fruitDrawAward.value = Number(saved.fruitAward || 0);
+    const prizeIndex = Math.max(0, fruitWheelValues.indexOf(fruitDrawAward.value));
+    const segment = 360 / fruitWheelValues.length;
+    fruitWheelRotation.value += 720 + (360 - prizeIndex * segment) - segment / 2;
+    window.setTimeout(() => {
+      fruitDrawSpinning.value = false;
+      openCheckinDialog(saved);
+    }, 650);
+  } catch (error) {
+    fruitDrawSpinning.value = false;
+    showToast(error.response?.data?.message || "抽取硕果失败，请稍后重试");
+  } finally {
+    window.setTimeout(() => {
+      fruitDrawLoading.value = false;
+    }, 700);
+  }
 }
 
 async function doCheckin() {
@@ -3243,6 +3274,129 @@ onUnmounted(() => {
   font-size: 26px;
   font-weight: 900;
   box-shadow: 0 12px 24px rgba(20, 148, 111, 0.22);
+}
+
+.fruit-wheel-wrap {
+  position: relative;
+  width: 172px;
+  height: 172px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 20px;
+}
+
+.fruit-wheel {
+  position: relative;
+  width: 152px;
+  height: 152px;
+  border: 9px solid #fff;
+  border-radius: 50%;
+  background:
+    conic-gradient(
+      from -18deg,
+      #e6f7ee 0 36deg,
+      #eef5ff 36deg 72deg,
+      #fff4e3 72deg 108deg,
+      #f2edff 108deg 144deg,
+      #e8fbf6 144deg 180deg,
+      #fff0f4 180deg 216deg,
+      #edf7ff 216deg 252deg,
+      #f7f4e9 252deg 288deg,
+      #f0fdf4 288deg 324deg,
+      #f3f7ff 324deg 360deg
+    );
+  box-shadow: 0 18px 36px rgba(28, 45, 75, .14), inset 0 0 0 1px rgba(21, 39, 70, .08);
+  transition: transform 720ms cubic-bezier(.16, 1, .3, 1);
+}
+
+.fruit-wheel.spinning {
+  transition-duration: 980ms;
+}
+
+.fruit-wheel::after {
+  content: "";
+  position: absolute;
+  inset: 43px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(21, 39, 70, .08);
+}
+
+.fruit-wheel span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  color: #185f48;
+  font-size: 14px;
+  font-weight: 900;
+  transform-origin: 0 0;
+}
+
+.fruit-wheel span:nth-child(1) { transform: rotate(0deg) translate(51px) rotate(0deg); }
+.fruit-wheel span:nth-child(2) { transform: rotate(36deg) translate(51px) rotate(-36deg); }
+.fruit-wheel span:nth-child(3) { transform: rotate(72deg) translate(51px) rotate(-72deg); }
+.fruit-wheel span:nth-child(4) { transform: rotate(108deg) translate(51px) rotate(-108deg); }
+.fruit-wheel span:nth-child(5) { transform: rotate(144deg) translate(51px) rotate(-144deg); }
+.fruit-wheel span:nth-child(6) { transform: rotate(180deg) translate(51px) rotate(-180deg); }
+.fruit-wheel span:nth-child(7) { transform: rotate(216deg) translate(51px) rotate(-216deg); }
+.fruit-wheel span:nth-child(8) { transform: rotate(252deg) translate(51px) rotate(-252deg); }
+.fruit-wheel span:nth-child(9) { transform: rotate(288deg) translate(51px) rotate(-288deg); }
+.fruit-wheel span:nth-child(10) { transform: rotate(324deg) translate(51px) rotate(-324deg); }
+
+.fruit-wheel-pointer {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 3;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 18px solid #0f8d66;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 6px 8px rgba(15, 141, 102, .22));
+}
+
+.fruit-draw-btn {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 20px;
+  border: 0;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, #12805c, #1c7bf2);
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(24, 111, 189, .18);
+}
+
+.fruit-draw-btn:disabled {
+  cursor: not-allowed;
+  opacity: .72;
+}
+
+.fruit-award-panel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 20px;
+  padding: 16px 18px;
+  border: 1px solid rgba(37, 99, 235, .16);
+  border-radius: 16px;
+  color: #1e3a8a;
+  background: #f4f8ff;
+}
+
+.fruit-award-panel span {
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.fruit-award-panel strong {
+  font-size: 24px;
+  line-height: 1;
 }
 
 .checkin-success-modal h3 {

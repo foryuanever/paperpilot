@@ -14,7 +14,10 @@
 
     <section class="current-strip">
       <div class="member-rank">
-        <span>{{ planInitial }}</span>
+        <span class="member-avatar">
+          <img v-if="userAvatar" :src="userAvatar" :alt="`${userName}头像`" />
+          <b v-else>{{ userInitial }}</b>
+        </span>
         <div>
           <small>{{ membership.active ? "当前会员" : "当前状态" }}</small>
           <strong>{{ membership.name }}</strong>
@@ -22,11 +25,10 @@
         </div>
       </div>
       <div class="entitlement-line">
-        <div v-for="item in benefitItems" :key="item.key" class="entitlement-item">
+        <div v-for="item in benefitItems" :key="item.key" class="entitlement-item" :class="quotaTone(item)">
           <span>{{ item.label }}</span>
-          <strong v-if="item.unlimited">不限次</strong>
-          <strong v-else>{{ item.remaining }} / {{ item.quota }} 次</strong>
-          <i v-if="!item.unlimited"><b :style="{ width: `${quotaPercent(item)}%` }"></b></i>
+          <strong>{{ benefitUsageLabel(item) }}</strong>
+          <i v-if="!item.unlimited" class="quota-meter"><b :style="{ width: `${quotaPercent(item)}%` }"></b></i>
         </div>
       </div>
     </section>
@@ -45,45 +47,53 @@
         </div>
       </div>
 
-      <div class="plan-cards">
-        <article
-          v-for="plan in displayPlans"
-          :key="plan.id"
-          class="plan-card"
-          :class="[plan.id, { active: selectedPlan === plan.id }]"
-          @click="selectedPlan = plan.id"
-        >
-          <header>
-            <div>
-              <div class="plan-title-row">
-                <h3>{{ planCardTitle(plan.id) }}</h3>
-                <em>{{ planBadgeLabel(plan.id) }}</em>
-              </div>
-              <p>{{ planCopy(plan.id) }}</p>
-            </div>
-            <span class="plan-icon">{{ planBadge(plan.id) }}</span>
-          </header>
-
-          <div class="price-line">
-            <strong>¥{{ planPrice(plan) }}</strong>
-            <span>{{ cycleLabel(selectedCycle) }}</span>
+      <div class="plan-groups">
+        <section v-for="group in planGroups" :key="group.key" class="plan-group">
+          <div class="plan-group-title">
+            <span>{{ group.label }}</span>
+            <p>{{ group.description }}</p>
           </div>
+          <div class="plan-cards" :class="`plan-cards-${group.key}`">
+            <article
+              v-for="plan in group.plans"
+              :key="plan.id"
+              class="plan-card"
+              :class="[plan.id, { active: selectedPlan === plan.id }]"
+              @click="selectedPlan = plan.id"
+            >
+              <header>
+                <div>
+                  <div class="plan-title-row">
+                    <h3>{{ planCardTitle(plan.id) }}</h3>
+                    <em>{{ planBadgeLabel(plan.id) }}</em>
+                  </div>
+                  <p>{{ planCopy(plan.id) }}</p>
+                </div>
+                <span class="plan-icon">{{ planBadge(plan.id) }}</span>
+              </header>
 
-          <ul class="center-plan-features">
-            <li v-for="row in planRows(plan)" :key="row.label">
-              <span class="feature-check">✓</span>
-              <div>
-                <strong>{{ row.label }}：{{ row.value }}</strong>
-                <small>{{ row.description }}</small>
+              <div class="price-line">
+                <strong>¥{{ planPrice(plan) }}</strong>
+                <span>{{ cycleLabel(selectedCycle) }}</span>
               </div>
-            </li>
-          </ul>
-          <p class="settlement-note">未使用次数到期清零，续费后重新获得当期权益。</p>
 
-          <button class="plan-buy-button" @click.stop="selectAndCheckout(plan.id)">
-            开通该套餐
-          </button>
-        </article>
+              <ul class="center-plan-features">
+                <li v-for="row in planRows(plan)" :key="row.label" :class="{ excluded: !row.included }">
+                  <span class="feature-check" :class="{ excluded: !row.included }">{{ row.included ? "✓" : "×" }}</span>
+                  <div>
+                    <strong>{{ row.label }}：{{ row.value }}</strong>
+                    <small>{{ row.description }}</small>
+                  </div>
+                </li>
+              </ul>
+              <p class="settlement-note">未使用次数到期清零，续费后重新获得当期权益。</p>
+
+              <button class="plan-buy-button" @click.stop="selectAndCheckout(plan.id)">
+                开通该套餐
+              </button>
+            </article>
+          </div>
+        </section>
       </div>
     </section>
 
@@ -146,15 +156,17 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useUsageStore } from "../stores/usage";
+import { useAuthStore } from "../stores/auth";
 import { paperpilotApi } from "../services/paperpilotApi";
 
 const usageStore = useUsageStore();
+const authStore = useAuthStore();
 const loading = ref(false);
 const paying = ref(false);
 const ordersLoading = ref(false);
 const provider = ref("alipay");
 const selectedCycle = ref("monthly");
-const selectedPlan = ref("study");
+const selectedPlan = ref("plus");
 const orders = ref([]);
 const paymentMessage = ref("");
 const ticketDialog = ref(null);
@@ -168,11 +180,41 @@ const cycles = [
   { id: "yearly", label: "年付", badge: "75 折" },
 ];
 
+const defaultPlans = [
+  { id: "lite", name: "个人 Lite", monthlyPrice: 9.9, reviewQuota: 3, pptQuota: 0, chatQuota: 60, teamSeats: 0, teamShared: false },
+  { id: "plus", name: "个人 Plus", monthlyPrice: 19.9, reviewQuota: 10, pptQuota: 1, chatQuota: 180, teamSeats: 0, teamShared: false },
+  { id: "pro", name: "个人 Pro", monthlyPrice: 39.9, reviewQuota: 25, pptQuota: 4, chatQuota: 500, teamSeats: 0, teamShared: false },
+  { id: "max", name: "个人 Max", monthlyPrice: 69.9, reviewQuota: 60, pptQuota: 10, chatQuota: 1200, teamSeats: 0, teamShared: false },
+  { id: "team_plus", name: "团队 Plus", monthlyPrice: 129, reviewQuota: 120, pptQuota: 16, chatQuota: 2600, teamSeats: 8, teamShared: true },
+  { id: "team_pro", name: "团队 Pro", monthlyPrice: 229, reviewQuota: 260, pptQuota: 36, chatQuota: 6000, teamSeats: 15, teamShared: true },
+];
+
 const plans = computed(() => usageStore.state.plans || []);
-const displayPlans = computed(() => plans.value.filter((item) => item.id !== "free"));
+const planOrder = ["lite", "plus", "pro", "max", "team_plus", "team_pro"];
+const displayPlans = computed(() => {
+  const byId = new Map(defaultPlans.map((plan) => [plan.id, plan]));
+  return planOrder.map((id) => byId.get(id)).filter(Boolean);
+});
+const planGroups = computed(() => [
+  {
+    key: "personal",
+    label: "个人套餐",
+    description: "适合个人论文阅读、综述、问答与组会 PPT。",
+    plans: displayPlans.value.filter((item) => ["lite", "plus", "pro", "max"].includes(item.id)),
+  },
+  {
+    key: "team",
+    label: "团队套餐",
+    description: "导师开通，全队共享额度与团队席位。",
+    plans: displayPlans.value.filter((item) => ["team_plus", "team_pro"].includes(item.id)),
+  },
+]);
 const membership = computed(() => usageStore.state.membership || { id: "free", name: "未开通会员", benefits: {} });
 const selectedPlanInfo = computed(() => displayPlans.value.find((item) => item.id === selectedPlan.value) || displayPlans.value[0] || { name: "研读会员", monthlyPrice: 19.9, reviewQuota: 10, pptQuota: 2, chatQuota: 80 });
-const planInitial = computed(() => ({ free: "B", light: "L", study: "R", lab: "P", team: "T", team_plus: "T+" })[membership.value.id] || "B");
+const planInitial = computed(() => ({ free: "B", lite: "L", plus: "P+", pro: "P", max: "M", team_plus: "T+", team_pro: "TP" })[normalizePlanId(membership.value.id)] || "B");
+const userName = computed(() => authStore.session.user?.name || "用户");
+const userAvatar = computed(() => authStore.session.user?.avatarUrl || "");
+const userInitial = computed(() => String(userName.value || "U").trim().slice(0, 1).toUpperCase());
 const benefitItems = computed(() => {
   const benefits = membership.value.benefits || {};
   const row = (key, label) => ({ key, label, ...(benefits[key] || { quota: 0, used: 0, remaining: 0 }) });
@@ -200,7 +242,8 @@ async function load() {
   loading.value = true;
   try {
     await usageStore.fetchSummary();
-    if (!displayPlans.value.some((item) => item.id === selectedPlan.value)) selectedPlan.value = displayPlans.value[0]?.id || "study";
+    selectedPlan.value = normalizePlanId(selectedPlan.value);
+    if (!displayPlans.value.some((item) => item.id === selectedPlan.value)) selectedPlan.value = displayPlans.value[1]?.id || displayPlans.value[0]?.id || "plus";
   } finally {
     loading.value = false;
   }
@@ -224,6 +267,27 @@ function quotaPercent(item) {
   return item.quota ? Math.max(0, Math.min(100, (item.remaining / item.quota) * 100)) : 0;
 }
 
+function benefitRemaining(item) {
+  const quota = Number(item.quota || 0);
+  const remaining = Number(item.remaining);
+  if (Number.isFinite(remaining)) return Math.max(0, remaining);
+  return Math.max(0, quota - Number(item.used || 0));
+}
+
+function benefitUsageLabel(item) {
+  if (item.unlimited) return "不限次";
+  const unit = item.key === "teamSeats" ? "席" : "次";
+  return `${benefitRemaining(item)} / ${Number(item.quota || 0)} ${unit}`;
+}
+
+function quotaTone(item) {
+  if (item.unlimited) return "quota-unlimited";
+  const percent = quotaPercent({ ...item, remaining: benefitRemaining(item) });
+  if (percent >= 60) return "quota-good";
+  if (percent >= 25) return "quota-mid";
+  return "quota-low";
+}
+
 function cycleLabel(cycle) {
   return ({ monthly: "月度会员", quarterly: "季度会员", yearly: "年度会员" })[cycle] || "月度会员";
 }
@@ -233,49 +297,51 @@ function cycleShortLabel(cycle) {
 }
 
 function planBadge(id) {
-  return ({ light: "L", study: "R", lab: "P", team: "T", team_plus: "T+" })[id] || "M";
+  return ({ lite: "L", plus: "P+", pro: "P", max: "M", team_plus: "T+", team_pro: "TP" })[normalizePlanId(id)] || "M";
 }
 
 function planBadgeLabel(id) {
-  return ({ light: "入门", study: "热销", lab: "特权", team: "导师车队", team_plus: "团队Plus" })[id] || "套餐";
+  return ({ lite: "入门", plus: "热销", pro: "进阶", max: "满配", team_plus: "团队Plus", team_pro: "团队Pro" })[normalizePlanId(id)] || "套餐";
 }
 
 function planCardTitle(id) {
-  return ({ light: "轻享月卡", study: "研读月卡", lab: "课题月卡", team: "导师车队卡", team_plus: "团队 Plus" })[id] || "会员套餐";
+  return ({ lite: "个人 Lite", plus: "个人 Plus", pro: "个人 Pro", max: "个人 Max", team_plus: "团队 Plus", team_pro: "团队 Pro" })[normalizePlanId(id)] || "会员套餐";
 }
 
 function planCopy(id) {
+  id = normalizePlanId(id);
   return ({
-    light: "适合个人轻量阅读、翻译和偶尔生成论文综述。",
-    study: "适合课程论文、周会准备和稳定的论文问答。",
-    lab: "适合课题高频推进，并解锁论坛彩名与发帖波浪。",
-    team: "导师一人开通，全队共享 8 个席位与组会生成权益。",
-    team_plus: "面向更大的实验室车队，15 个席位并拥有最高次数与论坛特权。",
+    lite: "适合个人轻量阅读、基础问答和偶尔生成综述。",
+    plus: "适合课程论文、周会准备和稳定的论文问答。",
+    pro: "适合课题高频推进，包含更多 PPT 与论坛特权。",
+    max: "个人满配额度，适合密集综述、问答和组会输出。",
+    team_plus: "导师一人开通，全队共享 8 个席位与组会生成权益。",
+    team_pro: "面向更大的实验室团队，15 席并拥有最高次数与论坛特权。",
   })[id] || "按任务次数使用。";
 }
 
 function planRows(plan) {
-  const forumIdentity = ["lab", "team_plus"].includes(plan.id)
-    ? "彩色姓名 + 发帖波浪"
-    : plan.id === "free"
-      ? "未含"
-      : plan.id === "team"
-        ? "团队共享，不含波浪"
-        : "未含";
+  const id = normalizePlanId(plan.id);
+  const premiumForum = ["pro", "max", "team_pro"].includes(id);
+  const forumIdentity = premiumForum ? "彩色姓名 + 发帖波浪" : "未含";
   const hasTeamSeats = Number(plan.teamSeats || 0) > 0;
   return [
-    { icon: "导", label: "论文导入与基础翻译", description: "文献入库、PDF 管理、基础翻译", level: "免费", value: "不限次" },
-    { icon: "综", label: "论文综述生成", description: "规范分点综述，可保存复用", level: plan.reviewQuota > 0 ? "包含" : "未含", value: `${plan.reviewQuota || 0} 次` },
-    { icon: "P", label: "组会 PPT 生成", description: "PPT Master Agent 重任务流程", level: plan.pptQuota > 0 ? "重任务" : "未含", value: `${plan.pptQuota || 0} 次` },
-    { icon: "问", label: "AI 文章对话", description: "围绕论文内容连续追问", level: plan.chatQuota > 80 ? "高频" : "常规", value: `${plan.chatQuota || 0} 次` },
-    { icon: "名", label: "论坛身份与发帖特效", description: "只有课题月卡与团队 Plus 拥有发帖波浪", level: ["lab", "team_plus"].includes(plan.id) ? "专属" : "未含", value: forumIdentity },
-    { icon: "团", label: "团队共享席位", description: hasTeamSeats ? "导师开通，全队共享权益" : "个人套餐不开放扩展席位", level: hasTeamSeats ? "导师共享" : "未含", value: hasTeamSeats ? `${plan.teamSeats} 席` : "未开放" },
+    { label: "论文导入与基础翻译", description: "文献入库、PDF 管理、基础翻译", value: "不限次", included: true },
+    { label: "论文综述生成", description: "规范分点综述，可保存复用", value: `${plan.reviewQuota || 0} 次`, included: Number(plan.reviewQuota || 0) > 0 },
+    { label: "组会 PPT 生成", description: "PPT Master Agent 重任务流程", value: Number(plan.pptQuota || 0) > 0 ? `${plan.pptQuota} 次` : "未包含", included: Number(plan.pptQuota || 0) > 0 },
+    { label: "AI 文章对话", description: "围绕论文内容连续追问", value: `${plan.chatQuota || 0} 次`, included: Number(plan.chatQuota || 0) > 0 },
+    { label: "论坛身份与发帖特效", description: "彩色姓名、发帖列表波浪等社区权益", value: forumIdentity, included: premiumForum },
+    { label: "团队共享席位", description: hasTeamSeats ? "导师开通，全队共享权益" : "个人套餐不开放扩展席位", value: hasTeamSeats ? `${plan.teamSeats} 席` : "未开放", included: hasTeamSeats },
   ];
 }
 
 async function selectAndCheckout(planId) {
-  selectedPlan.value = planId;
+  selectedPlan.value = normalizePlanId(planId);
   await checkout();
+}
+
+function normalizePlanId(id) {
+  return ({ light: "lite", study: "plus", lab: "pro", team: "team_plus" })[id] || id || "free";
 }
 
 function formatDate(value) {
@@ -285,7 +351,7 @@ function formatDate(value) {
 }
 
 function orderPlanName(order) {
-  return plans.value.find((item) => item.id === order.planId)?.name || (order.planId === "custom-recharge" ? "历史余额订单" : "会员套餐");
+  return displayPlans.value.find((item) => item.id === normalizePlanId(order.planId))?.name || (order.planId === "custom-recharge" ? "历史余额订单" : "会员套餐");
 }
 
 function statusLabel(status) {
@@ -435,57 +501,100 @@ button {
 }
 
 .member-rank {
+  position: relative;
+  overflow: hidden;
   display: flex;
   gap: 14px;
   align-items: center;
   padding: 18px;
+  border-color: #f0c46e;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, .72), transparent 34%),
+    linear-gradient(135deg, #fff4d3 0%, #ffd889 54%, #e8ad40 100%);
+  box-shadow: 0 14px 30px rgba(176, 111, 20, .12);
 }
 
-.member-rank > span {
+.member-rank::after {
+  position: absolute;
+  top: -48px;
+  right: -34px;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .28);
+  content: "";
+}
+
+.member-rank > * {
+  position: relative;
+  z-index: 1;
+}
+
+.member-avatar {
   width: 48px;
   height: 48px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
-  color: #fff;
-  background: #245ce0;
-  font-size: 22px;
-  font-weight: 900;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, .82);
+  border-radius: 50%;
+  color: #7a4a0c;
+  background: linear-gradient(135deg, #fffaf0, #f8cf7a);
+  box-shadow: 0 8px 18px rgba(117, 70, 8, .2);
+}
+
+.member-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.member-avatar b {
+  font-size: 20px;
+  font-weight: 950;
 }
 
 .member-rank small {
-  color: #6c7890;
+  color: #8a5a12;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .member-rank strong {
   display: block;
   margin: 2px 0 4px;
+  color: #17120a;
   font-size: 20px;
 }
 
 .member-rank p {
   margin: 0;
-  color: #6a758a;
+  color: #67420d;
   font-size: 12px;
+  font-weight: 650;
 }
 
 .entitlement-line {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1fr;
+  gap: 0;
   overflow: hidden;
+  padding: 10px 14px;
 }
 
 .entitlement-item {
   display: grid;
-  gap: 8px;
-  padding: 18px 20px;
-  border-left: 1px solid #edf1f6;
+  grid-template-columns: 132px 142px minmax(180px, 1fr);
+  align-items: center;
+  gap: 16px;
+  min-height: 48px;
+  padding: 8px 4px;
+  border-top: 1px solid #edf1f6;
 }
 
 .entitlement-item:first-child {
-  border-left: 0;
+  border-top: 0;
 }
 
 .entitlement-item span {
@@ -495,22 +604,29 @@ button {
 }
 
 .entitlement-item strong {
-  font-size: 20px;
+  color: #172033;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
 }
 
-.entitlement-item i {
-  height: 5px;
+.quota-meter {
+  height: 7px;
   overflow: hidden;
   border-radius: 99px;
   background: #e9eef7;
 }
 
-.entitlement-item b {
+.quota-meter b {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #245ce0;
+  transition: width .18s ease;
 }
+
+.quota-good .quota-meter b { background: #16a36a; }
+.quota-mid .quota-meter b { background: #f2b01e; }
+.quota-low .quota-meter b { background: #ef4444; }
+.quota-unlimited .quota-meter { display: none; }
 
 .plan-workbench {
   margin-top: 22px;
@@ -561,12 +677,48 @@ button {
   color: #168158;
 }
 
+.plan-groups {
+  display: grid;
+  gap: 22px;
+  margin-top: 18px;
+}
+
+.plan-group {
+  display: grid;
+  gap: 12px;
+}
+
+.plan-group-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.plan-group-title span {
+  color: #172033;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.plan-group-title p {
+  margin: 0;
+  color: #6a758a;
+  font-size: 12px;
+}
+
 .plan-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
-  margin-top: 18px;
   padding-bottom: 4px;
+}
+
+.plan-cards-personal {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.plan-cards-team {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .plan-card {
@@ -587,19 +739,25 @@ button {
   --tier-line: #a8c7ff;
 }
 
-.plan-card.lab {
+.plan-card.pro {
   --tier: #7c3aed;
   --tier-soft: #fbf8ff;
   --tier-line: #cbb6ff;
 }
 
-.plan-card.team {
+.plan-card.max {
+  --tier: #be185d;
+  --tier-soft: #fff7fb;
+  --tier-line: #f3a6c8;
+}
+
+.plan-card.team_plus {
   --tier: #e06d1b;
   --tier-soft: #fffaf5;
   --tier-line: #f2bc8f;
 }
 
-.plan-card.team_plus {
+.plan-card.team_pro {
   --tier: #b45309;
   --tier-soft: #fff8ed;
   --tier-line: #e9b86f;
@@ -700,11 +858,19 @@ button {
   align-items: start;
 }
 
+.center-plan-features li.excluded {
+  opacity: .72;
+}
+
 .feature-check {
   color: #16b981;
   font-size: 16px;
   font-weight: 900;
   line-height: 1.4;
+}
+
+.feature-check.excluded {
+  color: #ef4444;
 }
 
 .center-plan-features strong {
@@ -987,9 +1153,13 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .entitlement-line,
   .plan-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .entitlement-item {
+    grid-template-columns: 118px 124px minmax(120px, 1fr);
+    gap: 12px;
   }
 
   .checkout-actions {
@@ -1025,12 +1195,20 @@ button {
     font-size: 23px;
   }
 
-  .entitlement-line,
   .plan-cards,
   .order-item {
     grid-template-columns: 1fr;
   }
 
+  .entitlement-item {
+    grid-template-columns: 1fr auto;
+    gap: 6px 12px;
+    padding: 11px 2px;
+  }
+
+  .entitlement-item .quota-meter {
+    grid-column: 1 / -1;
+  }
   .cycle-switch {
     width: 100%;
     overflow-x: auto;

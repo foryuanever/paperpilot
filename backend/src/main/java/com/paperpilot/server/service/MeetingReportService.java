@@ -58,8 +58,8 @@ public class MeetingReportService {
         "oc/mimo-v2.5-free"
     );
     private static final List<String> DECK_AGENT_STRONG_MODELS = List.of(
-        "gpt-5.5",
-        "openai/gpt-5.5",
+        "gpt-5.4",
+        "openai/gpt-5.4",
         "gpt-5",
         "openai/gpt-5",
         "gpt-4.1",
@@ -1965,7 +1965,7 @@ public class MeetingReportService {
                 return;
             }
             String modelName = modelConfig == null
-                ? Objects.toString(job.result().getOrDefault("modelName", "gpt-5.5"), "gpt-5.5")
+                ? Objects.toString(job.result().getOrDefault("modelName", "gpt-5.4"), "gpt-5.4")
                 : modelConfig.getModelName();
             aiUsageService.recordAndCharge(
                 job.userId(),

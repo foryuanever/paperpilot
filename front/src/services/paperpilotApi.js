@@ -69,6 +69,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.post(`/api/admin/model-config/pool/${id}/activate`, null, { params: { scene } });
     return data;
   },
+  async getRelayResearchTop() {
+    const { data } = await apiClient.get("/api/admin/model-config/relay-research/top", { timeout: 60000 });
+    return data;
+  },
   async importPaper(payload) {
     const { data } = await apiClient.post("/api/papers/import", payload);
     return data;
@@ -368,6 +372,22 @@ export const paperpilotApi = {
     const { data } = await apiClient.get("/api/admin/stats");
     return data;
   },
+  async getCampusVerificationMe() {
+    const { data } = await apiClient.get("/api/campus-verification/me");
+    return data;
+  },
+  async submitCampusVerification(payload) {
+    const { data } = await apiClient.post("/api/campus-verification/submit", payload, { timeout: 30000 });
+    return data;
+  },
+  async getAdminCampusVerifications() {
+    const { data } = await apiClient.get("/api/admin/campus-verifications", { timeout: 15000 });
+    return data;
+  },
+  async reviewCampusVerification(id, payload) {
+    const { data } = await apiClient.patch(`/api/admin/campus-verifications/${id}`, payload, { timeout: 15000 });
+    return data;
+  },
   async getActiveSiteMessages() {
     const { data } = await apiClient.get("/api/site-messages/active");
     return data;
@@ -387,6 +407,29 @@ export const paperpilotApi = {
   async deleteSiteMessage(id) {
     await apiClient.delete(`/api/admin/site-messages/${id}`);
   },
+  async getTutorials() {
+    const { data } = await apiClient.get("/api/tutorials");
+    return data;
+  },
+  async getAdminTutorials() {
+    const { data } = await apiClient.get("/api/admin/tutorials");
+    return data;
+  },
+  async publishTutorial(payload) {
+    const { data } = await apiClient.post("/api/admin/tutorials", payload);
+    return data;
+  },
+  async updateTutorial(id, payload) {
+    const { data } = await apiClient.patch(`/api/admin/tutorials/${id}`, payload);
+    return data;
+  },
+  async updateTutorialStatus(id, active) {
+    const { data } = await apiClient.patch(`/api/admin/tutorials/${id}/status`, { active });
+    return data;
+  },
+  async deleteTutorial(id) {
+    await apiClient.delete(`/api/admin/tutorials/${id}`);
+  },
 
   // Forum API
   async getForumPosts() {
@@ -398,7 +441,7 @@ export const paperpilotApi = {
     return data;
   },
   async createForumPost(payload) {
-    const { data } = await apiClient.post("/api/forum/posts", payload, { timeout: 15000 });
+    const { data } = await apiClient.post("/api/forum/posts", payload, { timeout: 90000 });
     return data;
   },
   async updateForumPost(id, payload) {
@@ -570,6 +613,10 @@ export const paperpilotApi = {
   },
   async performTeamCheckin(payload) {
     const { data } = await apiClient.post("/api/team/checkins", payload);
+    return data;
+  },
+  async drawTeamCheckinFruit(payload) {
+    const { data } = await apiClient.post("/api/team/checkins/draw", payload);
     return data;
   },
   async getTeamCheckinHistory(memberId, year) {

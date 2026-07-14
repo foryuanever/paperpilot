@@ -32,6 +32,9 @@
             <span class="role-pill" :class="getRoleClass(currentUserMember.role)">{{ currentUserMember.role }}</span>
             <h1>{{ authStore.profile.name }}</h1>
             <p>{{ authStore.profile.email }}</p>
+            <span v-if="authStore.profile.campusVerified && authStore.profile.schoolName" class="school-badge">
+              {{ authStore.profile.schoolName }}
+            </span>
           </div>
 
           <div class="hero-stats">
@@ -84,6 +87,10 @@
               <div class="summary-item">
                 <span>当前状态</span>
                 <strong>{{ currentUserMember.status === "online" ? "在线" : "离线" }}</strong>
+              </div>
+              <div class="summary-item">
+                <span>校园认证</span>
+                <strong>{{ authStore.profile.campusVerified && authStore.profile.schoolName ? authStore.profile.schoolName : "未认证" }}</strong>
               </div>
             </div>
 
@@ -833,6 +840,18 @@ async function removePost(post) {
   margin: 0;
   font-size: 14px;
   color: #6e6e73;
+}
+
+.school-badge {
+  width: max-content;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #b9eee4;
+  border-radius: 999px;
+  color: #0f766e;
+  background: #ecfdf8;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .role-pill {

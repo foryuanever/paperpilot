@@ -358,7 +358,9 @@ public class AuthService {
             user.getRole(),
             user.getAvatarUrl(),
             user.getBackgroundUrl(),
-            user.getFruitScore() != null ? user.getFruitScore() : 0
+            user.getFruitScore() != null ? user.getFruitScore() : 0,
+            user.getSchoolName(),
+            user.isCampusVerified()
         );
     }
 
