@@ -412,6 +412,104 @@ public class MeetingReportService {
         }
     }
 
+    public Map<String, Object> fuseMeetingReport(Map<String, Object> body) {
+        Long userId = currentUserService.getOrCreateDefaultUserId();
+        Object reportsRaw = body.get("reports");
+        if (!(reportsRaw instanceof Collection<?> reports) || reports.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先选择并生成至少一篇论文综述");
+        }
+        List<Map<String, Object>> normalizedReports = reports.stream()
+            .filter(Map.class::isInstance)
+            .map(item -> (Map<String, Object>) item)
+            .limit(3)
+            .toList();
+        if (normalizedReports.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "综述内容为空，无法融合");
+        }
+        String material = normalizedReports.stream()
+            .map(this::meetingFusionMaterial)
+            .filter(text -> !text.isBlank())
+            .collect(Collectors.joining("\n\n---\n\n"));
+        if (material.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "综述内容为空，无法融合");
+        }
+        if (material.length() > 18000) material = material.substring(0, 18000);
+        String systemPrompt = """
+            你是研究生组会汇报教练。请把 1-3 篇论文综述融合成组会表单字段。
+            必须认真比较多篇文献，不能简单拼接标题或逐篇流水账。
+            如果是多篇：先找共同研究问题，再比较方法路线、数据/证据、结论边界，最后形成可讨论的问题。
+            如果是单篇：提炼该论文最适合组会讲清楚的主线。
+            输出严格 JSON，只包含 notes、objective、questions 三个字符串字段。
+            notes 是“组会重点内容”，用 3 条编号，每条必须说明论文/多篇文献的核心判断和证据线索。
+            objective 是“汇报目标”，用 3 条编号，写导师/组员需要帮忙判断什么。
+            questions 是“关键问题”，用 3 条编号，写组会上必须讨论清楚的问题。
+            不要输出 Markdown、星号、解释或额外字段。不要编造综述材料中没有的信息。
+            """;
+        String userPrompt = """
+            待融合论文综述如下：
+
+            %s
+            """.formatted(material);
+        try {
+            AiChatService.ChatResult result = aiChatService.chatJsonWithModelFallbackUnmetered(
+                systemPrompt,
+                userPrompt,
+                1800,
+                MEETING_MODEL_FALLBACKS
+            );
+            if (result.totalTokens() > 0) {
+                aiUsageService.recordAndCharge(
+                    userId,
+                    result.modelName(),
+                    "review",
+                    "组会综述融合",
+                    "组会汇报",
+                    result.promptTokens(),
+                    result.completionTokens(),
+                    result.totalTokens()
+                );
+            }
+            Map<String, Object> parsed = objectMapper.readValue(extractJson(result.content()), new TypeReference<>() {});
+            return Map.of(
+                "notes", cleanGeneratedText(Objects.toString(parsed.get("notes"), "")),
+                "objective", cleanGeneratedText(Objects.toString(parsed.get("objective"), "")),
+                "questions", cleanGeneratedText(Objects.toString(parsed.get("questions"), "")),
+                "modelName", result.modelName()
+            );
+        } catch (Exception error) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_GATEWAY,
+                "组会综述融合失败：" + readableError(error)
+            );
+        }
+    }
+
+    private String meetingFusionMaterial(Map<String, Object> report) {
+        String title = Objects.toString(report.get("title"), "未命名论文");
+        String authors = Objects.toString(report.get("authors"), "作者未补全");
+        Object sectionsRaw = report.get("sections");
+        Map<String, Object> sections = sectionsRaw instanceof Map<?, ?> raw ? (Map<String, Object>) raw : Map.of();
+        return """
+            论文：%s
+            作者：%s
+            基本信息：%s
+            研究问题：%s
+            方法路线：%s
+            结果证据：%s
+            数据与评测：%s
+            贡献与局限：%s
+            """.formatted(
+            title,
+            authors,
+            Objects.toString(sections.get("basicInfo"), ""),
+            Objects.toString(sections.get("overview"), ""),
+            Objects.toString(sections.get("method"), ""),
+            Objects.toString(sections.get("results"), ""),
+            Objects.toString(sections.get("datasets"), ""),
+            Objects.toString(sections.get("conclusion"), "")
+        );
+    }
+
     private String cleanAcademicAnswer(String value) {
         return Optional.ofNullable(value).orElse("")
             .replace("**", "")
@@ -2895,22 +2993,40 @@ public class MeetingReportService {
     private String ensureSectionBlocks(String key, String text, PaperEntity paper) {
         List<String> titles = SECTION_BLOCKS.getOrDefault(key, List.of());
         if (titles.isEmpty()) return text;
-        String rawClean = cleanGeneratedText(Optional.ofNullable(text).orElse("").trim());
+        String rawClean = cleanGeneratedText(Optional.ofNullable(text).orElse("").trim()).replace("发布信息：", "发表信息：");
         String clean = (isPromptLeak(rawClean) || isMetaAnswer(rawClean)) ? "" : rawClean;
         List<String> missing = titles.stream()
             .filter(title -> !clean.contains(title + "：") && !clean.contains(title + ":"))
             .toList();
-        if (clean.length() >= 80 && missing.isEmpty()) return clean;
+        if (clean.length() >= 80 && missing.isEmpty()) {
+            return formatSectionBlocks(clean, titles);
+        }
 
         String base = clean.isBlank() ? fallbackSectionText(key, paper) : clean;
+        base = base.replace("发布信息：", "发表信息：");
         StringBuilder builder = new StringBuilder();
         for (String title : titles) {
             String existing = extractBlock(base, title, titles);
             if (isPromptLeak(existing) || isMetaAnswer(existing)) existing = "";
             if (existing.isBlank()) existing = fallbackBlockText(key, title, paper);
-            builder.append(title).append("：").append(existing).append("\n");
+            appendSectionBlock(builder, title, existing);
         }
         return builder.toString().trim();
+    }
+
+    private String formatSectionBlocks(String text, List<String> titles) {
+        StringBuilder builder = new StringBuilder();
+        for (String title : titles) {
+            String existing = extractBlock(text, title, titles);
+            if (existing.isBlank()) continue;
+            appendSectionBlock(builder, title, existing);
+        }
+        return builder.toString().trim();
+    }
+
+    private void appendSectionBlock(StringBuilder builder, String title, String content) {
+        if (builder.length() > 0) builder.append("\n\n");
+        builder.append(title).append("：").append("\n").append(cleanGeneratedText(content));
     }
 
     private boolean isPromptLeak(String text) {

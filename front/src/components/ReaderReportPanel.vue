@@ -226,7 +226,7 @@ function cleanLine(line) {
 function isMeaningfulLine(line) {
   const value = cleanLine(line);
   if (value.length <= 4) return false;
-  if (/^(?:要点|概述|总结|分析|研究背景|研究问题|研究方法与数据|实验与结论|创新点与启示|局限性|核心要点|主要贡献|关键问题|本文思想|关键贡献|整体框架|关键模块|实现流程|主要发现|对比结果|研究结论|现有不足|未来展望|数据来源|数据设置|评测指标)\s*[：:]?$/.test(value)) {
+  if (/^(?:要点|概述|总结|分析|论文定位|发表信息|发布信息|汇报价值|研究背景|研究问题|研究方法与数据|实验与结论|创新点与启示|局限性|核心要点|主要贡献|关键问题|本文思想|关键贡献|整体框架|关键模块|实现流程|主要发现|对比结果|研究结论|现有不足|未来展望|数据来源|数据设置|评测指标)\s*[：:]?$/.test(value)) {
     return false;
   }
   return !/^[\u4e00-\u9fa5A-Za-z0-9与及、\s]{2,20}[：:]$/.test(value);
@@ -329,10 +329,32 @@ function synthesisFallback(title) {
 
 function applyReport(data = {}) {
   report.paper = { ...report.paper, ...(data.paper || props.paper || {}) };
-  report.sections = { ...report.sections, ...(data.sections || {}) };
+  report.sections = { ...report.sections, ...formatReportSections(data.sections || {}) };
   report.generated = Boolean(data.generated);
   report.modelName = data.modelName || "";
   noteDraft.value = data.paper?.note ?? noteDraft.value;
+}
+
+function formatReportSections(sections) {
+  return Object.fromEntries(Object.entries(sections).map(([key, value]) => [key, formatReportParagraphs(value)]));
+}
+
+function formatReportParagraphs(value = "") {
+  const labels = [
+    "论文定位", "发表信息", "发布信息", "汇报价值", "研究背景", "研究问题", "研究方法与数据", "实验与结论",
+    "创新点与启示", "局限性", "核心要点", "主要贡献", "关键问题", "本文思想", "关键贡献", "整体框架",
+    "关键模块", "实现流程", "主要发现", "对比结果", "实验结论", "研究结论", "现有不足", "未来展望",
+    "数据来源", "数据设置", "评测指标"
+  ];
+  const labelPattern = labels.join("|");
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/发布信息/g, "发表信息")
+    .replace(new RegExp(`\\s*((?:${labelPattern})\\s*[：:])\\s*`, "g"), "\n\n$1\n")
+    .replace(/([。；;])\s*((?:\d+[.、]|[（(]\d+[）)]))/g, "$1\n$2")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\n+/, "")
+    .trim();
 }
 
 function showToast(message) {

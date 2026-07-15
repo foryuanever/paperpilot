@@ -14,14 +14,29 @@
 
     <section class="current-strip">
       <div class="member-rank">
-        <span class="member-avatar">
-          <img v-if="userAvatar" :src="userAvatar" :alt="`${userName}头像`" />
-          <b v-else>{{ userInitial }}</b>
-        </span>
-        <div>
-          <small>{{ membership.active ? "当前会员" : "当前状态" }}</small>
-          <strong>{{ membership.name }}</strong>
-          <p>{{ membership.active ? `有效至 ${formatDate(membership.expiresAt)} · ${cycleLabel(membership.cycle)}` : "当前未购买套餐，仅保留免费导入、文献管理、基础翻译" }}</p>
+        <div class="member-card-bg" aria-hidden="true" :style="{ '--gold-card-image': `url(${goldCardReference})` }">
+          <span></span>
+        </div>
+        <div class="member-card-top">
+          <strong>{{ membership.active ? memberPeriodLabel : "体验会员" }}</strong>
+          <button type="button" @click="scrollToPlans">更多 <i aria-hidden="true"></i></button>
+        </div>
+        <div class="member-card-main">
+          <div>
+            <small>{{ membership.active ? "剩余" : "当前状态" }}</small>
+            <strong v-if="membership.active" class="remaining-days">
+              <b>{{ remainingDays }}</b>
+              <span>天</span>
+            </strong>
+            <strong v-else class="remaining-days inactive">
+              <b>0</b>
+              <span>天</span>
+            </strong>
+          </div>
+        </div>
+        <div class="member-card-bottom">
+          <span>{{ membership.name }}</span>
+          <p>{{ membership.active ? `有效期至 ${formatFullDate(membership.expiresAt)}` : "当前未购买套餐" }}</p>
         </div>
       </div>
       <div class="entitlement-line">
@@ -156,11 +171,10 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useUsageStore } from "../stores/usage";
-import { useAuthStore } from "../stores/auth";
 import { paperpilotApi } from "../services/paperpilotApi";
+import goldCardReference from "../assets/membership/gold-card-cropped.jpg";
 
 const usageStore = useUsageStore();
-const authStore = useAuthStore();
 const loading = ref(false);
 const paying = ref(false);
 const ordersLoading = ref(false);
@@ -211,10 +225,19 @@ const planGroups = computed(() => [
 ]);
 const membership = computed(() => usageStore.state.membership || { id: "free", name: "未开通会员", benefits: {} });
 const selectedPlanInfo = computed(() => displayPlans.value.find((item) => item.id === selectedPlan.value) || displayPlans.value[0] || { name: "研读会员", monthlyPrice: 19.9, reviewQuota: 10, pptQuota: 2, chatQuota: 80 });
-const planInitial = computed(() => ({ free: "B", lite: "L", plus: "P+", pro: "P", max: "M", team_plus: "T+", team_pro: "TP" })[normalizePlanId(membership.value.id)] || "B");
-const userName = computed(() => authStore.session.user?.name || "用户");
-const userAvatar = computed(() => authStore.session.user?.avatarUrl || "");
-const userInitial = computed(() => String(userName.value || "U").trim().slice(0, 1).toUpperCase());
+const remainingDays = computed(() => {
+  if (!membership.value.active || !membership.value.expiresAt) return 0;
+  const expires = parseDateValue(membership.value.expiresAt);
+  if (!expires) return 0;
+  const diff = expires.getTime() - Date.now();
+  return Math.max(0, Math.ceil(diff / 86400000));
+});
+const memberPeriodLabel = computed(() => {
+  const cycle = membership.value.cycle || "monthly";
+  if (cycle === "yearly") return "年卡365天";
+  if (cycle === "quarterly") return "季卡90天";
+  return "月卡30天";
+});
 const benefitItems = computed(() => {
   const benefits = membership.value.benefits || {};
   const row = (key, label) => ({ key, label, ...(benefits[key] || { quota: 0, used: 0, remaining: 0 }) });
@@ -348,6 +371,28 @@ function formatDate(value) {
   if (!value) return "-";
   if (Array.isArray(value)) return `${value[0]}-${String(value[1]).padStart(2, "0")}-${String(value[2]).padStart(2, "0")}`;
   return String(value).replace("T", " ").slice(0, 16);
+}
+
+function formatFullDate(value) {
+  const date = parseDateValue(value);
+  if (!date) return formatDate(value);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function parseDateValue(value) {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    const [year, month, day, hour = 23, minute = 59, second = 59] = value;
+    const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const date = new Date(String(value).replace(" ", "T"));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function scrollToPlans() {
+  document.querySelector(".plan-workbench")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function orderPlanName(order) {
@@ -485,8 +530,8 @@ button {
 
 .current-strip {
   display: grid;
-  grid-template-columns: 310px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: minmax(620px, 1.15fr) minmax(360px, .85fr);
+  gap: 24px;
   align-items: stretch;
 }
 
@@ -503,76 +548,160 @@ button {
 .member-rank {
   position: relative;
   overflow: hidden;
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  padding: 18px;
-  border-color: #f0c46e;
+  aspect-ratio: 1245 / 556;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 0;
+  padding: clamp(24px, 2.2vw, 34px) clamp(24px, 2.6vw, 34px) clamp(22px, 2vw, 30px) clamp(32px, 3.2vw, 46px);
+  border-color: #f0bf54;
+  border-radius: 18px;
   background:
-    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, .72), transparent 34%),
-    linear-gradient(135deg, #fff4d3 0%, #ffd889 54%, #e8ad40 100%);
-  box-shadow: 0 14px 30px rgba(176, 111, 20, .12);
+    linear-gradient(110deg, #fff9ed 0%, #f9e7bd 50%, #e8bf61 100%);
+  box-shadow: 0 22px 44px rgba(174, 117, 34, .14);
 }
 
-.member-rank::after {
+.member-card-bg {
   position: absolute;
-  top: -48px;
-  right: -34px;
-  width: 130px;
-  height: 130px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .28);
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.member-card-bg::before {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background:
+    radial-gradient(ellipse 46% 54% at 100% 0%, rgba(82, 76, 72, .76) 0%, rgba(105, 96, 88, .68) 34%, rgba(184, 154, 106, .3) 56%, rgba(226, 190, 128, 0) 78%),
+    linear-gradient(90deg, rgba(255, 249, 235, .99) 0%, rgba(255, 244, 220, .97) 40%, rgba(247, 221, 174, .74) 58%, rgba(226, 190, 128, .28) 76%, rgba(226, 190, 128, 0) 94%);
   content: "";
 }
 
-.member-rank > * {
-  position: relative;
+.member-card-bg::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 68%;
   z-index: 1;
+  background-image: var(--gold-card-image);
+  background-size: auto 100%;
+  background-position: right center;
+  background-repeat: no-repeat;
+  opacity: .98;
+  content: "";
 }
 
-.member-avatar {
-  width: 48px;
-  height: 48px;
+.member-card-bg span {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background:
+    radial-gradient(ellipse 44% 52% at 100% 0%, rgba(72, 67, 64, .58) 0%, rgba(96, 88, 82, .5) 34%, rgba(174, 146, 100, .18) 58%, rgba(226, 190, 128, 0) 80%),
+    linear-gradient(90deg, rgba(255, 248, 232, .99) 0%, rgba(255, 244, 219, .98) 38%, rgba(247, 224, 181, .66) 58%, rgba(226, 190, 128, .18) 78%, rgba(226, 190, 128, 0) 96%);
+}
+
+.member-card-top,
+.member-card-main,
+.member-card-bottom {
+  position: relative;
+  z-index: 2;
+}
+
+.member-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.member-card-top > strong {
+  color: #050505;
+  font-size: clamp(22px, 2.05vw, 30px);
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.member-card-top button {
+  height: clamp(34px, 3vw, 42px);
+  min-width: clamp(88px, 8.4vw, 112px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 clamp(14px, 1.5vw, 20px);
+  color: #111;
+  background: rgba(255, 255, 255, .96);
+  font-size: clamp(16px, 1.45vw, 20px);
+  font-weight: 500;
+  box-shadow: 0 8px 16px rgba(87, 63, 42, .1);
+}
+
+.member-card-top button i {
+  width: 0;
+  height: 0;
+  border-top: clamp(5px, .55vw, 7px) solid transparent;
+  border-bottom: clamp(5px, .55vw, 7px) solid transparent;
+  border-left: clamp(7px, .75vw, 10px) solid #111;
+}
+
+.member-card-main {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  align-self: center;
+}
+
+.member-card-main small {
+  color: #050505;
+  font-size: clamp(20px, 1.9vw, 26px);
+  font-weight: 400;
+}
+
+.remaining-days {
+  display: flex;
+  align-items: baseline;
+  gap: clamp(10px, 1vw, 15px);
+  margin-top: 0;
+  color: #080808;
+}
+
+.remaining-days b {
+  font-size: clamp(42px, 4.2vw, 58px);
+  line-height: .88;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.remaining-days span {
+  font-size: clamp(20px, 1.8vw, 26px);
+  font-weight: 400;
+}
+
+.remaining-days.inactive {
+  opacity: .7;
+}
+
+.member-card-bottom {
   display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  overflow: hidden;
-  border: 2px solid rgba(255, 255, 255, .82);
-  border-radius: 50%;
-  color: #7a4a0c;
-  background: linear-gradient(135deg, #fffaf0, #f8cf7a);
-  box-shadow: 0 8px 18px rgba(117, 70, 8, .2);
+  gap: 0;
 }
 
-.member-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.member-card-bottom span {
+  display: none;
 }
 
-.member-avatar b {
-  font-size: 20px;
-  font-weight: 950;
-}
-
-.member-rank small {
-  color: #8a5a12;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.member-rank strong {
-  display: block;
-  margin: 2px 0 4px;
-  color: #17120a;
-  font-size: 20px;
-}
-
-.member-rank p {
+.member-card-bottom p {
   margin: 0;
-  color: #67420d;
-  font-size: 12px;
-  font-weight: 650;
+  color: rgba(22, 16, 8, .5);
+  font-size: clamp(17px, 1.55vw, 22px);
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 .entitlement-line {
@@ -1153,6 +1282,10 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .member-rank {
+    min-height: 0;
+  }
+
   .plan-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1193,6 +1326,24 @@ button {
 
   .membership-topbar h1 {
     font-size: 23px;
+  }
+
+  .member-rank {
+    min-height: 0;
+    padding: 22px 20px 20px;
+  }
+
+  .member-card-top button {
+    height: 36px;
+    padding: 0 14px;
+  }
+
+  .member-card-main {
+    align-self: center;
+  }
+
+  .member-card-bg span {
+    background: linear-gradient(90deg, rgba(255, 248, 232, .99) 0%, rgba(255, 244, 219, .97) 48%, rgba(255, 235, 195, .7) 64%, rgba(255, 255, 255, 0) 82%);
   }
 
   .plan-cards,

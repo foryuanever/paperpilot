@@ -143,6 +143,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.post("/api/meeting-reports/deck/analyze", payload, { timeout: 180000 });
     return data;
   },
+  async fuseMeetingReport(payload) {
+    const { data } = await apiClient.post("/api/meeting-reports/fuse", payload, { timeout: 180000 });
+    return data;
+  },
   async createSearchSession(payload) {
     const { data } = await apiClient.post("/api/search/session", payload);
     return data;

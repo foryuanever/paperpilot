@@ -2346,6 +2346,7 @@ function truncateText(value, length = 100) {
 .admin-badge {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 8px;
   padding: 8px 16px;
   background: rgba(0, 102, 255, 0.08);
@@ -2354,6 +2355,7 @@ function truncateText(value, length = 100) {
   font-size: 0.9rem;
   font-weight: 600;
   color: #0066ff;
+  white-space: nowrap;
 }
 
 .badge-dot {
@@ -2423,6 +2425,7 @@ function truncateText(value, length = 100) {
   display: flex;
   max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
   background: rgba(0, 0, 0, 0.04);
   padding: 6px;
   border-radius: 99px;
@@ -2433,9 +2436,16 @@ function truncateText(value, length = 100) {
   box-shadow: inset 0 2px 8px rgba(0,0,0,0.02);
   backdrop-filter: blur(12px);
   width: fit-content;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.admin-tabs-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .tab-btn {
+  flex: 0 0 auto;
   border: none;
   background: transparent;
   padding: 10px 24px;
@@ -2444,6 +2454,7 @@ function truncateText(value, length = 100) {
   font-size: 0.9rem;
   font-weight: 600;
   color: #64748b;
+  white-space: nowrap;
   transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
@@ -3258,6 +3269,36 @@ function truncateText(value, length = 100) {
 }
 
 @media (max-width: 720px) {
+  .admin-shell {
+    padding-inline: 18px;
+  }
+
+  .admin-page {
+    padding: 96px 14px 36px;
+  }
+
+  .admin-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .admin-header h2 {
+    max-width: 8em;
+    font-size: 2rem;
+  }
+
+  .admin-tabs-nav {
+    width: 100%;
+    border-radius: 16px;
+  }
+
+  .tab-btn {
+    min-width: 132px;
+    padding-inline: 16px;
+    text-align: center;
+  }
+
   .team-detail-summary {
     grid-template-columns: 1fr;
   }

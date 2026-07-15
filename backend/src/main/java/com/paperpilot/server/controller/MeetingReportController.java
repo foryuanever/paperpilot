@@ -69,6 +69,11 @@ public class MeetingReportController {
         return meetingReportService.analyzeDeckComparison(body);
     }
 
+    @PostMapping("/fuse")
+    public Map<String, Object> fuseMeetingReport(@RequestBody Map<String, Object> body) {
+        return meetingReportService.fuseMeetingReport(body);
+    }
+
     @GetMapping("/deck/jobs/{jobId}/status")
     public Map<String, Object> deckStatus(@PathVariable("jobId") String jobId) {
         return meetingReportService.deckGenerationStatus(jobId);

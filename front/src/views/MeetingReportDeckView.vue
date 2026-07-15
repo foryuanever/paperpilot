@@ -99,37 +99,46 @@
                   <button type="button" @click="openPaperPicker(meeting)">点击添加</button>
                 </div>
                 <div v-if="meeting.papers.length" class="selected-papers">
-                  <button
+                  <article
                     v-for="paperId in meeting.papers"
                     :key="paperId"
-                    type="button"
                     class="selected-paper"
-                    @click="setPrimaryPaper(meeting, paperId)"
                   >
-                    <strong>{{ paperTitle(paperId) }}</strong>
-                    <small>{{ paperMeta(paperId) }}</small>
-                  </button>
+                    <div>
+                      <strong>{{ paperTitle(paperId) }}</strong>
+                      <small>{{ paperMeta(paperId) }}</small>
+                    </div>
+                    <div class="selected-paper-actions">
+                      <span :class="['selected-paper-status', reviewPaperStatus(paperId)]">{{ reviewPaperStatusText(paperId) }}</span>
+                      <button type="button" @click="openReview(meeting, paperById(paperId))">
+                        {{ reviewJobs[paperId]?.status === "running" ? "生成中" : "综述" }}
+                      </button>
+                    </div>
+                    <div class="paper-review-progress" aria-hidden="true">
+                      <i :style="{ width: `${paperReviewPercent(paperId)}%` }"></i>
+                    </div>
+                  </article>
                 </div>
                 <p v-else>从已导入论文中选择，也可以直接上传 PDF。</p>
               </div>
 
               <div class="generation-grid">
-                <div class="generation-action" :data-status="reviewActionStatus(meeting)">
+                <div class="generation-action" :data-status="importActionStatus(meeting)">
                   <div class="progress-label">
-                    <span>论文综述</span>
-                    <strong>{{ reviewPercent(meeting) }}%</strong>
+                    <span>一键导入汇报</span>
+                    <strong>{{ importProgressLabel(meeting) }}</strong>
                   </div>
-                  <p class="generation-step" :title="reviewStepText(meeting)">{{ reviewStepText(meeting) }}</p>
+                  <p class="generation-step" :title="importStepText(meeting)">{{ importStepText(meeting) }}</p>
                   <div class="generation-progress" aria-hidden="true">
-                    <i :style="{ width: `${reviewPercent(meeting)}%` }"></i>
+                    <i :style="{ width: `${importPercent(meeting)}%` }"></i>
                   </div>
                   <button
                     type="button"
                     class="soft-button"
-                    :disabled="!primaryPaper(meeting) || isReviewBusy(meeting)"
-                    @click="openReview(meeting)"
+                    :disabled="!canImportMeetingReviews(meeting)"
+                    @click="importMeetingReviews(meeting)"
                   >
-                    {{ isReviewBusy(meeting) ? "综述生成中" : "查看 / 生成综述" }}
+                    {{ isImportBusy(meeting) ? "融合中" : "融合并导入" }}
                   </button>
                 </div>
 
@@ -142,6 +151,7 @@
                   <div class="generation-progress ppt-progress" aria-hidden="true">
                     <i :style="{ width: `${deckPercent(meeting)}%` }"></i>
                   </div>
+                  <p class="deck-paper-scope">{{ deckPaperScope(meeting) }}</p>
                   <div class="deck-action-row">
                     <a
                       v-if="deckJobs[meeting.id]?.confirmUrl && isDeckBusy(meeting)"
@@ -165,7 +175,7 @@
                       v-else
                       type="button"
                       class="primary-button"
-                      :disabled="!primaryPaper(meeting) || !hasPdf(primaryPaper(meeting)) || isDeckBusy(meeting)"
+                      :disabled="!canMakePpt(meeting) || isDeckBusy(meeting)"
                       @click="makePpt(meeting)"
                     >
                       {{ deckJobs[meeting.id]?.status === "failed" ? "重新生成 PPT" : isDeckBusy(meeting) ? "执行中" : "生成汇报 PPT" }}
@@ -186,6 +196,11 @@
             <div>
               <span>添加汇报文献</span>
               <h2>{{ paperPicker.meeting?.title || "选择论文" }}</h2>
+              <p>可选择 1-3 篇文献共同准备组会汇报，PPT 会按所选文献合并生成。</p>
+            </div>
+            <div class="picker-header-actions">
+              <strong>{{ selectedPickerCount }}/{{ MAX_MEETING_PAPERS }}</strong>
+              <small>已选文献</small>
             </div>
             <button type="button" aria-label="关闭" @click="closePaperPicker">×</button>
           </header>
@@ -207,12 +222,18 @@
               :key="paper.workspaceId"
               type="button"
               class="picker-paper"
-              :class="{ selected: paperPicker.meeting?.papers.includes(paper.workspaceId) }"
+              :class="{
+                selected: paperPicker.meeting?.papers.includes(paper.workspaceId),
+                disabled: !paperPicker.meeting?.papers.includes(paper.workspaceId) && selectedPickerCount >= MAX_MEETING_PAPERS
+              }"
               @click="toggleMeetingPaper(paperPicker.meeting, paper)"
             >
-              <span :class="['pdf-badge', hasPdf(paper) ? 'ready' : 'missing']">
-                {{ hasPdf(paper) ? "PDF" : "待补 PDF" }}
-              </span>
+              <div class="picker-paper-top">
+                <span :class="['pdf-badge', hasPdf(paper) ? 'ready' : 'missing']">
+                  {{ hasPdf(paper) ? "PDF" : "待补 PDF" }}
+                </span>
+                <span v-if="paperPicker.meeting?.papers.includes(paper.workspaceId)" class="selected-check">已选</span>
+              </div>
               <strong>{{ paper.title || "未命名论文" }}</strong>
               <small>{{ compactMeta(paper) }}</small>
             </button>
@@ -269,11 +290,18 @@
                     <path d="M6 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                   </svg>
                 </button>
-                <textarea
-                  v-model="reviewModal.sections[section.key]"
-                  :placeholder="section.placeholder"
-                  @input="resizeReviewTextarea"
-                ></textarea>
+                <div
+                  class="review-rich-editor"
+                  contenteditable="true"
+                  role="textbox"
+                  spellcheck="false"
+                  :aria-label="section.title"
+                  :data-placeholder="section.placeholder"
+                  v-html="highlightedReviewHtml(reviewModal.sections[section.key])"
+                  @input="updateReviewSection(section.key, $event)"
+                  @blur="formatReviewSection(section.key)"
+                  @paste="pastePlainReviewText"
+                ></div>
               </section>
             </div>
           </template>
@@ -296,6 +324,7 @@ const STORAGE_KEY = "paperpilot-meeting-timeline-v1";
 const DECK_STORAGE_KEY = "paperpilot-meeting-deck-jobs-v1";
 const REVIEW_STORAGE_KEY = "paperpilot-meeting-review-jobs-v1";
 const DEFAULT_MEETING_TITLE = "新组会汇报";
+const MAX_MEETING_PAPERS = 3;
 const DEFAULT_MEETING_NOTES = "本次重点：先讲清研究问题，再讨论方法路线、证据质量和后续可推进方向。";
 const DEFAULT_MEETING_DETAILS = {
   objective: "",
@@ -330,6 +359,7 @@ const toastMessage = ref("");
 const importingReview = ref(false);
 const deckJobs = reactive({});
 const reviewJobs = reactive({});
+const importJobs = reactive({});
 const paperPicker = reactive({ open: false, meeting: null });
 const reviewModal = reactive({
   open: false,
@@ -352,6 +382,7 @@ const confirmOpened = ref("");
 let pendingConfirmWindow = null;
 
 const sortedMeetings = computed(() => [...meetings.value].sort((a, b) => new Date(b.meetingTime) - new Date(a.meetingTime)));
+const selectedPickerCount = computed(() => paperPicker.meeting?.papers?.length || 0);
 const canImportReviewToMeeting = computed(() => Boolean(
   reviewModal.meeting && reviewSections.some(section => String(reviewModal.sections?.[section.key] || "").trim()),
 ));
@@ -501,9 +532,9 @@ function joinReviewParts(parts, maxLength = 360, itemLength = 150) {
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
 
-function formatMeetingBullets(items, maxItems = 3) {
+function formatMeetingBullets(items, maxItems = 3, itemLength = 130) {
   return items
-    .map(item => compactReviewText(item, 130))
+    .map(item => compactReviewText(item, itemLength))
     .filter(Boolean)
     .slice(0, maxItems)
     .map((item, index) => `${index + 1}. ${item}`)
@@ -597,6 +628,10 @@ function closePaperPicker() {
 function toggleMeetingPaper(meeting, paper) {
   if (!meeting || !paper?.workspaceId) return;
   const exists = meeting.papers.includes(paper.workspaceId);
+  if (!exists && meeting.papers.length >= MAX_MEETING_PAPERS) {
+    showToast(`一场组会最多选择 ${MAX_MEETING_PAPERS} 篇文献`);
+    return;
+  }
   meeting.papers = exists
     ? meeting.papers.filter((id) => id !== paper.workspaceId)
     : [paper.workspaceId, ...meeting.papers];
@@ -615,11 +650,15 @@ async function uploadPaper(event) {
     const paper = await paperpilotApi.uploadLibraryPaper(file);
     papers.value = [paper, ...papers.value.filter((item) => item.workspaceId !== paper.workspaceId)];
     if (paperPicker.meeting) {
-      paperPicker.meeting.papers = [paper.workspaceId, ...paperPicker.meeting.papers.filter((id) => id !== paper.workspaceId)];
-      paperPicker.meeting.primaryPaperId = paper.workspaceId;
-      persistMeetings();
+      if (paperPicker.meeting.papers.includes(paper.workspaceId) || paperPicker.meeting.papers.length < MAX_MEETING_PAPERS) {
+        paperPicker.meeting.papers = [paper.workspaceId, ...paperPicker.meeting.papers.filter((id) => id !== paper.workspaceId)].slice(0, MAX_MEETING_PAPERS);
+        paperPicker.meeting.primaryPaperId = paper.workspaceId;
+        persistMeetings();
+        showToast("论文已上传并加入组会文献");
+      } else {
+        showToast(`论文已上传；本场组会已选满 ${MAX_MEETING_PAPERS} 篇`);
+      }
     }
-    showToast("论文已上传并加入组会文献");
   } catch (error) {
     showToast(error?.response?.data?.message || "论文上传失败");
   } finally {
@@ -636,6 +675,14 @@ function setPrimaryPaper(meeting, paperId) {
 function primaryPaper(meeting) {
   const paperId = meeting?.primaryPaperId || meeting?.papers?.[0];
   return papers.value.find((paper) => paper.workspaceId === paperId) || null;
+}
+
+function paperById(paperId) {
+  return papers.value.find((paper) => paper.workspaceId === paperId) || null;
+}
+
+function selectedMeetingPapers(meeting) {
+  return (meeting?.papers || []).map(paperById).filter(Boolean);
 }
 
 function paperTitle(paperId) {
@@ -657,15 +704,23 @@ function hasPdf(paper) {
   return paperpilotApi.isLikelyPdfUrl(paper?.paperUrl || "");
 }
 
+function missingPdfCount(meeting) {
+  return selectedMeetingPapers(meeting).filter(paper => !hasPdf(paper)).length;
+}
+
+function canMakePpt(meeting) {
+  const selected = selectedMeetingPapers(meeting);
+  return Boolean(selected.length && !missingPdfCount(meeting));
+}
+
 function meetingStatus(meeting) {
   const deck = deckJobs[meeting.id];
-  const paper = primaryPaper(meeting);
-  const review = paper ? reviewJobs[paper.workspaceId] : null;
-  if (isDeckRunning(deck) || review?.status === "running") return "running";
+  const reviews = selectedMeetingPapers(meeting).map(paper => reviewJobs[paper.workspaceId]).filter(Boolean);
+  if (isDeckRunning(deck) || reviews.some(job => job?.status === "running")) return "running";
   if (deck?.downloadUrl || deck?.status === "generated") return "ready";
-  if (review?.status === "generated") return "ready";
+  if (reviews.some(job => job?.status === "generated")) return "ready";
   if (deck?.status === "failed") return "failed";
-  if (review?.status === "failed") return "failed";
+  if (reviews.some(job => job?.status === "failed")) return "failed";
   return "idle";
 }
 
@@ -678,8 +733,20 @@ function statusText(meeting) {
 }
 
 function reviewPercent(meeting) {
-  const paper = primaryPaper(meeting);
-  const job = paper ? reviewJobs[paper.workspaceId] : null;
+  const selected = selectedMeetingPapers(meeting);
+  if (!selected.length) return 0;
+  const total = selected.reduce((sum, paper) => {
+    const job = reviewJobs[paper.workspaceId];
+    if (job?.status === "generated") return sum + 100;
+    if (job?.status === "failed") return sum + 100;
+    return sum + Number(job?.progress || 0);
+  }, 0);
+  return Math.round(total / selected.length);
+}
+
+function paperReviewPercent(paperId) {
+  const job = reviewJobs[paperId];
+  if (job?.status === "generated" || job?.status === "failed") return 100;
   return Math.round(job?.progress || 0);
 }
 
@@ -697,12 +764,15 @@ function deckProgressLabel(meeting) {
 }
 
 function isReviewBusy(meeting) {
-  const paper = primaryPaper(meeting);
-  return Boolean(paper && reviewJobs[paper.workspaceId]?.status === "running");
+  return selectedMeetingPapers(meeting).some(paper => reviewJobs[paper.workspaceId]?.status === "running");
 }
 
 function isDeckBusy(meeting) {
   return isDeckRunning(deckJobs[meeting.id]);
+}
+
+function isImportBusy(meeting) {
+  return importJobs[meeting.id]?.status === "running";
 }
 
 function isDeckRunning(job) {
@@ -710,9 +780,14 @@ function isDeckRunning(job) {
 }
 
 function reviewActionStatus(meeting) {
-  const paper = primaryPaper(meeting);
-  const job = paper ? reviewJobs[paper.workspaceId] : null;
-  return job?.status || "idle";
+  const selected = selectedMeetingPapers(meeting);
+  if (!selected.length) return "idle";
+  const jobs = selected.map(paper => reviewJobs[paper.workspaceId]).filter(Boolean);
+  if (jobs.some(job => job.status === "running")) return "running";
+  if (jobs.some(job => job.status === "failed")) return "failed";
+  if (jobs.length && selected.every(paper => reviewJobs[paper.workspaceId]?.status === "generated")) return "generated";
+  if (jobs.some(job => job.status === "generated")) return "generated";
+  return "idle";
 }
 
 function deckActionStatus(meeting) {
@@ -721,19 +796,41 @@ function deckActionStatus(meeting) {
   return job?.status || "idle";
 }
 
+function importActionStatus(meeting) {
+  return importJobs[meeting.id]?.status || "idle";
+}
+
+function importPercent(meeting) {
+  const job = importJobs[meeting.id];
+  if (job?.status === "generated" || job?.status === "failed") return 100;
+  return Math.round(job?.progress || 0);
+}
+
+function importProgressLabel(meeting) {
+  const job = importJobs[meeting.id];
+  if (job?.status === "failed") return "失败";
+  return `${importPercent(meeting)}%`;
+}
+
 function reviewStepText(meeting) {
-  const paper = primaryPaper(meeting);
-  const job = paper ? reviewJobs[paper.workspaceId] : null;
-  if (!paper) return "先添加汇报文献";
-  if (job?.status === "running") return job.message || "正在生成综述";
-  if (job?.status === "generated") return "已保存，可重新生成";
-  if (job?.status === "failed") return "生成失败，可重试";
-  return "等待生成或查看";
+  const selected = selectedMeetingPapers(meeting);
+  if (!selected.length) return "先添加汇报文献";
+  const generated = selected.filter(paper => reviewJobs[paper.workspaceId]?.status === "generated").length;
+  const running = selected.find(paper => reviewJobs[paper.workspaceId]?.status === "running");
+  const failed = selected.filter(paper => reviewJobs[paper.workspaceId]?.status === "failed").length;
+  if (running) return reviewJobs[running.workspaceId]?.message || `正在生成 ${paperTitle(running.workspaceId)} 的综述`;
+  if (failed) return `${failed} 篇综述失败，可逐篇重试`;
+  if (generated === selected.length) return `${generated}/${selected.length} 篇综述已保存`;
+  if (generated) return `${generated}/${selected.length} 篇综述已保存，剩余可逐篇生成`;
+  return `${selected.length} 篇文献，综述需逐篇生成`;
 }
 
 function deckStepText(meeting) {
   const job = deckJobs[meeting.id];
-  if (!primaryPaper(meeting)) return "先添加汇报文献";
+  const selected = selectedMeetingPapers(meeting);
+  if (!selected.length) return "先添加汇报文献";
+  const missing = missingPdfCount(meeting);
+  if (missing) return `${missing} 篇文献缺少 PDF，补齐后可合并生成`;
   if (!job) return "等待启动 PPT 任务";
   if (job.status === "generated") return "已生成，可下载";
   if (job.status === "failed") return job.message || "生成失败";
@@ -741,13 +838,50 @@ function deckStepText(meeting) {
   return [job.stage, job.message].filter(Boolean).join(" · ") || "后台生成中";
 }
 
-async function openReview(meeting) {
-  const paper = primaryPaper(meeting);
+function importStepText(meeting) {
+  const job = importJobs[meeting.id];
+  if (job?.message) return job.message;
+  const selected = selectedMeetingPapers(meeting);
+  if (!selected.length) return "先添加汇报文献";
+  const generated = selected.filter(paper => reviewJobs[paper.workspaceId]?.status === "generated").length;
+  if (!generated) return "先逐篇生成至少一篇论文综述";
+  if (selected.length === 1) return "将单篇综述整理为组会字段";
+  return `将融合 ${generated}/${selected.length} 篇已保存综述`;
+}
+
+function canImportMeetingReviews(meeting) {
+  if (!selectedMeetingPapers(meeting).length) return false;
+  if (isImportBusy(meeting)) return false;
+  return true;
+}
+
+function deckPaperScope(meeting) {
+  const count = selectedMeetingPapers(meeting).length;
+  if (!count) return "未选择汇报文献";
+  return count === 1 ? "单篇文献生成 1 个 PPT" : `${count} 篇文献合并生成 1 个 PPT`;
+}
+
+function reviewPaperStatus(paperId) {
+  return reviewJobs[paperId]?.status || "idle";
+}
+
+function reviewPaperStatusText(paperId) {
+  const status = reviewPaperStatus(paperId);
+  if (status === "generated") return "已综述";
+  if (status === "running") return "生成中";
+  if (status === "failed") return "失败";
+  return "待综述";
+}
+
+async function openReview(meeting, targetPaper = null) {
+  const paper = targetPaper || primaryPaper(meeting);
   if (!paper) {
     showToast("请先添加组会汇报文献");
     return;
   }
+  meeting.primaryPaperId = paper.workspaceId;
   activeMeetingId.value = meeting.id;
+  persistMeetings();
   Object.assign(reviewModal, {
     open: true,
     meeting,
@@ -862,11 +996,28 @@ async function saveReview() {
 
 function applyReviewData(data = {}) {
   reviewModal.sections = formatReviewSections({ ...emptySections(), ...(data.sections || {}) });
+  if (!hasUsefulSection(reviewModal.sections.basicInfo)) {
+    reviewModal.sections.basicInfo = buildBasicInfoFallback(data.paper || reviewModal.paper || {});
+  }
   reviewModal.generated = Boolean(data.generated);
   reviewModal.modelName = data.modelName || "";
   reviewModal.progress = data.generated ? 100 : reviewModal.progress;
   reviewModal.message = data.generated ? "已读取历史保存的论文综述" : "尚未生成";
   nextTick(resizeAllReviewTextareas);
+}
+
+function hasUsefulSection(value = "") {
+  const text = String(value || "").replace(/\s+/g, "");
+  if (text.length < 12) return false;
+  return !/^(作者、年份、期刊\/会议、研究对象、数据来源。?|作者年份期刊会议研究对象数据来源)$/.test(text);
+}
+
+function buildBasicInfoFallback(paper = {}) {
+  return formatReviewParagraphs([
+    `论文定位：${paper.title || "当前论文"} 可作为本次组会的主论文材料，用于讨论研究问题、方法路线和证据链条。`,
+    `发表信息：作者为 ${paper.authors || "作者信息未补全"}；来源为 ${paper.source || "来源未记录"}；年份为 ${paper.publishYear || "年份未知"}。`,
+    `汇报价值：适合从研究对象、问题动机、方法设计、结果证据和局限边界几个角度组织汇报。`,
+  ].join("\n\n"));
 }
 
 function formatReviewSections(sections) {
@@ -875,31 +1026,69 @@ function formatReviewSections(sections) {
 
 function formatReviewParagraphs(value = "") {
   const labels = [
-    "研究背景", "论文定位", "核心要点", "要点", "研究问题", "整体框架", "关键模块", "实现流程",
-    "主要发现", "关键证据", "实验设置", "数据来源", "方法路线", "结果证据", "贡献", "局限", "讨论点", "启发"
+    "论文定位", "发表信息", "发布信息", "汇报价值", "研究背景", "研究问题", "研究方法与数据", "实验与结论",
+    "创新点与启示", "局限性", "核心要点", "要点", "主要贡献", "关键问题", "本文思想", "关键贡献",
+    "整体框架", "关键模块", "实现流程", "主要发现", "对比结果", "实验结论", "关键证据", "实验设置",
+    "数据来源", "数据设置", "评测指标", "方法路线", "结果证据", "研究结论", "现有不足", "未来展望",
+    "贡献", "局限", "讨论点", "启发"
   ];
   const labelPattern = labels.join("|");
   return String(value || "")
     .replace(/\r\n/g, "\n")
-    .replace(new RegExp(`([^\\n])((?:${labelPattern})[：:])`, "g"), "$1\n\n$2")
-    .replace(new RegExp(`\\n((?:${labelPattern})[：:])`, "g"), "\n\n$1")
+    .replace(/发布信息/g, "发表信息")
+    .replace(new RegExp(`\\s*((?:${labelPattern})\\s*[：:])\\s*`, "g"), "\n\n$1\n")
     .replace(/([。；;])((?:第二|第三|第四|第五|第六|第七|其次|再次|最后)[，,])/g, "$1\n\n$2")
+    .replace(/([。；;])\s*((?:\d+[.、]|[（(]\d+[）)]))/g, "$1\n$2")
     .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\n+/, "")
     .trim();
 }
 
-function resizeReviewTextarea(event) {
-  const textarea = event?.target;
-  if (!textarea) return;
-  textarea.style.height = "auto";
-  textarea.style.height = `${textarea.scrollHeight}px`;
+function updateReviewSection(key, event) {
+  reviewModal.sections[key] = event?.currentTarget?.innerText || "";
+}
+
+function formatReviewSection(key) {
+  reviewModal.sections[key] = formatReviewParagraphs(reviewModal.sections[key]);
+}
+
+function pastePlainReviewText(event) {
+  event.preventDefault();
+  const text = event.clipboardData?.getData("text/plain") || "";
+  document.execCommand("insertText", false, text);
 }
 
 function resizeAllReviewTextareas() {
-  document.querySelectorAll(".review-point textarea").forEach((textarea) => {
-    textarea.style.height = "auto";
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  });
+  // Rich editors grow with content; kept as a stable hook for existing async flows.
+}
+
+function highlightedReviewHtml(value = "") {
+  const text = String(value || "");
+  if (!text.trim()) return "";
+  return text
+    .split("\n")
+    .map((line) => {
+      if (!line.trim()) return "<br>";
+      const escaped = escapeHtml(line);
+      if (/^[\u4e00-\u9fa5A-Za-z（）()、与及\s]{2,24}\s*[：:]$/.test(line.trim())) {
+        return `<span class="review-inline-heading">${escaped}</span>`;
+      }
+      return highlightLatinAndNumbers(escaped);
+    })
+    .join("<br>");
+}
+
+function highlightLatinAndNumbers(escapedLine = "") {
+  return escapedLine.replace(/([A-Za-z][A-Za-z0-9._/-]*|[+-]?\d+(?:[.,]\d+)*(?:\.\d+)?%?)/g, '<span class="review-number">$1</span>');
+}
+
+function escapeHtml(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 async function copyReviewSection(section) {
@@ -964,9 +1153,155 @@ async function importReviewToMeeting() {
   showToast("已整理并导入前三个组会字段");
 }
 
+async function importMeetingReviews(meeting) {
+  const selected = selectedMeetingPapers(meeting);
+  if (!selected.length || isImportBusy(meeting)) return;
+  activeMeetingId.value = meeting.id;
+  let progressTimer = null;
+  let reports = [];
+  importJobs[meeting.id] = {
+    status: "running",
+    progress: 6,
+    message: selected.length === 1 ? "正在读取单篇综述" : `正在读取 ${selected.length} 篇综述`,
+  };
+  try {
+    reports = [];
+    for (let index = 0; index < selected.length; index += 1) {
+      const paper = selected[index];
+      importJobs[meeting.id] = {
+        status: "running",
+        progress: 10 + Math.round((index / selected.length) * 45),
+        message: `读取综述：${paper.title || "未命名论文"}`,
+      };
+      const data = await paperpilotApi.getMeetingReport(paper.workspaceId);
+      const sections = formatReviewSections(data.sections || {});
+      if (data.generated && hasUsefulReviewSections(sections)) {
+        reports.push({ paper, sections });
+      }
+    }
+    if (!reports.length) {
+      importJobs[meeting.id] = { status: "failed", progress: 100, message: "请先生成至少一篇论文综述" };
+      showToast("请先生成至少一篇论文综述");
+      return;
+    }
+    importJobs[meeting.id] = {
+      status: "running",
+      progress: 56,
+      message: reports.length > 1 ? `模型正在融合 ${reports.length} 篇综述` : "模型正在整理单篇综述",
+    };
+    progressTimer = window.setInterval(() => {
+      const current = importJobs[meeting.id];
+      if (!current || current.status !== "running") return;
+      const next = Math.min(92, Number(current.progress || 0) + (reports.length > 1 ? 3 : 5));
+      importJobs[meeting.id] = {
+        ...current,
+        progress: next,
+        message: next < 74 ? "模型正在比较研究问题与方法差异" : next < 88 ? "模型正在压缩成组会字段" : "正在等待模型返回结果",
+      };
+    }, 900);
+    const fused = await paperpilotApi.fuseMeetingReport({
+      reports: reports.map(({ paper, sections }) => ({
+        title: paper.title || "未命名论文",
+        authors: paper.authors || "作者未补全",
+        source: paper.source || "",
+        publishYear: paper.publishYear || "",
+        sections,
+      })),
+    });
+    if (progressTimer) {
+      window.clearInterval(progressTimer);
+      progressTimer = null;
+    }
+    applyFusedMeetingFields(meeting, fused, reports);
+    importJobs[meeting.id] = {
+      status: "generated",
+      progress: 100,
+      message: reports.length > 1 ? `已用模型融合 ${reports.length} 篇综述` : "已用模型整理单篇综述",
+    };
+    showToast(importJobs[meeting.id].message);
+  } catch (error) {
+    if (progressTimer) window.clearInterval(progressTimer);
+    importJobs[meeting.id] = {
+      status: "failed",
+      progress: 100,
+      message: error?.response?.data?.message || "模型融合失败，请稍后重试",
+    };
+    showToast(importJobs[meeting.id].message);
+  }
+}
+
+function hasUsefulReviewSections(sections = {}) {
+  return reviewSections.some(section => compactReviewText(sections[section.key], 80).length > 12);
+}
+
+function applyReportsToMeeting(meeting, reports) {
+  meeting.details = normalizeMeetingDetails(meeting.details);
+  if (reports.length === 1) {
+    const sections = reports[0].sections || {};
+    meeting.notes = formatMeetingBullets([
+      sections.overview && `研究问题：${sections.overview}`,
+      sections.method && `方法路线：${sections.method}`,
+      sections.results && `结果证据：${sections.results}`,
+    ], 3) || meeting.notes;
+    meeting.details.objective = formatMeetingBullets([
+      sections.overview && `判断选题与研究问题是否成立：${sections.overview}`,
+      sections.method && `确认方法路线是否可作为后续课题推进基础：${sections.method}`,
+      sections.conclusion && `讨论贡献、局限与下一步修改方向：${sections.conclusion}`,
+    ], 3);
+    meeting.details.questions = formatMeetingBullets([
+      sections.overview && `本文真正回答的核心问题是什么？${sections.overview}`,
+      sections.method && `方法设计是否足以支撑研究问题？${sections.method}`,
+      sections.results && `结果证据是否充分，哪些部分需要补充？${sections.results}`,
+    ], 3);
+  } else {
+    meeting.notes = formatMeetingBullets(reports.map(({ paper, sections }) =>
+      `${paper.title || "未命名论文"}：${joinReviewParts([sections.overview, sections.method, sections.results], 210, 72)}`
+    ), 3, 190);
+    meeting.details.objective = formatMeetingBullets([
+      `对比 ${reports.length} 篇文献的研究问题是否指向同一类学术缺口，判断本次汇报应以共同问题还是差异比较为主线。`,
+      `融合各文献的方法路线与证据强度，确定哪些方法、数据或理论框架值得后续课题继续沿用。`,
+      `提炼可向导师讨论的推进方向，包括补实验、换数据、调整问题表述或形成组合式研究方案。`,
+    ], 3, 180);
+    meeting.details.questions = formatMeetingBullets([
+      `这些文献的核心问题是否一致？差异主要来自研究对象、方法假设、数据来源还是评价指标？`,
+      `哪一篇的证据链最完整，哪一篇只适合作为背景或对照材料？`,
+      `如果要合并成一个 PPT，应该按问题线、方法线还是结果线组织，避免逐篇流水账？`,
+    ], 3, 180);
+  }
+  meeting.details.evidence = "";
+  meeting.details.discussion = "";
+  persistMeetings();
+}
+
+function applyFusedMeetingFields(meeting, fused = {}, reports = []) {
+  meeting.details = normalizeMeetingDetails(meeting.details);
+  meeting.notes = cleanMeetingField(fused.notes) || meeting.notes;
+  meeting.details.objective = cleanMeetingField(fused.objective) || meeting.details.objective;
+  meeting.details.questions = cleanMeetingField(fused.questions) || meeting.details.questions;
+  if (!meeting.notes || !meeting.details.objective || !meeting.details.questions) {
+    applyReportsToMeeting(meeting, reports);
+    return;
+  }
+  meeting.details.evidence = "";
+  meeting.details.discussion = "";
+  persistMeetings();
+}
+
+function cleanMeetingField(value = "") {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 async function makePpt(meeting) {
-  const paper = primaryPaper(meeting);
-  if (!paper || !hasPdf(paper) || isDeckBusy(meeting)) return;
+  const selected = selectedMeetingPapers(meeting);
+  const paper = primaryPaper(meeting) || selected[0];
+  if (!selected.length || !paper || isDeckBusy(meeting)) return;
+  if (missingPdfCount(meeting)) {
+    showToast("请先补齐本次组会文献的 PDF");
+    return;
+  }
   pendingConfirmWindow = openPendingConfirmWindow();
   activeMeetingId.value = meeting.id;
   deckJobs[meeting.id] = {
@@ -975,7 +1310,7 @@ async function makePpt(meeting) {
     stage: "提交任务",
     message: "正在提交 PPT Master 任务",
     paperWorkspaceId: paper.workspaceId,
-    paperTitle: paper.title,
+    paperTitle: selected.length > 1 ? `${selected.length} 篇文献联合汇报` : paper.title,
     jobId: "",
     confirmUrl: "",
     downloadUrl: "",
@@ -985,7 +1320,7 @@ async function makePpt(meeting) {
     const result = await paperpilotApi.generateMeetingDeck({
       engine: "ppt-master-skill",
       reportWorkspaceId: paper.workspaceId,
-      paperIds: meeting.papers,
+      paperIds: selected.map(item => item.workspaceId),
       slideCount: meeting.params.slideCount,
       audience: meeting.params.audience,
       focus: meetingFocusText(meeting),
@@ -1413,7 +1748,7 @@ button:disabled {
 .meeting-status[data-status="failed"] span { background: #d97706; }
 
 .meeting-card-body {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
   align-items: stretch;
 }
 
@@ -1576,31 +1911,108 @@ button:disabled {
 
 .selected-paper {
   display: grid;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 11px;
   width: 100%;
   border: 1px solid #d7e2ee;
   border-radius: 10px;
-  padding: 11px;
+  padding: 12px;
   background: #fff;
   text-align: left;
-  cursor: pointer;
+}
+
+.selected-paper > div:first-child {
+  min-width: 0;
+}
+
+.selected-paper.primary {
+  border-color: #93b8ff;
+  background: linear-gradient(180deg, #f8fbff, #ffffff);
 }
 
 .selected-paper strong {
+  display: -webkit-box;
+  overflow: hidden;
   color: #152033;
-  line-height: 1.45;
+  line-height: 1.38;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .selected-paper small {
+  display: block;
+  margin-top: 5px;
   color: #64748b;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.selected-paper-actions {
+  display: grid;
+  grid-template-columns: minmax(82px, .9fr) minmax(72px, .7fr);
+  align-items: center;
+  gap: 7px;
+}
+
+.selected-paper-actions button,
+.selected-paper-status {
+  justify-content: center;
+  min-height: 30px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.selected-paper-actions button {
+  border: 1px solid #cbd8ea;
+  color: #174fbf;
+  background: #f8fbff;
+}
+
+.selected-paper-actions .paper-primary-button {
+  color: #5f6f84;
+  background: #fff;
+}
+
+.selected-paper.primary .paper-primary-button {
+  color: #fff;
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
+.selected-paper-status {
+  display: inline-flex;
+  align-items: center;
+  color: #64748b;
+  background: #eef3f8;
+}
+
+.selected-paper-status.generated { color: #047857; background: #dcfce7; }
+.selected-paper-status.running { color: #174fbf; background: #dbeafe; }
+.selected-paper-status.failed { color: #b42323; background: #fee2e2; }
+
+.paper-review-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: #e3ebf7;
+  overflow: hidden;
+}
+
+.paper-review-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #8fb2ff);
+  transition: width .22s ease;
+}
+
 .generation-grid {
   grid-template-columns: 1fr 1fr;
-  align-items: start;
+  align-items: stretch;
   gap: 12px;
 }
 
@@ -1628,8 +2040,8 @@ button:disabled {
   position: relative;
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto auto auto auto;
-  min-height: 0;
+  grid-template-rows: auto auto auto auto 1fr;
+  min-height: 188px;
   padding: 15px;
   border: 1px solid rgba(203, 216, 231, .72);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .82);
@@ -1720,11 +2132,20 @@ button:disabled {
   background: linear-gradient(90deg, #2563eb, #10b981);
 }
 
+.deck-paper-scope {
+  margin: -5px 0 12px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 750;
+  min-height: 16px;
+}
+
 .deck-action-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
-  align-self: start;
+  align-self: end;
+  margin-top: auto;
 }
 
 .deck-action-row:has(.confirm-link-button) {
@@ -1737,6 +2158,8 @@ button:disabled {
   box-sizing: border-box;
   min-height: 42px;
   border-radius: 10px;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .confirm-link-button {
@@ -1759,6 +2182,8 @@ button:disabled {
 }
 
 .generation-action .soft-button {
+  align-self: end;
+  margin-top: auto;
   border-color: #c7d8ef;
   background: #fff;
   color: #194fbf;
@@ -1793,8 +2218,9 @@ button:disabled {
   position: sticky;
   top: 0;
   z-index: 2;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: start;
   gap: 16px;
   padding: 22px 24px;
   border-bottom: 1px solid #e5edf6;
@@ -1806,6 +2232,39 @@ button:disabled {
   color: #111827;
   font-size: 22px;
   line-height: 1.4;
+}
+
+.modal-panel header p {
+  margin: 8px 0 0;
+  max-width: 660px;
+  color: #53647a;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.picker-header-actions {
+  min-width: 82px;
+  border: 1px solid #dbe7f5;
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: #f7fbff;
+  text-align: center;
+}
+
+.picker-header-actions strong {
+  display: block;
+  color: #174fbf;
+  font-size: 17px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.picker-header-actions small {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .modal-panel header button {
@@ -1860,14 +2319,30 @@ button:disabled {
   cursor: pointer;
 }
 
+.picker-paper.disabled {
+  cursor: not-allowed;
+  opacity: .52;
+}
+
 .picker-paper.selected {
   border-color: #225ce0;
   background: #f2f7ff;
 }
 
+.picker-paper-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .picker-paper strong {
+  display: -webkit-box;
+  overflow: hidden;
   color: #152033;
   line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .picker-paper small {
@@ -1893,6 +2368,15 @@ button:disabled {
 .pdf-badge.missing {
   color: #8a4b00;
   background: #fff1d7;
+}
+
+.selected-check {
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #dbeafe;
+  color: #174fbf;
+  font-size: 11px;
+  font-weight: 850;
 }
 
 .paper-loading span {
@@ -1997,14 +2481,12 @@ button:disabled {
   stroke-linejoin: round;
 }
 
-.review-point textarea {
+.review-rich-editor {
   min-height: 92px;
-  height: auto;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid color-mix(in srgb, currentColor 20%, #d5e0eb);
   border-radius: 10px;
   padding: 12px;
-  resize: none;
   background: rgba(255, 255, 255, .86);
   color: currentColor;
   outline: 0;
@@ -2012,8 +2494,31 @@ button:disabled {
   white-space: pre-wrap;
 }
 
-.review-point textarea::placeholder {
+.review-rich-editor:empty::before {
+  content: attr(data-placeholder);
   color: color-mix(in srgb, currentColor 46%, #94a3b8);
+}
+
+.review-rich-editor:focus {
+  border-color: color-mix(in srgb, currentColor 48%, #8fb2ee);
+  background: #fff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.review-rich-editor :deep(.review-inline-heading) {
+  display: inline-block;
+  margin: 10px 0 3px;
+  color: #12346f;
+  font-weight: 950;
+}
+
+.review-rich-editor :deep(.review-inline-heading:first-child) {
+  margin-top: 0;
+}
+
+.review-rich-editor :deep(.review-number) {
+  color: #dc2626;
+  font-weight: 950;
 }
 
 .meeting-toast {
@@ -2057,6 +2562,10 @@ button:disabled {
   .meeting-card-body {
     grid-template-columns: 1fr;
   }
+
+  .selected-paper-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 820px) {
@@ -2082,6 +2591,15 @@ button:disabled {
   .paper-loading,
   .review-point {
     grid-template-columns: 1fr;
+  }
+
+  .modal-panel header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .picker-header-actions {
+    grid-column: 1 / -1;
+    width: fit-content;
   }
 
   .timeline-list {

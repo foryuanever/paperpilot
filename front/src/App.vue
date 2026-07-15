@@ -108,7 +108,9 @@
 
     <main :class="mainClass" @click="uiStore.closeOverlays">
       <router-view v-slot="{ Component, route: viewRoute }">
-        <component :is="Component" :key="viewRoute.path" />
+        <Transition name="workspace-route" mode="out-in">
+          <component :is="Component" :key="viewRoute.path" />
+        </Transition>
       </router-view>
     </main>
 
@@ -860,6 +862,35 @@ async function submitPasswordChange() {
   cursor: pointer;
 }
 
+.spatial-app {
+  min-height: 100vh;
+  color: #111827;
+  background:
+    radial-gradient(circle at 82% 0%, rgba(245, 158, 11, .14), transparent 30%),
+    radial-gradient(circle at 12% 18%, rgba(37, 99, 235, .12), transparent 28%),
+    linear-gradient(180deg, #f7faff 0%, #f6f8fc 46%, #eef3f8 100%);
+}
+
+.spatial-app::before {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .18;
+  background-image:
+    linear-gradient(rgba(37, 99, 235, .06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, .06) 1px, transparent 1px);
+  background-size: 84px 84px;
+  mask-image: linear-gradient(180deg, #000 0%, transparent 72%);
+  content: "";
+}
+
+.spatial-main {
+  position: relative;
+  z-index: 1;
+  padding-top: 18px;
+}
+
 .site-message-bar {
   display: flex;
   align-items: center;
@@ -883,6 +914,9 @@ async function submitPasswordChange() {
   row-gap: 10px;
   width: min(1480px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
+  min-height: 66px;
+  margin: 0 auto;
+  padding: 0;
   overflow: visible;
   background: transparent;
   border: 0;
@@ -911,7 +945,10 @@ async function submitPasswordChange() {
 
 .spatial-nav-brand strong {
   overflow: hidden;
+  color: #111827;
   text-overflow: ellipsis;
+  font-size: 17px;
+  font-weight: 900;
 }
 
 .spatial-nav-links {
@@ -929,10 +966,28 @@ async function submitPasswordChange() {
 .spatial-nav-link {
   position: relative;
   flex: 0 0 auto;
-  padding-inline: 9px;
+  padding: 8px 10px;
   white-space: nowrap;
+  color: rgba(17, 24, 39, .7);
   background: transparent !important;
   border-radius: 0;
+  font-weight: 850;
+}
+
+.spatial-nav-link:hover,
+.spatial-nav-link.active {
+  color: #2563eb;
+}
+
+.spatial-nav-link.active::after {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: #2563eb;
+  content: "";
 }
 
 .nav-forum-alert {
@@ -964,9 +1019,9 @@ async function submitPasswordChange() {
   width: clamp(160px, 13vw, 220px);
   height: 34px;
   padding-inline: 8px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid rgba(37, 99, 235, .1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .64);
   color: #5f6c80;
 }
 
@@ -978,17 +1033,17 @@ async function submitPasswordChange() {
 .profile-button {
   min-width: 32px;
   height: 32px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid rgba(37, 99, 235, .1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .64);
   color: #26344c;
   box-shadow: none;
 }
 
 .icon-button:hover,
 .profile-button:hover {
-  color: #075ee5;
-  background: transparent;
+  color: #2563eb;
+  background: rgba(255, 255, 255, .9);
 }
 
 .app-profile-button .profile-name {
@@ -1100,17 +1155,19 @@ async function submitPasswordChange() {
 
 .workspace-route-enter-active,
 .workspace-route-leave-active {
-  transition: opacity 160ms ease, transform 200ms cubic-bezier(.22, 1, .36, 1);
+  transition: opacity 210ms ease, transform 260ms cubic-bezier(.22, 1, .36, 1), filter 260ms ease;
 }
 
 .workspace-route-enter-from {
   opacity: 0;
-  transform: translateY(6px);
+  transform: translateY(12px) scale(.992);
+  filter: blur(4px);
 }
 
 .workspace-route-leave-to {
   opacity: 0;
-  transform: translateY(-3px);
+  transform: translateY(-6px) scale(.996);
+  filter: blur(3px);
 }
 
 .announcement-backdrop {

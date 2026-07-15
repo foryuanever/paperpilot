@@ -1,142 +1,123 @@
 <template>
-  <div class="spatial-landing spatial-page">
-    <!-- Ambient glowing backdrops -->
-    <div class="spatial-orb spatial-orb-blue" style="width:550px;height:550px;top:-10%;right:-8%"></div>
-    <div class="spatial-orb spatial-orb-warm" style="width:380px;height:380px;bottom:25%;left:-6%"></div>
-    <div class="spatial-orb spatial-orb-blue" style="width:400px;height:400px;top:40%;right:15%;opacity:0.35"></div>
-
-    <header class="spatial-landing-nav">
-      <router-link class="spatial-landing-brand" to="/">
-        <img class="spatial-landing-brand-logo" src="/brand/papersolver-mark-v2.png" alt="" />
-        PaperSolver
+  <div class="login-route-root">
+    <div class="flow-landing spatial-page">
+      <header class="flow-landing-nav">
+      <router-link class="flow-brand" to="/">
+        <img class="flow-brand-mark" src="/brand/papersolver-mark-v2.png" alt="" />
+        <strong>PaperSolver</strong>
       </router-link>
-      <nav class="spatial-landing-links">
-        <a href="#chapter-flow">流程</a>
-        <a href="#chapter-space">空间</a>
+      <nav class="flow-nav-links">
+        <a href="#reading-path">阅读路径</a>
+        <a href="#real-surfaces">功能入口</a>
         <a href="#chapter-pricing">定价</a>
         <a href="#" @click.prevent="openModal('login')">进入</a>
       </nav>
-      <div class="spatial-landing-auth">
-        <span class="spatial-nav-link active" @click="openModal('login')" style="cursor:pointer">登录</span>
-        <button class="spatial-btn spatial-btn-accent" @click="openModal('register')">注册</button>
-      </div>
+      <button class="flow-download-btn" type="button" @click="openModal('register')">免费注册</button>
     </header>
 
-    <section class="spatial-hero">
-      <span class="spatial-hero-eyebrow" data-reveal>未来研究界面</span>
-      <h1 class="spatial-hero-title spatial-hero-title-offset" data-reveal data-reveal-delay="1">
-        论文<br />不是模块<br />是空间
-      </h1>
-      <p class="spatial-hero-lead" data-reveal data-reveal-delay="2">
-        进入 PaperSlover，像走进一座数字文献馆——搜索、阅读、翻译与综述在一条流动的研究叙事中展开，而非堆叠在后台面板里。
-      </p>
-      <div class="spatial-hero-actions" data-reveal data-reveal-delay="3">
-        <button class="spatial-btn spatial-btn-primary" @click="openModal('login')">进入系统</button>
-        <button class="spatial-btn spatial-btn-ghost" @click="openModal('register')">邀请注册</button>
-      </div>
-    </section>
-
-    <!-- Chapter 1: Research Flow (Interactive Visual) -->
-    <section id="chapter-flow" class="spatial-chapter">
-      <div class="spatial-chapter-inner spatial-chapter-split">
-        <div class="spatial-chapter-copy" data-reveal="left">
-          <span class="spatial-chapter-eyebrow">研究流程</span>
-          <h2 class="spatial-chapter-title">从检索到精读，一条向下展开的研究镜头。</h2>
-          <p class="spatial-chapter-lead">
-            学术搜索找到 PDF，文献库沉淀资产，阅读器左原文右译文同步滚动——每一步都是连续场景，而不是跳转页面。
-          </p>
+    <section class="flow-hero">
+      <div class="flow-hero-copy">
+        <div class="flow-pill-row" data-reveal>
+          <span>读论文</span>
+          <span>写综述</span>
+          <span>讲组会</span>
         </div>
-        <div class="spatial-chapter-visual" data-reveal="right">
-          <!-- Flow board visual replaces the old blank monument -->
-          <div class="flow-interactive-board">
-            <div class="flow-track-line">
-              <div class="flow-pulse-dot"></div>
-            </div>
-            
-            <div class="flow-board-card active">
-              <div class="flow-card-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-              </div>
-              <div class="flow-card-info">
-                <strong>学术搜索</strong>
-                <span>一键检索多源 PDF 瞬间导入</span>
-              </div>
-            </div>
+        <h1 data-reveal data-reveal-delay="1">
+          把论文读薄，<br />
+          把汇报讲清。
+        </h1>
+        <p data-reveal data-reveal-delay="2">
+          PDF 不是终点。PaperSolver 把阅读、标注、翻译、综述和组会材料放在同一条路上，让每一次打开论文都有下文。
+        </p>
+        <div class="flow-keywords" data-reveal data-reveal-delay="3">
+          <b>文献精读</b>
+          <b>论文综述</b>
+          <b>组会汇报</b>
+          <b>校园圈</b>
+          <b>模型路由</b>
+        </div>
+        <div class="flow-hero-actions" data-reveal data-reveal-delay="4">
+          <button type="button" class="flow-primary-btn" @click="openModal('login')">进入工作台</button>
+          <button type="button" class="flow-secondary-btn" @click="openModal('register')">创建账号</button>
+        </div>
+      </div>
 
-            <div class="flow-board-card">
-              <div class="flow-card-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                </svg>
-              </div>
-              <div class="flow-card-info">
-                <strong>文献沉淀</strong>
-                <span>学术期刊标签化档案管理</span>
-              </div>
-            </div>
-
-            <div class="flow-board-card">
-              <div class="flow-card-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                </svg>
-              </div>
-              <div class="flow-card-info">
-                <strong>同步精读</strong>
-                <span>左原文右学术译文流动对照</span>
-              </div>
-            </div>
-
-            <div class="flow-board-card">
-              <div class="flow-card-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
-                  <path d="M15.5 12a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z"></path>
-                </svg>
-              </div>
-              <div class="flow-card-info">
-                <strong>综述总结</strong>
-                <span>AI 自动提取创新点与大纲</span>
-              </div>
+      <div class="flow-product-stage" data-reveal="right">
+        <div class="flow-step-grid" aria-label="首页功能切换">
+          <button
+            v-for="item in landingPanels"
+            :key="item.id"
+            type="button"
+            :class="{ active: activeLandingPanel === item.id }"
+            @click="activeLandingPanel = item.id"
+          >
+            <span>{{ item.index }}</span>{{ item.tab }}
+          </button>
+        </div>
+        <article class="product-window product-module-panel" :key="currentLandingPanel.id">
+          <header class="product-module-head">
+            <span>{{ currentLandingPanel.index }}</span>
+            <strong>{{ currentLandingPanel.title }}</strong>
+            <button type="button" @click="openModal('login')">进入</button>
+          </header>
+          <div class="product-module-body">
+            <p>{{ currentLandingPanel.description }}</p>
+            <div class="module-proof-list">
+              <button
+                v-for="point in currentLandingPanel.points"
+                :key="point.label"
+                type="button"
+                @click="activeLandingPanel = currentLandingPanel.id"
+              >
+                <small>{{ point.label }}</small>
+                <span>{{ point.text }}</span>
+              </button>
             </div>
           </div>
-        </div>
+          <footer class="product-module-foot">
+            <span>{{ currentLandingPanel.footer }}</span>
+            <a :href="currentLandingPanel.href" @click.prevent="openModal('login')">{{ currentLandingPanel.link }}</a>
+          </footer>
+        </article>
       </div>
     </section>
 
-    <!-- Chapter 2: Space -->
-    <section id="chapter-space" class="spatial-chapter spatial-chapter-dark">
-      <div class="spatial-chapter-inner">
-        <span class="spatial-chapter-eyebrow" data-reveal>空间设计</span>
-        <h2 class="spatial-chapter-title" data-reveal data-reveal-delay="1" style="color:#f5f5f7;max-width:16ch">
-          内容优先，界面退后。
-        </h2>
-        <div class="spatial-drift-band" style="margin-top:56px">
-          <article class="spatial-drift-item spatial-glass-panel-dark" data-reveal data-reveal-delay="1">
-            <span class="spatial-drift-label">阅读器</span>
-            <strong class="spatial-drift-value" style="color:#f5f5f7">双栏同步</strong>
-            <p class="spatial-drift-detail" style="color:rgba(245,245,247,0.62)">左 PDF 右译文，段落锚点一一对应。</p>
-          </article>
-          <article class="spatial-drift-item spatial-glass-panel-dark" data-reveal data-reveal-delay="2">
-            <span class="spatial-drift-label">文献库</span>
-            <strong class="spatial-drift-value" style="color:#f5f5f7">研究档案</strong>
-            <p class="spatial-drift-detail" style="color:rgba(245,245,247,0.62)">阅读进度、标注与期刊标签在同一工作区维护。</p>
-          </article>
-          <article class="spatial-drift-item spatial-glass-panel-dark" data-reveal data-reveal-delay="3">
-            <span class="spatial-drift-label">模型中心</span>
-            <strong class="spatial-drift-value" style="color:#f5f5f7">独立网关</strong>
-            <p class="spatial-drift-detail" style="color:rgba(245,245,247,0.62)">模型配置不污染阅读空间。</p>
-          </article>
+    <section id="reading-path" class="flow-section flow-section-split">
+      <div class="flow-section-copy" data-reveal="left">
+        <span class="flow-section-index">从一页 PDF 开始</span>
+        <h2>先读懂，再产出。</h2>
+        <p>
+          一篇论文可以变成标注、翻译、问答、综述，也可以继续长成组会讲稿。页面不替你假装努力，只把下一步放在你伸手够得到的位置。
+        </p>
+        <div class="flow-section-tags">
+          <span>选中文字就能批注</span>
+          <span>综述逐段留痕</span>
+          <span>组会可合并多篇</span>
         </div>
+      </div>
+      <div class="flow-timeline" data-reveal="right">
+        <article><b>收进来</b><span>上传 PDF、Zotero 导入、学术搜索结果入库。</span></article>
+        <article><b>读下去</b><span>逐段翻译、全文翻译、片段标注、论文内容详解。</span></article>
+        <article><b>写出来</b><span>论文综述保留分点结构，数字和英文重点突出。</span></article>
+        <article><b>讲清楚</b><span>单篇或多篇文献生成组会综述和 PPT。</span></article>
       </div>
     </section>
 
-    <!-- Chapter 3: Pricing (Imported from center) -->
-    <section id="chapter-pricing" class="spatial-chapter">
+    <section id="real-surfaces" class="flow-showcase-section">
+      <div data-reveal>
+        <span class="flow-section-index">真正会用到的入口</span>
+        <h2>少一点摆设，多一点顺手。</h2>
+      </div>
+      <div class="flow-showcase-grid">
+        <article v-for="(surface, index) in homeSurfaces" :key="surface.title" data-reveal :data-reveal-delay="index + 1">
+          <span>{{ surface.kicker }}</span>
+          <strong>{{ surface.title }}</strong>
+          <p>{{ surface.text }}</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="chapter-pricing" class="flow-pricing-section">
       <div class="spatial-chapter-inner">
         <span class="spatial-chapter-eyebrow" data-reveal>订阅定价</span>
         <h2 class="spatial-chapter-title" data-reveal style="margin-bottom:48px;max-width:20ch">按月开通会员，按功能次数使用</h2>
@@ -171,11 +152,11 @@
         </div>
       </div>
     </section>
-  </div>
+    </div>
 
-  <!-- Glassmorphic Auth Modal -->
-  <div v-if="showAuthModal" class="spatial-modal-backdrop" @click="closeModal">
-    <div class="spatial-modal-content" @click.stop>
+    <!-- Glassmorphic Auth Modal -->
+    <div v-if="showAuthModal" class="spatial-modal-backdrop" @click="closeModal">
+      <div class="spatial-modal-content" @click.stop>
       <button class="spatial-modal-close" @click="closeModal">&times;</button>
       
       <div v-if="authMode === 'login'">
@@ -325,6 +306,7 @@
           <a href="#" class="auth-link" @click.prevent="authMode = 'login'">返回登录</a>
         </div>
       </div>
+      </div>
     </div>
   </div>
 </template>
@@ -366,6 +348,122 @@ const forgotCode = ref("");
 const forgotNewPassword = ref("");
 const sendingCode = ref(false);
 const forgotSuccessText = ref("");
+const activeLandingPanel = ref("library");
+
+const landingPanels = [
+  {
+    id: "library",
+    index: "01",
+    tab: "文献入库",
+    title: "先把论文收稳",
+    description: "文献库负责把 PDF、Zotero、搜索结果和手动补全的元数据放到同一个地方。阅读进度、期刊标签、导入源头都能继续追踪。",
+    href: "/library",
+    link: "打开文献库",
+    footer: "适合从一堆 PDF 里先理出秩序。",
+    points: [
+      { label: "导入", text: "本地 PDF、Zotero、URL 与学术搜索" },
+      { label: "整理", text: "文献类型、期刊标签、来源和笔记" },
+      { label: "衔接", text: "直接进入双栏翻译或逐段阅读" },
+    ],
+  },
+  {
+    id: "reader",
+    index: "02",
+    tab: "精读解析",
+    title: "在正文旁边读懂它",
+    description: "阅读器把原文、翻译、内容详解和标注放在同一个阅读现场。批注精确到选中的句子，不再把整段都涂成一片。",
+    href: "/reading",
+    link: "进入阅读",
+    footer: "适合需要边读、边问、边做笔记的论文。",
+    points: [
+      { label: "翻译", text: "全文翻译、逐段翻译、原文 PDF 切换" },
+      { label: "标注", text: "选取片段后保存，可单独删除" },
+      { label: "解析", text: "研究背景、方法、数据、局限分开看" },
+    ],
+  },
+  {
+    id: "review",
+    index: "03",
+    tab: "论文综述",
+    title: "把一篇论文写成能复用的综述",
+    description: "综述不是把摘要再说一遍。它会拆成基本信息、研究问题、主要发现、价值与局限，并保留分段和重点标记。",
+    href: "/library",
+    link: "生成综述",
+    footer: "适合课程论文、开题准备和组会前的材料整理。",
+    points: [
+      { label: "分段", text: "每个要点单独成段，不堆成一坨" },
+      { label: "重点", text: "英文、数字和百分号会突出显示" },
+      { label: "复用", text: "综述可继续导入组会汇报" },
+    ],
+  },
+  {
+    id: "meeting",
+    index: "04",
+    tab: "组会汇报",
+    title: "单篇能讲，多篇也能合并讲",
+    description: "组会汇报支持最多三篇文献合并。它不是简单拼接，而是先融合研究问题、汇报目标和关键问题，再生成 PPT。",
+    href: "/meeting-report",
+    link: "准备组会",
+    footer: "适合导师会、课程展示和小组讨论。",
+    points: [
+      { label: "融合", text: "多篇文献合并成一条汇报主线" },
+      { label: "讲稿", text: "生成主讲综述和导师建议修改" },
+      { label: "PPT", text: "组会 PPT 单独走更强模型" },
+    ],
+  },
+  {
+    id: "forum",
+    index: "05",
+    tab: "校园论坛",
+    title: "让问题流到同校和同行那里",
+    description: "论坛承接求助、科研羊毛、论文期刊、研究讨论和校园圈。校园认证后，帖子可以按学校筛选，个人主页显示学校。",
+    href: "/forum",
+    link: "进入论坛",
+    footer: "适合问数据、问投稿、问工具，也适合组内通知。",
+    points: [
+      { label: "审核", text: "发帖先进入 AI 审核，减少垃圾内容" },
+      { label: "校园圈", text: "认证后进入同校帖子筛选" },
+      { label: "消息", text: "回复、置顶、封禁、认证反馈进站内通知" },
+    ],
+  },
+  {
+    id: "models",
+    index: "06",
+    tab: "模型与额度",
+    title: "贵模型只用在该用的地方",
+    description: "不同入口可以单独配置模型：PPT 走更强模型，综述、问答和发帖审核可以用更便宜的模型，成本和体验分开算。",
+    href: "/models",
+    link: "查看额度",
+    footer: "适合控制成本，也适合管理员做模型路由。",
+    points: [
+      { label: "场景", text: "综述、问答、PPT、审核分别配置" },
+      { label: "额度", text: "按任务次数显示剩余，不让用户猜" },
+      { label: "会员", text: "个人和团队套餐分别展示" },
+    ],
+  },
+];
+
+const currentLandingPanel = computed(
+  () => landingPanels.find((item) => item.id === activeLandingPanel.value) || landingPanels[0],
+);
+
+const homeSurfaces = [
+  {
+    kicker: "文献库",
+    title: "先把资料放对地方",
+    text: "导入、检索、标签、阅读进度和笔记都在这里开始，后续阅读器和组会不会断线。",
+  },
+  {
+    kicker: "阅读器",
+    title: "左边解析，右边正文",
+    text: "翻译、标注、论文内容详解围绕正文展开，像认真读书，不像后台拼面板。",
+  },
+  {
+    kicker: "组会",
+    title: "把多篇论文讲成一条线",
+    text: "单篇综述可以进入组会，多篇文献也能融合成汇报目标、关键问题和 PPT。",
+  },
+];
 
 const registerCodeButtonText = computed(() => {
   if (sendingRegisterCode.value) return "发送中";
@@ -554,6 +652,695 @@ onMounted(() => {
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+.flow-landing {
+  min-height: 100vh;
+  overflow-x: hidden;
+  color: #111827;
+  background:
+    radial-gradient(circle at 78% 14%, rgba(248, 181, 88, .18), transparent 28%),
+    radial-gradient(circle at 20% 18%, rgba(74, 144, 226, .14), transparent 26%),
+    radial-gradient(circle at 62% 54%, rgba(124, 58, 237, .08), transparent 30%),
+    linear-gradient(180deg, #f7faff 0%, #f8fafc 44%, #f3f6fb 100%);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.flow-landing::before {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .18;
+  background-image:
+    linear-gradient(rgba(37, 99, 235, .06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, .06) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: linear-gradient(180deg, #000 0%, transparent 76%);
+  content: "";
+}
+
+.flow-landing > * {
+  position: relative;
+  z-index: 1;
+}
+
+.flow-landing-nav {
+  width: min(1160px, calc(100vw - 64px));
+  height: 66px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.flow-brand,
+.flow-nav-links,
+.flow-landing-auth {
+  display: flex;
+  align-items: center;
+}
+
+.flow-brand {
+  gap: 12px;
+  color: #101827;
+  text-decoration: none;
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.flow-brand-mark {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(38, 59, 96, .1);
+}
+
+.flow-nav-links {
+  gap: 30px;
+  margin-left: auto;
+}
+
+.flow-nav-links a {
+  color: rgba(17, 24, 39, .72);
+  font-size: 14px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.flow-nav-links a:hover {
+  color: #2563eb;
+}
+
+.flow-download-btn,
+.flow-primary-btn,
+.flow-secondary-btn {
+  border: 0;
+  cursor: pointer;
+  font-weight: 850;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.flow-download-btn {
+  height: 38px;
+  padding: 0 22px;
+  border-radius: 999px;
+  color: #fff;
+  background: #111827;
+  box-shadow: 0 14px 28px rgba(17, 24, 39, .16);
+}
+
+.flow-download-btn:hover,
+.flow-primary-btn:hover,
+.flow-secondary-btn:hover {
+  transform: translateY(-1px);
+}
+
+.flow-hero {
+  width: min(1160px, calc(100vw - 64px));
+  min-height: calc(100vh - 66px);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(420px, .92fr) minmax(520px, 1.08fr);
+  align-items: center;
+  gap: 56px;
+  padding: 34px 0 72px;
+}
+
+.flow-hero-copy {
+  max-width: 610px;
+}
+
+.flow-pill-row,
+.flow-keywords,
+.flow-hero-actions,
+.flow-section-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.flow-pill-row span,
+.flow-keywords b,
+.flow-section-tags span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 16px;
+  border: 1px solid rgba(16, 185, 129, .2);
+  border-radius: 999px;
+  color: #1d4ed8;
+  background: rgba(255, 255, 255, .78);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, .05);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.flow-pill-row span::before,
+.flow-keywords b::before,
+.flow-section-tags span::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #f59e0b;
+  content: "";
+}
+
+.flow-hero h1 {
+  margin: 24px 0 20px;
+  color: #101827;
+  font-size: clamp(48px, 6vw, 76px);
+  line-height: .98;
+  letter-spacing: 0;
+  font-weight: 900;
+  text-wrap: balance;
+}
+
+.flow-hero h1::first-line {
+  color: #2563eb;
+}
+
+.flow-hero p {
+  max-width: 56ch;
+  margin: 0;
+  color: rgba(17, 24, 39, .66);
+  font-size: 18px;
+  line-height: 1.9;
+  font-weight: 550;
+}
+
+.flow-keywords {
+  margin-top: 22px;
+}
+
+.flow-keywords b {
+  min-height: 30px;
+  padding: 0 12px;
+  border-color: transparent;
+  background: rgba(37, 99, 235, .08);
+  font-size: 14px;
+}
+
+.flow-hero-actions {
+  margin-top: 32px;
+}
+
+.flow-primary-btn,
+.flow-secondary-btn {
+  height: 58px;
+  padding: 0 28px;
+  border-radius: 12px;
+  font-size: 16px;
+}
+
+.flow-primary-btn {
+  color: #fff;
+  background: linear-gradient(135deg, #111827, #2563eb);
+  box-shadow: 0 24px 44px rgba(37, 99, 235, .22);
+}
+
+.flow-secondary-btn {
+  border: 1px solid rgba(37, 99, 235, .16);
+  color: #111827;
+  background: rgba(255, 255, 255, .78);
+}
+
+.flow-product-stage {
+  display: grid;
+  gap: 18px;
+}
+
+.flow-step-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.flow-step-grid button {
+  min-height: 58px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid rgba(30, 41, 59, .1);
+  border-radius: 9px;
+  color: rgba(17, 24, 39, .72);
+  background: rgba(255, 255, 255, .78);
+  text-align: left;
+  font-size: 13px;
+  font-weight: 850;
+  box-shadow: 0 10px 24px rgba(30, 41, 59, .06);
+}
+
+.flow-step-grid button span {
+  color: rgba(17, 24, 39, .44);
+  font-size: 11px;
+}
+
+.flow-step-grid button.active {
+  color: #fff;
+  background: #2563eb;
+  border-color: #2563eb;
+  transform: translateY(-2px);
+}
+
+.flow-step-grid button.active span {
+  color: rgba(255, 255, 255, .72);
+}
+
+.product-window {
+  overflow: hidden;
+  border: 1px solid rgba(30, 41, 59, .1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .78);
+  box-shadow: 0 34px 78px rgba(30, 41, 59, .13);
+  animation: product-float 5.5s ease-in-out infinite;
+}
+
+.product-module-panel {
+  animation: product-float 5.5s ease-in-out infinite, module-swap 320ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.product-module-head {
+  height: auto !important;
+  min-height: 74px;
+  align-items: center;
+  padding: 18px 22px !important;
+}
+
+.product-module-head span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #2563eb !important;
+  font-size: 13px !important;
+  font-weight: 950;
+}
+
+.product-module-head strong {
+  margin-left: 4px !important;
+  color: #111827 !important;
+  font-size: 19px !important;
+}
+
+.product-module-head button {
+  margin-left: auto;
+  height: 38px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: #111827;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.product-module-body {
+  padding: 26px;
+  background:
+    radial-gradient(circle at 92% 8%, rgba(245, 158, 11, .14), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, .96), rgba(239, 246, 255, .72));
+}
+
+.product-module-body p {
+  max-width: 56ch;
+  margin: 0 0 22px;
+  color: rgba(17, 24, 39, .72);
+  font-size: 16px;
+  line-height: 1.85;
+  font-weight: 650;
+}
+
+.module-proof-list {
+  display: grid;
+  gap: 12px;
+}
+
+.module-proof-list button {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-height: 58px;
+  padding: 14px 16px;
+  border: 1px solid rgba(37, 99, 235, .1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .72);
+  color: #111827;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.module-proof-list button:hover {
+  transform: translateX(4px);
+  border-color: rgba(37, 99, 235, .28);
+  background: #fff;
+}
+
+.module-proof-list small {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.module-proof-list span {
+  color: rgba(17, 24, 39, .76);
+  font-weight: 800;
+}
+
+.product-module-foot {
+  min-height: 64px !important;
+}
+
+.product-module-foot span {
+  color: rgba(17, 24, 39, .58);
+  font-weight: 700;
+}
+
+.product-window header {
+  height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  border-bottom: 1px solid rgba(30, 41, 59, .1);
+}
+
+.product-window header i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #ff6159;
+}
+
+.product-window header i:nth-child(2) { background: #ffc43d; }
+.product-window header i:nth-child(3) { background: #29c06f; }
+
+.product-window header strong {
+  margin-left: 8px;
+  color: #2563eb;
+  font-size: 13px;
+}
+
+.product-window header span {
+  margin-left: auto;
+  color: rgba(17, 24, 39, .48);
+  font-size: 12px;
+}
+
+.product-window-body {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  min-height: 265px;
+  background:
+    radial-gradient(circle at 80% 20%, rgba(245, 158, 11, .12), transparent 28%),
+    linear-gradient(135deg, rgba(239, 246, 255, .78), rgba(255, 255, 255, .92));
+}
+
+.product-window-body aside {
+  padding: 24px;
+  border-right: 1px solid rgba(30, 41, 59, .1);
+}
+
+.product-window-body aside b,
+.flow-showcase-grid span {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.product-window-body aside strong {
+  display: block;
+  margin: 12px 0 8px;
+  color: #101827;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.product-window-body aside span,
+.product-window footer,
+.flow-showcase-grid p {
+  color: rgba(17, 24, 39, .56);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.product-window-body main {
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  padding: 24px;
+}
+
+.paper-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .74);
+}
+
+.paper-row span {
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.paper-row b {
+  min-width: 0;
+  overflow: hidden;
+  color: #111827;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.paper-row.active {
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.stage-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, .12);
+}
+
+.stage-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #f59e0b);
+  animation: progress-breathe 2.8s ease-in-out infinite;
+}
+
+.product-window footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 58px;
+  padding: 0 18px;
+  border-top: 1px solid rgba(30, 41, 59, .1);
+}
+
+.product-window footer a {
+  color: #2563eb;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.flow-section,
+.flow-showcase-section,
+.flow-pricing-section {
+  width: min(1160px, calc(100vw - 64px));
+  margin: 0 auto;
+  padding: 92px 0;
+}
+
+.flow-section-split {
+  display: grid;
+  grid-template-columns: minmax(320px, .86fr) minmax(420px, 1fr);
+  gap: 72px;
+  align-items: center;
+  border-top: 1px solid rgba(30, 41, 59, .1);
+}
+
+.flow-section-index {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: #2563eb;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid rgba(37, 99, 235, .16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .72);
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.flow-section-copy h2,
+.flow-showcase-section h2 {
+  max-width: 760px;
+  margin: 18px 0;
+  color: #101827;
+  font-size: clamp(34px, 4vw, 54px);
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.flow-section-copy p {
+  max-width: 60ch;
+  margin: 0;
+  color: rgba(17, 24, 39, .64);
+  font-size: 17px;
+  line-height: 1.9;
+}
+
+.flow-section-tags {
+  margin-top: 24px;
+}
+
+.flow-timeline {
+  display: grid;
+  gap: 16px;
+}
+
+.flow-timeline article,
+.flow-showcase-grid article {
+  padding: 24px;
+  border: 1px solid rgba(30, 41, 59, .1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .74);
+  box-shadow: 0 18px 44px rgba(30, 41, 59, .06);
+}
+
+.flow-timeline article {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  align-items: center;
+}
+
+.flow-timeline b {
+  color: #1d4ed8;
+  font-size: 18px;
+}
+
+.flow-timeline span {
+  color: rgba(17, 24, 39, .64);
+}
+
+.flow-showcase-section {
+  border-top: 1px solid rgba(30, 41, 59, .1);
+}
+
+.flow-showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 34px;
+}
+
+.flow-showcase-grid strong {
+  display: block;
+  margin: 10px 0 8px;
+  color: #101827;
+  font-size: 21px;
+}
+
+.flow-pricing-section {
+  border-top: 1px solid rgba(30, 41, 59, .1);
+}
+
+@keyframes product-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes module-swap {
+  from {
+    opacity: .55;
+    transform: translateY(10px) scale(.985);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes progress-breathe {
+  0%, 100% { filter: saturate(1); }
+  50% { filter: saturate(1.35) brightness(1.08); }
+}
+
+@media (max-width: 980px) {
+  .flow-landing-nav,
+  .flow-hero,
+  .flow-section,
+  .flow-showcase-section,
+  .flow-pricing-section {
+    width: min(100% - 28px, 760px);
+  }
+
+  .flow-nav-links {
+    display: none;
+  }
+
+  .flow-hero,
+  .flow-section-split {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+
+  .flow-hero {
+    padding-top: 28px;
+  }
+
+  .flow-step-grid,
+  .flow-showcase-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .flow-hero h1 {
+    font-size: 42px;
+  }
+
+  .flow-step-grid,
+  .product-window-body,
+  .flow-showcase-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .product-window-body aside {
+    border-right: 0;
+    border-bottom: 1px solid rgba(30, 41, 59, .1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-window,
+  .stage-progress i {
+    animation: none;
+  }
+}
 
 .spatial-landing {
   font-family: 'Inter', -apple-system, sans-serif;

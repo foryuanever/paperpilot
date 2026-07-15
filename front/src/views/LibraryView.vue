@@ -1,27 +1,28 @@
 <template>
-  <Teleport to="body">
-    <div
-      v-if="openFilter"
-      class="library-filter-menu-portal"
-      :style="filterMenuStyle"
-      @click.stop
-    >
-      <label
-        v-for="opt in currentFilterOptions"
-        :key="opt"
-        class="library-filter-option"
+  <div class="library-route-root">
+    <Teleport to="body">
+      <div
+        v-if="openFilter"
+        class="library-filter-menu-portal"
+        :style="filterMenuStyle"
+        @click.stop
       >
-        <input
-          type="checkbox"
-          :checked="currentFilterSelected.includes(opt)"
-          @change="toggleFilterOption(openFilter, opt)"
-        />
-        <span>{{ opt }}</span>
-      </label>
-      <div v-if="!currentFilterOptions.length" class="library-filter-empty">暂无选项</div>
-    </div>
-  </Teleport>
-  <div class="spatial-page library-spatial">
+        <label
+          v-for="opt in currentFilterOptions"
+          :key="opt"
+          class="library-filter-option"
+        >
+          <input
+            type="checkbox"
+            :checked="currentFilterSelected.includes(opt)"
+            @change="toggleFilterOption(openFilter, opt)"
+          />
+          <span>{{ opt }}</span>
+        </label>
+        <div v-if="!currentFilterOptions.length" class="library-filter-empty">暂无选项</div>
+      </div>
+    </Teleport>
+    <div class="spatial-page library-spatial">
     <section class="spatial-chapter library-workbench-head" data-reveal="off">
       <div class="spatial-chapter-inner library-head-inner" data-reveal="off">
         <div class="library-head-actions" data-reveal>
@@ -433,6 +434,7 @@
           </button>
         </footer>
       </section>
+    </div>
     </div>
   </div>
 </template>
