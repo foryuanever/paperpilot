@@ -28,6 +28,7 @@ public class ModelConfigService {
     public static final String SCENE_PAPER_QA = "paper_qa";
     public static final String SCENE_MEETING_DECK = "meeting_deck";
     public static final String SCENE_FORUM_MODERATION = "forum_moderation";
+    public static final String SCENE_TOPIC_RESEARCH = "topic_research";
 
     private final ModelConfigRepository modelConfigRepository;
     private final CurrentUserService currentUserService;
@@ -316,6 +317,9 @@ public class ModelConfigService {
         String value = scene.trim().toLowerCase();
         if (value.equals("paper_review") || value.equals("review") || value.equals("summary") || value.equals("综述")) {
             return SCENE_PAPER_REVIEW;
+        }
+        if (value.equals("topic") || value.equals("topics") || value.equals("topic_research") || value.equals("deep_research") || value.equals("deep-research") || value.equals("选题") || value.equals("选题调研")) {
+            return SCENE_TOPIC_RESEARCH;
         }
         if (value.equals("paper_qa") || value.equals("qa") || value.equals("chat") || value.equals("问答")) {
             return SCENE_PAPER_QA;

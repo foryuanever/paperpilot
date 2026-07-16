@@ -925,6 +925,9 @@ public class AiChatService {
         if (combined.contains("meeting report") || combined.contains("组会") || combined.contains("ppt")) {
             return ModelConfigService.SCENE_MEETING_DECK;
         }
+        if (combined.contains("deep-research") || combined.contains("选题调研") || combined.contains("选题广场") || combined.contains("可执行选题") || combined.contains("topic research")) {
+            return ModelConfigService.SCENE_TOPIC_RESEARCH;
+        }
         if (combined.contains("summary") || combined.contains("综述") || combined.contains("文献综述")) {
             return ModelConfigService.SCENE_PAPER_REVIEW;
         }

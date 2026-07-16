@@ -527,6 +527,28 @@ export const paperpilotApi = {
     await apiClient.patch(`/api/friends/requests/${requestId}`, { action });
   },
 
+  // Topic square API
+  async getTopics(params = {}) {
+    const { data } = await apiClient.get("/api/topics", { params, timeout: 20000 });
+    return data;
+  },
+  async generateTopic(payload) {
+    const { data } = await apiClient.post("/api/topics/generate", payload, { timeout: 300000 });
+    return data;
+  },
+  async saveTopic(id) {
+    const { data } = await apiClient.post(`/api/topics/${id}/save`, null, { timeout: 15000 });
+    return data;
+  },
+  async markTopicInterested(id) {
+    const { data } = await apiClient.post(`/api/topics/${id}/interested`, null, { timeout: 15000 });
+    return data;
+  },
+  async exportTopicOutline(id, target = "review") {
+    const { data } = await apiClient.post(`/api/topics/${id}/outline`, { target }, { timeout: 30000 });
+    return data;
+  },
+
   // Team API
   async getTeamInfo() {
     const { data } = await apiClient.get("/api/team/info");

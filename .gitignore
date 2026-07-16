@@ -52,3 +52,6 @@ memory/
 MEMORY.md
 .trash/
 backups/
+*.bak
+*.bak-*
+*-bak-*

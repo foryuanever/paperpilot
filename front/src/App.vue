@@ -309,6 +309,7 @@ const navItems = computed(() => {
       { to: "/reading", label: "文献阅读" },
       { to: "/meeting-report", label: "组会汇报" },
       { to: "/search", label: "检索" },
+      { to: "/topics", label: "选题广场" },
       { to: "/forum", label: "学术论坛" },
       { to: "/models", label: "用量" },
       { to: "/team", label: "团队" }

@@ -1352,6 +1352,11 @@ const modelSceneOptions = [
     hint: "读者对话、追问、解释公式和方法",
   },
   {
+    value: "topic_research",
+    label: "选题调研",
+    hint: "deep-research、主题簇、研究空白",
+  },
+  {
     value: "meeting_deck",
     label: "PPT生成",
     hint: "必须配置 gpt-5.4 级别强模型",
@@ -1517,12 +1522,14 @@ const modelSceneLabel = computed(() => modelSceneOptions.find(scene => scene.val
 const modelSceneDescription = computed(() => ({
   paper_review: "论文综述独立配置，适合长上下文、结构化综述、引用线索整理；建议用性价比强模型。",
   paper_qa: "AI 论文问答独立配置，优先低延迟和低成本，保障用户愿意高频使用。",
+  topic_research: "选题调研独立配置，适合 deep-research、主题聚类、代表论文和研究空白整理，可用便宜长上下文模型。",
   meeting_deck: "PPT 生成使用独立强模型配置，必须配置 gpt-5.4 或更强模型；不会影响问答和审核。",
   forum_moderation: "AI 发帖审核独立配置，适合低价快模型，重点是稳定 JSON 输出和审核延迟。",
 })[modelScene.value] || "模型入口独立配置，避免高成本任务和轻量任务混用。");
 const modelPoolDescription = computed(() => ({
   paper_review: "这里只管理论文综述模型池。建议主路由选稳定强模型，备用路由选便宜模型。",
   paper_qa: "这里只管理 AI 论文问答模型池。遇到限流、超时或上游失败时，会在问答池内尝试备用路由。",
+  topic_research: "这里只管理选题调研模型池。生成主题簇、研究空白、代表论文和可行路线时会优先读取这个池子。",
   meeting_deck: "这里只管理 PPT 生成专用池。PPT 多轮 Agent 只会读取这个池子，主模型建议 gpt-5.4。",
   forum_moderation: "这里只管理发帖审核模型池。可以配置低价快模型，不必占用 PPT 强模型额度。",
 })[modelScene.value] || "这里只管理当前入口的模型池。");

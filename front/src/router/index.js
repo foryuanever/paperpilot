@@ -13,6 +13,7 @@ import TeamView from "../views/TeamView.vue";
 import ProfileView from "../views/ProfileView.vue";
 import MessagesView from "../views/MessagesView.vue";
 import ReferralView from "../views/ReferralView.vue";
+import TopicSquareView from "../views/TopicSquareView.vue";
 import { useAuthStore } from "../stores/auth";
 
 const routes = [
@@ -74,6 +75,12 @@ const routes = [
     path: "/forum",
     name: "forum",
     component: ForumView,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: "/topics",
+    name: "topics",
+    component: TopicSquareView,
     meta: { requiresAuth: true },
   },
   {

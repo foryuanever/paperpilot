@@ -65,6 +65,7 @@ export const pageNavItems = [
   { to: "/reading", label: "文献阅读", icon: "reading" },
   { to: "/meeting-report", label: "组会汇报", icon: "slides" },
   { to: "/search", label: "学术搜索", icon: "search" },
+  { to: "/topics", label: "选题广场", icon: "search" },
   { to: "/forum", label: "学术论坛", icon: "forum" },
   { to: "/models", label: "用量与额度", icon: "models" },
   { to: "/team", label: "我的team", icon: "team" },
