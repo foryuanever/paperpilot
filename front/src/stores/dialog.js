@@ -10,6 +10,9 @@ export const useDialogStore = defineStore("dialog", () => {
     cancelText: "取消",
     showCancel: false,
     danger: false,
+    mode: "message",
+    inputValue: "",
+    inputPlaceholder: "",
   });
 
   let resolveCurrent = null;
@@ -24,6 +27,9 @@ export const useDialogStore = defineStore("dialog", () => {
       cancelText: options.cancelText || "取消",
       showCancel: Boolean(options.showCancel),
       danger: Boolean(options.danger),
+      mode: options.mode || "message",
+      inputValue: options.defaultValue || "",
+      inputPlaceholder: options.placeholder || "",
     });
     return new Promise(resolve => {
       resolveCurrent = resolve;
@@ -47,17 +53,31 @@ export const useDialogStore = defineStore("dialog", () => {
     });
   }
 
+  function prompt(message, options = {}) {
+    return openDialog({
+      title: "请输入",
+      ...options,
+      message,
+      showCancel: true,
+      mode: "prompt",
+    });
+  }
+
   function finish(result) {
+    const payload = state.mode === "prompt"
+      ? (result ? state.inputValue : null)
+      : result;
     state.open = false;
     const resolve = resolveCurrent;
     resolveCurrent = null;
-    resolve?.(result);
+    resolve?.(payload);
   }
 
   return {
     state,
     alert,
     confirm,
+    prompt,
     accept: () => finish(true),
     cancel: () => finish(false),
   };

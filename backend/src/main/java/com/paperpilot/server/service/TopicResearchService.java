@@ -20,6 +20,8 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class TopicResearchService {
@@ -71,7 +73,52 @@ public class TopicResearchService {
 
     @Transactional
     public List<Map<String, Object>> generate(Map<String, Object> body) {
-        AppUserEntity user = currentUserService.getOrCreateDefaultUser();
+        return generateForUser(currentUserService.getOrCreateDefaultUser(), body, false);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> adminList(String keyword) {
+        AppUserEntity admin = currentUserService.requireAdmin();
+        String q = text(keyword).toLowerCase(Locale.ROOT);
+        return topicResearchRepository.findAllByOrderByCreatedAtDesc().stream()
+            .filter(topic -> !StringUtils.hasText(q) || searchable(topic).toLowerCase(Locale.ROOT).contains(q))
+            .map(topic -> toMap(topic, admin.getId()))
+            .toList();
+    }
+
+    @Transactional
+    public Map<String, Object> adminDelete(String id) {
+        currentUserService.requireAdmin();
+        TopicResearchEntity topic = findTopic(id);
+        topicResearchRepository.delete(topic);
+        return Map.of("id", id, "deleted", true);
+    }
+
+    @Transactional
+    public List<Map<String, Object>> generateOfficialHotTopics(Map<String, Object> body) {
+        AppUserEntity admin = currentUserService.requireAdmin();
+        Map<String, Object> request = body == null ? Map.of() : body;
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("direction", defaultText(request, "direction", "2026 年前沿 AI 科研选题"));
+        payload.put("discipline", defaultText(request, "discipline", "人工智能"));
+        payload.put("stage", defaultText(request, "stage", "硕士"));
+        payload.put("goal", defaultText(request, "goal", "投稿选题"));
+        payload.put("resource", defaultText(request, "resource", "无实验，仅公开数据"));
+        payload.put("dataAccess", "公开数据集、开源代码和近两年代表论文优先");
+        payload.put("methodPreference", "先找可复现实验路线，再判断创新空间");
+        payload.put("topicScale", "能在 2-4 个月推进的硕士/低年级博士小题");
+        payload.put("outputDepth", "详细：每个推荐方向都要给摘要、具体方法、发文现状、优势、局限、潜在论文和代表论文");
+        payload.put("evaluationFocus", "前沿性、可复现、数据可得和投稿价值");
+        payload.put("expectedContribution", "从大方向拆出可验证的小问题");
+        payload.put("constraints", List.of("必须有真实代表论文", "必须有公开数据或可替代数据", "推荐方向之间不能重复", "适合用户继续导入文献库"));
+        payload.put("keywords", "large language model multimodal medical image foundation model drug discovery time series education AI 2026");
+        payload.put("avoidRoutes", "不做空泛综述，不做只有概念没有数据的题目，不推荐无法验证的宏大命题");
+        payload.put("note", "管理员发布到选题广场的官方热门方向：需要覆盖最新研究热度，同时每个推荐方向都要精确对应代表论文。");
+        payload.put("maxTopics", 3);
+        return generateForUser(admin, payload, true);
+    }
+
+    private List<Map<String, Object>> generateForUser(AppUserEntity user, Map<String, Object> body, boolean officialPublish) {
         String direction = text(body.get("direction"));
         if (!StringUtils.hasText(direction)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写研究方向大类");
@@ -80,22 +127,49 @@ public class TopicResearchService {
         String stage = defaultText(body, "stage", "硕士");
         String goal = defaultText(body, "goal", "开题");
         String resource = defaultText(body, "resource", "无实验，仅公开数据");
+        String dataAccess = defaultText(body, "dataAccess", "公开数据集优先");
+        String researchObject = text(body.get("researchObject"));
+        String sampleType = defaultText(body, "sampleType", "暂不确定");
+        String methodPreference = defaultText(body, "methodPreference", "不限，先找可行路线");
+        String topicScale = defaultText(body, "topicScale", "硕士可完成的小题");
+        String outputDepth = defaultText(body, "outputDepth", "标准：每类给摘要/方法/风险/文献");
+        String evaluationFocus = defaultText(body, "evaluationFocus", "准确率/效果提升");
+        String expectedContribution = defaultText(body, "expectedContribution", "提出一个可验证问题");
+        String keywords = text(body.get("keywords"));
+        String avoidRoutes = text(body.get("avoidRoutes"));
+        String seedPapers = text(body.get("seedPapers"));
+        List<String> constraints = stringList(body.get("constraints"));
         String note = text(body.get("note"));
-        List<Map<String, Object>> evidencePapers = searchAcademicEvidence(direction, discipline, goal);
+        int maxTopics = Math.max(1, Math.min(officialPublish ? 3 : 6, intValue(body.get("maxTopics"), officialPublish ? 3 : 6)));
+        String searchQuery = String.join(" ", direction, researchObject, sampleType, keywords, seedPapers).trim();
+        List<Map<String, Object>> evidencePapers = searchAcademicEvidence(searchQuery, discipline, goal);
 
         List<TopicResearchEntity> entities;
         try {
+            Map<String, Object> researchContext = new LinkedHashMap<>();
+            researchContext.put("researchCategory", direction);
+            researchContext.put("discipline", discipline);
+            researchContext.put("stage", stage);
+            researchContext.put("goal", goal);
+            researchContext.put("resource", resource);
+            researchContext.put("dataAccess", dataAccess);
+            researchContext.put("researchObject", researchObject);
+            researchContext.put("sampleType", sampleType);
+            researchContext.put("methodPreference", methodPreference);
+            researchContext.put("topicScale", topicScale);
+            researchContext.put("outputDepth", outputDepth);
+            researchContext.put("evaluationFocus", evaluationFocus);
+            researchContext.put("expectedContribution", expectedContribution);
+            researchContext.put("constraints", constraints);
+            researchContext.put("keywords", keywords);
+            researchContext.put("avoidRoutes", avoidRoutes);
+            researchContext.put("seedPapers", seedPapers);
+            researchContext.put("note", note);
+            researchContext.put("maxTopics", maxTopics);
+            researchContext.put("academic_search_results", evidencePapers);
             AiChatService.ChatResult result = aiChatService.chatJsonWithModelFallbackUnmetered(
-                "你是 deep-research 选题调研 agent。只输出 JSON，不要 Markdown。你必须基于 academic_search_results 中的真实检索候选做选题，不允许编造论文题名、DOI、作者或年份。任务：用户给的是研究方向大类，你需要生成 4-6 张可供选择的选题卡。JSON 字段：topics(array)。每个 topic 包含 title, summary, discipline, stage, goal, tags(array), themeClusters(array), researchQuestion, researchGap, methodRoute, riskNote, feasibilityScore(number), innovationScore(number), difficultyScore(number), subtopics(array of {name, analysis, papers(array of paper title from academic_search_results)}), representativePapers(array of {title, source, year, reason})。每张卡必须推荐 3-5 个小类，每个小类要具体分析并关联真实候选论文。代表论文只能从 academic_search_results 里选择；如果候选不足，就明确写“候选文献不足，需要继续检索”。",
-                objectMapper.writeValueAsString(Map.of(
-                    "researchCategory", direction,
-                    "discipline", discipline,
-                    "stage", stage,
-                    "goal", goal,
-                    "resource", resource,
-                    "note", note,
-                    "academic_search_results", evidencePapers
-                )),
+                "你是 deep-research 选题调研 agent。只输出 JSON，不要 Markdown。必须基于 academic_search_results 中的真实检索候选做选题，不允许编造论文题名、DOI、作者或年份。任务：用户给的是研究方向大类和 research brief，你需要生成 maxTopics 张可供选择的选题卡，彼此方向必须明显不同，不允许同一套小类反复换标题。JSON 字段：topics(array)。每个 topic 包含 title, summary, discipline, stage, goal, tags(array), themeClusters(array), researchQuestion, researchGap, methodRoute, riskNote, feasibilityScore(number), innovationScore(number), difficultyScore(number), subtopics(array of {name, analysis, recommendationScore(number), papers(array of paper title from academic_search_results)}), representativePapers(array of {title, source, year, reason})。每张卡必须先推荐 3-5 个具体研究方向，每个方向必须是可写论文的切口，不要写“先读某论文”“数据与样本”“方法路线”这种栏目名。analysis 必须像调研报告，不许模板化，并且必须严格用 7 段格式：'【摘要】...【具体方法】...【发文现状】...【优势】...【局限】...【潜在论文】...【代表论文】...'。每段至少 55 个中文字符；必须写清研究对象、数据/样本形态、评价重点、基线方法、发文热度、预期结果或失败边界。代表论文只能从 academic_search_results 里选择，并且要精准对应当前方向；如果候选不足，就明确写“候选文献不足，需要继续检索”。必须避开 avoidRoutes，优先满足 constraints、evaluationFocus 和 expectedContribution。",
+                objectMapper.writeValueAsString(researchContext),
                 2600,
                 TOPIC_FALLBACK_MODELS
             );
@@ -103,22 +177,33 @@ public class TopicResearchService {
             for (TopicResearchEntity entity : entities) {
                 if (!evidencePapers.isEmpty()) {
                     entity.setRepresentativePapersJson(objectMapper.writeValueAsString(mergeEvidencePapers(parsePapers(entity.getRepresentativePapersJson()), evidencePapers)));
-                    entity.setSource("deep-research + academic-search");
+                    entity.setSource(officialPublish ? "官方" : "deep-research + academic-search");
                 }
+                if (officialPublish) entity.setModelName(firstNonBlank(entity.getModelName(), "daily-frontier"));
             }
         } catch (Exception error) {
-            entities = deterministicTopicSet(user.getId(), direction, discipline, stage, goal, resource, note, "deterministic-fallback", evidencePapers);
+            if (officialPublish) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "官方热点必须经过 AI 模型生成，但当前选题调研模型调用失败：" + error.getMessage());
+            }
+            entities = deterministicTopicSet(user.getId(), direction, discipline, stage, goal, resource, note, "deterministic-fallback", evidencePapers, dataAccess, methodPreference, topicScale, constraints, avoidRoutes);
             for (TopicResearchEntity entity : entities) {
                 if (!evidencePapers.isEmpty()) {
                     entity.setRepresentativePapersJson(writePapers(evidencePapers));
-                    entity.setSource("academic-search");
+                    entity.setSource(officialPublish ? "官方" : "academic-search");
                 }
+                if (officialPublish) entity.setModelName("daily-frontier");
             }
         }
         String userId = String.valueOf(user.getId());
         List<TopicResearchEntity> saved = new ArrayList<>();
-        for (TopicResearchEntity entity : entities.stream().limit(6).toList()) {
-            entity.setSavedByUserIds(userId);
+        for (TopicResearchEntity entity : entities.stream().limit(maxTopics).toList()) {
+            if (officialPublish) {
+                entity.setSource("官方");
+                entity.setSavedByUserIds("");
+                if (!StringUtils.hasText(entity.getModelName())) entity.setModelName("daily-frontier");
+            } else {
+                entity.setSavedByUserIds(userId);
+            }
             saved.add(topicResearchRepository.save(entity));
         }
         return saved.stream().map(topic -> toMap(topic, user.getId())).toList();
@@ -260,14 +345,14 @@ public class TopicResearchService {
             entities.add(entity);
         }
         if (entities.size() < 6) {
-            List<TopicResearchEntity> fallback = deterministicTopicSet(userId, fallbackDiscipline, fallbackDiscipline, fallbackStage, fallbackGoal, "无实验，仅公开数据", "", modelName, evidencePapers);
+            List<TopicResearchEntity> fallback = deterministicTopicSet(userId, fallbackDiscipline, fallbackDiscipline, fallbackStage, fallbackGoal, "无实验，仅公开数据", "", modelName, evidencePapers, "公开数据集优先", "不限，先找可行路线", "硕士可完成的小题", List.of(), "");
             for (TopicResearchEntity item : fallback) {
                 if (entities.size() >= 6) break;
                 boolean duplicate = entities.stream().anyMatch(existing -> normalizeTitle(existing.getTitle()).equals(normalizeTitle(item.getTitle())));
                 if (!duplicate) entities.add(item);
             }
         }
-        return entities.isEmpty() ? deterministicTopicSet(userId, fallbackDiscipline, fallbackDiscipline, fallbackStage, fallbackGoal, "无实验，仅公开数据", "", modelName, evidencePapers) : entities;
+        return entities.isEmpty() ? deterministicTopicSet(userId, fallbackDiscipline, fallbackDiscipline, fallbackStage, fallbackGoal, "无实验，仅公开数据", "", modelName, evidencePapers, "公开数据集优先", "不限，先找可行路线", "硕士可完成的小题", List.of(), "") : entities;
     }
 
     private TopicResearchEntity fromAiTopicNode(JsonNode root, Long userId, String modelName, String fallbackDiscipline, String fallbackStage, String fallbackGoal) throws Exception {
@@ -294,15 +379,15 @@ public class TopicResearchService {
         return entity;
     }
 
-    private List<TopicResearchEntity> deterministicTopicSet(Long userId, String direction, String discipline, String stage, String goal, String resource, String note, String modelName, List<Map<String, Object>> evidencePapers) {
-        List<String> lanes = List.of("数据可得性", "方法复现", "场景迁移", "评价指标", "轻量部署", "争议问题");
+    private List<TopicResearchEntity> deterministicTopicSet(Long userId, String direction, String discipline, String stage, String goal, String resource, String note, String modelName, List<Map<String, Object>> evidencePapers, String dataAccess, String methodPreference, String topicScale, List<String> constraints, String avoidRoutes) {
+        List<String> lanes = researchLanes(direction, discipline, methodPreference, constraints);
         List<TopicResearchEntity> topics = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 6; i++) {
             String lane = lanes.get(i % lanes.size());
-            TopicResearchEntity entity = deterministicTopic(userId, direction + "：" + lane + "切入", discipline, stage, goal, resource, note, modelName);
-            entity.setTitle("面向" + direction + "的" + lane + "选题拆解");
-            entity.setSummary("围绕“" + direction + "”的大方向，从“" + lane + "”收窄成可执行选题，优先保证真实文献、数据条件和方法路线能继续推进。");
-            entity.setThemeClusters(String.join(",", List.of(lane, "代表论文", "研究空白", "可做方向")));
+            TopicResearchEntity entity = deterministicTopic(userId, direction + "：" + lane + "切入", discipline, stage, goal, resource, note, modelName, dataAccess, methodPreference, topicScale, constraints, avoidRoutes);
+            entity.setTitle("面向" + direction + "的" + lane + "研究路线");
+            entity.setSummary("围绕“" + direction + "”从“" + lane + "”收窄成可执行选题；优先检查真实文献、数据来源、方法基线和评价指标，避免停留在泛泛概念。");
+            entity.setThemeClusters(String.join(",", concreteTopicClusters(direction, discipline, lane)));
             entity.setSubtopicsJson(writeSubtopics(buildSubtopics(entity, evidencePapers)));
             topics.add(entity);
         }
@@ -310,20 +395,24 @@ public class TopicResearchService {
     }
 
     private TopicResearchEntity deterministicTopic(Long userId, String direction, String discipline, String stage, String goal, String resource, String note, String modelName) {
+        return deterministicTopic(userId, direction, discipline, stage, goal, resource, note, modelName, "公开数据集优先", "不限，先找可行路线", "硕士可完成的小题", List.of(), "");
+    }
+
+    private TopicResearchEntity deterministicTopic(Long userId, String direction, String discipline, String stage, String goal, String resource, String note, String modelName, String dataAccess, String methodPreference, String topicScale, List<String> constraints, String avoidRoutes) {
         TopicResearchEntity entity = new TopicResearchEntity();
         entity.setUserId(userId);
         entity.setTitle(direction + "的可行选题与研究路线");
-        entity.setSummary("围绕“" + direction + "”拆出一个可执行选题，适合" + stage + goal + "；当前资源条件为：" + resource + "。");
+        entity.setSummary("围绕“" + direction + "”拆出一个可执行选题，适合" + stage + goal + "；资源条件为：" + resource + "，数据来源偏好为：" + dataAccess + "。");
         entity.setDiscipline(discipline);
         entity.setStage(stage);
         entity.setGoal(goal);
         entity.setSource("AI生成");
-        entity.setTags(String.join(",", List.of(goal, discipline, "deep-research", resource.replace("，", " ").split(" ")[0])));
-        entity.setThemeClusters(String.join(",", List.of(direction, "代表论文矩阵", "研究空白", "可复现实验")));
+        entity.setTags(String.join(",", compactTags(List.of(goal, discipline, "deep-research", resource.replace("，", " ").split(" ")[0], methodPreference, topicScale))));
+        entity.setThemeClusters(String.join(",", concreteTopicClusters(direction, discipline, methodPreference)));
         entity.setResearchQuestion("在" + direction + "中，哪些关键变量、数据条件或应用场景尚未被充分解释？");
         entity.setResearchGap("已有研究往往偏重方法效果展示，缺少对数据边界、可复现对照和真实场景迁移的连续分析。");
-        entity.setMethodRoute("先做系统检索和主题聚类，再建立代表论文矩阵；随后选择公开数据、问卷访谈或案例材料完成小规模验证，最后把结论转为开题问题链。");
-        entity.setRiskNote(StringUtils.hasText(note) ? "注意和补充说明保持一致：" + note : "需要尽快确认数据来源、评价指标、伦理边界和导师认可的研究范围。");
+        entity.setMethodRoute("先扩展英文关键词并做系统检索，再建立代表论文矩阵；随后按“数据-方法-指标-基线”筛出 3-5 个推荐方向，最后选择一个能复现或对比验证的小问题。方法偏好：" + methodPreference + "。");
+        entity.setRiskNote(StringUtils.hasText(avoidRoutes) ? "需要避开：" + avoidRoutes : (StringUtils.hasText(note) ? "注意和补充说明保持一致：" + note : "需要确认数据来源、评价指标、伦理边界和导师认可的研究范围。"));
         entity.setFeasibilityScore(resource.contains("公开") ? 86 : 76);
         entity.setInnovationScore(74);
         entity.setDifficultyScore("博士".equals(stage) ? 78 : 58);
@@ -681,8 +770,8 @@ public class TopicResearchService {
         List<Map<String, Object>> subtopics = new ArrayList<>();
         for (int i = 0; i < Math.min(5, Math.max(3, names.size())); i++) {
             String name = names.get(i % names.size());
-            List<Map<String, Object>> linked = papers.stream().skip(Math.min(i, Math.max(0, papers.size() - 1))).limit(2).toList();
-            if (linked.isEmpty() && !papers.isEmpty()) linked = papers.stream().limit(2).toList();
+            String context = String.join(" ", text(topic.getTitle()), text(topic.getSummary()), text(topic.getResearchQuestion()), text(topic.getMethodRoute()));
+            List<Map<String, Object>> linked = rankPapersForSubtopic(name, context, papers, i);
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("name", name);
             item.put("analysis", concreteSubtopicAnalysis(topic, name, linked));
@@ -698,10 +787,14 @@ public class TopicResearchService {
         for (Map<String, Object> item : parseSubtopics(topic.getSubtopicsJson())) {
             if (!StringUtils.hasText(text(item.get("name")))) continue;
             Map<String, Object> copy = new LinkedHashMap<>(item);
-            List<Map<String, Object>> linked = resolveSubtopicPapers(copy.get("papers"), papers, index);
-            copy.put("name", concreteSubtopicName(topic, text(copy.get("name")), linked, index));
+            String originalName = text(copy.get("name"));
+            String originalAnalysis = text(copy.get("analysis"));
+            List<Map<String, Object>> linked = resolveSubtopicPapers(copy.get("papers"), papers, index, originalName, originalAnalysis);
+            String normalizedName = concreteSubtopicName(topic, originalName, linked, index);
+            boolean renamed = !normalizeTitle(originalName).equals(normalizeTitle(normalizedName));
+            copy.put("name", normalizedName);
             copy.put("papers", linked);
-            if (isGenericAnalysis(text(copy.get("analysis")))) copy.put("analysis", concreteSubtopicAnalysis(topic, text(copy.get("name")), linked));
+            if (renamed || isGenericAnalysis(text(copy.get("analysis")))) copy.put("analysis", concreteSubtopicAnalysis(topic, text(copy.get("name")), linked));
             normalized.add(copy);
             index++;
         }
@@ -724,7 +817,7 @@ public class TopicResearchService {
         return normalized.stream().limit(5).toList();
     }
 
-    private List<Map<String, Object>> resolveSubtopicPapers(Object value, List<Map<String, Object>> allPapers, int index) {
+    private List<Map<String, Object>> resolveSubtopicPapers(Object value, List<Map<String, Object>> allPapers, int index, String subtopicName, String analysis) {
         List<Map<String, Object>> linked = new ArrayList<>();
         if (value instanceof List<?> list) {
             for (Object item : list) {
@@ -743,14 +836,106 @@ public class TopicResearchService {
                 if (!matched.isEmpty()) linked.add(publicPaper(matched));
             }
         }
-        if (linked.isEmpty() && !allPapers.isEmpty()) {
-            int start = Math.min(index, Math.max(0, allPapers.size() - 1));
-            linked.addAll(allPapers.stream().skip(start).limit(2).map(this::publicPaper).toList());
+        if (!allPapers.isEmpty()) {
+            for (Map<String, Object> paper : rankPapersForSubtopic(subtopicName, analysis, allPapers, index)) {
+                if (linked.stream().noneMatch(existing -> samePaper(existing, paper))) linked.add(publicPaper(paper));
+                if (linked.size() >= 5) break;
+            }
         }
+        linked.sort((a, b) -> Double.compare(
+            paperMatchScore(String.join(" ", text(subtopicName), text(analysis)).toLowerCase(Locale.ROOT), b, allPapers.indexOf(findPaperByTitle(allPapers, text(b.get("title")))), index),
+            paperMatchScore(String.join(" ", text(subtopicName), text(analysis)).toLowerCase(Locale.ROOT), a, allPapers.indexOf(findPaperByTitle(allPapers, text(a.get("title")))), index)
+        ));
+        String queryText = String.join(" ", text(subtopicName), text(analysis)).toLowerCase(Locale.ROOT);
+        List<Map<String, Object>> filtered = linked.stream()
+            .filter(paper -> StringUtils.hasText(text(paper.get("title"))))
+            .filter(paper -> !isClearlyIrrelevantPaper(queryText, paper))
+            .limit(3)
+            .toList();
+        if (filtered.size() >= 2 || linked.size() <= 2) return filtered;
         return linked.stream()
             .filter(paper -> StringUtils.hasText(text(paper.get("title"))))
             .limit(3)
             .toList();
+    }
+
+    private boolean isClearlyIrrelevantPaper(String query, Map<String, Object> paper) {
+        String haystack = String.join(" ", text(paper.get("title")), text(paper.get("abstract")), text(paper.get("reason"))).toLowerCase(Locale.ROOT);
+        return containsAny(query, "接受", "采纳", "满意", "写作", "教学", "课堂", "问卷", "acceptance", "adoption", "writing", "education")
+            && containsAny(haystack, "jailbreak", "jailbreaking", "attack", "adversarial", "security exploit");
+    }
+
+    private List<Map<String, Object>> rankPapersForSubtopic(String subtopicName, String analysis, List<Map<String, Object>> papers, int index) {
+        if (papers.isEmpty()) return List.of();
+        String query = String.join(" ", text(subtopicName), text(analysis)).toLowerCase(Locale.ROOT);
+        List<Map<String, Object>> ranked = new ArrayList<>(papers);
+        ranked.sort((a, b) -> Double.compare(
+            paperMatchScore(query, b, papers.indexOf(b), index),
+            paperMatchScore(query, a, papers.indexOf(a), index)
+        ));
+        return ranked.stream().limit(3).toList();
+    }
+
+    private double paperMatchScore(String query, Map<String, Object> paper, int paperIndex, int subtopicIndex) {
+        String haystack = String.join(" ",
+            text(paper.get("title")),
+            text(paper.get("abstract")),
+            text(paper.get("reason")),
+            text(paper.get("source")),
+            text(paper.get("subjects"))
+        ).toLowerCase(Locale.ROOT);
+        double score = 0;
+        for (String token : keywordTokens(query)) {
+            if (haystack.contains(token)) score += token.length() > 6 ? 2.2 : 1.0;
+        }
+        for (String token : keywordTokens(haystack)) {
+            if (query.contains(token)) score += token.length() > 6 ? 1.4 : 0.35;
+        }
+        score += semanticPaperBonus(query, haystack);
+        score += Math.max(0, 0.5 - Math.abs(paperIndex - subtopicIndex) * 0.08);
+        return score;
+    }
+
+    private double semanticPaperBonus(String query, String haystack) {
+        double score = 0;
+        if (containsAny(query, "接受", "采纳", "满意", "行为", "用户", "问卷", "acceptance", "adoption", "attitude", "utaut", "tam")
+            && containsAny(haystack, "acceptance", "adoption", "attitude", "utaut", "tam", "student", "user", "platform")) score += 8;
+        if (containsAny(query, "接受", "采纳", "满意", "行为", "用户", "问卷", "acceptance", "adoption", "attitude", "utaut", "tam")
+            && containsAny(haystack, "jailbreak", "attack", "security", "adversarial", "safety")) score -= 6;
+        if (containsAny(query, "写作", "英语", "作文", "反馈", "writing", "efl", "essay")
+            && containsAny(haystack, "writing", "efl", "essay", "english", "feedback", "student")) score += 8;
+        if (containsAny(query, "检索", "幻觉", "提示", "rag", "retrieval", "hallucination", "prompt")
+            && containsAny(haystack, "retrieval", "rag", "hallucination", "prompt", "generative", "large language")) score += 7;
+        if (containsAny(query, "分割", "影像", "标注", "segmentation", "medical image")
+            && containsAny(haystack, "segmentation", "medical", "image", "annotation", "radiology")) score += 8;
+        if (containsAny(query, "药", "分子", "性质", "molecule", "drug", "property")
+            && containsAny(haystack, "molecule", "molecular", "drug", "property", "chem", "compound")) score += 8;
+        if (containsAny(query, "小样本", "少样本", "低样本", "few-shot", "small sample")
+            && containsAny(haystack, "few-shot", "small", "sample", "low-resource", "limited")) score += 6;
+        if (containsAny(query, "时序", "预测", "time series", "forecast")
+            && containsAny(haystack, "time series", "forecast", "temporal", "sequence", "lstm")) score += 6;
+        return score;
+    }
+
+    private boolean containsAny(String value, String... needles) {
+        for (String needle : needles) {
+            if (value.contains(needle.toLowerCase(Locale.ROOT))) return true;
+        }
+        return false;
+    }
+
+    private List<String> keywordTokens(String value) {
+        return Arrays.stream(text(value).toLowerCase(Locale.ROOT).split("[^\\p{IsAlphabetic}\\p{IsDigit}]+"))
+            .map(String::trim)
+            .filter(token -> token.length() >= 4)
+            .filter(token -> !Set.of("with", "from", "that", "this", "using", "based", "study", "research", "analysis", "model", "models").contains(token))
+            .distinct()
+            .limit(80)
+            .toList();
+    }
+
+    private boolean samePaper(Map<String, Object> a, Map<String, Object> b) {
+        return normalizeTitle(text(a.get("title"))).equals(normalizeTitle(text(b.get("title"))));
     }
 
     private Map<String, Object> enrichPaper(Map<String, Object> paper, List<Map<String, Object>> allPapers) {
@@ -780,11 +965,21 @@ public class TopicResearchService {
     }
 
     private String concreteSubtopicAnalysis(TopicResearchEntity topic, String name, List<Map<String, Object>> linked) {
-        if (linked.isEmpty()) {
-            return "切口定义：把“" + name + "”限制在一个研究对象、一个数据来源和一组评价指标内。当前代表论文不足，先补充英文关键词与公开数据来源，再判断是否适合开题。";
-        }
-        String source = paperCitation(linked.get(0));
-        return "切口定义：围绕“" + name + "”限定研究对象、数据条件和评价指标。可做任务：整理代表论文的实验场景、数据来源和指标设置，做一组小规模复现或对比。交付结果：问题边界、数据表、方法对照和 2-3 个可解释指标。参考来源：" + source + "。";
+        String field = text(topic.getDiscipline());
+        String title = text(topic.getTitle());
+        String source = linked.isEmpty() ? "候选文献不足，需要继续检索英文关键词、公开数据源和近三年综述。" : paperCitation(linked.get(0));
+        String second = linked.size() > 1 ? paperCitation(linked.get(1)) : source;
+        String dataset = dataHint(name, title, field);
+        String method = methodHint(name, title, field);
+        String metric = metricHint(name, title, field);
+        Map<String, String> profile = subtopicProfile(name);
+        return "【摘要】" + profile.get("summary").replace("{name}", name) + "核心判断是该切口能否在当前资源下做出可复现、可汇报、可继续投稿的结果。\n"
+            + "【具体方法】以" + dataset + "为数据入口，" + profile.get("method").replace("{method}", method) + "；每一步记录数据规模、预处理、基线方法和失败样例，避免只给概念路线。\n"
+            + "【发文现状】围绕" + name + "的近年论文多集中在" + method + "、公开基准复现和真实场景迁移三类问题；如果代表论文来自不同来源，应先按年份、数据集和指标整理成矩阵，再判断这个方向是热点延伸、方法补洞还是应用落地。\n"
+            + "【优势】" + profile.get("advantage") + "最终能形成问题边界、数据表、方法对照和" + metric + "等 2-3 个可解释指标。\n"
+            + "【局限】" + profile.get("risk") + "若样本量不足或指标选择太泛，容易变成普通综述，需要提前设定排除标准和最小可行实验。\n"
+            + "【潜在论文】可写成“基于" + dataset + "的" + name + "研究”：摘要交代任务缺口，方法部分比较" + method + "，实验部分报告" + metric + "，讨论部分说明适用边界和下一步可扩展方向。\n"
+            + "【代表论文】主要参考：" + source + (linked.size() > 1 ? "；可补充对照：" + second + "。" : "。");
     }
 
     private List<String> concreteSubtopicNames(TopicResearchEntity topic, List<Map<String, Object>> papers) {
@@ -803,7 +998,12 @@ public class TopicResearchService {
     private String concreteSubtopicName(TopicResearchEntity topic, String rawName, List<Map<String, Object>> linked, int index) {
         String raw = text(rawName);
         if (StringUtils.hasText(raw) && !isGenericSubtopicName(raw)) return raw;
-        String title = firstNonBlank(text(topic.getTitle()), linked.isEmpty() ? "" : text(linked.get(0).get("title")));
+        String linkedTitle = linked.stream()
+            .map(paper -> text(paper.get("title")))
+            .filter(StringUtils::hasText)
+            .findFirst()
+            .orElse("");
+        String title = String.join(" ", text(topic.getTitle()), linkedTitle).trim();
         String discipline = text(topic.getDiscipline());
         List<String> lanes = subtopicLanes(title, discipline);
         String lane = lanes.get(Math.floorMod(index, lanes.size()));
@@ -822,6 +1022,12 @@ public class TopicResearchService {
             || name.contains("可做方向")
             || name.contains("研究问题")
             || name.contains("数据与样本")
+            || name.contains("公开数据验证")
+            || name.contains("小样本复现")
+            || name.contains("指标对照实验")
+            || name.contains("应用现状")
+            || name.contains("优化策略")
+            || name.contains("面临的挑战")
             || name.contains("方法路线")
             || name.contains("评价指标")
             || name.contains("应用边界")
@@ -844,6 +1050,12 @@ public class TopicResearchService {
 
     private List<String> subtopicLanes(String title, String discipline) {
         String value = (text(title) + " " + text(discipline)).toLowerCase(Locale.ROOT);
+        if (value.contains("large language") || value.contains("llm") || value.contains("chatgpt") || value.contains("大语言") || value.contains("大模型")) {
+            if (value.contains("writing") || value.contains("写作") || value.contains("efl") || value.contains("英语")) {
+                return List.of("写作接受度变量", "写作质量前后测", "教师反馈采纳", "提示依赖风险", "学习行为留存");
+            }
+            return List.of("任务接受度变量", "幻觉边界评测", "检索增强对照", "提示成本压缩", "人机协作流程");
+        }
         if (value.contains("药") || value.contains("molecule") || value.contains("drug") || value.contains("chem")) {
             return List.of("分子表征迁移", "公开基准复现", "性质预测对照", "低样本泛化", "可解释筛选");
         }
@@ -869,6 +1081,7 @@ public class TopicResearchService {
         String raw = text(title);
         String lower = raw.toLowerCase(Locale.ROOT);
         if (lower.contains("molecule") || lower.contains("drug") || lower.contains("chem") || raw.contains("药")) return "药物发现";
+        if (lower.contains("large language") || lower.contains("chatgpt") || lower.contains("llm") || raw.contains("大语言") || raw.contains("大模型")) return "大语言模型";
         if (raw.contains("医学影像") || lower.contains("medical image") || lower.contains("segmentation")) return "医学影像";
         if (lower.contains("mamba") || lower.contains("yolo") || raw.contains("目标检测")) return "目标检测";
         if (raw.contains("液态神经") || lower.contains("liquid neural")) return "液态神经网络";
@@ -899,11 +1112,28 @@ public class TopicResearchService {
 
     private boolean isGenericAnalysis(String value) {
         if (!StringUtils.hasText(value)) return true;
-        return value.contains("可把大方向收窄到可检索")
+        return thinStructuredAnalysis(value)
+            || !value.contains("【摘要】")
+            || value.contains("候选文献不足")
+            || value.contains("可把大方向收窄到可检索")
             || value.contains("围绕该小类比较代表论文")
             || value.contains("继续从真实候选论文中抽取")
             || value.contains("先读")
             || value.length() < 24;
+    }
+
+    private boolean thinStructuredAnalysis(String value) {
+        if (!StringUtils.hasText(value) || !value.contains("【摘要】")) return false;
+        String[] required = {"摘要", "具体方法", "发文现状", "优势", "局限", "潜在论文", "代表论文"};
+        int shortBlocks = 0;
+        for (String label : required) {
+            Pattern pattern = Pattern.compile("【" + Pattern.quote(label) + "】([\\s\\S]*?)(?=【[^】]+】|$)");
+            Matcher matcher = pattern.matcher(value);
+            if (!matcher.find()) return true;
+            String body = matcher.group(1).replaceAll("\\s+", "");
+            if (body.length() < 34) shortBlocks++;
+        }
+        return shortBlocks >= 2;
     }
 
     private String inferDiscipline(String text) {
@@ -912,6 +1142,136 @@ public class TopicResearchService {
         if (value.contains("教育")) return "教育";
         if (value.contains("材料")) return "材料";
         return "计算机";
+    }
+
+    private List<String> researchLanes(String direction, String discipline, String methodPreference, List<String> constraints) {
+        String value = String.join(" ", text(direction), text(discipline), text(methodPreference), String.join(" ", constraints)).toLowerCase(Locale.ROOT);
+        if (value.contains("llm") || value.contains("大模型") || value.contains("语言模型")) {
+            return List.of("技术接受度", "幻觉评测", "提示压缩", "课堂反馈", "检索增强", "低成本部署");
+        }
+        if (value.contains("医学影像") || value.contains("segmentation") || value.contains("medical image")) {
+            return List.of("小样本分割", "跨设备泛化", "弱监督标注", "基础模型迁移", "临床指标解释", "不确定性评估");
+        }
+        if (value.contains("药") || value.contains("drug") || value.contains("molecule")) {
+            return List.of("分子表征", "性质预测", "药靶互作", "色谱质谱建模", "小样本筛选", "可解释预测");
+        }
+        if (value.contains("教育")) {
+            return List.of("学习过程诊断", "个性化反馈", "课堂行为建模", "作业质量评估", "学习风险预警", "教师采纳机制");
+        }
+        if (value.contains("因果") || value.contains("统计")) {
+            return List.of("变量识别", "反事实估计", "异质性分析", "稳健性检验", "指标体系", "政策场景验证");
+        }
+        return List.of("数据可得性", "方法复现", "场景迁移", "评价指标", "轻量部署", "争议问题");
+    }
+
+    private List<String> concreteTopicClusters(String direction, String discipline, String lane) {
+        String object = topicObject(direction, discipline);
+        List<String> lanes = subtopicLanes(direction + " " + lane, discipline);
+        List<String> clusters = new ArrayList<>();
+        clusters.add(lane);
+        for (String item : lanes) {
+            clusters.add(compactSubtopicName(object + item));
+            if (clusters.size() >= 5) break;
+        }
+        return clusters;
+    }
+
+    private List<String> compactTags(List<String> values) {
+        return values.stream()
+            .map(this::text)
+            .filter(StringUtils::hasText)
+            .map(value -> value.length() > 12 ? value.substring(0, 12) : value)
+            .distinct()
+            .limit(6)
+            .toList();
+    }
+
+    private String dataHint(String name, String title, String discipline) {
+        String value = String.join(" ", name, title, discipline).toLowerCase(Locale.ROOT);
+        if (value.contains("large language") || value.contains("chatgpt") || value.contains("大语言") || value.contains("大模型") || value.contains("写作")) return "学生写作文本、平台使用日志、接受度问卷和教师反馈记录";
+        if (value.contains("医学影像") || value.contains("分割") || value.contains("medical")) return "公开医学影像数据集、标注掩膜和跨中心验证集";
+        if (value.contains("药") || value.contains("molecule") || value.contains("drug")) return "MoleculeNet、ChEMBL、PubChem 或色谱/质谱公开记录";
+        if (value.contains("教育") || value.contains("学生") || value.contains("课堂")) return "问卷量表、学习平台日志、作业文本和课堂行为记录";
+        if (value.contains("时序") || value.contains("预测")) return "公开时序基准、传感器记录或业务事件序列";
+        if (value.contains("材料")) return "Materials Project、OQMD 或材料性能公开表格";
+        return "代表论文中的公开数据、补充材料、开源代码和可复现实验设置";
+    }
+
+    private String methodHint(String name, String title, String discipline) {
+        String value = String.join(" ", name, title, discipline).toLowerCase(Locale.ROOT);
+        if (value.contains("llm") || value.contains("large language") || value.contains("chatgpt") || value.contains("大语言") || value.contains("大模型") || value.contains("提示")) return "TAM/UTAUT 接受度模型、写作质量评分、提示策略对照和人工/自动评价一致性分析";
+        if (value.contains("分割") || value.contains("影像")) return "U-Net/nnU-Net、SAM/MedSAM、参数高效微调和测试时自适应";
+        if (value.contains("药") || value.contains("molecule")) return "图神经网络、分子指纹、Transformer 表征和传统机器学习基线";
+        if (value.contains("因果")) return "倾向得分、双重差分、工具变量或稳健性检验";
+        if (value.contains("时序")) return "LSTM、Transformer、状态空间模型和滚动窗口验证";
+        return "基线复现、消融实验、统计检验和误差案例分析";
+    }
+
+    private String metricHint(String name, String title, String discipline) {
+        String value = String.join(" ", name, title, discipline).toLowerCase(Locale.ROOT);
+        if (value.contains("分割") || value.contains("影像")) return "Dice、IoU、HD95、跨域性能下降";
+        if (value.contains("药") || value.contains("molecule")) return "AUC、RMSE、MAE、富集因子和可解释特征贡献";
+        if (value.contains("教育") || value.contains("接受") || value.contains("写作") || value.contains("large language") || value.contains("大语言")) return "接受度量表、写作质量得分、学习增益、满意度和行为留存";
+        if (value.contains("时序")) return "MAE、RMSE、MAPE、推断延迟和异常召回率";
+        return "准确率、召回率、稳健性、成本和可解释性评分";
+    }
+
+    private Map<String, String> subtopicProfile(String name) {
+        String value = text(name);
+        if (value.contains("接受") || value.contains("采纳") || value.contains("反馈")) {
+            return Map.of(
+                "summary", "围绕“{name}”不再只问技术是否先进，而是研究用户为什么愿意用、何时不用、哪些风险会降低使用意愿。",
+                "method", "先构建接受度变量和使用情境，再结合{method}做问卷、访谈或日志对照",
+                "advantage", "该切口容易和真实教学、医疗或组织场景连接，结果不是单纯模型分数，而是能解释使用行为。",
+                "risk", "量表设计和样本来源会显著影响结论，若只做便利样本，外推性会比较弱。"
+            );
+        }
+        if (value.contains("小样本") || value.contains("低样本") || value.contains("少样本")) {
+            return Map.of(
+                "summary", "围绕“{name}”关注数据少、标注贵、类别不均衡时模型还能不能稳定工作，适合资源有限但想做实验的选题。",
+                "method", "固定少样本划分和公开基准，再结合{method}比较不同样本量下的性能曲线",
+                "advantage", "该切口实验规模可控，容易做出递进式结果：全量、半量、少量和跨域四组对比。",
+                "risk", "少样本实验容易受随机种子和划分方式影响，必须做多次重复和置信区间。"
+            );
+        }
+        if (value.contains("指标") || value.contains("对照") || value.contains("评测")) {
+            return Map.of(
+                "summary", "围绕“{name}”把研究重点放在评价体系，而不是继续换模型；适合已有方法很多但结论不好比较的领域。",
+                "method", "先整理代表论文的指标和基线，再用{method}复现一组统一评价协议",
+                "advantage", "该切口贡献清楚，能产出统一指标表、错误案例库和更公平的基线比较。",
+                "risk", "如果只堆指标不解释指标含义，论文会显得像实验报告，需要加入任务边界和指标适用性讨论。"
+            );
+        }
+        if (value.contains("迁移") || value.contains("泛化") || value.contains("跨")) {
+            return Map.of(
+                "summary", "围绕“{name}”研究模型从一个数据域迁移到另一个数据域时哪里失效，重点不是单点精度，而是跨场景稳定性。",
+                "method", "构建源域/目标域数据组合，再结合{method}比较直接迁移、微调和自适应策略",
+                "advantage", "该切口比普通复现更有问题意识，能解释不同数据分布、设备或人群导致的性能变化。",
+                "risk", "跨域数据如果来源不清，结论很容易被数据偏差解释掉，需要保留数据描述和分布诊断。"
+            );
+        }
+        if (value.contains("风险") || value.contains("边界") || value.contains("不确定")) {
+            return Map.of(
+                "summary", "围绕“{name}”专门研究方法什么时候不可靠，把失败条件、伦理限制和适用边界写成论文贡献。",
+                "method", "先列出错误类型和边界场景，再结合{method}做压力测试、消融和人工核验",
+                "advantage", "该切口有现实价值，尤其适合医疗、教育和管理场景，因为用户更关心系统何时不能信。",
+                "risk", "风险分析需要足够案例支撑，若只有主观判断，容易显得空，需要把失败案例结构化。"
+            );
+        }
+        if (value.contains("部署") || value.contains("轻量") || value.contains("成本")) {
+            return Map.of(
+                "summary", "围绕“{name}”关注模型能不能在低成本环境下运行，适合把算法性能和真实使用成本放在同一张表里讨论。",
+                "method", "设置参数量、推理延迟和资源消耗预算，再结合{method}比较轻量化方案",
+                "advantage", "该切口很适合做工程型论文，能把准确率、速度、显存和部署复杂度统一起来。",
+                "risk", "如果只压缩模型而不解释精度损失来源，贡献会偏工程调参，需要增加误差分析。"
+            );
+        }
+        return Map.of(
+            "summary", "围绕“{name}”把大方向收窄为一个可以验证的小问题：限定研究对象、数据来源和评价指标，不再停留在“先了解某篇论文”的层面。",
+            "method", "先建立代表论文矩阵，再用{method}做小规模复现或对比",
+            "advantage", "该方向边界清楚、交付物明确；如果实验资源有限，也能先用公开数据完成初版验证。",
+            "risk", "代表论文可能集中在相邻场景，数据分布和真实任务并不完全一致。"
+        );
     }
 
     private List<String> split(String value) {
@@ -923,12 +1283,29 @@ public class TopicResearchService {
             .toList();
     }
 
+    private List<String> stringList(Object value) {
+        if (value instanceof Collection<?> collection) {
+            return collection.stream().map(this::text).filter(StringUtils::hasText).distinct().toList();
+        }
+        if (value instanceof String raw) return split(raw);
+        return List.of();
+    }
+
     private int clamp(int value) {
         return Math.max(0, Math.min(100, value));
     }
 
     private int value(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private int intValue(Object value, int fallback) {
+        if (value instanceof Number number) return number.intValue();
+        try {
+            return Integer.parseInt(text(value));
+        } catch (Exception ignored) {
+            return fallback;
+        }
     }
 
     private String defaultText(Map<String, Object> body, String key, String fallback) {

@@ -592,11 +592,13 @@ import MarkdownIt from "markdown-it";
 import { useAuthStore } from "../stores/auth";
 import { useForumStore } from "../stores/forum";
 import { useLibraryStore } from "../stores/library";
+import { useDialogStore } from "../stores/dialog";
 import { paperpilotApi } from "../services/paperpilotApi";
 
 const authStore = useAuthStore();
 const forumStore = useForumStore();
 const libraryStore = useLibraryStore();
+const dialogStore = useDialogStore();
 const router = useRouter();
 
 const postModules = [
@@ -1009,16 +1011,31 @@ async function insertMarkdown(before, after = "") {
 }
 
 async function insertAnnouncementTemplate() {
-  if (form.content.trim() && !window.confirm("当前正文已有内容，确定追加公告模板吗？")) return;
+  if (form.content.trim()) {
+    const ok = await dialogStore.confirm("当前正文已有内容，确定追加公告模板吗？", {
+      title: "追加公告模板",
+      confirmText: "追加",
+      cancelText: "取消",
+    });
+    if (!ok) return;
+  }
   form.content = form.content.trim() ? `${form.content.trim()}\n\n${announcementTemplate}` : announcementTemplate;
   await nextTick();
   contentEditor.value?.focus();
 }
 
-function clearMarkdownContent() {
-  if (!form.content.trim() || window.confirm("确定清空正文内容吗？")) {
+async function clearMarkdownContent() {
+  if (!form.content.trim()) {
     form.content = "";
+    return;
   }
+  const ok = await dialogStore.confirm("确定清空正文内容吗？", {
+    title: "清空正文",
+    confirmText: "清空",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (ok) form.content = "";
 }
 
 async function handleEditorPaste(event) {
@@ -1099,7 +1116,13 @@ function isMine(post) {
 }
 
 async function removeMyPost(post) {
-  if (!window.confirm(`确定删除“${post.title}”吗？`)) return;
+  const ok = await dialogStore.confirm(`确定删除“${post.title}”吗？`, {
+    title: "删除帖子",
+    confirmText: "删除",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok) return;
   await forumStore.deletePost(post.id);
   window.dispatchEvent(new Event("paperpilot:forum-posts-changed"));
 }

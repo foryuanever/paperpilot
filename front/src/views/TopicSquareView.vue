@@ -17,28 +17,43 @@
         </button>
       </div>
 
-      <select v-model="filters.discipline" class="toolbar-select" @change="loadTopics">
-        <option value="">按标签筛选</option>
-        <option v-for="item in disciplines" :key="item" :value="item">{{ item }}</option>
+      <select v-model="filters.tag" class="toolbar-select">
+        <option value="">按当前标签筛选</option>
+        <option v-for="item in availableTagFilters" :key="item.value" :value="item.value">
+          {{ item.value }}（{{ item.count }}）
+        </option>
       </select>
 
       <button type="button" class="toolbar-primary" @click="openGenerator">发起调研</button>
+      <button v-if="isAdmin" type="button" class="toolbar-admin-generate" :disabled="adminGenerating" @click="generateOfficialHotTopics">
+        {{ adminGenerating ? "AI 思考中" : "AI 生成官方热点" }}
+      </button>
     </header>
 
     <section class="square-status-row">
       <div>
         <strong>选题广场</strong>
-        <span>{{ topics.length }} 个方向 · deep-research 接入后端 · 可收藏、查看代表论文来源、生成综述/组会提纲</span>
+        <span>{{ filteredTopics.length }} / {{ topics.length }} 个方向 · deep-research 接入后端 · 可收藏、查看代表论文来源、生成综述/组会提纲</span>
       </div>
-      <button type="button" @click="loadTopics" :disabled="loading">{{ loading ? "刷新中" : "刷新" }}</button>
+      <button type="button" @click="loadTopics" :disabled="loading || adminGenerating">{{ loading ? "刷新中" : "刷新" }}</button>
     </section>
 
     <main class="topic-board" :class="{ loading }">
       <article v-if="loading && !topics.length" v-for="index in 6" :key="index" class="topic-card skeleton-card"></article>
 
-      <article v-for="topic in topics" :key="topic.id" class="topic-card" @click="selectedTopic = topic">
+      <article v-for="topic in filteredTopics" :key="topic.id" class="topic-card" :class="{ 'admin-manageable': isAdmin }" @click="selectedTopic = topic">
         <div class="topic-visual" :class="visualClass(topic)">
           <span class="provider-badge" :class="{ official: topicProviderLabel(topic) === '官方' }">{{ topicProviderLabel(topic) }}</span>
+          <button
+            v-if="isAdmin"
+            type="button"
+            class="topic-admin-delete"
+            :disabled="isDeletingTopic(topic)"
+            title="删除这个选题"
+            @click.stop="deleteTopicAsAdmin(topic)"
+          >
+            {{ isDeletingTopic(topic) ? "删除中" : "删除" }}
+          </button>
           <div class="visual-system" aria-hidden="true">
             <i class="axis axis-x"></i>
             <i class="axis axis-y"></i>
@@ -71,9 +86,9 @@
         </footer>
       </article>
 
-      <div v-if="!loading && !topics.length" class="empty-state">
+      <div v-if="!loading && !filteredTopics.length" class="empty-state">
         <strong>还没有匹配的选题</strong>
-        <span>换一个关键词，或直接发起一次 deep-research 调研。</span>
+        <span>{{ topics.length ? "换一个标签，或清空筛选。" : "换一个关键词，或直接发起一次 deep-research 调研。" }}</span>
         <button type="button" @click="openGenerator">发起调研</button>
       </div>
     </main>
@@ -114,12 +129,25 @@
 
         <section class="subtopic-panel">
           <div class="paper-panel-head">
-            <h3>推荐小类</h3>
-            <span>3-5 个切入点</span>
+            <h3>推荐方向</h3>
+            <span>每个方向都由模型生成完整调研结构</span>
           </div>
-          <article v-for="item in detailSubtopics(selectedTopic)" :key="item.name">
-            <strong>{{ item.name }}</strong>
-            <p>{{ item.analysis }}</p>
+          <article v-for="(item, index) in detailSubtopics(selectedTopic)" :key="item.name" class="direction-report">
+            <div class="subtopic-title-row">
+              <div>
+                <small>推荐方向 {{ String(index + 1).padStart(2, "0") }}</small>
+                <strong>{{ item.name }}</strong>
+              </div>
+              <span>推荐度 {{ directionScore(item, selectedTopic, index) }}</span>
+            </div>
+            <div class="subtopic-analysis direction-report-body">
+              <section v-for="block in directionReportBlocks(item, selectedTopic)" :key="block.label + block.text" :class="['direction-report-block', block.key]">
+                <b>{{ block.label }}</b>
+                <ul>
+                  <li v-for="point in blockPoints(block.text)" :key="point">{{ point }}</li>
+                </ul>
+              </section>
+            </div>
             <div v-if="subtopicPapers(item, selectedTopic).length" class="subtopic-papers">
               <div v-for="paper in subtopicPapers(item, selectedTopic)" :key="paper.title" class="subtopic-paper-row">
                 <div>
@@ -130,22 +158,6 @@
               </div>
             </div>
           </article>
-        </section>
-
-        <section class="paper-panel">
-          <div class="paper-panel-head">
-            <h3>代表论文</h3>
-            <span>{{ evidenceLabel(selectedTopic) }}</span>
-          </div>
-          <div v-for="paper in selectedTopic.papers || []" :key="paper.title" class="represent-paper-row">
-            <div>
-              <strong>{{ paper.title }}</strong>
-              <span>{{ paperSourceMeta(paper) }}</span>
-              <p v-if="paper.reason">{{ paper.reason }}</p>
-            </div>
-            <button type="button" @click.stop="openPaperSource(paper)">查看来源</button>
-          </div>
-          <p v-if="!(selectedTopic.papers || []).length" class="paper-empty">还没有足够真实候选文献。请在发起调研时补充英文关键词、数据来源或研究对象后重新检索。</p>
         </section>
 
         <footer>
@@ -170,7 +182,10 @@
           </label>
           <label>
             研究方向大类
-            <input v-model.trim="generatorForm.discipline" required placeholder="例如：医学影像 / 药物发现 / 教育技术" />
+            <input v-model.trim="generatorForm.discipline" required list="discipline-presets" placeholder="例如：医学影像 / 药物发现 / 教育技术" />
+            <datalist id="discipline-presets">
+              <option v-for="item in disciplinePresets" :key="item" :value="item" />
+            </datalist>
           </label>
           <label>
             学历阶段
@@ -187,25 +202,74 @@
           <label>
             资源条件
             <select v-model="generatorForm.resource">
-              <option>无实验，仅公开数据</option>
-              <option>有导师课题</option>
-              <option>有实验室/设备</option>
-              <option>有企业或医院数据</option>
+              <option v-for="item in resources" :key="item" :value="item">{{ item }}</option>
             </select>
+          </label>
+          <label>
+            数据来源
+            <select v-model="generatorForm.dataAccess">
+              <option v-for="item in dataAccessOptions" :key="item" :value="item">{{ item }}</option>
+            </select>
+          </label>
+          <label>
+            数据/样本形态
+            <select v-model="generatorForm.sampleType">
+              <option v-for="item in sampleTypes" :key="item" :value="item">{{ item }}</option>
+            </select>
+          </label>
+          <label>
+            方法偏好
+            <select v-model="generatorForm.methodPreference">
+              <option v-for="item in methodOptions" :key="item" :value="item">{{ item }}</option>
+            </select>
+          </label>
+          <label>
+            选题尺度
+            <select v-model="generatorForm.topicScale">
+              <option v-for="item in topicScales" :key="item" :value="item">{{ item }}</option>
+            </select>
+          </label>
+          <label>
+            期望贡献
+            <select v-model="generatorForm.expectedContribution">
+              <option v-for="item in contributionOptions" :key="item" :value="item">{{ item }}</option>
+            </select>
+          </label>
+          <fieldset class="full chip-field">
+            <legend>重点约束</legend>
+            <button v-for="item in constraintOptions" :key="item" type="button" :class="{ active: generatorForm.constraints.includes(item) }" @click="toggleConstraint(item)">
+              {{ item }}
+            </button>
+          </fieldset>
+          <label>
+            英文关键词
+            <input v-model.trim="generatorForm.keywords" placeholder="例如：few-shot segmentation, foundation model" />
+          </label>
+          <label>
+            避开路线
+            <input v-model.trim="generatorForm.avoidRoutes" placeholder="例如：不做纯综述、不做模型堆叠" />
+          </label>
+          <label class="full">
+            已读/想参考的论文
+            <textarea v-model.trim="generatorForm.seedPapers" rows="3" placeholder="可粘贴 1-5 篇论文题名、DOI 或 arXiv 号；系统会尽量围绕这些论文扩展，而不是乱发散"></textarea>
           </label>
           <label class="full">
             补充说明
-            <textarea v-model.trim="generatorForm.note" rows="4" placeholder="写清楚专业、可拿到的数据、导师方向或不想做的路线"></textarea>
+            <textarea v-model.trim="generatorForm.note" rows="4" placeholder="写清楚专业、可拿到的数据、导师方向、已有论文、希望偏理论/工程/应用，或明确不想做的路线"></textarea>
           </label>
           <button type="submit" class="toolbar-primary">开始调研</button>
         </form>
 
         <div v-else class="research-progress">
+          <header class="research-progress-head">
+            <strong>正在生成调研 brief</strong>
+            <span>{{ generationSteps[generationIndex] }}</span>
+          </header>
           <div v-for="(step, index) in generationSteps" :key="step" :class="{ active: index <= generationIndex }">
             <i>{{ index + 1 }}</i>
             <span>{{ step }}</span>
           </div>
-          <p>正在先检索真实文献，再融合成多张可选选题卡。真实模型响应较慢时这里会持续等待。</p>
+          <p>会先用方向大类扩展检索词，再用真实候选文献筛掉泛题，最后把每个推荐方向写成摘要、具体方法、发文现状、优势、局限、潜在论文和代表论文。</p>
         </div>
       </section>
     </div>
@@ -215,24 +279,49 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { paperpilotApi } from "../services/paperpilotApi";
+import { useAuthStore } from "../stores/auth";
+import { useDialogStore } from "../stores/dialog";
 
 const router = useRouter();
-const disciplines = ["计算机", "医学", "教育", "管理", "材料", "经济", "心理", "公卫"];
+const authStore = useAuthStore();
+const dialogStore = useDialogStore();
+const isAdmin = computed(() => authStore.profile.role === "管理员" || authStore.session?.role === "管理员");
+const disciplinePresets = [
+  "人工智能",
+  "LLM 大模型",
+  "多模态学习",
+  "医学影像",
+  "药物发现",
+  "生物信息学",
+  "教育技术",
+  "公共卫生",
+  "材料计算",
+  "管理科学",
+  "数字人文",
+  "心理测量",
+];
 const stages = ["本科", "硕士", "博士", "课程论文"];
-const goals = ["开题", "综述", "基金背景", "投稿选题", "组会准备"];
+const goals = ["课程论文", "开题", "综述", "基金背景", "投稿选题", "组会准备", "毕业论文", "横向项目"];
+const resources = ["无实验，仅公开数据", "只有文献和开源代码", "有导师课题", "有实验室/设备", "有企业或医院数据", "有问卷/访谈对象", "已有一批论文想继续挖"];
+const dataAccessOptions = ["公开数据集优先", "可爬取公开网页/报告", "问卷/访谈可获得", "实验室数据可获得", "医院/企业数据需脱敏", "暂不确定，需要推荐数据源"];
+const sampleTypes = ["表格数据", "文本/论文语料", "图像/医学影像", "时序/传感器", "多模态数据", "问卷/访谈", "代码/日志", "暂不确定"];
+const methodOptions = ["不限，先找可行路线", "深度学习/大模型", "传统机器学习 + 可解释", "统计建模/因果推断", "综述/计量分析", "实验设计/对照验证", "系统开发/工程落地"];
+const topicScales = ["硕士可完成的小题", "本科可完成的小题", "博士投稿级问题", "基金背景方向", "课程作业快速成稿"];
+const contributionOptions = ["提出一个可验证问题", "复现并改进代表方法", "建立评价指标/基准", "做跨场景对比", "整理综述框架", "形成系统原型", "给导师可改的开题方向"];
+const constraintOptions = ["必须有公开数据", "必须可复现", "尽量少训练成本", "需要可解释性", "要有对照实验", "适合组会汇报", "适合投稿", "避开敏感数据", "需要导师可改", "不碰隐私数据", "能在 2 周内验证", "需要代码开源"];
 const sortTabs = [
   { label: "最新", value: "latest" },
   { label: "最热", value: "hot" },
   { label: "点赞最多", value: "liked" },
 ];
-const generationSteps = ["拆解大类", "检索真实文献", "聚类小方向", "生成多组选题", "写入我的收藏"];
+const generationSteps = ["读取研究 brief", "拆解对象和数据", "扩展中英文检索词", "检索真实文献", "生成 3-5 个推荐方向", "筛掉泛题和重复方向", "匹配代表论文来源", "写调研报告", "写入我的收藏"];
 
 const filters = reactive({
   keyword: "",
-  discipline: "",
+  tag: "",
   sort: "latest",
 });
 const generatorForm = reactive({
@@ -241,6 +330,17 @@ const generatorForm = reactive({
   stage: "硕士",
   goal: "开题",
   resource: "无实验，仅公开数据",
+  dataAccess: "公开数据集优先",
+  sampleType: "暂不确定",
+  methodPreference: "不限，先找可行路线",
+  topicScale: "硕士可完成的小题",
+  outputDepth: "详细：每个推荐方向都给 7 段调研报告",
+  evaluationFocus: "准确率/效果提升",
+  expectedContribution: "提出一个可验证问题",
+  constraints: ["必须有公开数据", "必须可复现"],
+  keywords: "",
+  avoidRoutes: "",
+  seedPapers: "",
   note: "",
 });
 
@@ -250,8 +350,10 @@ const savedOnly = ref(false);
 const selectedTopic = ref(null);
 const showGenerator = ref(false);
 const generating = ref(false);
+const adminGenerating = ref(false);
 const generationIndex = ref(0);
 const toastMessage = ref("");
+const deletingTopicIds = ref(new Set());
 let progressTimer = null;
 
 onMounted(loadTopics);
@@ -264,7 +366,6 @@ async function loadTopics() {
   try {
     topics.value = await paperpilotApi.getTopics({
       keyword: filters.keyword,
-      discipline: filters.discipline,
       sort: filters.sort,
       savedOnly: savedOnly.value,
     });
@@ -274,6 +375,42 @@ async function loadTopics() {
     loading.value = false;
   }
 }
+
+const availableTagFilters = computed(() => {
+  const counts = new Map();
+  for (const topic of topics.value) {
+    const values = [
+      topic.discipline,
+      topic.stage,
+      topic.goal,
+      ...(Array.isArray(topic.tags) ? topic.tags : []),
+      ...(Array.isArray(topic.themeClusters) ? topic.themeClusters : []),
+    ];
+    values
+      .map(value => String(value || "").trim())
+      .filter(Boolean)
+      .forEach(value => counts.set(value, (counts.get(value) || 0) + 1));
+  }
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value, "zh-Hans-CN"))
+    .slice(0, 60);
+});
+
+const filteredTopics = computed(() => {
+  const tag = String(filters.tag || "").trim();
+  if (!tag) return topics.value;
+  return topics.value.filter(topic => {
+    const values = [
+      topic.discipline,
+      topic.stage,
+      topic.goal,
+      ...(Array.isArray(topic.tags) ? topic.tags : []),
+      ...(Array.isArray(topic.themeClusters) ? topic.themeClusters : []),
+    ];
+    return values.some(value => String(value || "").trim() === tag);
+  });
+});
 
 function setSavedOnly(value) {
   savedOnly.value = value;
@@ -299,11 +436,17 @@ function closeGenerator() {
 async function generateTopic() {
   generating.value = true;
   generationIndex.value = 0;
+  const startedAt = Date.now();
   progressTimer = setInterval(() => {
     generationIndex.value = Math.min(generationSteps.length - 1, generationIndex.value + 1);
-  }, 1100);
+  }, 1500);
   try {
     const result = await paperpilotApi.generateTopic({ ...generatorForm });
+    const minimumMs = 12500;
+    const elapsed = Date.now() - startedAt;
+    if (elapsed < minimumMs) {
+      await new Promise(resolve => setTimeout(resolve, minimumMs - elapsed));
+    }
     const createdTopics = Array.isArray(result) ? result : [result];
     const createdIds = new Set(createdTopics.map(item => item.id));
     topics.value = [...createdTopics, ...topics.value.filter(item => !createdIds.has(item.id))];
@@ -317,6 +460,67 @@ async function generateTopic() {
     generating.value = false;
     generationIndex.value = 0;
     if (progressTimer) clearInterval(progressTimer);
+  }
+}
+
+async function generateOfficialHotTopics() {
+  if (!isAdmin.value || adminGenerating.value) return;
+  adminGenerating.value = true;
+  const startedAt = Date.now();
+  toast("管理员热点生成已开始：正在调用选题调研模型和真实文献检索");
+  try {
+    const generated = await paperpilotApi.generateAdminHotTopics({ maxTopics: 3 });
+    const minimumMs = 16000;
+    const elapsed = Date.now() - startedAt;
+    if (elapsed < minimumMs) {
+      await new Promise(resolve => setTimeout(resolve, minimumMs - elapsed));
+    }
+    const createdTopics = Array.isArray(generated) ? generated.slice(0, 3) : [];
+    const createdIds = new Set(createdTopics.map(item => item.id));
+    topics.value = [...createdTopics, ...topics.value.filter(item => !createdIds.has(item.id))];
+    savedOnly.value = false;
+    toast(`AI 已生成 ${createdTopics.length} 个官方热点选题`);
+  } catch (error) {
+    toast(error.response?.data?.message || "官方热点生成失败：请先在管理员模型配置里配置选题调研模型");
+  } finally {
+    adminGenerating.value = false;
+  }
+}
+
+function isDeletingTopic(topic) {
+  return deletingTopicIds.value.has(topic?.id);
+}
+
+async function deleteTopicAsAdmin(topic) {
+  if (!isAdmin.value || !topic?.id || isDeletingTopic(topic)) return;
+  const ok = await dialogStore.confirm(`确认删除选题「${topic.title}」吗？删除后用户侧选题大厅也会移除。`, {
+    title: "删除选题",
+    confirmText: "删除",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok) return;
+  deletingTopicIds.value = new Set([...deletingTopicIds.value, topic.id]);
+  try {
+    await paperpilotApi.deleteAdminTopic(topic.id);
+    topics.value = topics.value.filter(item => item.id !== topic.id);
+    if (selectedTopic.value?.id === topic.id) selectedTopic.value = null;
+    toast("已删除该选题");
+  } catch (error) {
+    toast(error.response?.data?.message || "删除选题失败");
+  } finally {
+    const next = new Set(deletingTopicIds.value);
+    next.delete(topic.id);
+    deletingTopicIds.value = next;
+  }
+}
+
+function toggleConstraint(item) {
+  const index = generatorForm.constraints.indexOf(item);
+  if (index >= 0) {
+    generatorForm.constraints.splice(index, 1);
+  } else {
+    generatorForm.constraints.push(item);
   }
 }
 
@@ -407,6 +611,86 @@ function detailSubtopics(topic) {
     analysis: `从“${name}”切入，可以把大方向收窄到一个可检索、可复现的小问题。`,
     papers: (topic?.papers || []).slice(0, 2),
   }));
+}
+
+function analysisBlocks(value) {
+  const text = String(value || "").trim();
+  if (!text) return [{ label: "摘要", text: "该推荐方向还缺少足够分析，需要补充真实文献和数据条件后继续判断。" }];
+  const parts = text
+    .split(/(?=【[^】]+】)/g)
+    .map(item => item.trim())
+    .filter(Boolean)
+    .map(item => {
+      const match = item.match(/^【([^】]+)】\s*([\s\S]*)$/);
+      if (match) return { label: match[1], text: match[2].trim() };
+      return { label: "分析", text: item };
+    });
+  return parts.length ? parts : [{ label: "分析", text }];
+}
+
+function directionReportBlocks(item, topic) {
+  const rawBlocks = analysisBlocks(item?.analysis);
+  const alias = {
+    "局限/风险": "局限",
+    "潜在论文场景": "潜在论文",
+    "代表文献": "代表论文",
+  };
+  const map = new Map();
+  rawBlocks.forEach(block => {
+    const label = alias[block.label] || block.label;
+    if (!map.has(label)) map.set(label, block.text);
+  });
+  const papers = subtopicPapers(item, topic);
+  const paperText = papers.length
+    ? papers.map(paper => `《${paper.title}》（${paperSourceMeta(paper)}）`).join("；")
+    : "候选文献不足，需要继续检索英文关键词、近三年综述和公开数据来源。";
+  const fallback = {
+    "摘要": `“${item?.name || "当前方向"}”需要先限定研究对象、数据来源和评价指标，再判断是否适合继续开题或投稿。`,
+    "具体方法": detailText(topic, "method"),
+    "发文现状": papers.length
+      ? `当前代表论文主要来自 ${papers.map(paper => paper.source || paper.verifiedBy || "academic-search").filter(Boolean).slice(0, 3).join("、")}；建议按年份、数据集、方法和指标整理发文矩阵，再判断是热点延伸还是应用补洞。`
+      : "当前方向还缺少足够真实来源，建议扩大英文关键词后再判断发文热度。",
+    "优势": "这个方向如果能拿到可复现数据，容易形成清楚的问题边界、方法对照和可解释指标，后续也能自然进入综述、组会汇报和论文计划。",
+    "局限": detailText(topic, "risk"),
+    "潜在论文": `可围绕“${item?.name || topic?.title || "当前方向"}”写成小论文：先提出任务缺口，再给出数据、方法、实验和失败边界，避免只做泛泛综述。`,
+    "代表论文": paperText,
+  };
+  const order = ["摘要", "具体方法", "发文现状", "优势", "局限", "潜在论文", "代表论文"];
+  return order.map(label => ({
+    key: label === "代表论文" ? "paper-block" : "",
+    label,
+    text: map.get(label) || fallback[label],
+  }));
+}
+
+function blockPoints(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return [];
+  const bulletParts = text
+    .split(/[；;。]\s*|(?=·)|(?=•)|(?=^\d+[.、])/g)
+    .map(item => item.replace(/^[·•\-\s]+/, "").trim())
+    .filter(item => item.length > 3);
+  if (bulletParts.length >= 2) return bulletParts.slice(0, 6);
+  if (text.length <= 72) return [text];
+  const chunks = [];
+  let rest = text;
+  while (rest.length > 0 && chunks.length < 5) {
+    const slice = rest.slice(0, 66);
+    const cut = Math.max(slice.lastIndexOf("，"), slice.lastIndexOf("、"), slice.lastIndexOf(" "));
+    const end = cut > 24 ? cut + 1 : Math.min(66, rest.length);
+    chunks.push(rest.slice(0, end).trim());
+    rest = rest.slice(end).trim();
+  }
+  return chunks.filter(Boolean);
+}
+
+function directionScore(item, topic, index) {
+  const explicit = Number(item?.recommendationScore || item?.score || item?.recommendation);
+  if (Number.isFinite(explicit) && explicit > 0) return Math.max(1, Math.min(99, Math.round(explicit)));
+  const feasibility = Number(topic?.feasibility) || 72;
+  const innovation = Number(topic?.innovation) || 72;
+  const paperBoost = Math.min(8, subtopicPapers(item, topic).length * 3);
+  return Math.max(68, Math.min(96, Math.round(feasibility * 0.48 + innovation * 0.34 + paperBoost + 10 - index * 3)));
 }
 
 function subtopicPapers(item, topic) {
@@ -522,7 +806,7 @@ function toast(message) {
   top: 86px;
   z-index: 20;
   display: grid;
-  grid-template-columns: auto minmax(260px, 1fr) auto minmax(160px, 220px) auto;
+  grid-template-columns: auto minmax(260px, 1fr) auto minmax(160px, 220px) auto auto;
   gap: 14px;
   align-items: center;
   width: min(1480px, calc(100% - 48px));
@@ -621,6 +905,7 @@ button:disabled {
 }
 
 .toolbar-primary,
+.toolbar-admin-generate,
 .square-status-row button,
 .download-btn,
 .topic-detail footer .primary {
@@ -634,11 +919,18 @@ button:disabled {
 }
 
 .toolbar-primary:hover,
+.toolbar-admin-generate:hover,
 .square-status-row button:hover,
 .download-btn:hover,
 .topic-detail footer button:hover {
   transform: translateY(-1px);
   filter: brightness(1.04);
+}
+
+.toolbar-admin-generate {
+  color: #0f3b2e;
+  background: #dcfce7;
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, .26);
 }
 
 .square-status-row {
@@ -774,6 +1066,28 @@ button:disabled {
   color: #064e3b;
   background: #ecfdf5;
   border-color: rgba(236, 253, 245, .75);
+}
+
+.topic-admin-delete {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 4;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: #7f1d1d;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 4px 8px rgba(23, 32, 51, .12);
+  font-size: 12px;
+  font-weight: 900;
+  transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.topic-admin-delete:hover:not(:disabled) {
+  transform: translateY(-1px);
+  color: #fff;
+  background: #dc2626;
 }
 
 .visual-system {
@@ -998,11 +1312,13 @@ button:disabled {
 
 .modal-backdrop {
   position: fixed;
-  inset: 0;
+  inset: 74px 0 0;
   z-index: 80;
-  display: grid;
-  place-items: center;
-  padding: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: 22px 24px 28px;
   background: rgba(15, 23, 42, .46);
 }
 
@@ -1010,12 +1326,16 @@ button:disabled {
 .generator-modal {
   position: relative;
   width: min(980px, 100%);
-  max-height: min(86vh, 860px);
+  max-height: calc(100vh - 120px);
   overflow: auto;
-  padding: 28px;
+  padding: 24px;
   border-radius: 18px;
   background: #fff;
   box-shadow: 0 28px 80px rgba(15, 23, 42, .22);
+}
+
+.generator-modal {
+  width: min(1120px, 100%);
 }
 
 .modal-close {
@@ -1117,22 +1437,140 @@ button:disabled {
   margin-top: 14px;
 }
 
-.subtopic-panel article {
+.subtopic-panel .direction-report {
   display: grid;
-  gap: 8px;
-  padding: 14px;
-  border-radius: 12px;
-  background: #fff;
+  gap: 15px;
+  padding: 18px 20px;
+  border: 1px solid rgba(15, 118, 110, .22);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(240, 253, 250, .78), rgba(255, 255, 255, .98) 210px),
+    #fff;
 }
 
-.subtopic-panel article strong {
+.subtopic-title-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5edf6;
+}
+
+.subtopic-title-row > div {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.subtopic-title-row small {
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.subtopic-title-row strong {
   color: #172033;
-  font-size: 16px;
+  font-size: 18px;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+.subtopic-title-row span {
+  flex: 0 0 auto;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 11px;
+  border-radius: 999px;
+  color: #92400e;
+  background: #fff7df;
+  border: 1px solid #fde68a;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.subtopic-analysis,
+.direction-report-body {
+  display: grid;
+  gap: 0;
+}
+
+.direction-report-block {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 14px;
+  padding: 13px 0;
+  border-bottom: 1px dashed rgba(15, 23, 42, .12);
+  background: transparent;
+}
+
+.direction-report-block:first-child {
+  padding-top: 2px;
+}
+
+.direction-report-block:last-child {
+  border-bottom: 0;
+}
+
+.subtopic-analysis b {
+  position: sticky;
+  top: 10px;
+  align-self: start;
+  color: #0f766e;
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1.5;
+}
+
+.subtopic-analysis b::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: currentColor;
+  vertical-align: 1px;
+}
+
+.subtopic-analysis ul {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subtopic-analysis li {
+  position: relative;
+  min-width: 0;
+  max-width: 78ch;
+  color: #405169;
+  line-height: 1.68;
+  font-size: 13px;
+  font-weight: 690;
+  text-wrap: pretty;
+}
+
+.subtopic-analysis li::before {
+  content: "·";
+  margin-right: 6px;
+  color: #0f766e;
+  font-weight: 950;
+}
+
+.direction-report-block.paper-block {
+  padding: 12px 14px;
+  border: 1px solid rgba(15, 118, 110, .16);
+  border-radius: 14px;
+  background: #f7fffd;
 }
 
 .subtopic-papers {
   display: grid;
-  gap: 8px;
+  gap: 7px;
 }
 
 .subtopic-paper-row,
@@ -1141,7 +1579,7 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 10px 10px 10px 12px;
+  padding: 9px 10px 9px 12px;
   border: 1px solid #d7efe9;
   border-radius: 12px;
   background: linear-gradient(135deg, #f7fffd 0%, #ffffff 78%);
@@ -1158,7 +1596,7 @@ button:disabled {
 .represent-paper-row strong {
   overflow: hidden;
   color: #0f2b3b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 880;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1277,7 +1715,7 @@ button:disabled {
 
 .generator-form {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   margin-top: 22px;
 }
@@ -1289,8 +1727,14 @@ button:disabled {
   font-weight: 900;
 }
 
-.generator-form .full {
+.generator-form .full,
+.chip-field {
   grid-column: 1 / -1;
+}
+
+.generator-form label:nth-of-type(1),
+.generator-form label:nth-of-type(2) {
+  grid-column: span 2;
 }
 
 .generator-form input,
@@ -1307,10 +1751,65 @@ button:disabled {
   resize: vertical;
 }
 
+.chip-field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #d9e2ef;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.chip-field legend {
+  padding: 0 6px;
+  color: #475569;
+  font-weight: 900;
+}
+
+.chip-field button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #d5e0ee;
+  border-radius: 999px;
+  color: #526176;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.chip-field button.active {
+  color: #065f46;
+  border-color: #86efac;
+  background: #ecfdf5;
+}
+
 .research-progress {
   display: grid;
   gap: 12px;
   margin-top: 24px;
+}
+
+.research-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border: 1px solid #dbe5f3;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.research-progress-head strong {
+  color: #172033;
+  font-size: 18px;
+}
+
+.research-progress-head span {
+  color: #2563eb;
+  font-weight: 950;
 }
 
 .research-progress div {
@@ -1423,7 +1922,7 @@ button:disabled {
 
   .topic-detail,
   .generator-modal {
-    max-height: 92vh;
+    max-height: calc(100vh - 112px);
     padding: 22px;
   }
 
@@ -1436,6 +1935,17 @@ button:disabled {
   .detail-grid,
   .generator-form {
     grid-template-columns: 1fr;
+  }
+
+  .generator-form label,
+  .generator-form label:nth-of-type(1),
+  .generator-form label:nth-of-type(2) {
+    grid-column: 1 / -1;
+  }
+
+  .direction-report-block {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 }
 

@@ -15,19 +15,16 @@
               <strong>选择搜索源</strong>
               <span>ScienceDirect / PubMed / arXiv</span>
             </article>
-            <span class="flow-link"></span>
             <article class="flow-node">
               <i class="flow-icon icon-detect"></i>
               <strong>识别论文页</strong>
               <span>DOI、题名、作者、PDF 信号</span>
             </article>
-            <span class="flow-link"></span>
             <article class="flow-node">
               <i class="flow-icon icon-confirm"></i>
               <strong>点击导入</strong>
               <span>低打扰浮层，不再乱弹</span>
             </article>
-            <span class="flow-link"></span>
             <article class="flow-node">
               <i class="flow-icon icon-library"></i>
               <strong>进入文献库</strong>
@@ -66,7 +63,7 @@
               @click="openSourceLauncher(source)"
             >
               <i class="source-site-icon">
-                <img :src="source.icon" :alt="`${source.name} logo`" loading="lazy" />
+                <img v-if="source.icon" :src="source.icon" :alt="`${source.name} logo`" loading="lazy" />
                 <b>{{ source.initial }}</b>
               </i>
               <strong>{{ source.name }}</strong>
@@ -473,7 +470,7 @@ const sourceMeta = {
   },
 };
 
-const faviconFor = (domain) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+const faviconFor = () => "";
 
 const sourceLaunchers = [
   ...searchEnginePresets.map((item, index) => ({
@@ -481,7 +478,7 @@ const sourceLaunchers = [
     initial: item.shortName.slice(0, 1).toUpperCase(),
     desc: sourceMeta[item.id]?.desc || "官方学术检索入口",
     region: sourceMeta[item.id]?.region || "Source",
-    icon: sourceMeta[item.id]?.icon || faviconFor(new URL(item.url).hostname.replace(/^www\./, "")),
+    icon: "",
     tone: ["blue", "violet", "green", "ink", "red", "amber", "cyan", "purple"][index % 8],
   })),
   {
@@ -4059,6 +4056,16 @@ async function importByUrl() {
     #fff;
 }
 
+.capture-flow-hero .flow-node {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  min-width: 0 !important;
+  animation-name: none !important;
+}
+
 .flow-head {
   max-width: 720px;
   margin: 0 auto 30px;
@@ -4084,14 +4091,15 @@ async function importByUrl() {
 .flow-diagram {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 22px;
+  grid-template-columns: repeat(4, minmax(170px, 1fr));
+  gap: 28px;
   align-items: center;
-  padding: 20px 0 24px;
+  padding: 18px 0 18px;
 }
 
 .flow-node {
   position: relative;
+  z-index: 1;
   min-height: 158px;
   display: grid;
   justify-items: center;
@@ -4102,6 +4110,34 @@ async function importByUrl() {
   border-radius: 16px;
   background: rgba(255, 255, 255, .92);
   text-align: center;
+}
+
+.flow-node:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 28px;
+  height: 2px;
+  overflow: hidden;
+  background: linear-gradient(90deg, rgba(37, 99, 235, .18), rgba(20, 184, 166, .32));
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.flow-node:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  z-index: 1;
+  width: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: #2563eb;
+  transform: translate(-12px, -50%);
+  animation: flowDot 2.8s ease-out infinite;
+  pointer-events: none;
 }
 
 .flow-node strong {
@@ -4192,35 +4228,14 @@ async function importByUrl() {
   box-shadow: 0 7px 0 #ea580c, 0 14px 0 #ea580c;
 }
 
-.flow-link {
-  position: absolute;
-  top: 50%;
-  width: calc(25% - 60px);
-  height: 2px;
-  overflow: hidden;
-  background: linear-gradient(90deg, rgba(37, 99, 235, .16), rgba(20, 184, 166, .28));
-  transform: translateY(-50%);
-}
-
-.flow-link:nth-of-type(1) { left: calc(25% - 14px); }
-.flow-link:nth-of-type(2) { left: calc(50% - 14px); }
-.flow-link:nth-of-type(3) { left: calc(75% - 14px); }
-
-.flow-link::after {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 -30%;
-  width: 30%;
-  background: linear-gradient(90deg, transparent, #2563eb, transparent);
-  animation: flowPulse 2.7s ease-out infinite;
-}
-
 .browser-downloads {
+  position: relative;
+  z-index: 2;
   display: flex;
   justify-content: center;
   gap: 14px;
   flex-wrap: wrap;
-  padding-top: 2px;
+  padding-top: 16px;
 }
 
 .browser-download-btn {
@@ -4329,7 +4344,7 @@ async function importByUrl() {
 }
 
 .source-square-card .source-site-icon b {
-  display: none;
+  display: block;
   color: #2563eb;
   font-size: 15px;
   font-style: normal;
@@ -4384,8 +4399,14 @@ async function importByUrl() {
   100% { transform: translateX(430%); opacity: 0; }
 }
 
+@keyframes flowDot {
+  0% { transform: translate(-12px, -50%); opacity: 0; }
+  16% { opacity: 1; }
+  100% { transform: translate(26px, -50%); opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .flow-link::after,
+  .flow-node:not(:last-child)::before,
   .browser-download-btn,
   .source-square-card {
     animation: none;
@@ -4398,7 +4419,8 @@ async function importByUrl() {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .flow-link {
+  .flow-node::before,
+  .flow-node::after {
     display: none;
   }
 }

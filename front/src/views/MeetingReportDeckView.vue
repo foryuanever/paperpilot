@@ -319,6 +319,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { paperpilotApi } from "../services/paperpilotApi";
 import { API_BASE_URL } from "../services/apiClient";
+import { useDialogStore } from "../stores/dialog";
 
 const STORAGE_KEY = "paperpilot-meeting-timeline-v1";
 const DECK_STORAGE_KEY = "paperpilot-meeting-deck-jobs-v1";
@@ -357,6 +358,7 @@ const uploading = ref(false);
 const activeMeetingId = ref("");
 const toastMessage = ref("");
 const importingReview = ref(false);
+const dialogStore = useDialogStore();
 const deckJobs = reactive({});
 const reviewJobs = reactive({});
 const importJobs = reactive({});
@@ -569,10 +571,16 @@ function isAutoSeededMeeting(meeting) {
   return (meeting.title || "") === DEFAULT_MEETING_TITLE && (meeting.notes || "") === DEFAULT_MEETING_NOTES;
 }
 
-function removeMeeting(meetingId) {
+async function removeMeeting(meetingId) {
   const meeting = meetings.value.find((item) => item.id === meetingId);
   if (!meeting) return;
-  if (!window.confirm(`删除「${meeting.title || "组会汇报"}」？`)) return;
+  const ok = await dialogStore.confirm(`删除「${meeting.title || "组会汇报"}」？`, {
+    title: "删除组会",
+    confirmText: "删除",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok) return;
   meetings.value = meetings.value.filter((item) => item.id !== meetingId);
   delete deckJobs[meetingId];
   if (deckTimers.has(meetingId)) {

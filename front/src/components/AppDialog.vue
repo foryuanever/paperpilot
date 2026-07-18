@@ -7,6 +7,14 @@
         </div>
         <h2 :id="titleId">{{ dialogStore.state.title }}</h2>
         <p>{{ dialogStore.state.message }}</p>
+        <textarea
+          v-if="dialogStore.state.mode === 'prompt'"
+          v-model="dialogStore.state.inputValue"
+          class="app-dialog-input"
+          :placeholder="dialogStore.state.inputPlaceholder"
+          rows="4"
+          autofocus
+        ></textarea>
         <div class="app-dialog-actions">
           <button
             v-if="dialogStore.state.showCancel"
@@ -41,7 +49,7 @@ const titleId = "paper-slover-dialog-title";
 function handleKeydown(event) {
   if (!dialogStore.state.open) return;
   if (event.key === "Escape") dialogStore.cancel();
-  if (event.key === "Enter") dialogStore.accept();
+  if (event.key === "Enter" && event.target?.tagName !== "TEXTAREA") dialogStore.accept();
 }
 
 onMounted(() => window.addEventListener("keydown", handleKeydown));
@@ -99,6 +107,29 @@ onUnmounted(() => window.removeEventListener("keydown", handleKeydown));
   font-size: 14px;
   line-height: 1.7;
   white-space: pre-wrap;
+}
+
+.app-dialog-input {
+  width: 100%;
+  min-height: 104px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  resize: vertical;
+  border: 1px solid #d8dee8;
+  border-radius: 14px;
+  background: #fbfcfe;
+  color: #1d1d1f;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+  outline: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.app-dialog-input:focus {
+  border-color: #2563eb;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.11);
 }
 
 .app-dialog-actions {

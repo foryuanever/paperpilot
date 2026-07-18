@@ -252,15 +252,36 @@
         </div>
       </main>
 
-      <nav class="reader-page-rail" aria-label="页面导航">
+      <nav class="reader-paper-rail" aria-label="文献切换">
+        <div class="reader-paper-rail-head">
+          <span>文献切换</span>
+          <small>{{ currentPage }}/{{ totalPages || loadedPages || "−" }} 页</small>
+        </div>
         <button
-          v-for="page in pages"
-          :key="page.pageNumber"
-          :class="{ active: currentPage === page.pageNumber }"
-          @click="scrollToPage(page.pageNumber)"
+          v-for="paper in readerPaperTabs"
+          :key="paper.id"
+          class="reader-paper-tab"
+          :class="{ active: paper.id === activePaper.id }"
+          :title="paper.title"
+          @click="switchReaderPaper(paper.id)"
         >
-          {{ page.pageNumber }}
+          <span class="reader-paper-tab-mark">{{ paperInitial(paper) }}</span>
+          <span class="reader-paper-tab-text">
+            <strong>{{ shortPaperTitle(paper.title, 28) }}</strong>
+            <small>{{ paper.source || paper.publishYear || "文献库" }}</small>
+          </span>
         </button>
+        <div class="reader-page-mini" aria-label="当前论文页码">
+          <button
+            v-for="page in compactPageTabs"
+            :key="page.key"
+            :class="{ active: currentPage === page.pageNumber, muted: page.ellipsis }"
+            :disabled="page.ellipsis"
+            @click="scrollToPage(page.pageNumber)"
+          >
+            {{ page.label }}
+          </button>
+        </div>
       </nav>
     </div>
 
@@ -289,38 +310,46 @@
       :style="{ left: `${selectionTranslator.x}px`, top: `${selectionTranslator.y}px` }"
       @click.stop
     >
-      <header>
+      <header class="selection-popover-head">
         <div>
-          <strong>选中内容</strong>
-          <span>{{ selectionTranslator.source.length }} 字符</span>
-        </div>
-        <div class="selection-color-tools" aria-label="设置选中文字颜色">
-          <button
-            v-for="color in textColors"
-            :key="color.id"
-            :style="{ '--swatch': color.value }"
-            :title="`${color.label}标记`"
-            :aria-label="`${color.label}标记`"
-            @mousedown.prevent
-            @click="applySelectionColor(color.value)"
-          ></button>
+          <span class="selection-kicker">Selection</span>
+          <strong>选区工具</strong>
+          <small>{{ selectionTranslator.source.length }} 字符</small>
         </div>
         <button aria-label="关闭选中内容工具" @click="closeSelectionTranslator">×</button>
       </header>
       <p class="selection-source">{{ selectionTranslator.preview }}</p>
+      <div class="selection-color-tools" aria-label="设置选中文字颜色">
+        <span>标记颜色</span>
+        <button
+          v-for="color in textColors"
+          :key="color.id"
+          :style="{ '--swatch': color.value }"
+          :title="`${color.label}标记`"
+          :aria-label="`${color.label}标记`"
+          @mousedown.prevent
+          @click="applySelectionColor(color.value)"
+        ></button>
+      </div>
       <div class="selection-actions">
         <button
+          class="primary-action"
           :disabled="selectionTranslator.loading"
           @click="translateSelection"
         >
           选中翻译
         </button>
+        <button :disabled="selectionTranslator.loading" @click="explainSelection">AI 解读</button>
         <button class="annotation-action" @click="openAnnotationEditor">批注</button>
       </div>
-      <div class="selection-result" :class="{ pending: selectionTranslator.loading, error: selectionTranslator.error }">
+      <div v-if="selectionTranslator.loading || selectionTranslator.result || selectionTranslator.error" class="selection-result" :class="{ pending: selectionTranslator.loading, error: selectionTranslator.error }">
         <span v-if="selectionTranslator.loading" class="selection-spinner"></span>
-        <p>{{ selectionTranslator.loading ? "正在翻译…" : selectionTranslator.error || selectionTranslator.result || "点击“选中翻译”显示译文。" }}</p>
+        <div>
+          <strong>{{ selectionTranslator.resultTitle || "处理结果" }}</strong>
+          <p>{{ selectionTranslator.loading ? selectionTranslator.loadingText : selectionTranslator.error || selectionTranslator.result }}</p>
+        </div>
       </div>
+      <p v-else class="selection-hint">选中后可翻译、解读，也可以保存为批注。</p>
       <div v-if="selectionTranslator.annotating" class="selection-annotation-editor">
         <textarea v-model="selectionTranslator.annotationDraft" rows="3" placeholder="写下对这段内容的理解、疑问或提醒…"></textarea>
         <div>
@@ -346,10 +375,10 @@
     <Transition name="paper-chat">
       <section v-if="paperChat.open" class="paper-chat-panel">
         <header>
-          <div class="paper-chat-mark">P</div>
+          <div class="paper-chat-mark">PS</div>
           <div>
-            <strong>PaperSolver 论文问答</strong>
-            <span>当前论文优先 · 支持学术相关问题</span>
+            <strong>论文问答</strong>
+            <span>{{ shortPaperTitle(activePaper.title, 34) }}</span>
           </div>
         </header>
         <div class="paper-chat-messages">
@@ -474,6 +503,8 @@ const selectionTranslator = reactive({
   paragraph: "",
   preview: "",
   result: "",
+  resultTitle: "",
+  loadingText: "正在处理选区…",
   error: "",
   loading: false,
   blockId: "",
@@ -514,9 +545,33 @@ const translationWaiters = [];
 let readerToastTimer;
 
 const activePaper = computed(() => libraryStore.activeDocument || {
+  id: "",
   title: "未选择文献",
   authors: "",
   source: "",
+});
+
+const readerPaperTabs = computed(() =>
+  (libraryStore.state.documents || [])
+    .filter(paper => paper?.id)
+    .slice(0, 10),
+);
+
+const compactPageTabs = computed(() => {
+  const count = Number(totalPages.value || pages.length || 0);
+  if (!count) return [];
+  const current = Number(currentPage.value || 1);
+  const candidates = [1, current - 1, current, current + 1, count]
+    .filter(page => page >= 1 && page <= count);
+  const unique = Array.from(new Set(candidates)).sort((a, b) => a - b);
+  return unique.reduce((items, page, index) => {
+    const previous = unique[index - 1];
+    if (previous && page - previous > 1) {
+      items.push({ key: `gap-${previous}-${page}`, label: "…", pageNumber: previous, ellipsis: true });
+    }
+    items.push({ key: `page-${page}`, label: page, pageNumber: page, ellipsis: false });
+    return items;
+  }, []);
 });
 
 const paperSourceLabel = computed(() => String(activePaper.value?.source || "")
@@ -536,6 +591,17 @@ const pdfSource = computed(() => {
   const source = paper.pdfUrl || paper.paperUrl || "";
   return paperpilotApi.buildPdfProxyUrl(source);
 });
+
+function shortPaperTitle(title, max = 32) {
+  const value = String(title || "未命名文献").replace(/\s+/g, " ").trim();
+  return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+function paperInitial(paper) {
+  const title = String(paper?.title || "").trim();
+  const first = title.match(/[A-Za-z0-9\u4e00-\u9fa5]/)?.[0] || "P";
+  return /[A-Za-z]/.test(first) ? first.toUpperCase() : first;
+}
 
 const textColors = [
   { id: "black", label: "黑色", value: "#20242c" },
@@ -929,6 +995,8 @@ async function translateSelection() {
   const text = selectionTranslator.source;
   if (!text || selectionTranslator.loading) return;
   selectionTranslator.loading = true;
+  selectionTranslator.resultTitle = "选中翻译";
+  selectionTranslator.loadingText = "正在生成译文…";
   selectionTranslator.error = "";
   selectionTranslator.result = "";
   try {
@@ -943,6 +1011,35 @@ async function translateSelection() {
   } catch (error) {
     console.warn("selection translation failed", error);
     selectionTranslator.error = "选区翻译失败，请稍后重试。";
+  } finally {
+    selectionTranslator.loading = false;
+  }
+}
+
+async function explainSelection() {
+  const text = selectionTranslator.source;
+  if (!text || selectionTranslator.loading) return;
+  selectionTranslator.loading = true;
+  selectionTranslator.resultTitle = "AI 解读";
+  selectionTranslator.loadingText = "正在结合论文语境解读…";
+  selectionTranslator.error = "";
+  selectionTranslator.result = "";
+  const localContext = selectionTranslator.sentence || selectionTranslator.paragraph || text;
+  try {
+    const result = await paperpilotApi.askPaperSelection(workspaceId.value, {
+      question: [
+        "请用中文解释下面这段论文选中内容。",
+        "要求：先说明它在论文中的作用，再解释关键概念，最后给出读者需要注意的研究含义。",
+        "不要泛泛复述，不要回答非学术内容。",
+        `选中内容：${text}`,
+        `所在语境：${localContext}`,
+      ].join("\n"),
+    });
+    selectionTranslator.result = cleanChatAnswer(result?.answer);
+    if (!selectionTranslator.result) selectionTranslator.error = "本次没有返回解读，请重试。";
+  } catch (error) {
+    console.warn("selection explanation failed", error);
+    selectionTranslator.error = error?.response?.data?.message || "AI 解读失败，请稍后重试。";
   } finally {
     selectionTranslator.loading = false;
   }
@@ -1160,13 +1257,15 @@ function editAnnotation(annotation, event) {
   selectionTranslator.preview = annotation.quote.length > 180 ? `${annotation.quote.slice(0, 180)}…` : annotation.quote;
   selectionTranslator.blockId = annotation.blockId;
   selectionTranslator.result = "";
+  selectionTranslator.resultTitle = "";
+  selectionTranslator.loadingText = "正在处理选区…";
   selectionTranslator.error = "";
   selectionTranslator.annotating = true;
   selectionTranslator.annotationDraft = annotation.note;
   selectionTranslator.editingAnnotationId = annotation.id;
   selectionTranslator.start = Number.isInteger(annotation.start) ? annotation.start : -1;
   selectionTranslator.end = Number.isInteger(annotation.end) ? annotation.end : -1;
-  selectionTranslator.x = Math.max(12, Math.min(window.innerWidth - 372, event.clientX - 340));
+  selectionTranslator.x = Math.max(12, Math.min(window.innerWidth - 404, event.clientX - 360));
   selectionTranslator.y = Math.max(56, Math.min(window.innerHeight - 330, event.clientY - 60));
   selectionTranslator.open = true;
   nextTick(() => fitSelectionPopover(true));
@@ -1449,12 +1548,14 @@ function captureSelection() {
   const selectionOffsets = getSelectionOffsets(paragraphElement, range);
   const paragraphText = normalizeText(paragraphElement?.innerText || selectedText);
   const rect = range.getBoundingClientRect();
-  const popoverWidth = 360;
+  const popoverWidth = 392;
   selectionTranslator.source = selectedText;
   selectionTranslator.paragraph = paragraphText;
   selectionTranslator.sentence = sentenceAroundSelection(paragraphText, selectedText);
   selectionTranslator.preview = selectedText.length > 180 ? `${selectedText.slice(0, 180)}…` : selectedText;
   selectionTranslator.result = "";
+  selectionTranslator.resultTitle = "";
+  selectionTranslator.loadingText = "正在处理选区…";
   selectionTranslator.error = "";
   selectionTranslator.blockId = paragraphElement?.dataset?.blockId || "";
   selectionTranslator.start = selectionOffsets?.start ?? -1;
@@ -1546,6 +1647,44 @@ function startReaderTour() {
   readerTour.open = true;
   readerTour.index = 0;
   nextTick(updateTourRect);
+}
+
+function resetReaderDocumentState() {
+  closeSelectionTranslator();
+  closeColorMenu();
+  window.getSelection()?.removeAllRanges();
+  selectedRange.value = null;
+  selectionReady.value = false;
+  pages.splice(0, pages.length);
+  pageCanvasElements.clear();
+  mineruAssetUrls.splice(0).forEach(url => URL.revokeObjectURL(url));
+  if (pdfObjectUrl) {
+    URL.revokeObjectURL(pdfObjectUrl);
+    pdfObjectUrl = "";
+  }
+  pdfDocument?.destroy?.();
+  pdfDocument = null;
+  abstractTranslation.value = "";
+  abstractTranslating.value = false;
+  abstractFromPdf.value = "";
+  structuredHasAbstract.value = false;
+  totalPages.value = 0;
+  loadedPages.value = 0;
+  currentPage.value = 1;
+  readingProgress.value = 0;
+  parsingMessage.value = "正在进行论文版面解析（完整段落、图表、表格）";
+  parsingProgress.value = 8;
+  readingScroll.value?.scrollTo({ top: 0, left: 0 });
+}
+
+async function switchReaderPaper(id) {
+  if (!id || id === activePaper.value?.id || loadingPdf.value) return;
+  libraryStore.setActiveDocument(id);
+  if (activePaper.value) rememberLastReading(authStore.session.user, activePaper.value);
+  resetReaderDocumentState();
+  loadAnnotations();
+  await nextTick();
+  loadStructuredDocument();
 }
 
 function scrollToPage(pageNumber) {
@@ -1832,9 +1971,10 @@ onBeforeUnmount(() => {
 .reader-body {
   height: calc(100vh - var(--reader-toolbar-height));
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr) 50px;
+  grid-template-columns: 340px minmax(0, 1fr) 226px;
   min-height: 0;
-  background: linear-gradient(90deg, #f8fafc 0, #f7f9fc 300px, #f3f6fa 430px, #eef3f8 100%);
+  background:
+    linear-gradient(90deg, #f8fafc 0, #f7f9fc 300px, #f4f7fb 430px, #edf3f8 100%);
 }
 
 .reader-assistant {
@@ -1849,8 +1989,8 @@ onBeforeUnmount(() => {
 }
 
 .reader-assistant.collapsed { width: 46px; }
-.reader-body:has(.reader-assistant.collapsed) { grid-template-columns: 46px minmax(0, 1fr) 50px; }
-.reader-body.assistant-wide { grid-template-columns: clamp(440px, 38vw, 580px) minmax(440px, 1fr) 50px; }
+.reader-body:has(.reader-assistant.collapsed) { grid-template-columns: 46px minmax(0, 1fr) 226px; }
+.reader-body.assistant-wide { grid-template-columns: clamp(440px, 38vw, 580px) minmax(440px, 1fr) 226px; }
 .reader-assistant.expanded { width: auto; }
 
 .assistant-tabs {
@@ -1945,11 +2085,12 @@ onBeforeUnmount(() => {
   min-height: 100%;
   margin: 0 auto;
   padding: 34px 62px 100px;
-  border-right: 1px solid #e6ebf2;
-  border-left: 1px solid #e6ebf2;
-  background: #fff;
+  border: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .98), #fff 180px),
+    #fff;
   box-sizing: border-box;
-  box-shadow: 0 0 0 1px rgba(226, 232, 240, .28), 0 18px 44px rgba(35, 48, 70, .055);
+  box-shadow: 0 22px 58px rgba(31, 45, 68, .07);
   font-size: calc(16px * var(--reader-scale));
 }
 
@@ -1999,17 +2140,17 @@ onBeforeUnmount(() => {
 }
 
 .source-paragraph { color: #303846; }
-.selectable-paragraph::selection { color: #172033; background: #c9f46a; }
+.selectable-paragraph::selection { color: #172033; background: rgba(113, 126, 242, .2); }
 .annotation-highlight {
   position: relative;
   padding: 0 .08em .08em;
   border-radius: 3px;
-  background: linear-gradient(180deg, rgba(255,255,255,0) 38%, rgba(245, 158, 11, .32) 38%, rgba(245, 158, 11, .32) 88%, rgba(255,255,255,0) 88%);
-  box-shadow: inset 0 -1px rgba(217, 119, 6, .26);
+  background: linear-gradient(180deg, rgba(255,255,255,0) 42%, rgba(137, 151, 255, .2) 42%, rgba(137, 151, 255, .2) 90%, rgba(255,255,255,0) 90%);
+  box-shadow: inset 0 -1px rgba(79, 70, 229, .2);
   cursor: pointer;
 }
 .annotation-highlight:hover {
-  background: linear-gradient(180deg, rgba(255,255,255,0) 32%, rgba(245, 158, 11, .46) 32%, rgba(245, 158, 11, .46) 90%, rgba(255,255,255,0) 90%);
+  background: linear-gradient(180deg, rgba(255,255,255,0) 34%, rgba(137, 151, 255, .3) 34%, rgba(137, 151, 255, .3) 92%, rgba(255,255,255,0) 92%);
 }
 .annotation-delete {
   display: inline-grid;
@@ -2019,18 +2160,18 @@ onBeforeUnmount(() => {
   padding: 0;
   place-items: center;
   vertical-align: 2px;
-  border: 1px solid rgba(180, 83, 9, .32);
+  border: 1px solid rgba(79, 70, 229, .26);
   border-radius: 50%;
-  color: #9a5a07;
-  background: #fffaf0;
+  color: #4f46e5;
+  background: #f7f7ff;
   font: 800 10px/1 Inter, "PingFang SC", sans-serif;
   opacity: .72;
   cursor: pointer;
 }
 .annotation-delete:hover {
-  color: #7c2d12;
-  border-color: rgba(180, 83, 9, .55);
-  background: #ffedd5;
+  color: #3730a3;
+  border-color: rgba(79, 70, 229, .46);
+  background: #eef2ff;
   opacity: 1;
 }
 .translation-block { margin: 3px 0 14px; padding: 0; border: 0; border-radius: 0; background: transparent; }
@@ -2101,42 +2242,50 @@ onBeforeUnmount(() => {
 .selection-translate-popover {
   position: fixed;
   z-index: 75;
-  width: 360px;
+  width: 392px;
   max-height: calc(100dvh - 24px);
   overflow-x: hidden;
   overflow-y: auto;
-  border: 1px solid #d9e0ea;
-  border-radius: 12px;
+  border: 1px solid rgba(166, 176, 199, .42);
+  border-radius: 18px;
   color: #263244;
-  background: #fff;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, .18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(249, 251, 255, .98));
+  box-shadow: 0 18px 46px rgba(30, 41, 59, .16), 0 0 0 1px rgba(255, 255, 255, .72) inset;
+  backdrop-filter: blur(14px);
 }
-.selection-translate-popover header {
+.selection-popover-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-bottom: 1px solid #e6eaf0;
+  gap: 16px;
+  padding: 14px 15px 10px;
 }
-.selection-translate-popover header > div { display: flex; align-items: baseline; gap: 7px; }
-.selection-translate-popover header strong { font-size: 12px; }
-.selection-translate-popover header span { color: #8a94a4; font-size: 9px; }
-.selection-translate-popover header > button {
-  width: 24px;
-  height: 24px;
+.selection-popover-head > div { display: grid; gap: 3px; }
+.selection-popover-head strong { color: #172033; font-size: 14px; font-weight: 780; }
+.selection-popover-head small { color: #8a94a4; font-size: 10px; font-weight: 650; }
+.selection-kicker {
+  color: #6366f1;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.selection-popover-head > button {
+  width: 28px;
+  height: 28px;
   border: 0;
-  border-radius: 5px;
-  color: #748095;
-  background: #f2f4f7;
+  border-radius: 9px;
+  color: #64748b;
+  background: #eef2f7;
   cursor: pointer;
 }
-.selection-color-tools { margin-left: auto; align-items: center !important; gap: 5px !important; }
+.selection-popover-head > button:hover { color: #1f2937; background: #e2e8f0; }
 .selection-color-tools button {
   position: relative;
-  width: 22px;
-  min-width: 22px;
-  height: 22px;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
   padding: 0;
   border: 1px solid #d5dce6;
   border-radius: 50%;
@@ -2145,38 +2294,59 @@ onBeforeUnmount(() => {
 }
 .selection-color-tools button::after { position: absolute; inset: 4px; border-radius: 50%; content: ""; background: var(--swatch); }
 .selection-source {
-  max-height: 66px;
+  max-height: 76px;
   overflow: auto;
-  margin: 0;
-  padding: 10px 12px 8px;
-  color: #5b6576;
-  background: #fafbfc;
-  font: 11px/1.55 "Times New Roman", "Songti SC", serif;
+  margin: 0 15px;
+  padding: 11px 12px;
+  border: 1px solid rgba(226, 232, 240, .9);
+  border-radius: 12px;
+  color: #475569;
+  background: rgba(248, 250, 252, .78);
+  font: 12px/1.65 "Times New Roman", "Songti SC", serif;
 }
-.selection-actions { display: grid; padding: 9px 12px; }
-.selection-actions { grid-template-columns: minmax(0, 1fr) 84px; gap: 7px; }
+.selection-color-tools {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 11px 15px 0;
+  color: #7c8798;
+  font-size: 10px;
+  font-weight: 650;
+}
+.selection-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 74px;
+  gap: 8px;
+  padding: 12px 15px 10px;
+}
 .selection-actions button {
-  min-height: 32px;
-  border: 0;
-  border-radius: 7px;
-  color: #fff;
-  background: #5b35d5;
+  min-height: 34px;
+  border: 1px solid #d7dfeb;
+  border-radius: 10px;
+  color: #334155;
+  background: #fff;
   font-size: 11px;
   font-weight: 750;
   cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
+.selection-actions button:hover { transform: translateY(-1px); border-color: #b8c5d9; box-shadow: 0 8px 18px rgba(30, 41, 59, .08); }
+.selection-actions .primary-action { color: #fff; border-color: #4f46e5; background: linear-gradient(135deg, #5b5ff0, #2563eb); }
 .selection-actions button:disabled { opacity: .55; cursor: default; }
-.selection-actions .annotation-action { color: #334155; background: #e9edf3; }
+.selection-actions .annotation-action { color: #334155; background: #eef3f8; }
 .selection-result {
-  min-height: 54px;
+  min-height: 64px;
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 10px 12px 12px;
-  border-top: 1px solid #e6eaf0;
-  background: #fff;
+  margin: 0 15px 14px;
+  padding: 12px;
+  border: 1px solid rgba(199, 210, 254, .72);
+  border-radius: 13px;
+  background: linear-gradient(180deg, #f8faff, #ffffff);
 }
-.selection-result p { margin: 0; color: #243147; font: 12px/1.7 "Songti SC", "STSong", serif; }
+.selection-result strong { display: block; margin-bottom: 5px; color: #334155; font-size: 11px; }
+.selection-result p { margin: 0; color: #243147; font: 12px/1.72 "Songti SC", "STSong", serif; white-space: pre-wrap; }
 .selection-result.error p { color: #b42318; }
 .selection-spinner {
   flex: 0 0 auto;
@@ -2188,12 +2358,13 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   animation: spin 700ms linear infinite;
 }
-.selection-annotation-editor { padding: 10px 12px 12px; border-top: 1px solid #e6eaf0; background: #f8f9fb; }
-.selection-annotation-editor textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 9px 10px; border: 1px solid #cfd7e2; border-radius: 8px; outline: 0; color: #263244; background: #fff; font: 11px/1.6 inherit; }
+.selection-hint { margin: 0 15px 14px; color: #8792a3; font-size: 11px; line-height: 1.6; }
+.selection-annotation-editor { margin: 0 15px 15px; padding: 10px; border: 1px solid #dfe6ef; border-radius: 13px; background: #f8fafc; }
+.selection-annotation-editor textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 10px 11px; border: 1px solid #cfd7e2; border-radius: 10px; outline: 0; color: #263244; background: #fff; font: 11px/1.6 inherit; }
 .selection-annotation-editor textarea:focus { border-color: #2f6df6; box-shadow: 0 0 0 2px rgba(47, 109, 246, .12); }
 .selection-annotation-editor > div { display: flex; justify-content: flex-end; gap: 7px; margin-top: 8px; }
-.selection-annotation-editor button { min-height: 29px; padding: 0 11px; border: 0; border-radius: 7px; color: #4b5563; background: #e7ebf0; font-size: 10px; cursor: pointer; }
-.selection-annotation-editor button:last-child { color: #fff; background: #2f6df6; }
+.selection-annotation-editor button { min-height: 30px; padding: 0 12px; border: 0; border-radius: 9px; color: #4b5563; background: #e7ebf0; font-size: 10px; cursor: pointer; }
+.selection-annotation-editor button:last-child { color: #fff; background: #2563eb; }
 .selection-annotation-editor button:disabled { opacity: .45; cursor: default; }
 .block-annotation-note {
   position: relative;
@@ -2264,20 +2435,21 @@ onBeforeUnmount(() => {
   right: 24px;
   bottom: 24px;
   z-index: 82;
-  width: 52px;
-  height: 52px;
+  width: 50px;
+  height: 50px;
   display: grid;
   place-items: center;
   padding: 0;
-  border: 0;
+  border: 1px solid rgba(148, 163, 184, .28);
   border-radius: 50%;
-  color: #fff;
-  background: #24324a;
-  box-shadow: 0 6px 14px rgba(15, 23, 42, .24);
+  color: #2563eb;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 16px 34px rgba(30, 41, 59, .16);
+  backdrop-filter: blur(14px);
   cursor: pointer;
 }
-.paper-chat-launcher:hover { background: #1b2638; transform: translateY(-1px); }
-.paper-chat-launcher.open { background: #365173; }
+.paper-chat-launcher:hover { color: #1d4ed8; background: #fff; transform: translateY(-1px); }
+.paper-chat-launcher.open { color: #fff; background: #263a5c; }
 .paper-chat-launcher svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .paper-chat-launcher > span { font-size: 26px; font-weight: 300; line-height: 1; }
 .paper-chat-panel {
@@ -2285,37 +2457,46 @@ onBeforeUnmount(() => {
   right: 24px;
   bottom: 88px;
   z-index: 81;
-  width: min(390px, calc(100vw - 32px));
-  height: min(590px, calc(100vh - 120px));
+  width: min(420px, calc(100vw - 32px));
+  height: min(600px, calc(100vh - 120px));
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
-  border: 1px solid #d7dee8;
-  border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, .22);
+  border: 1px solid rgba(203, 213, 225, .82);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 26px 60px rgba(30, 41, 59, .18);
+  backdrop-filter: blur(18px);
 }
-.paper-chat-panel > header { display: flex; align-items: center; gap: 10px; padding: 13px 15px; border-bottom: 1px solid #e5e9ef; background: #24324a; }
-.paper-chat-mark { width: 30px; height: 30px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 9px; color: #fff; background: #3b82f6; font: 800 13px/1 Inter, sans-serif; }
+.paper-chat-panel > header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 15px 16px 13px;
+  border-bottom: 1px solid #e8edf5;
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, .92), rgba(248, 250, 252, .92));
+}
+.paper-chat-mark { width: 34px; height: 34px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 12px; color: #fff; background: linear-gradient(135deg, #2563eb, #5b5ff0); font: 800 11px/1 Inter, sans-serif; }
 .paper-chat-panel > header > div:last-child { display: grid; gap: 3px; }
-.paper-chat-panel > header strong { color: #fff; font-size: 12px; }
-.paper-chat-panel > header span { color: #cbd5e1; font-size: 9.5px; }
-.paper-chat-messages { overflow-y: auto; padding: 16px 14px; background: #f7f8fa; }
+.paper-chat-panel > header strong { color: #172033; font-size: 13px; }
+.paper-chat-panel > header span { max-width: 320px; overflow: hidden; color: #64748b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.paper-chat-messages { overflow-y: auto; padding: 17px 15px; background: linear-gradient(180deg, #fbfcff, #f7f9fc); }
 .paper-chat-message { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 13px; }
-.paper-chat-message > span { width: 24px; height: 24px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 7px; color: #fff; background: #365173; font-size: 9px; font-weight: 800; }
-.paper-chat-message p { max-width: 84%; margin: 0; padding: 9px 11px; border-radius: 10px; color: #273244; background: #fff; font-size: 11px; line-height: 1.65; white-space: pre-wrap; }
+.paper-chat-message > span { width: 25px; height: 25px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 9px; color: #3153a3; background: #e8efff; font-size: 9px; font-weight: 800; }
+.paper-chat-message p { max-width: 84%; margin: 0; padding: 10px 12px; border: 1px solid #eef2f7; border-radius: 13px; color: #273244; background: #fff; font-size: 11px; line-height: 1.68; white-space: pre-wrap; box-shadow: 0 8px 18px rgba(30, 41, 59, .045); }
 .paper-chat-message.user { justify-content: flex-end; }
-.paper-chat-message.user p { color: #fff; background: #4b5565; }
+.paper-chat-message.user p { color: #fff; border-color: transparent; background: linear-gradient(135deg, #3558d8, #243b75); }
 .paper-chat-thinking { display: flex; gap: 4px; align-items: center; min-height: 18px; }
 .paper-chat-thinking i { width: 5px; height: 5px; border-radius: 50%; background: #7b8798; animation: chat-dot 1s ease-in-out infinite; }
 .paper-chat-thinking i:nth-child(2) { animation-delay: .15s; }
 .paper-chat-thinking i:nth-child(3) { animation-delay: .3s; }
-.paper-chat-panel form { display: grid; grid-template-columns: minmax(0, 1fr) 36px; align-items: end; gap: 8px; padding: 11px 12px 8px; border-top: 1px solid #e5e9ef; background: #fff; }
-.paper-chat-panel textarea { min-height: 42px; max-height: 110px; resize: none; box-sizing: border-box; padding: 10px 11px; border: 1px solid #cfd7e2; border-radius: 10px; outline: 0; color: #263244; background: #fff; font: 11px/1.45 inherit; }
+.paper-chat-panel form { display: grid; grid-template-columns: minmax(0, 1fr) 38px; align-items: end; gap: 9px; padding: 12px 13px 8px; border-top: 1px solid #e5e9ef; background: #fff; }
+.paper-chat-panel textarea { min-height: 44px; max-height: 110px; resize: none; box-sizing: border-box; padding: 11px 12px; border: 1px solid #cfd7e2; border-radius: 13px; outline: 0; color: #263244; background: #fff; font: 11px/1.45 inherit; }
 .paper-chat-panel textarea:focus { border-color: #2f6df6; box-shadow: 0 0 0 2px rgba(47, 109, 246, .12); }
-.paper-chat-panel form button { width: 36px; height: 36px; border: 0; border-radius: 9px; color: #fff; background: #2f6df6; font-size: 18px; cursor: pointer; }
+.paper-chat-panel form button { width: 38px; height: 38px; border: 0; border-radius: 12px; color: #fff; background: #2563eb; font-size: 18px; cursor: pointer; }
 .paper-chat-panel form button:disabled { opacity: .4; cursor: default; }
-.paper-chat-panel > small { padding: 0 13px 10px; color: #8993a2; background: #fff; font-size: 9px; }
+.paper-chat-panel > small { padding: 0 14px 12px; color: #8993a2; background: #fff; font-size: 9px; }
 .paper-chat-enter-active,
 .paper-chat-leave-active { transition: opacity 160ms ease, transform 180ms cubic-bezier(.22, 1, .36, 1); transform-origin: bottom right; }
 .paper-chat-enter-from,
@@ -2357,11 +2538,14 @@ onBeforeUnmount(() => {
   .reader-toolbar { grid-template-columns: minmax(180px, 1fr) auto auto; gap: 8px; padding-inline: 8px; }
   .reader-document-source { display: none; }
   .reader-status-item small { display: none; }
-  .reader-body { grid-template-columns: 260px minmax(0, 1fr) 50px; }
-  .reader-body.assistant-wide { grid-template-columns: clamp(360px, 40vw, 460px) minmax(360px, 1fr) 50px; }
+  .reader-body { grid-template-columns: 260px minmax(0, 1fr) 190px; }
+  .reader-body:has(.reader-assistant.collapsed) { grid-template-columns: 46px minmax(0, 1fr) 190px; }
+  .reader-body.assistant-wide { grid-template-columns: clamp(360px, 40vw, 460px) minmax(360px, 1fr) 190px; }
   .reading-column { width: calc(100% - 32px); padding: 30px 36px 90px; }
   .block-annotation-note { width: 31px; margin-right: -28px; }
   .block-annotation-note p { display: none; }
+  .reader-paper-tab { grid-template-columns: 1fr; min-height: 50px; }
+  .reader-paper-tab-mark { display: none; }
 }
 
 @media (max-width: 820px) {
@@ -2370,7 +2554,7 @@ onBeforeUnmount(() => {
   .reader-status { display: none; }
   .reader-zoom-control { display: none; }
   .reader-body { position: relative; grid-template-columns: minmax(0, 1fr); }
-  .reader-page-rail { display: none; }
+  .reader-paper-rail { display: none; }
   .reader-assistant {
     position: absolute;
     inset: 0 auto 0 0;
@@ -2479,28 +2663,113 @@ onBeforeUnmount(() => {
 .reader-loading-state small { color: #7a8494; font-size: 11px; }
 .reader-loading-state .reader-process-note { margin-top: 28px; color: #8792a3; font-size: 11px; }
 
-.reader-page-rail {
+.reader-paper-rail {
+  min-width: 0;
   overflow-y: auto;
-  padding: 8px 5px;
-  background: var(--reader-panel);
-  border-left: 1px solid var(--reader-line);
+  padding: 14px 10px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, .82), rgba(238, 243, 248, .92));
+  border-left: 1px solid rgba(226, 232, 240, .9);
 }
 
-.reader-page-rail button {
-  width: 40px;
-  height: 32px;
-  margin-bottom: 4px;
-  border: 0;
-  border-left: 2px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: #7a8494;
+.reader-paper-rail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 2px 4px 11px;
+  color: #475569;
+}
+.reader-paper-rail-head span { font-size: 12px; font-weight: 800; }
+.reader-paper-rail-head small { color: #8a96a7; font-size: 10px; font-weight: 650; }
+
+.reader-paper-tab {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 8px;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: #475569;
+  background: rgba(255, 255, 255, .58);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+.reader-paper-tab:hover {
+  transform: translateY(-1px);
+  border-color: rgba(148, 163, 184, .3);
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 12px 22px rgba(30, 41, 59, .07);
+}
+.reader-paper-tab.active {
+  border-color: rgba(37, 99, 235, .42);
+  color: #1d4ed8;
+  background: linear-gradient(135deg, rgba(239, 246, 255, .98), rgba(255, 255, 255, .94));
+  box-shadow: 0 12px 24px rgba(37, 99, 235, .09);
+}
+.reader-paper-tab-mark {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #3153a3;
+  background: #e8efff;
+  font-size: 12px;
+  font-weight: 850;
+}
+.reader-paper-tab.active .reader-paper-tab-mark {
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #5b5ff0);
+}
+.reader-paper-tab-text {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.reader-paper-tab-text strong {
+  overflow: hidden;
+  color: inherit;
   font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reader-paper-tab-text small {
+  overflow: hidden;
+  color: #8a96a7;
+  font-size: 9px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reader-page-mini {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 14px 4px 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(226, 232, 240, .9);
+}
+.reader-page-mini button {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #64748b;
+  background: rgba(255, 255, 255, .64);
+  font-size: 10px;
+  font-weight: 700;
   cursor: pointer;
 }
-
-.reader-page-rail button:hover { color: #334155; background: #f1f4f8; }
-.reader-page-rail button.active { border-left-color: var(--reader-accent); background: var(--reader-accent-soft); color: var(--reader-accent); font-weight: 750; }
+.reader-page-mini button:hover { color: #334155; background: #fff; }
+.reader-page-mini button.active { color: #fff; background: #2563eb; }
+.reader-page-mini button.muted { color: #a0a8b5; cursor: default; background: transparent; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 

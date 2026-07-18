@@ -548,6 +548,18 @@ export const paperpilotApi = {
     const { data } = await apiClient.post(`/api/topics/${id}/outline`, { target }, { timeout: 30000 });
     return data;
   },
+  async getAdminTopics(params = {}) {
+    const { data } = await apiClient.get("/api/admin/topics", { params, timeout: 20000 });
+    return data;
+  },
+  async generateAdminHotTopics(payload = {}) {
+    const { data } = await apiClient.post("/api/admin/topics/generate-hot", payload, { timeout: 300000 });
+    return data;
+  },
+  async deleteAdminTopic(id) {
+    const { data } = await apiClient.delete(`/api/admin/topics/${id}`, { timeout: 15000 });
+    return data;
+  },
 
   // Team API
   async getTeamInfo() {

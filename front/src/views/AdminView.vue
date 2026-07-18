@@ -1258,6 +1258,9 @@ const siteMessagePage = ref(1);
 const siteMessagePageSize = ref(5);
 const tutorialPage = ref(1);
 const tutorialPageSize = ref(5);
+const topicAdminQuery = ref("");
+const topicAdminLoading = ref(false);
+const topicAdminGenerating = ref(false);
 
 
 // Initialize scroll reveal animations
@@ -1331,6 +1334,7 @@ const siteMessages = ref([]);
 const tutorials = ref([]);
 const forumReports = ref([]);
 const campusVerifications = ref([]);
+const adminTopics = ref([]);
 const modelPool = ref([]);
 const modelPoolRefreshing = ref(false);
 const modelPoolSeeding = ref(false);
@@ -1468,6 +1472,20 @@ const paginatedForumReports = computed(() => paginateRows(forumReports.value, fo
 const paginatedCampusVerifications = computed(() => paginateRows(campusVerifications.value, campusVerificationPage.value, campusVerificationPageSize.value));
 const paginatedSiteMessages = computed(() => paginateRows(siteMessages.value, siteMessagePage.value, siteMessagePageSize.value));
 const paginatedTutorials = computed(() => paginateRows(tutorials.value, tutorialPage.value, tutorialPageSize.value));
+const filteredAdminTopics = computed(() => {
+  const query = topicAdminQuery.value.toLowerCase();
+  if (!query) return adminTopics.value;
+  return adminTopics.value.filter(topic => {
+    return [
+      topic.title,
+      topic.summary,
+      topic.source,
+      topic.providerLabel,
+      ...(topic.tags || []),
+      ...(topic.themeClusters || []),
+    ].some(value => String(value || "").toLowerCase().includes(query));
+  });
+});
 
 watch([searchQuery, roleFilter, userPageSize], () => {
   userPage.value = 1;
@@ -1752,6 +1770,63 @@ async function loadRelayResearch() {
   } finally {
     relayResearchLoading.value = false;
   }
+}
+
+async function loadAdminTopics(showLoading = true) {
+  if (showLoading) topicAdminLoading.value = true;
+  try {
+    adminTopics.value = await paperpilotApi.getAdminTopics({ keyword: topicAdminQuery.value });
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "选题广场列表加载失败");
+  } finally {
+    topicAdminLoading.value = false;
+  }
+}
+
+async function generateOfficialHotTopics() {
+  if (topicAdminGenerating.value) return;
+  topicAdminGenerating.value = true;
+  try {
+    const generated = await paperpilotApi.generateAdminHotTopics();
+    adminTopics.value = [...generated, ...adminTopics.value.filter(topic => !generated.some(item => item.id === topic.id))];
+    dialogStore.alert(`已发布 ${generated.length || 0} 个官方热门选题`);
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "官方热门选题生成失败");
+  } finally {
+    topicAdminGenerating.value = false;
+  }
+}
+
+async function deleteAdminTopic(topic) {
+  if (!topic?.id) return;
+  const ok = await dialogStore.confirm(`确认删除选题「${topic.title}」吗？删除后用户端选题广场也会移除。`, {
+    title: "删除选题",
+    confirmText: "删除",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    await paperpilotApi.deleteAdminTopic(topic.id);
+    adminTopics.value = adminTopics.value.filter(item => item.id !== topic.id);
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "删除选题失败");
+  }
+}
+
+function topicProviderLabel(topic) {
+  if (topic?.providerLabel) return topic.providerLabel;
+  const source = String(topic?.source || "");
+  return source.includes("官方") || source.includes("daily-frontier") ? "官方" : "匿名用户提供";
+}
+
+function topicProviderClass(topic) {
+  return topicProviderLabel(topic) === "官方" ? "official" : "anonymous";
+}
+
+function shortText(value, max = 80) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > max ? `${text.slice(0, max)}...` : text;
 }
 
 async function copyModelConfig() {
@@ -2101,7 +2176,14 @@ async function submitForumReportDecision() {
 
 async function reviewCampusVerification(request, status) {
   const isApprove = status === "approved";
-  let adminNote = isApprove ? "校园认证信息已核验通过。" : window.prompt("请输入驳回原因", request.adminNote || "学生证信息不清晰，请重新上传。");
+  let adminNote = isApprove ? "校园认证信息已核验通过。" : await dialogStore.prompt("请输入驳回原因", {
+    title: "驳回校园认证",
+    confirmText: "继续驳回",
+    cancelText: "取消",
+    danger: true,
+    defaultValue: request.adminNote || "学生证信息不清晰，请重新上传。",
+    placeholder: "写清楚需要用户补充或重新上传的原因",
+  });
   if (!isApprove && adminNote === null) return;
   if (!await dialogStore.confirm(`确定${isApprove ? "通过" : "驳回"} ${request.userName || request.email} 的校园认证吗？`, {
     title: "校园认证审核",
@@ -4417,6 +4499,251 @@ function truncateText(value, length = 100) {
   text-align: center;
 }
 
+.topic-admin-header {
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.topic-admin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.topic-admin-hot-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f766e 0%, #2563eb 100%);
+  font-size: 0.86rem;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.22);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.topic-admin-hot-btn::before {
+  content: "+";
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  border-radius: 999px;
+  color: #0f766e;
+  background: #ffffff;
+  font-size: 0.92rem;
+  line-height: 1;
+}
+
+.topic-admin-hot-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.28);
+}
+
+.topic-admin-hot-btn:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.topic-admin-search {
+  width: 240px;
+  height: 38px;
+  padding: 0 13px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 10px;
+  color: #0f172a;
+  background: #fff;
+  outline: none;
+}
+
+.topic-admin-search:focus {
+  border-color: rgba(37, 99, 235, 0.55);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.topic-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.topic-admin-card {
+  position: relative;
+  display: grid;
+  gap: 13px;
+  min-height: 360px;
+  padding: 20px 20px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+}
+
+.topic-admin-delete {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 10px 0 7px;
+  border: 1px solid rgba(220, 38, 38, 0.24);
+  border-radius: 999px;
+  color: #b91c1c;
+  font-size: 0.74rem;
+  font-weight: 900;
+  background: #fff1f2;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.topic-admin-delete span {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: #ef4444;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.topic-admin-delete:hover {
+  transform: translateY(-1px);
+  border-color: rgba(220, 38, 38, 0.42);
+  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.14);
+}
+
+.topic-admin-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 58px;
+}
+
+.topic-admin-meta small {
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.topic-provider-badge {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.topic-provider-badge.official {
+  color: #075985;
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(14, 165, 233, 0.16);
+}
+
+.topic-provider-badge.anonymous {
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.topic-admin-card h4 {
+  margin: 0;
+  padding-right: 36px;
+  color: #0f172a;
+  font-size: 1.08rem;
+  line-height: 1.35;
+}
+
+.topic-admin-card > p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.86rem;
+  line-height: 1.65;
+}
+
+.topic-admin-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.topic-admin-tags span {
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.1);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.topic-admin-subtopics {
+  display: grid;
+  gap: 9px;
+}
+
+.topic-admin-subtopic {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid rgba(20, 184, 166, 0.14);
+  border-radius: 12px;
+  background: rgba(240, 253, 250, 0.66);
+}
+
+.topic-admin-subtopic strong {
+  color: #0f172a;
+  font-size: 0.86rem;
+}
+
+.topic-admin-subtopic small,
+.topic-admin-subtopic em {
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  font-style: normal;
+}
+
+.topic-admin-subtopic em {
+  color: #0f766e;
+  font-weight: 700;
+}
+
+.topic-admin-card footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.topic-admin-empty {
+  grid-column: 1 / -1;
+  padding: 34px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 16px;
+  color: #64748b;
+  background: #fff;
+  text-align: center;
+}
+
 @media (max-width: 900px) {
   .site-message-admin-grid,
   .tutorial-admin-grid,
@@ -4424,7 +4751,8 @@ function truncateText(value, length = 100) {
   .relay-summary-grid,
   .relay-purchase-grid,
   .economy-routing-grid,
-  .membership-recommendation-grid {
+  .membership-recommendation-grid,
+  .topic-admin-grid {
     grid-template-columns: 1fr;
   }
   .relay-research-header {
@@ -4436,6 +4764,17 @@ function truncateText(value, length = 100) {
   }
   .campus-card-preview-grid {
     grid-template-columns: 1fr;
+  }
+  .topic-admin-header,
+  .topic-admin-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .topic-admin-hot-btn {
+    width: 100%;
+  }
+  .topic-admin-search {
+    width: 100%;
   }
 }
 
