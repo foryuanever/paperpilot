@@ -148,7 +148,7 @@
                 <p class="source-paragraph selectable-paragraph" data-block-id="abstract">
                   <template v-for="segment in annotationSegments('abstract', abstractText)" :key="segment.key">
                     <span v-if="segment.annotated" class="annotation-highlight" :title="segment.note" @click="editAnnotation(segment.annotation, $event)">
-                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button>
+                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
                     </span>
                     <template v-else>{{ segment.text }}</template>
                   </template>
@@ -163,17 +163,6 @@
                     @click="translateAbstract(true)"
                   >↻</button>
                 </p>
-                <aside
-                  v-if="annotationForBlock('abstract')"
-                  class="block-annotation-note"
-                  :title="annotationForBlock('abstract').note"
-                >
-                  <div class="block-annotation-actions">
-                    <button type="button" aria-label="编辑摘要批注" title="编辑批注" @click.stop="editAnnotation(annotationForBlock('abstract'), $event)">✎</button>
-                    <button type="button" class="block-annotation-remove" aria-label="删除摘要批注" title="删除批注" @click.stop="removeAnnotation(annotationForBlock('abstract').id)">×</button>
-                  </div>
-                  <p @click="editAnnotation(annotationForBlock('abstract'), $event)">{{ annotationForBlock('abstract').note }}</p>
-                </aside>
               </div>
             </header>
 
@@ -206,7 +195,7 @@
                 <div v-else-if="block.kind === 'references'" class="reference-block selectable-paragraph" :data-block-id="block.id">
                   <template v-for="segment in annotationSegments(block.id, block.text)" :key="segment.key">
                     <span v-if="segment.annotated" class="annotation-highlight" :title="segment.note" @click="editAnnotation(segment.annotation, $event)">
-                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button>
+                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
                     </span>
                     <template v-else>{{ segment.text }}</template>
                   </template>
@@ -214,7 +203,7 @@
                 <p v-else class="source-paragraph selectable-paragraph" :data-block-id="block.id">
                   <template v-for="segment in annotationSegments(block.id, block.text)" :key="segment.key">
                     <span v-if="segment.annotated" class="annotation-highlight" :title="segment.note" @click="editAnnotation(segment.annotation, $event)">
-                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button>
+                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
                     </span>
                     <template v-else>{{ segment.text }}</template>
                   </template>
@@ -235,17 +224,6 @@
                     >↻</button>
                   </p>
                 </div>
-                <aside
-                  v-if="annotationForBlock(block.id)"
-                  class="block-annotation-note"
-                  :title="annotationForBlock(block.id).note"
-                >
-                  <div class="block-annotation-actions">
-                    <button type="button" aria-label="编辑本段批注" title="编辑批注" @click.stop="editAnnotation(annotationForBlock(block.id), $event)">✎</button>
-                    <button type="button" class="block-annotation-remove" aria-label="删除本段批注" title="删除批注" @click.stop="removeAnnotation(annotationForBlock(block.id).id)">×</button>
-                  </div>
-                  <p @click="editAnnotation(annotationForBlock(block.id), $event)">{{ annotationForBlock(block.id).note }}</p>
-                </aside>
               </template>
             </section>
           </article>
@@ -307,49 +285,39 @@
     <section
       v-if="selectionTranslator.open"
       class="selection-translate-popover"
+      :class="[`is-${selectionTranslator.placement}`, { expanded: selectionTranslator.result || selectionTranslator.error || selectionTranslator.loading || selectionTranslator.annotating }]"
       :style="{ left: `${selectionTranslator.x}px`, top: `${selectionTranslator.y}px` }"
       @click.stop
     >
-      <header class="selection-popover-head">
-        <div>
-          <span class="selection-kicker">Selection</span>
-          <strong>选区工具</strong>
-          <small>{{ selectionTranslator.source.length }} 字符</small>
+      <div class="selection-command-bar">
+        <button :disabled="selectionTranslator.loading" @click="explainSelection">AI解读</button>
+        <button :disabled="selectionTranslator.loading" @click="translateSelection">翻译</button>
+        <button @click="addSelectionToChat">加入对话</button>
+        <button class="selection-note-action" @click="openAnnotationEditor">新建批注</button>
+        <div class="selection-mark-dots" aria-label="设置选中文字颜色">
+          <button
+            v-for="color in textColors"
+            :key="color.id"
+            :style="{ '--swatch': color.value }"
+            :title="`${color.label}标记`"
+            :aria-label="`${color.label}标记`"
+            @mousedown.prevent
+            @click="applySelectionColor(color.value)"
+          ></button>
         </div>
         <button aria-label="关闭选中内容工具" @click="closeSelectionTranslator">×</button>
-      </header>
-      <p class="selection-source">{{ selectionTranslator.preview }}</p>
-      <div class="selection-color-tools" aria-label="设置选中文字颜色">
-        <span>标记颜色</span>
-        <button
-          v-for="color in textColors"
-          :key="color.id"
-          :style="{ '--swatch': color.value }"
-          :title="`${color.label}标记`"
-          :aria-label="`${color.label}标记`"
-          @mousedown.prevent
-          @click="applySelectionColor(color.value)"
-        ></button>
-      </div>
-      <div class="selection-actions">
-        <button
-          class="primary-action"
-          :disabled="selectionTranslator.loading"
-          @click="translateSelection"
-        >
-          选中翻译
-        </button>
-        <button :disabled="selectionTranslator.loading" @click="explainSelection">AI 解读</button>
-        <button class="annotation-action" @click="openAnnotationEditor">批注</button>
       </div>
       <div v-if="selectionTranslator.loading || selectionTranslator.result || selectionTranslator.error" class="selection-result" :class="{ pending: selectionTranslator.loading, error: selectionTranslator.error }">
         <span v-if="selectionTranslator.loading" class="selection-spinner"></span>
         <div>
-          <strong>{{ selectionTranslator.resultTitle || "处理结果" }}</strong>
+          <header>
+            <strong>{{ selectionTranslator.resultTitle || "处理结果" }}</strong>
+            <small>{{ selectionTranslator.source.length }} 字符</small>
+          </header>
+          <p v-if="selectionTranslator.wasCompacted && !selectionTranslator.loading && !selectionTranslator.error" class="selection-compact-note">选区较长，已结合开头、结尾和所在段落进行摘要式解读。</p>
           <p>{{ selectionTranslator.loading ? selectionTranslator.loadingText : selectionTranslator.error || selectionTranslator.result }}</p>
         </div>
       </div>
-      <p v-else class="selection-hint">选中后可翻译、解读，也可以保存为批注。</p>
       <div v-if="selectionTranslator.annotating" class="selection-annotation-editor">
         <textarea v-model="selectionTranslator.annotationDraft" rows="3" placeholder="写下对这段内容的理解、疑问或提醒…"></textarea>
         <div>
@@ -498,6 +466,7 @@ const selectionTranslator = reactive({
   open: false,
   x: 0,
   y: 0,
+  placement: "below",
   source: "",
   sentence: "",
   paragraph: "",
@@ -505,6 +474,7 @@ const selectionTranslator = reactive({
   result: "",
   resultTitle: "",
   loadingText: "正在处理选区…",
+  wasCompacted: false,
   error: "",
   loading: false,
   blockId: "",
@@ -985,6 +955,33 @@ function sentenceAroundSelection(paragraph, selected) {
   return source.slice(sentenceStart, sentenceEnd).trim() || needle;
 }
 
+function compactForSelectionAi(text, limit = 760) {
+  const value = normalizeText(text);
+  if (value.length <= limit) {
+    return { text: value, compacted: false };
+  }
+  const headLength = Math.floor(limit * 0.56);
+  const tailLength = limit - headLength;
+  return {
+    text: `${value.slice(0, headLength)}\n...[中间选区已压缩]...\n${value.slice(-tailLength)}`,
+    compacted: true,
+  };
+}
+
+function placeSelectionPopover(rect, width = 392) {
+  const edge = 14;
+  const toolbarHeight = 66;
+  const gap = 12;
+  const left = Math.max(edge, Math.min(window.innerWidth - width - edge, rect.left + rect.width / 2 - width / 2));
+  const hasRoomBelow = rect.bottom + gap + toolbarHeight < window.innerHeight - edge;
+  const top = hasRoomBelow
+    ? rect.bottom + gap
+    : Math.max(edge, rect.top - toolbarHeight - gap);
+  selectionTranslator.x = left;
+  selectionTranslator.y = top;
+  selectionTranslator.placement = hasRoomBelow ? "below" : "above";
+}
+
 function closeSelectionTranslator() {
   selectionTranslator.open = false;
   selectionTranslator.loading = false;
@@ -997,8 +994,10 @@ async function translateSelection() {
   selectionTranslator.loading = true;
   selectionTranslator.resultTitle = "选中翻译";
   selectionTranslator.loadingText = "正在生成译文…";
+  selectionTranslator.wasCompacted = false;
   selectionTranslator.error = "";
   selectionTranslator.result = "";
+  nextTick(() => fitSelectionPopover(false));
   try {
     const result = await paperpilotApi.translate({
       text,
@@ -1013,36 +1012,70 @@ async function translateSelection() {
     selectionTranslator.error = "选区翻译失败，请稍后重试。";
   } finally {
     selectionTranslator.loading = false;
+    nextTick(() => fitSelectionPopover(false));
   }
 }
 
 async function explainSelection() {
   const text = selectionTranslator.source;
   if (!text || selectionTranslator.loading) return;
+  const selected = compactForSelectionAi(text, 3600);
+  const context = compactForSelectionAi(selectionTranslator.paragraph || selectionTranslator.sentence || text, 6400);
   selectionTranslator.loading = true;
   selectionTranslator.resultTitle = "AI 解读";
   selectionTranslator.loadingText = "正在结合论文语境解读…";
+  selectionTranslator.wasCompacted = selected.compacted || context.compacted;
   selectionTranslator.error = "";
   selectionTranslator.result = "";
-  const localContext = selectionTranslator.sentence || selectionTranslator.paragraph || text;
+  nextTick(() => fitSelectionPopover(false));
   try {
     const result = await paperpilotApi.askPaperSelection(workspaceId.value, {
-      question: [
-        "请用中文解释下面这段论文选中内容。",
-        "要求：先说明它在论文中的作用，再解释关键概念，最后给出读者需要注意的研究含义。",
-        "不要泛泛复述，不要回答非学术内容。",
-        `选中内容：${text}`,
-        `所在语境：${localContext}`,
-      ].join("\n"),
+      selection: selected.text,
+      paragraph: context.text,
+      question: "请用中文解读选中内容：1.它在论文中的作用；2.关键概念；3.读者应注意的研究含义。若选区被压缩，请结合上下文概括，不要要求用户重选。",
     });
     selectionTranslator.result = cleanChatAnswer(result?.answer);
     if (!selectionTranslator.result) selectionTranslator.error = "本次没有返回解读，请重试。";
   } catch (error) {
     console.warn("selection explanation failed", error);
-    selectionTranslator.error = error?.response?.data?.message || "AI 解读失败，请稍后重试。";
+    if (isSelectionLengthError(error)) {
+      try {
+        const retrySelected = compactForSelectionAi(text, 1800);
+        const retryContext = compactForSelectionAi(selectionTranslator.sentence || selectionTranslator.paragraph || text, 2200);
+        selectionTranslator.wasCompacted = true;
+        const retry = await paperpilotApi.askPaperSelection(workspaceId.value, {
+          selection: retrySelected.text,
+          paragraph: retryContext.text,
+          question: "请用中文摘要式解读这段长选区：说明论文作用、关键概念和研究含义，控制在300字以内。",
+        });
+        selectionTranslator.result = cleanChatAnswer(retry?.answer);
+        if (!selectionTranslator.result) selectionTranslator.error = "本次没有返回解读，请重试。";
+      } catch (retryError) {
+        console.warn("selection explanation retry failed", retryError);
+        selectionTranslator.error = "选区已自动压缩，但 AI 解读仍未返回，请稍后重试。";
+      }
+    } else {
+      selectionTranslator.error = error?.response?.data?.message || "AI 解读失败，请稍后重试。";
+    }
   } finally {
     selectionTranslator.loading = false;
+    nextTick(() => fitSelectionPopover(false));
   }
+}
+
+function isSelectionLengthError(error) {
+  const message = String(error?.response?.data?.message || error?.message || "");
+  return /过长|太长|length|too long|limit|字符|范围/.test(message);
+}
+
+function addSelectionToChat() {
+  const text = selectionTranslator.source;
+  if (!text) return;
+  const selected = compactForSelectionAi(text, 900);
+  paperChat.open = true;
+  paperChat.question = `请结合当前论文解释这段选中内容：\n${selected.text}`;
+  closeSelectionTranslator();
+  nextTick(() => document.querySelector(".paper-chat-panel textarea")?.focus());
 }
 
 async function askPaperChat() {
@@ -1223,8 +1256,10 @@ function openAnnotationEditor() {
 function fitSelectionPopover(focusTextarea = false) {
   const popover = document.querySelector(".selection-translate-popover");
   if (!popover) return;
-  const edge = 12;
+  const edge = 14;
+  const width = Math.min(popover.offsetWidth || 392, window.innerWidth - edge * 2);
   const height = Math.min(popover.scrollHeight, window.innerHeight - edge * 2);
+  selectionTranslator.x = Math.max(edge, Math.min(selectionTranslator.x, window.innerWidth - width - edge));
   selectionTranslator.y = Math.max(edge, Math.min(selectionTranslator.y, window.innerHeight - height - edge));
   if (focusTextarea) {
     nextTick(() => popover.querySelector("textarea")?.focus());
@@ -1259,6 +1294,7 @@ function editAnnotation(annotation, event) {
   selectionTranslator.result = "";
   selectionTranslator.resultTitle = "";
   selectionTranslator.loadingText = "正在处理选区…";
+  selectionTranslator.wasCompacted = false;
   selectionTranslator.error = "";
   selectionTranslator.annotating = true;
   selectionTranslator.annotationDraft = annotation.note;
@@ -1267,6 +1303,7 @@ function editAnnotation(annotation, event) {
   selectionTranslator.end = Number.isInteger(annotation.end) ? annotation.end : -1;
   selectionTranslator.x = Math.max(12, Math.min(window.innerWidth - 404, event.clientX - 360));
   selectionTranslator.y = Math.max(56, Math.min(window.innerHeight - 330, event.clientY - 60));
+  selectionTranslator.placement = "below";
   selectionTranslator.open = true;
   nextTick(() => fitSelectionPopover(true));
 }
@@ -1556,6 +1593,7 @@ function captureSelection() {
   selectionTranslator.result = "";
   selectionTranslator.resultTitle = "";
   selectionTranslator.loadingText = "正在处理选区…";
+  selectionTranslator.wasCompacted = false;
   selectionTranslator.error = "";
   selectionTranslator.blockId = paragraphElement?.dataset?.blockId || "";
   selectionTranslator.start = selectionOffsets?.start ?? -1;
@@ -1563,8 +1601,7 @@ function captureSelection() {
   selectionTranslator.annotating = false;
   selectionTranslator.annotationDraft = "";
   selectionTranslator.editingAnnotationId = "";
-  selectionTranslator.x = Math.max(12, Math.min(window.innerWidth - popoverWidth - 12, rect.left + rect.width / 2 - popoverWidth / 2));
-  selectionTranslator.y = Math.max(56, Math.min(window.innerHeight - 260, rect.bottom + 10));
+  placeSelectionPopover(rect, popoverWidth);
   selectionTranslator.open = true;
   nextTick(() => fitSelectionPopover(false));
 }
@@ -2140,17 +2177,17 @@ onBeforeUnmount(() => {
 }
 
 .source-paragraph { color: #303846; }
-.selectable-paragraph::selection { color: #172033; background: rgba(113, 126, 242, .2); }
+.selectable-paragraph::selection { color: #132136; background: rgba(98, 123, 255, .16); }
 .annotation-highlight {
   position: relative;
   padding: 0 .08em .08em;
   border-radius: 3px;
-  background: linear-gradient(180deg, rgba(255,255,255,0) 42%, rgba(137, 151, 255, .2) 42%, rgba(137, 151, 255, .2) 90%, rgba(255,255,255,0) 90%);
-  box-shadow: inset 0 -1px rgba(79, 70, 229, .2);
+  background: linear-gradient(180deg, rgba(255,255,255,0) 44%, rgba(94, 111, 255, .14) 44%, rgba(94, 111, 255, .14) 91%, rgba(255,255,255,0) 91%);
+  box-shadow: inset 0 -1px rgba(48, 72, 186, .16);
   cursor: pointer;
 }
 .annotation-highlight:hover {
-  background: linear-gradient(180deg, rgba(255,255,255,0) 34%, rgba(137, 151, 255, .3) 34%, rgba(137, 151, 255, .3) 92%, rgba(255,255,255,0) 92%);
+  background: linear-gradient(180deg, rgba(255,255,255,0) 38%, rgba(94, 111, 255, .2) 38%, rgba(94, 111, 255, .2) 92%, rgba(255,255,255,0) 92%);
 }
 .annotation-delete {
   display: inline-grid;
@@ -2173,6 +2210,28 @@ onBeforeUnmount(() => {
   border-color: rgba(79, 70, 229, .46);
   background: #eef2ff;
   opacity: 1;
+}
+.annotation-inline-note {
+  display: inline-flex;
+  max-width: min(240px, 40vw);
+  align-items: center;
+  margin: 0 4px 0 5px;
+  padding: 2px 8px 3px;
+  vertical-align: 1px;
+  border: 1px solid rgba(99, 102, 241, .18);
+  border-radius: 999px;
+  color: #42526f;
+  background: rgba(248, 250, 255, .96);
+  box-shadow: 0 1px 4px rgba(46, 60, 96, .08);
+  font: 600 10px/1.45 Inter, "PingFang SC", sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.annotation-inline-note:hover {
+  color: #25345c;
+  border-color: rgba(79, 70, 229, .32);
+  background: #fff;
 }
 .translation-block { margin: 3px 0 14px; padding: 0; border: 0; border-radius: 0; background: transparent; }
 .translation-unit { margin: 4px 0 16px; padding-left: 12px; border-left: 2px solid #b9c4d6; }
@@ -2242,112 +2301,117 @@ onBeforeUnmount(() => {
 .selection-translate-popover {
   position: fixed;
   z-index: 75;
-  width: 392px;
-  max-height: calc(100dvh - 24px);
-  overflow-x: hidden;
-  overflow-y: auto;
-  border: 1px solid rgba(166, 176, 199, .42);
-  border-radius: 18px;
+  width: max-content;
+  max-width: min(720px, calc(100vw - 28px));
+  max-height: calc(100dvh - 28px);
+  overflow: visible;
   color: #263244;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(249, 251, 255, .98));
-  box-shadow: 0 18px 46px rgba(30, 41, 59, .16), 0 0 0 1px rgba(255, 255, 255, .72) inset;
-  backdrop-filter: blur(14px);
+  filter: drop-shadow(0 18px 34px rgba(15, 23, 42, .18));
 }
-.selection-popover-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 15px 10px;
-}
-.selection-popover-head > div { display: grid; gap: 3px; }
-.selection-popover-head strong { color: #172033; font-size: 14px; font-weight: 780; }
-.selection-popover-head small { color: #8a94a4; font-size: 10px; font-weight: 650; }
-.selection-kicker {
-  color: #6366f1;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-}
-.selection-popover-head > button {
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 9px;
-  color: #64748b;
-  background: #eef2f7;
-  cursor: pointer;
-}
-.selection-popover-head > button:hover { color: #1f2937; background: #e2e8f0; }
-.selection-color-tools button {
-  position: relative;
-  width: 20px;
-  min-width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 1px solid #d5dce6;
-  border-radius: 50%;
-  background: #fff;
-  cursor: pointer;
-}
-.selection-color-tools button::after { position: absolute; inset: 4px; border-radius: 50%; content: ""; background: var(--swatch); }
-.selection-source {
-  max-height: 76px;
-  overflow: auto;
-  margin: 0 15px;
-  padding: 11px 12px;
-  border: 1px solid rgba(226, 232, 240, .9);
-  border-radius: 12px;
-  color: #475569;
-  background: rgba(248, 250, 252, .78);
-  font: 12px/1.65 "Times New Roman", "Songti SC", serif;
-}
-.selection-color-tools {
+.selection-command-bar {
   display: flex;
   align-items: center;
   gap: 7px;
-  margin: 11px 15px 0;
-  color: #7c8798;
-  font-size: 10px;
-  font-weight: 650;
+  width: max-content;
+  max-width: min(720px, calc(100vw - 28px));
+  padding: 7px;
+  border: 1px solid rgba(148, 163, 184, .32);
+  border-radius: 999px;
+  color: #eef2f7;
+  background: rgba(20, 28, 24, .94);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  backdrop-filter: blur(16px);
 }
-.selection-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr 74px;
-  gap: 8px;
-  padding: 12px 15px 10px;
+.selection-translate-popover.is-below .selection-command-bar::before,
+.selection-translate-popover.is-above .selection-command-bar::after {
+  position: absolute;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  content: "";
+  background: rgba(20, 28, 24, .94);
+  transform: translateX(-50%) rotate(45deg);
 }
-.selection-actions button {
-  min-height: 34px;
-  border: 1px solid #d7dfeb;
-  border-radius: 10px;
-  color: #334155;
-  background: #fff;
-  font-size: 11px;
-  font-weight: 750;
+.selection-translate-popover.is-below .selection-command-bar::before { top: -4px; }
+.selection-translate-popover.is-above .selection-command-bar::after { bottom: -4px; }
+.selection-command-bar > button {
+  position: relative;
+  z-index: 1;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid rgba(126, 163, 133, .45);
+  border-radius: 999px;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, .045);
+  font-size: 14px;
+  font-weight: 760;
+  white-space: nowrap;
   cursor: pointer;
-  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
 }
-.selection-actions button:hover { transform: translateY(-1px); border-color: #b8c5d9; box-shadow: 0 8px 18px rgba(30, 41, 59, .08); }
-.selection-actions .primary-action { color: #fff; border-color: #4f46e5; background: linear-gradient(135deg, #5b5ff0, #2563eb); }
-.selection-actions button:disabled { opacity: .55; cursor: default; }
-.selection-actions .annotation-action { color: #334155; background: #eef3f8; }
+.selection-command-bar > button:hover { transform: translateY(-1px); border-color: rgba(154, 210, 165, .7); background: rgba(255, 255, 255, .1); }
+.selection-command-bar > button:disabled { opacity: .48; cursor: default; transform: none; }
+.selection-command-bar > button:last-child {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-color: transparent;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, .08);
+  font-size: 16px;
+}
+.selection-note-action { color: #f6fbf7 !important; }
+.selection-mark-dots {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 4px 0 7px;
+}
+.selection-mark-dots button {
+  position: relative;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .28);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .9);
+  cursor: pointer;
+}
+.selection-mark-dots button::after { position: absolute; inset: 4px; border-radius: 50%; content: ""; background: var(--swatch); }
 .selection-result {
-  min-height: 64px;
+  width: min(420px, calc(100vw - 28px));
+  max-height: min(46vh, 360px);
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  margin: 0 15px 14px;
-  padding: 12px;
-  border: 1px solid rgba(199, 210, 254, .72);
-  border-radius: 13px;
-  background: linear-gradient(180deg, #f8faff, #ffffff);
+  gap: 10px;
+  overflow-y: auto;
+  margin: 10px auto 0;
+  padding: 13px 14px;
+  border: 1px solid rgba(203, 213, 225, .78);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 16px 42px rgba(30, 41, 59, .14);
+  backdrop-filter: blur(16px);
 }
-.selection-result strong { display: block; margin-bottom: 5px; color: #334155; font-size: 11px; }
+.selection-result header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.selection-result strong { color: #172033; font-size: 13px; font-weight: 800; }
+.selection-result small { color: #8a96a7; font-size: 10px; font-weight: 650; white-space: nowrap; }
 .selection-result p { margin: 0; color: #243147; font: 12px/1.72 "Songti SC", "STSong", serif; white-space: pre-wrap; }
 .selection-result.error p { color: #b42318; }
+.selection-compact-note {
+  margin: 0 0 7px !important;
+  color: #5b6f95 !important;
+  font: 11px/1.6 Inter, "PingFang SC", sans-serif !important;
+}
 .selection-spinner {
   flex: 0 0 auto;
   width: 12px;
@@ -2358,8 +2422,18 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   animation: spin 700ms linear infinite;
 }
-.selection-hint { margin: 0 15px 14px; color: #8792a3; font-size: 11px; line-height: 1.6; }
-.selection-annotation-editor { margin: 0 15px 15px; padding: 10px; border: 1px solid #dfe6ef; border-radius: 13px; background: #f8fafc; }
+.selection-annotation-editor {
+  width: min(420px, calc(100vw - 28px));
+  max-height: min(42vh, 330px);
+  overflow-y: auto;
+  margin: 10px auto 0;
+  padding: 12px;
+  border: 1px solid rgba(203, 213, 225, .78);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 16px 42px rgba(30, 41, 59, .14);
+  backdrop-filter: blur(16px);
+}
 .selection-annotation-editor textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 10px 11px; border: 1px solid #cfd7e2; border-radius: 10px; outline: 0; color: #263244; background: #fff; font: 11px/1.6 inherit; }
 .selection-annotation-editor textarea:focus { border-color: #2f6df6; box-shadow: 0 0 0 2px rgba(47, 109, 246, .12); }
 .selection-annotation-editor > div { display: flex; justify-content: flex-end; gap: 7px; margin-top: 8px; }
@@ -2567,7 +2641,14 @@ onBeforeUnmount(() => {
   .reader-body.assistant-wide { grid-template-columns: minmax(0, 1fr); }
   .reader-assistant.expanded { width: min(88vw, 520px); }
   .reading-column { width: 100%; padding: 26px 28px 86px; }
-  .selection-translate-popover { width: min(360px, calc(100vw - 20px)); }
+  .selection-translate-popover,
+  .selection-command-bar { max-width: calc(100vw - 20px); }
+  .selection-command-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+    border-radius: 18px;
+  }
+  .selection-command-bar > button { height: 34px; padding-inline: 12px; font-size: 12px; }
 }
 
 @media (max-width: 560px) {

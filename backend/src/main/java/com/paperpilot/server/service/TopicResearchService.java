@@ -37,6 +37,7 @@ public class TopicResearchService {
     private final CurrentUserService currentUserService;
     private final AiChatService aiChatService;
     private final ExternalSearchService externalSearchService;
+    private final AiUsageService aiUsageService;
     private final ObjectMapper objectMapper;
 
     public TopicResearchService(
@@ -45,6 +46,7 @@ public class TopicResearchService {
         CurrentUserService currentUserService,
         AiChatService aiChatService,
         ExternalSearchService externalSearchService,
+        AiUsageService aiUsageService,
         ObjectMapper objectMapper
     ) {
         this.topicResearchRepository = topicResearchRepository;
@@ -52,13 +54,13 @@ public class TopicResearchService {
         this.currentUserService = currentUserService;
         this.aiChatService = aiChatService;
         this.externalSearchService = externalSearchService;
+        this.aiUsageService = aiUsageService;
         this.objectMapper = objectMapper;
     }
 
     @Transactional
     public List<Map<String, Object>> list(String keyword, String discipline, String stage, String goal, String sort, boolean savedOnly) {
         AppUserEntity user = currentUserService.getOrCreateDefaultUser();
-        seedIfEmpty(user.getId());
         String q = text(keyword).toLowerCase();
         return topicResearchRepository.findAllByOrderByCreatedAtDesc().stream()
             .filter(topic -> !savedOnly || isSaved(topic, user.getId()))
@@ -140,7 +142,7 @@ public class TopicResearchService {
         String seedPapers = text(body.get("seedPapers"));
         List<String> constraints = stringList(body.get("constraints"));
         String note = text(body.get("note"));
-        int maxTopics = Math.max(1, Math.min(officialPublish ? 3 : 6, intValue(body.get("maxTopics"), officialPublish ? 3 : 6)));
+        int maxTopics = Math.max(1, Math.min(officialPublish ? 3 : 1, intValue(body.get("maxTopics"), officialPublish ? 3 : 1)));
         String searchQuery = String.join(" ", direction, researchObject, sampleType, keywords, seedPapers).trim();
         List<Map<String, Object>> evidencePapers = searchAcademicEvidence(searchQuery, discipline, goal);
 
@@ -167,13 +169,13 @@ public class TopicResearchService {
             researchContext.put("note", note);
             researchContext.put("maxTopics", maxTopics);
             researchContext.put("academic_search_results", evidencePapers);
-            AiChatService.ChatResult result = aiChatService.chatJsonWithModelFallbackUnmetered(
-                "你是 deep-research 选题调研 agent。只输出 JSON，不要 Markdown。必须基于 academic_search_results 中的真实检索候选做选题，不允许编造论文题名、DOI、作者或年份。任务：用户给的是研究方向大类和 research brief，你需要生成 maxTopics 张可供选择的选题卡，彼此方向必须明显不同，不允许同一套小类反复换标题。JSON 字段：topics(array)。每个 topic 包含 title, summary, discipline, stage, goal, tags(array), themeClusters(array), researchQuestion, researchGap, methodRoute, riskNote, feasibilityScore(number), innovationScore(number), difficultyScore(number), subtopics(array of {name, analysis, recommendationScore(number), papers(array of paper title from academic_search_results)}), representativePapers(array of {title, source, year, reason})。每张卡必须先推荐 3-5 个具体研究方向，每个方向必须是可写论文的切口，不要写“先读某论文”“数据与样本”“方法路线”这种栏目名。analysis 必须像调研报告，不许模板化，并且必须严格用 7 段格式：'【摘要】...【具体方法】...【发文现状】...【优势】...【局限】...【潜在论文】...【代表论文】...'。每段至少 55 个中文字符；必须写清研究对象、数据/样本形态、评价重点、基线方法、发文热度、预期结果或失败边界。代表论文只能从 academic_search_results 里选择，并且要精准对应当前方向；如果候选不足，就明确写“候选文献不足，需要继续检索”。必须避开 avoidRoutes，优先满足 constraints、evaluationFocus 和 expectedContribution。",
+            AiChatService.ChatResult result = aiChatService.chatJsonWithModelFallback(
+                "你是 deep-research 选题调研 agent。只输出 JSON，不要 Markdown。必须基于 academic_search_results 中的真实检索候选做选题，不允许编造论文题名、DOI、作者或年份。任务：用户给的是研究方向大类和 research brief，你需要生成 maxTopics 张可供选择的选题卡；如果 maxTopics=1，就只输出 1 张。彼此方向必须明显不同，不允许同一套小类反复换标题。JSON 字段：topics(array)。每个 topic 包含 title, summary, discipline, stage, goal, tags(array), themeClusters(array), researchQuestion, researchGap, methodRoute, riskNote, feasibilityScore(number), innovationScore(number), difficultyScore(number), subtopics(array of {name, analysis, recommendationScore(number), papers(array of paper title from academic_search_results)}), representativePapers(array of {title, source, year, reason})。每张卡必须先推荐 3-5 个具体研究方向。每个小方向名称控制在 8-16 个中文字符，必须像“低剂量 CT 小样本分割”“影像报告跨模态对齐”这种可直接开题的切口；禁止写“先读某论文”“数据与样本”“方法路线”“评价指标”“研究问题”这类栏目名。analysis 必须像调研报告，不许模板化，并且必须严格用 7 段格式：'【摘要】...【具体方法】...【发文现状】...【优势】...【局限】...【潜在论文】...【代表论文】...'。每段至少 55 个中文字符；必须写清研究对象、数据/样本形态、评价重点、基线方法、发文热度、预期结果或失败边界。代表论文只能从 academic_search_results 里选择，并且要精准对应当前方向；如果候选不足，就明确写“候选文献不足，需要继续检索”。必须避开 avoidRoutes，优先满足 constraints、evaluationFocus 和 expectedContribution。",
                 objectMapper.writeValueAsString(researchContext),
                 2600,
                 TOPIC_FALLBACK_MODELS
             );
-            entities = fromAiJsonMany(result.content(), user.getId(), result.modelName(), discipline, stage, goal, evidencePapers);
+            entities = fromAiJsonManyWithRepair(result.content(), result.modelName(), user.getId(), discipline, stage, goal, evidencePapers, researchContext);
             for (TopicResearchEntity entity : entities) {
                 if (!evidencePapers.isEmpty()) {
                     entity.setRepresentativePapersJson(objectMapper.writeValueAsString(mergeEvidencePapers(parsePapers(entity.getRepresentativePapersJson()), evidencePapers)));
@@ -182,17 +184,18 @@ public class TopicResearchService {
                 if (officialPublish) entity.setModelName(firstNonBlank(entity.getModelName(), "daily-frontier"));
             }
         } catch (Exception error) {
-            if (officialPublish) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "官方热点必须经过 AI 模型生成，但当前选题调研模型调用失败：" + error.getMessage());
-            }
-            entities = deterministicTopicSet(user.getId(), direction, discipline, stage, goal, resource, note, "deterministic-fallback", evidencePapers, dataAccess, methodPreference, topicScale, constraints, avoidRoutes);
-            for (TopicResearchEntity entity : entities) {
-                if (!evidencePapers.isEmpty()) {
-                    entity.setRepresentativePapersJson(writePapers(evidencePapers));
-                    entity.setSource(officialPublish ? "官方" : "academic-search");
-                }
-                if (officialPublish) entity.setModelName("daily-frontier");
-            }
+            aiUsageService.recordFailure(
+                user.getId(),
+                "topic-quality-gate",
+                ModelConfigService.SCENE_TOPIC_RESEARCH,
+                officialPublish ? "官方热点质检" : "选题调研质检",
+                direction,
+                0L,
+                error.getMessage(),
+                0L
+            );
+            String prefix = officialPublish ? "官方热点必须经过 AI 模型生成" : "选题调研必须经过 AI 模型生成";
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, prefix + "，当前调研广场模型调用失败：" + error.getMessage());
         }
         String userId = String.valueOf(user.getId());
         List<TopicResearchEntity> saved = new ArrayList<>();
@@ -341,25 +344,89 @@ public class TopicResearchService {
         List<TopicResearchEntity> entities = new ArrayList<>();
         for (JsonNode item : topicsNode) {
             TopicResearchEntity entity = fromAiTopicNode(item, userId, modelName, fallbackDiscipline, fallbackStage, fallbackGoal);
-            entity.setSubtopicsJson(writeSubtopics(normalizeSubtopics(entity, evidencePapers)));
+            entity.setSubtopicsJson(writeSubtopics(normalizeSubtopics(entity, evidencePapers, true)));
             entities.add(entity);
         }
-        if (entities.size() < 6) {
-            List<TopicResearchEntity> fallback = deterministicTopicSet(userId, fallbackDiscipline, fallbackDiscipline, fallbackStage, fallbackGoal, "无实验，仅公开数据", "", modelName, evidencePapers, "公开数据集优先", "不限，先找可行路线", "硕士可完成的小题", List.of(), "");
-            for (TopicResearchEntity item : fallback) {
-                if (entities.size() >= 6) break;
-                boolean duplicate = entities.stream().anyMatch(existing -> normalizeTitle(existing.getTitle()).equals(normalizeTitle(item.getTitle())));
-                if (!duplicate) entities.add(item);
-            }
+        if (entities.isEmpty()) {
+            throw new IllegalStateException("模型返回为空，没有生成可保存的选题卡");
         }
-        return entities.isEmpty() ? deterministicTopicSet(userId, fallbackDiscipline, fallbackDiscipline, fallbackStage, fallbackGoal, "无实验，仅公开数据", "", modelName, evidencePapers, "公开数据集优先", "不限，先找可行路线", "硕士可完成的小题", List.of(), "") : entities;
+        return entities;
+    }
+
+    private List<TopicResearchEntity> fromAiJsonManyWithRepair(
+        String raw,
+        String modelName,
+        Long userId,
+        String fallbackDiscipline,
+        String fallbackStage,
+        String fallbackGoal,
+        List<Map<String, Object>> evidencePapers,
+        Map<String, Object> researchContext
+    ) throws Exception {
+        String candidate = raw;
+        String candidateModel = modelName;
+        try {
+            return fromAiJsonMany(candidate, userId, candidateModel, fallbackDiscipline, fallbackStage, fallbackGoal, evidencePapers);
+        } catch (IllegalStateException qualityError) {
+            IllegalStateException lastQualityError = qualityError;
+            for (int attempt = 1; attempt <= 2; attempt++) {
+                AiChatService.ChatResult repaired = repairTopicResearchJson(candidate, researchContext, evidencePapers, lastQualityError.getMessage(), attempt);
+                candidate = repaired.content();
+                candidateModel = repaired.modelName();
+                try {
+                    return fromAiJsonMany(candidate, userId, candidateModel, fallbackDiscipline, fallbackStage, fallbackGoal, evidencePapers);
+                } catch (IllegalStateException nextQualityError) {
+                    lastQualityError = nextQualityError;
+                }
+            }
+            return fromAiJsonManyLenient(candidate, userId, candidateModel, fallbackDiscipline, fallbackStage, fallbackGoal, evidencePapers);
+        }
+    }
+
+    private List<TopicResearchEntity> fromAiJsonManyLenient(String raw, Long userId, String modelName, String fallbackDiscipline, String fallbackStage, String fallbackGoal, List<Map<String, Object>> evidencePapers) throws Exception {
+        JsonNode root = objectMapper.readTree(stripJson(raw));
+        JsonNode topicsNode = root.path("topics");
+        if (!topicsNode.isArray()) {
+            topicsNode = objectMapper.createArrayNode().add(root);
+        }
+        List<TopicResearchEntity> entities = new ArrayList<>();
+        for (JsonNode item : topicsNode) {
+            TopicResearchEntity entity = fromAiTopicNode(item, userId, modelName, fallbackDiscipline, fallbackStage, fallbackGoal);
+            entity.setSubtopicsJson(writeSubtopics(normalizeSubtopics(entity, evidencePapers, false)));
+            entities.add(entity);
+        }
+        if (entities.isEmpty()) {
+            throw new IllegalStateException("模型返回为空，没有生成可保存的选题卡");
+        }
+        return entities;
+    }
+
+    private AiChatService.ChatResult repairTopicResearchJson(
+        String previousJson,
+        Map<String, Object> researchContext,
+        List<Map<String, Object>> evidencePapers,
+        String qualityError,
+        int attempt
+    ) throws Exception {
+        Map<String, Object> repairContext = new LinkedHashMap<>();
+        repairContext.put("quality_error", qualityError);
+        repairContext.put("repair_attempt", attempt);
+        repairContext.put("research_brief", researchContext);
+        repairContext.put("previous_json", stripJson(previousJson));
+        repairContext.put("academic_search_results", evidencePapers);
+        return aiChatService.chatJsonWithModelFallback(
+            "你是选题调研质检返工 agent。只输出 JSON，不要 Markdown。上一轮结果没有通过质量门，quality_error 已明确指出失败原因。你必须重写失败的小方向，而不是微调一句话。严格要求：1）如果 research_brief.maxTopics=1，只输出 1 张 topic；2）每张 topic 必须有 3-5 个 subtopics；3）subtopic.name 必须是 8-16 个中文字符的具体论文切口，像“低剂量CT肺结节分割”“小样本MRI肿瘤边界校准”，不能是栏目名，不能写“研究问题/方法路线/数据与样本/评价指标/应用边界/小方向/现状分析”；4）每个 subtopic.analysis 必须包含【摘要】【具体方法】【发文现状】【优势】【局限】【潜在论文】【代表论文】七段。每段写 2 个短句或 2 个分号要点，至少 45 个中文字符；必须写清研究对象、数据/样本形态、评价重点、基线方法、发文热度、预期结果或失败边界；5）禁止使用“具有重要意义、具有潜力、至关重要、有望发表、相关研究较少”这种空话；6）每个 subtopic.papers 必须从 academic_search_results 里选择 1-3 篇精准对应的题名，代表论文段也要点名这些论文；7）不得编造论文。输出 schema：{topics:[{title,summary,discipline,stage,goal,tags,themeClusters,researchQuestion,researchGap,methodRoute,riskNote,feasibilityScore,innovationScore,difficultyScore,subtopics,representativePapers}]}",
+            objectMapper.writeValueAsString(repairContext),
+            5200,
+            TOPIC_FALLBACK_MODELS
+        );
     }
 
     private TopicResearchEntity fromAiTopicNode(JsonNode root, Long userId, String modelName, String fallbackDiscipline, String fallbackStage, String fallbackGoal) throws Exception {
         TopicResearchEntity entity = new TopicResearchEntity();
         entity.setUserId(userId);
-        entity.setTitle(defaultNode(root, "title", "待完善选题"));
-        entity.setSummary(defaultNode(root, "summary", "AI 已生成选题调研卡，请继续补充方向约束。"));
+        entity.setTitle(requireNode(root, "title"));
+        entity.setSummary(requireNode(root, "summary"));
         entity.setDiscipline(defaultNode(root, "discipline", fallbackDiscipline));
         entity.setStage(defaultNode(root, "stage", fallbackStage));
         entity.setGoal(defaultNode(root, "goal", fallbackGoal));
@@ -376,6 +443,9 @@ public class TopicResearchService {
         entity.setRepresentativePapersJson(objectMapper.writeValueAsString(readPaperArray(root.path("representativePapers"))));
         entity.setSubtopicsJson(objectMapper.writeValueAsString(readSubtopicArray(root.path("subtopics"))));
         entity.setModelName(modelName);
+        if (parseSubtopics(entity.getSubtopicsJson()).isEmpty()) {
+            throw new IllegalStateException("模型没有返回合格的小方向 subtopics");
+        }
         return entity;
     }
 
@@ -433,23 +503,27 @@ public class TopicResearchService {
         boolean alreadyUpdated = topicResearchRepository.findAllByOrderByCreatedAtDesc().stream()
             .anyMatch(topic -> text(topic.getSource()).contains("daily-frontier") && topic.getCreatedAt() != null && today.equals(topic.getCreatedAt().toLocalDate()));
         if (alreadyUpdated) return;
-        List<String> frontiers = List.of(
-            "多模态医学影像基础模型",
-            "小样本学习与公开数据复现",
-            "液态神经网络动态时序建模",
-            "具身智能评测与仿真数据",
-            "AI 药物发现中的分子表征",
-            "教育大模型的学习过程诊断",
-            "低碳材料筛选与机器学习",
-            "公共卫生风险预测与可解释模型"
-        );
-        for (String frontier : frontiers) {
-            List<Map<String, Object>> evidence = searchAcademicEvidence(frontier, inferDiscipline(frontier), "前沿追踪");
-            TopicResearchEntity entity = deterministicTopic(user.getId(), frontier, inferDiscipline(frontier), "硕士", "开题", "无实验，仅公开数据", "每日前沿自动更新", "daily-frontier");
-            entity.setSource("daily-frontier + academic-search");
-            if (!evidence.isEmpty()) entity.setRepresentativePapersJson(writePapers(evidence));
-            entity.setSubtopicsJson(writeSubtopics(buildSubtopics(entity, evidence.isEmpty() ? parsePapers(entity.getRepresentativePapersJson()) : evidence)));
-            topicResearchRepository.save(entity);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("direction", "2026 年可继续推进的前沿科研选题");
+        payload.put("discipline", "人工智能");
+        payload.put("stage", "硕士");
+        payload.put("goal", "前沿追踪");
+        payload.put("resource", "无实验，仅公开数据");
+        payload.put("dataAccess", "公开数据集、开源代码和近两年代表论文优先");
+        payload.put("methodPreference", "先找可复现实验路线，再判断创新空间");
+        payload.put("topicScale", "能在 2-4 个月推进的硕士/低年级博士小题");
+        payload.put("outputDepth", "详细：每个推荐方向都要给摘要、具体方法、发文现状、优势、局限、潜在论文和代表论文");
+        payload.put("evaluationFocus", "前沿性、可复现、数据可得和投稿价值");
+        payload.put("expectedContribution", "从大方向拆出可验证的小问题");
+        payload.put("constraints", List.of("必须有真实代表论文", "必须有公开数据或可替代数据", "推荐方向之间不能重复", "适合用户继续导入文献库"));
+        payload.put("keywords", "large language model multimodal medical image foundation model drug discovery time series education AI 2026");
+        payload.put("avoidRoutes", "不做空泛综述，不做只有概念没有数据的题目，不推荐无法验证的宏大命题");
+        payload.put("note", "每日自动发布到选题广场的官方前沿方向，必须经过选题调研模型生成。");
+        payload.put("maxTopics", 3);
+        try {
+            generateForUser(user, payload, true);
+        } catch (ResponseStatusException ignored) {
+            // Daily refresh must never publish deterministic placeholder topics.
         }
     }
 
@@ -548,7 +622,7 @@ public class TopicResearchService {
         map.put("method", fallbackMethod(topic, papers));
         map.put("risk", fallbackRisk(topic, papers));
         map.put("papers", papers);
-        map.put("subtopics", normalizeSubtopics(topic, papers));
+        map.put("subtopics", normalizeSubtopics(topic, papers, false));
         map.put("evidenceCount", papers.size());
         map.put("searchSources", papers.stream().map(paper -> text(paper.get("verifiedBy"))).filter(StringUtils::hasText).distinct().toList());
         map.put("feasibility", value(topic.getFeasibilityScore()));
@@ -669,6 +743,14 @@ public class TopicResearchService {
         return StringUtils.hasText(value) ? value.trim() : fallback;
     }
 
+    private String requireNode(JsonNode root, String key) {
+        String value = root.path(key).asText("");
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalStateException("模型缺少必填字段：" + key);
+        }
+        return value.trim();
+    }
+
     private String joinNodeArray(JsonNode node) {
         if (!node.isArray()) return "";
         List<String> values = new ArrayList<>();
@@ -781,7 +863,7 @@ public class TopicResearchService {
         return subtopics;
     }
 
-    private List<Map<String, Object>> normalizeSubtopics(TopicResearchEntity topic, List<Map<String, Object>> papers) {
+    private List<Map<String, Object>> normalizeSubtopics(TopicResearchEntity topic, List<Map<String, Object>> papers, boolean strictQuality) {
         List<Map<String, Object>> normalized = new ArrayList<>();
         int index = 0;
         for (Map<String, Object> item : parseSubtopics(topic.getSubtopicsJson())) {
@@ -789,32 +871,67 @@ public class TopicResearchService {
             Map<String, Object> copy = new LinkedHashMap<>(item);
             String originalName = text(copy.get("name"));
             String originalAnalysis = text(copy.get("analysis"));
+            if (isGenericSubtopicName(originalName)) {
+                continue;
+            }
             List<Map<String, Object>> linked = resolveSubtopicPapers(copy.get("papers"), papers, index, originalName, originalAnalysis);
-            String normalizedName = concreteSubtopicName(topic, originalName, linked, index);
-            boolean renamed = !normalizeTitle(originalName).equals(normalizeTitle(normalizedName));
-            copy.put("name", normalizedName);
+            copy.put("name", originalName);
             copy.put("papers", linked);
-            if (renamed || isGenericAnalysis(text(copy.get("analysis")))) copy.put("analysis", concreteSubtopicAnalysis(topic, text(copy.get("name")), linked));
+            String analysis = text(copy.get("analysis"));
+            if (!StringUtils.hasText(analysis)) {
+                throw new IllegalStateException("模型返回的小方向缺少分析内容：" + originalName);
+            }
+            validateSubtopicAnalysis(originalName, analysis, strictQuality);
             normalized.add(copy);
             index++;
         }
-        Set<String> names = new LinkedHashSet<>();
-        normalized.forEach(item -> names.add(text(item.get("name"))));
-        for (Map<String, Object> item : buildSubtopics(topic, papers)) {
-            if (normalized.size() >= 5) break;
-            String name = text(item.get("name"));
-            if (names.add(name)) normalized.add(item);
-        }
-        while (normalized.size() < 3) {
-            int fallbackIndex = normalized.size() + 1;
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("name", "可做小方向 " + fallbackIndex);
-            List<Map<String, Object>> linked = papers.stream().limit(2).map(this::publicPaper).toList();
-            item.put("analysis", concreteSubtopicAnalysis(topic, text(item.get("name")), linked));
-            item.put("papers", linked);
-            normalized.add(item);
+        if (normalized.size() < 2) {
+            throw new IllegalStateException("模型返回的小方向不够具体，至少需要 2 个可写论文的小切口");
         }
         return normalized.stream().limit(5).toList();
+    }
+
+    private void validateSubtopicAnalysis(String name, String analysis, boolean strictQuality) {
+        List<String> warnings = new ArrayList<>();
+        List<String> sections = List.of("摘要", "具体方法", "发文现状", "优势", "局限", "潜在论文", "代表论文");
+        for (String section : sections) {
+            if (!analysis.contains("【" + section + "】")) {
+                throw new IllegalStateException("模型返回的小方向分析缺少【" + section + "】：" + name);
+            }
+        }
+        Map<String, String> parts = splitAnalysisSections(analysis, sections);
+        for (String section : List.of("摘要", "具体方法", "发文现状", "优势", "局限", "潜在论文")) {
+            String value = text(parts.get(section));
+            if (value.length() < 16) {
+                throw new IllegalStateException("模型返回的小方向【" + section + "】几乎为空：" + name);
+            }
+            if (value.length() < 42) {
+                warnings.add("【" + section + "】偏短");
+            }
+        }
+        String compact = analysis.replaceAll("\\s+", "");
+        if (containsAny(compact, "相关研究较少，主要集中在单模态应用", "该方向有望在", "具有重要意义", "具有潜力", "至关重要")
+            && containsAny(compact, "候选文献不足，需要继续检索")) {
+            throw new IllegalStateException("模型返回的小方向过于模板化，需要重新调研：" + name);
+        }
+        if (strictQuality && warnings.size() >= 3) {
+            throw new IllegalStateException("模型返回的小方向段落过短，需要重新调研：" + name + "；" + String.join("、", warnings));
+        }
+    }
+
+    private Map<String, String> splitAnalysisSections(String analysis, List<String> sections) {
+        Map<String, String> parts = new LinkedHashMap<>();
+        for (int i = 0; i < sections.size(); i++) {
+            String current = "【" + sections.get(i) + "】";
+            String next = i + 1 < sections.size() ? "【" + sections.get(i + 1) + "】" : "";
+            int start = analysis.indexOf(current);
+            if (start < 0) continue;
+            start += current.length();
+            int end = StringUtils.hasText(next) ? analysis.indexOf(next, start) : analysis.length();
+            if (end < 0) end = analysis.length();
+            parts.put(sections.get(i), analysis.substring(start, end).trim());
+        }
+        return parts;
     }
 
     private List<Map<String, Object>> resolveSubtopicPapers(Object value, List<Map<String, Object>> allPapers, int index, String subtopicName, String analysis) {

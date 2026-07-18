@@ -6,7 +6,15 @@ import com.paperpilot.server.entity.ModelConfigEntity;
 import com.paperpilot.server.repository.AiUsageRecordRepository;
 import com.paperpilot.server.repository.AppUserRepository;
 import com.paperpilot.server.repository.ModelConfigRepository;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,6 +24,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 public class AiUsageService {
@@ -55,8 +64,29 @@ public class AiUsageService {
         long completionTokens,
         long totalTokens
     ) {
+        record(userId, modelName, scene, action, paperTitle, promptTokens, completionTokens, totalTokens, "success", "", 0L);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void record(
+        Long userId,
+        String modelName,
+        String scene,
+        String action,
+        String paperTitle,
+        long promptTokens,
+        long completionTokens,
+        long totalTokens,
+        String status,
+        String errorMessage,
+        long latencyMs
+    ) {
         AiUsageRecordEntity entity = new AiUsageRecordEntity();
         entity.setUserId(userId);
+        appUserRepository.findById(userId).ifPresent(user -> {
+            entity.setUsername(blankTo(user.getUsername(), ""));
+            entity.setUserEmail(blankTo(user.getEmail(), ""));
+        });
         entity.setModelName(blankTo(modelName, "unknown-model"));
         entity.setScene(blankTo(scene, "analyze"));
         entity.setAction(blankTo(action, "论文解析"));
@@ -64,12 +94,16 @@ public class AiUsageService {
         entity.setPromptTokens(promptTokens);
         entity.setCompletionTokens(completionTokens);
         entity.setTotalTokens(totalTokens);
+        entity.setStatus(blankTo(status, "success"));
+        entity.setErrorMessage(clip(errorMessage, 760));
+        entity.setLatencyMs(Math.max(0L, latencyMs));
         entity.setUnitPrice(billingService.unitPrice());
         entity.setBillingMultiplier(billingService.multiplier());
-        entity.setChargeAmount(billingService.calculateCharge(action, totalTokens));
+        entity.setChargeAmount("success".equalsIgnoreCase(status) ? billingService.calculateCharge(action, totalTokens) : 0.0D);
         repository.save(entity);
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordAndCharge(
         Long userId,
         String modelName,
@@ -88,6 +122,115 @@ public class AiUsageService {
             membershipService.consume(user, action);
         });
         record(userId, modelName, scene, action, paperTitle, promptTokens, completionTokens, totalTokens);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordAndCharge(
+        Long userId,
+        String modelName,
+        String scene,
+        String action,
+        String paperTitle,
+        long promptTokens,
+        long completionTokens,
+        long totalTokens,
+        long latencyMs
+    ) {
+        if (userId == null || totalTokens <= 0) return;
+        appUserRepository.findById(userId).ifPresent(user -> {
+            long current = user.getTokenUsed() == null ? 0L : user.getTokenUsed();
+            user.setTokenUsed(current + totalTokens);
+            appUserRepository.save(user);
+            membershipService.consume(user, action);
+        });
+        record(userId, modelName, scene, action, paperTitle, promptTokens, completionTokens, totalTokens, "success", "", latencyMs);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordFailure(
+        Long userId,
+        String modelName,
+        String scene,
+        String action,
+        String paperTitle,
+        long promptTokens,
+        String errorMessage,
+        long latencyMs
+    ) {
+        if (userId == null) return;
+        record(userId, modelName, scene, action, paperTitle, Math.max(0L, promptTokens), 0L, Math.max(0L, promptTokens), "failed", errorMessage, latencyMs);
+    }
+
+    public Map<String, Object> adminCalls(String keyword, String scene, String model, String status, int page, int pageSize) {
+        int safePage = Math.max(1, page);
+        int safeSize = Math.min(100, Math.max(5, pageSize));
+        String trimmedKeyword = StringUtils.hasText(keyword) ? keyword.trim().toLowerCase() : "";
+        List<Long> matchedUserIds = StringUtils.hasText(trimmedKeyword)
+            ? appUserRepository.findAll().stream()
+                .filter(user ->
+                    String.valueOf(user.getId()).contains(trimmedKeyword)
+                        || blankTo(user.getUsername(), "").toLowerCase().contains(trimmedKeyword)
+                        || blankTo(user.getEmail(), "").toLowerCase().contains(trimmedKeyword)
+                )
+                .map(AppUserEntity::getId)
+                .toList()
+            : List.of();
+        Specification<AiUsageRecordEntity> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (StringUtils.hasText(trimmedKeyword)) {
+                String like = "%" + trimmedKeyword + "%";
+                List<Predicate> keywordPredicates = new ArrayList<>(List.of(
+                    cb.like(cb.lower(root.get("username")), like),
+                    cb.like(cb.lower(root.get("userEmail")), like),
+                    cb.like(cb.lower(root.get("paperTitle")), like),
+                    cb.like(root.get("userId").as(String.class), like)
+                ));
+                if (!matchedUserIds.isEmpty()) {
+                    keywordPredicates.add(root.get("userId").in(matchedUserIds));
+                }
+                predicates.add(cb.or(keywordPredicates.toArray(Predicate[]::new)));
+            }
+            if (StringUtils.hasText(scene) && !"全部".equals(scene)) {
+                predicates.add(cb.equal(root.get("scene"), scene.trim()));
+            }
+            if (StringUtils.hasText(model)) {
+                predicates.add(cb.like(cb.lower(root.get("modelName")), "%" + model.trim().toLowerCase() + "%"));
+            }
+            if (StringUtils.hasText(status) && !"全部".equals(status)) {
+                predicates.add(cb.equal(root.get("status"), status.trim()));
+            }
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
+        Page<AiUsageRecordEntity> result = repository.findAll(
+            spec,
+            PageRequest.of(safePage - 1, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+        List<AiUsageRecordEntity> rows = result.getContent();
+        long inputTokens = rows.stream().mapToLong(r -> safe(r.getPromptTokens())).sum();
+        long outputTokens = rows.stream().mapToLong(r -> safe(r.getCompletionTokens())).sum();
+        long failed = rows.stream().filter(r -> "failed".equalsIgnoreCase(blankTo(r.getStatus(), ""))).count();
+        double cost = rows.stream().mapToDouble(this::chargeOf).sum();
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("page", safePage);
+        response.put("pageSize", safeSize);
+        response.put("total", result.getTotalElements());
+        response.put("totalPages", result.getTotalPages());
+        response.put("summary", Map.of(
+            "inputTokens", inputTokens,
+            "outputTokens", outputTokens,
+            "totalTokens", inputTokens + outputTokens,
+            "failed", failed,
+            "cost", money(cost)
+        ));
+        response.put("rows", rows.stream().map(this::adminCallRow).toList());
+        return response;
+    }
+
+    public Map<String, Object> clearAdminCalls() {
+        currentUserService.requireAdmin();
+        long removed = repository.count();
+        repository.deleteAllInBatch();
+        return Map.of("removed", removed);
     }
 
     public Map<String, Object> summary() {
@@ -265,15 +408,89 @@ public class AiUsageService {
             row.put("tokens", safe(record.getTotalTokens()));
             row.put("promptTokens", safe(record.getPromptTokens()));
             row.put("completionTokens", safe(record.getCompletionTokens()));
+            row.put("status", blankTo(record.getStatus(), "success"));
             return row;
         }).toList();
+    }
+
+    private Map<String, Object> adminCallRow(AiUsageRecordEntity record) {
+        AppUserEntity user = record.getUserId() == null ? null : appUserRepository.findById(record.getUserId()).orElse(null);
+        String username = blankTo(record.getUsername(), user == null ? "未知用户" : blankTo(user.getUsername(), "未知用户"));
+        String email = blankTo(record.getUserEmail(), user == null ? "" : blankTo(user.getEmail(), ""));
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", record.getId());
+        row.put("time", record.getCreatedAt() == null ? "" : record.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        row.put("userId", record.getUserId());
+        row.put("username", username);
+        row.put("userEmail", email);
+        row.put("scene", blankTo(record.getScene(), "analyze"));
+        row.put("sceneLabel", sceneLabel(record.getScene()));
+        row.put("action", normalizeAction(record.getAction()));
+        row.put("rawAction", blankTo(record.getAction(), ""));
+        row.put("model", blankTo(record.getModelName(), "unknown-model"));
+        row.put("paper", displayPaperTitle(record.getPaperTitle(), "未关联论文"));
+        row.put("promptTokens", safe(record.getPromptTokens()));
+        row.put("completionTokens", safe(record.getCompletionTokens()));
+        row.put("totalTokens", safe(record.getTotalTokens()));
+        row.put("chargeAmount", chargeOf(record));
+        row.put("unitPrice", unitPriceOf(record));
+        row.put("billingMultiplier", multiplierOf(record));
+        row.put("status", blankTo(record.getStatus(), "success"));
+        row.put("latencyMs", safe(record.getLatencyMs()));
+        row.put("errorMessage", blankTo(record.getErrorMessage(), ""));
+        Map<String, Object> fallback = fallbackResolution(record);
+        row.put("fallbackResolved", fallback.get("resolved"));
+        row.put("fallbackModel", fallback.get("model"));
+        row.put("fallbackTime", fallback.get("time"));
+        return row;
+    }
+
+    private Map<String, Object> fallbackResolution(AiUsageRecordEntity record) {
+        if (!"failed".equalsIgnoreCase(blankTo(record.getStatus(), "")) || record.getCreatedAt() == null || record.getUserId() == null) {
+            return Map.of("resolved", false, "model", "", "time", "");
+        }
+        LocalDateTime start = record.getCreatedAt();
+        LocalDateTime end = start.plusMinutes(3);
+        List<AiUsageRecordEntity> laterSuccess = repository.findTop3ByUserIdAndSceneAndActionAndStatusAndCreatedAtBetweenOrderByCreatedAtAsc(
+            record.getUserId(),
+            blankTo(record.getScene(), ""),
+            blankTo(record.getAction(), ""),
+            "success",
+            start,
+            end
+        );
+        AiUsageRecordEntity success = laterSuccess.stream()
+            .filter(item -> item.getId() != null && record.getId() != null && item.getId() > record.getId())
+            .findFirst()
+            .orElse(null);
+        if (success == null) return Map.of("resolved", false, "model", "", "time", "");
+        return Map.of(
+            "resolved", true,
+            "model", blankTo(success.getModelName(), "后续模型"),
+            "time", success.getCreatedAt() == null ? "" : success.getCreatedAt().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+        );
     }
 
     private String normalizeAction(String action) {
         String value = blankTo(action, "");
         if (value.contains("PPT") || value.contains("Agent")) return "组会PPT Agent执行";
+        if (value.contains("审核")) return "AI发帖审核";
+        if (value.contains("选题")) return "选题调研";
         if (value.contains("综述") || value.contains("汇报") || value.contains("组会")) return "论文综述生成";
+        if (value.contains("翻译")) return "论文翻译";
         return "AI文章对话";
+    }
+
+    private String sceneLabel(String scene) {
+        return switch (blankTo(scene, "")) {
+            case ModelConfigService.SCENE_PAPER_REVIEW, "summary", "report" -> "论文综述";
+            case ModelConfigService.SCENE_PAPER_QA, "qa", "analyze" -> "AI论文问答";
+            case ModelConfigService.SCENE_TOPIC_RESEARCH -> "选题研究";
+            case ModelConfigService.SCENE_MEETING_DECK -> "PPT生成";
+            case ModelConfigService.SCENE_FORUM_MODERATION -> "AI发帖审核";
+            case "translate" -> "全文翻译";
+            default -> blankTo(scene, "未知模块");
+        };
     }
 
     private String displayPaperTitle(String paperTitle, String fallback) {
@@ -294,6 +511,12 @@ public class AiUsageService {
         return value == null ? 0L : value;
     }
 
+    private String clip(String text, int maxLength) {
+        String value = Objects.toString(text, "").trim();
+        if (value.length() <= maxLength) return value;
+        return value.substring(0, Math.max(0, maxLength - 1)) + "…";
+    }
+
     private String blankTo(String text, String fallback) {
         return text == null || text.isBlank() ? fallback : text;
     }
@@ -303,6 +526,7 @@ public class AiUsageService {
     }
 
     private double chargeOf(AiUsageRecordEntity record) {
+        if ("failed".equalsIgnoreCase(blankTo(record.getStatus(), ""))) return 0.0D;
         double saved = money(record.getChargeAmount());
         double calculated = billingService.calculateCharge(record.getAction(), safe(record.getTotalTokens()));
         if (billingService.isPptAgentAction(record.getAction())) return calculated;

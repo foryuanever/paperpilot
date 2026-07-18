@@ -441,7 +441,7 @@ async function generateTopic() {
     generationIndex.value = Math.min(generationSteps.length - 1, generationIndex.value + 1);
   }, 1500);
   try {
-    const result = await paperpilotApi.generateTopic({ ...generatorForm });
+    const result = await paperpilotApi.generateTopic({ ...generatorForm, maxTopics: 1 });
     const minimumMs = 12500;
     const elapsed = Date.now() - startedAt;
     if (elapsed < minimumMs) {
@@ -453,7 +453,7 @@ async function generateTopic() {
     selectedTopic.value = createdTopics[0] || null;
     savedOnly.value = true;
     showGenerator.value = false;
-    toast(`已生成 ${createdTopics.length} 张选题卡，并加入我的收藏`);
+    toast("已完成 1 次真实调研，并加入我的收藏");
   } catch (error) {
     toast(error.response?.data?.message || "选题调研失败");
   } finally {

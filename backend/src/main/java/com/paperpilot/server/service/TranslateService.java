@@ -3,6 +3,7 @@ package com.paperpilot.server.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paperpilot.server.dto.TranslateRequest;
+import com.paperpilot.server.entity.AppUserEntity;
 import com.paperpilot.server.entity.ModelConfigEntity;
 import com.paperpilot.server.entity.TranslationRecordEntity;
 import com.paperpilot.server.repository.ModelConfigRepository;
@@ -41,15 +42,18 @@ public class TranslateService {
     private final ModelConfigRepository modelConfigRepository;
     private final TranslationRecordRepository translationRecordRepository;
     private final CurrentUserService currentUserService;
+    private final AiUsageService aiUsageService;
 
     public TranslateService(
         ModelConfigRepository modelConfigRepository,
         TranslationRecordRepository translationRecordRepository,
-        CurrentUserService currentUserService
+        CurrentUserService currentUserService,
+        AiUsageService aiUsageService
     ) {
         this.modelConfigRepository = modelConfigRepository;
         this.translationRecordRepository = translationRecordRepository;
         this.currentUserService = currentUserService;
+        this.aiUsageService = aiUsageService;
     }
 
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -233,39 +237,71 @@ public class TranslateService {
         );
         
         String payload = objectMapper.writeValueAsString(payloadMap);
-        
+
         HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(URI.create(url))
             .timeout(Duration.ofSeconds(45))
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(payload));
-            
+
         if (StringUtils.hasText(apiKey)) {
             reqBuilder.header("Authorization", "Bearer " + apiKey);
         }
-        
-        HttpRequest request = reqBuilder.build();
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        
-        if (response.statusCode() >= 400) {
-            throw new IllegalStateException("LLM 接口返回 HTTP " + response.statusCode() + ": " + response.body());
+
+        long startedAt = System.nanoTime();
+        try {
+            HttpRequest request = reqBuilder.build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() >= 400) {
+                throw new IllegalStateException("LLM 接口返回 HTTP " + response.statusCode() + ": " + response.body());
+            }
+
+            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode choices = root.path("choices");
+            if (!choices.isArray() || choices.isEmpty()) {
+                throw new IllegalStateException("LLM 返回 choices 为空");
+            }
+
+            String resultText = choices.get(0).path("message").path("content").asText("").trim();
+            if (resultText.isEmpty()) {
+                throw new IllegalStateException("LLM 返回内容为空");
+            }
+
+            if (resultText.startsWith("```")) {
+                resultText = resultText.replaceAll("^```[a-zA-Z]*\\n", "").replaceAll("\\n```$", "");
+            }
+            JsonNode usage = root.path("usage");
+            long promptTokens = usage.path("prompt_tokens").asLong(estimateTokens(systemPrompt + "\n" + text));
+            long completionTokens = usage.path("completion_tokens").asLong(estimateTokens(resultText));
+            long totalTokens = usage.path("total_tokens").asLong(promptTokens + completionTokens);
+            recordAiTranslateUsage(modelName, text, promptTokens, completionTokens, totalTokens, "", elapsedMs(startedAt), true);
+            return resultText.trim();
+        } catch (Exception error) {
+            recordAiTranslateUsage(modelName, text, estimateTokens(systemPrompt + "\n" + text), 0L, estimateTokens(systemPrompt + "\n" + text), error.getMessage(), elapsedMs(startedAt), false);
+            throw error;
         }
-        
-        JsonNode root = objectMapper.readTree(response.body());
-        JsonNode choices = root.path("choices");
-        if (!choices.isArray() || choices.isEmpty()) {
-            throw new IllegalStateException("LLM 返回 choices 为空");
+    }
+
+    private void recordAiTranslateUsage(String modelName, String text, long promptTokens, long completionTokens, long totalTokens, String error, long latencyMs, boolean success) {
+        try {
+            AppUserEntity user = currentUserService.getOrCreateDefaultUser();
+            if (success) {
+                aiUsageService.recordAndCharge(user.getId(), modelName, "translate", "全文翻译", "当前论文", promptTokens, completionTokens, totalTokens, latencyMs);
+            } else {
+                aiUsageService.recordFailure(user.getId(), modelName, "translate", "全文翻译", "当前论文", promptTokens, error, latencyMs);
+            }
+        } catch (Exception ignored) {
+            // Translation should not fail because accounting failed.
         }
-        
-        String resultText = choices.get(0).path("message").path("content").asText("").trim();
-        if (resultText.isEmpty()) {
-            throw new IllegalStateException("LLM 返回内容为空");
-        }
-        
-        if (resultText.startsWith("```")) {
-            resultText = resultText.replaceAll("^```[a-zA-Z]*\\n", "").replaceAll("\\n```$", "");
-        }
-        
-        return resultText.trim();
+    }
+
+    private long elapsedMs(long startedAt) {
+        return Math.max(0L, java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
+    }
+
+    private long estimateTokens(String value) {
+        if (!StringUtils.hasText(value)) return 0L;
+        return Math.max(1L, (long) Math.ceil(value.replaceAll("\\s+", "").length() / 3.0));
     }
 
     private String normalizeProvider(String provider) {

@@ -73,6 +73,14 @@ export const paperpilotApi = {
     const { data } = await apiClient.get("/api/admin/model-config/relay-research/top", { timeout: 60000 });
     return data;
   },
+  async getAdminAiUsageCalls(params = {}) {
+    const { data } = await apiClient.get("/api/admin/ai-usage/calls", { params, timeout: 20000 });
+    return data;
+  },
+  async clearAdminAiUsageCalls() {
+    const { data } = await apiClient.delete("/api/admin/ai-usage/calls", { timeout: 20000 });
+    return data;
+  },
   async importPaper(payload) {
     const { data } = await apiClient.post("/api/papers/import", payload);
     return data;

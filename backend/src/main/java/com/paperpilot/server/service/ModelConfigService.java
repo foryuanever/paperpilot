@@ -214,13 +214,9 @@ public class ModelConfigService {
         }
         String targetScene = normalizeScene(StringUtils.hasText(target.getScene()) ? target.getScene() : scene);
         target.setScene(targetScene);
-        modelConfigRepository.findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(targetScene).ifPresent(active -> {
-            active.setActive(false);
-            modelConfigRepository.save(active);
-        });
         target.setActive(true);
         modelConfigRepository.save(target);
-        return poolRow(target, "unknown", "已设为主路由，建议立即刷新健康状态", null);
+        return poolRow(target, "unknown", "已提为主路由，其他已启用路由会继续作为备用模型池", null);
     }
 
     @Transactional
@@ -435,15 +431,37 @@ public class ModelConfigService {
     private List<Map<String, String>> recommendedTemplates() {
         return List.of(
             Map.of(
-                "id", "deepseek-official",
-                "providerName", "DeepSeek 官方",
-                "baseUrl", "https://api.deepseek.com",
-                "modelName", "deepseek-v4-flash",
+                "id", "openrouter-relay",
+                "providerName", "OpenRouter Relay",
+                "baseUrl", "https://openrouter.ai/api/v1",
+                "modelName", "deepseek/deepseek-chat-v3-0324:free",
                 "apiFormat", "openai_chat",
                 "status", "unconfigured",
-                "message", "DeepSeek 官方 OpenAI 兼容协议；需要 DeepSeek API Key，模型名不要填写 gpt-5.4。",
-                "keyUrl", "https://platform.deepseek.com/api_keys",
-                "priority", "79-deepseek"
+                "message", "第三方 OpenAI-compatible 中转，适合低成本问答、审核和综述备用；PPT 入口请换强模型。",
+                "keyUrl", "https://openrouter.ai/keys",
+                "priority", "70-openrouter"
+            ),
+            Map.of(
+                "id", "siliconflow-relay",
+                "providerName", "SiliconFlow Relay",
+                "baseUrl", "https://api.siliconflow.cn/v1",
+                "modelName", "deepseek-ai/DeepSeek-V3",
+                "apiFormat", "openai_chat",
+                "status", "unconfigured",
+                "message", "第三方 OpenAI-compatible 中转，国内访问友好，适合经济模型池和长文本任务备用。",
+                "keyUrl", "https://cloud.siliconflow.cn/account/ak",
+                "priority", "72-siliconflow"
+            ),
+            Map.of(
+                "id", "aimlapi-relay",
+                "providerName", "AIMLAPI Relay",
+                "baseUrl", "https://api.aimlapi.com/v1",
+                "modelName", "gpt-4o-mini",
+                "apiFormat", "openai_chat",
+                "status", "unconfigured",
+                "message", "第三方 OpenAI-compatible 中转，可作为轻量 GPT 路由候选；以实际账户价格和可用模型为准。",
+                "keyUrl", "https://aimlapi.com/app/keys/",
+                "priority", "74-aimlapi"
             ),
             Map.of(
                 "id", "groq",

@@ -21,6 +21,12 @@ public class AiUsageRecordEntity {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Column(name = "username", length = 96)
+    private String username = "";
+
+    @Column(name = "user_email", length = 160)
+    private String userEmail = "";
+
     @Column(name = "model_name", nullable = false, length = 120)
     private String modelName = "";
 
@@ -41,6 +47,15 @@ public class AiUsageRecordEntity {
 
     @Column(name = "total_tokens", nullable = false)
     private Long totalTokens = 0L;
+
+    @Column(name = "status", nullable = false, length = 24)
+    private String status = "success";
+
+    @Column(name = "error_message", length = 800)
+    private String errorMessage = "";
+
+    @Column(name = "latency_ms")
+    private Long latencyMs = 0L;
 
     @Column(name = "charge_amount", nullable = false)
     private Double chargeAmount = 0.0;
@@ -64,6 +79,10 @@ public class AiUsageRecordEntity {
     public Long getId() { return id; }
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
+    public String getUserEmail() { return userEmail; }
+    public void setUserEmail(String userEmail) { this.userEmail = userEmail; }
     public String getModelName() { return modelName; }
     public void setModelName(String modelName) { this.modelName = modelName; }
     public String getScene() { return scene; }
@@ -78,6 +97,12 @@ public class AiUsageRecordEntity {
     public void setCompletionTokens(Long completionTokens) { this.completionTokens = completionTokens; }
     public Long getTotalTokens() { return totalTokens; }
     public void setTotalTokens(Long totalTokens) { this.totalTokens = totalTokens; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public String getErrorMessage() { return errorMessage; }
+    public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+    public Long getLatencyMs() { return latencyMs; }
+    public void setLatencyMs(Long latencyMs) { this.latencyMs = latencyMs; }
     public Double getChargeAmount() { return chargeAmount; }
     public void setChargeAmount(Double chargeAmount) { this.chargeAmount = chargeAmount; }
     public Double getUnitPrice() { return unitPrice; }

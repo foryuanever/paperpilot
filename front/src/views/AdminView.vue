@@ -428,13 +428,20 @@
           <section class="model-pool-panel spatial-glass-panel">
             <div class="model-pool-header">
               <div>
-                <h4>实时模型池</h4>
-                <p>{{ modelPoolDescription }}</p>
+                <span class="pool-kicker">Route Health Pool</span>
+                <h4>实时中转模型池</h4>
+                <p>{{ modelPoolDescription }} 系统每 10 秒检测一次，按主路由、可用状态和延迟自动排序。</p>
               </div>
               <div class="model-pool-actions">
                 <span class="pool-summary">
                   {{ availableModelRoutes }} 可用 / {{ configuredModelRoutes }} 已配置 / {{ unconfiguredModelRoutes }} 待配置
                 </span>
+                <span class="pool-refresh-chip" :class="{ active: modelPoolAutoRefresh }">
+                  {{ modelPoolRefreshing ? "正在检测" : `10 秒自动刷新${modelPoolLastRefreshedAt ? " · " + formatTime(modelPoolLastRefreshedAt) : ""}` }}
+                </span>
+                <button class="spatial-btn spatial-btn-ghost compact-btn" @click="modelPoolAutoRefresh = !modelPoolAutoRefresh">
+                  {{ modelPoolAutoRefresh ? "暂停轮询" : "恢复轮询" }}
+                </button>
                 <button class="spatial-btn spatial-btn-ghost compact-btn" @click="showUnconfiguredPool = !showUnconfiguredPool">
                   {{ showUnconfiguredPool ? "隐藏待配置" : "查看待配置" }}
                 </button>
@@ -450,26 +457,43 @@
               </div>
             </div>
 
-            <div class="model-pool-list">
+            <div class="model-pool-list route-health-grid">
               <article
-                v-for="route in visibleModelPool"
+                v-for="(route, index) in visibleModelPool"
                 :key="route.id"
                 class="model-pool-card"
                 :class="[`status-${route.status}`, { 'message-expanded': isPoolMessageExpanded(route) }]"
               >
                 <header class="pool-card-top">
-                  <span class="pool-state-dot"></span>
+                  <div class="pool-rank-wrap">
+                    <span class="pool-rank">#{{ index + 1 }}</span>
+                    <span class="pool-state-dot"></span>
+                  </div>
                   <span class="pool-chip" :class="`chip-${route.status}`">{{ poolStatusLabel(route.status) }}</span>
                 </header>
                 <div class="pool-card-body">
                   <div class="pool-title-line">
                     <strong>{{ route.providerName }}</strong>
                     <span v-if="route.active" class="pool-chip primary">主路由</span>
-                    <span v-if="route.template" class="pool-chip">推荐</span>
+                    <span v-if="route.template" class="pool-chip">候选</span>
                     <span v-if="route.duplicateCount > 1" class="pool-chip">重复 {{ route.duplicateCount }}</span>
                   </div>
                   <p>{{ route.modelName || "待填写模型" }}</p>
                   <small>{{ route.baseUrl }}</small>
+                </div>
+                <div class="pool-health-metrics">
+                  <span>
+                    <small>延迟</small>
+                    <strong>{{ routeLatencyLabel(route) }}</strong>
+                  </span>
+                  <span>
+                    <small>Key</small>
+                    <strong>{{ route.keyConfigured ? "已配置" : "未配置" }}</strong>
+                  </span>
+                  <span>
+                    <small>优先级</small>
+                    <strong>{{ routePriorityLabel(route, index) }}</strong>
+                  </span>
                 </div>
                 <div class="pool-message-wrap">
                   <p class="pool-message" :class="{ expanded: isPoolMessageExpanded(route) }">{{ route.message }}</p>
@@ -483,8 +507,6 @@
                   </button>
                 </div>
                 <div class="pool-card-footer">
-                  <span>{{ route.keyConfigured ? "Key 已配置" : "缺少 Key" }}</span>
-                  <span v-if="route.latencyMs">{{ route.latencyMs }} ms</span>
                   <button
                     v-if="route.keyUrl"
                     class="action-btn text-btn"
@@ -505,7 +527,7 @@
                     :disabled="!route.keyConfigured || route.status === 'unconfigured'"
                     @click="activateModelRoute(route)"
                   >
-                    设为主路由
+                    提为主路由
                   </button>
                 </div>
               </article>
@@ -515,193 +537,124 @@
             </div>
           </section>
 
-          <section class="relay-research-panel spatial-glass-panel">
-            <div class="relay-research-header">
+          <section class="ai-usage-ledger spatial-glass-panel">
+            <div class="ledger-header">
               <div>
-                <h4>中转站价格与选型研究</h4>
-                <p>{{ relayResearch.pricingNote || "从 MODELOC 刷新前 20 个候选中转站；公开接口未给出的价格需登录对应官网核价。" }}</p>
+                <span class="pool-kicker">Usage Ledger</span>
+                <h4>AI 调用明细</h4>
+                <p>记录本站用户在每个模块中调用的模型、输入 Token、输出 Token、费用估算与失败原因。</p>
               </div>
-              <div class="relay-research-actions">
-                <span v-if="relayResearch.fetchedAt">刷新时间 {{ formatDateTime(relayResearch.fetchedAt) }}</span>
-                <button class="spatial-btn spatial-btn-accent compact-btn" :disabled="relayResearchLoading" @click="loadRelayResearch">
-                  {{ relayResearchLoading ? "刷新中..." : "刷新前20" }}
-                </button>
-              </div>
+              <button class="spatial-btn spatial-btn-accent compact-btn" :disabled="aiUsageLoading" @click="loadAiUsageCalls">
+                {{ aiUsageLoading ? "刷新中..." : "刷新账本" }}
+              </button>
             </div>
 
-            <div class="relay-summary-grid">
-              <article v-for="item in relayRecommendationCards" :key="item.key">
-                <span>{{ item.label }}</span>
-                <strong>{{ item.title }}</strong>
-                <p>{{ item.text }}</p>
+            <div class="ledger-filters">
+              <label>
+                <span>用户检索</span>
+                <input v-model.trim="aiUsageFilters.keyword" type="search" placeholder="用户名 / 邮箱 / 用户ID / 论文标题" @keyup.enter="resetAiUsagePageAndLoad" />
+              </label>
+              <label>
+                <span>模块</span>
+                <select v-model="aiUsageFilters.scene" @change="resetAiUsagePageAndLoad">
+                  <option value="">全部模块</option>
+                  <option v-for="scene in aiUsageSceneOptions" :key="scene.value" :value="scene.value">{{ scene.label }}</option>
+                </select>
+              </label>
+              <label>
+                <span>模型</span>
+                <input v-model.trim="aiUsageFilters.model" type="search" placeholder="例如 gpt / qwen / deepseek" @keyup.enter="resetAiUsagePageAndLoad" />
+              </label>
+              <label>
+                <span>状态</span>
+                <select v-model="aiUsageFilters.status" @change="resetAiUsagePageAndLoad">
+                  <option value="">全部状态</option>
+                  <option value="success">成功</option>
+                  <option value="failed">失败</option>
+                </select>
+              </label>
+              <button class="spatial-btn spatial-btn-ghost compact-btn" @click="resetAiUsagePageAndLoad">检索</button>
+            </div>
+
+            <div class="ledger-summary">
+              <article>
+                <span>当前页输入</span>
+                <strong>{{ formatNumber(aiUsageSummary.inputTokens) }}</strong>
+              </article>
+              <article>
+                <span>当前页输出</span>
+                <strong>{{ formatNumber(aiUsageSummary.outputTokens) }}</strong>
+              </article>
+              <article>
+                <span>失败调用</span>
+                <strong>{{ formatNumber(aiUsageSummary.failed) }}</strong>
+              </article>
+              <article>
+                <span>估算成本</span>
+                <strong>¥{{ formatMoney(aiUsageSummary.cost) }}</strong>
               </article>
             </div>
 
-            <div class="relay-purchase-grid">
-              <article v-for="plan in relayPurchasePlan" :key="plan.scene">
-                <span>{{ plan.scene }}</span>
-                <strong>{{ plan.primary }}</strong>
-                <p>备用：{{ plan.backup }} · {{ plan.budget }}</p>
-                <small>{{ plan.reason }}</small>
-              </article>
-            </div>
-
-            <div class="economy-routing-grid">
-              <article v-for="route in relaySceneRoutingPlan" :key="route.scene">
-                <span>{{ route.scene }}</span>
-                <strong>{{ route.primary }}</strong>
-                <p>备用：{{ route.backup }}</p>
-                <p>降级：{{ route.fallback }}</p>
-                <small>{{ route.strategy }}</small>
-              </article>
-            </div>
-
-            <div class="economy-model-heading">
-              <div>
-                <h5>经济模型家族最优报价</h5>
-                <p>每个家族保留当前前 20 中人民币综合成本最低的公开候选；低价不等于已验证，仍需小额压测。</p>
-              </div>
-              <strong>{{ relayEconomyModels.length }} 个模型家族</strong>
-            </div>
-            <div class="economy-table-wrap">
-              <table class="economy-table">
+            <div class="ledger-table-wrap">
+              <table class="ledger-table">
                 <thead>
                   <tr>
-                    <th>家族 / 模型</th>
-                    <th>中转站</th>
-                    <th>分组倍率</th>
-                    <th>输入 / 输出每1M</th>
-                    <th>适用入口</th>
-                    <th>入池要求</th>
+                    <th>时间</th>
+                    <th>用户</th>
+                    <th>模块</th>
+                    <th>模型</th>
+                    <th>输入</th>
+                    <th>输出</th>
+                    <th>总量</th>
+                    <th>费用</th>
+                    <th>状态</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="model in relayEconomyModels" :key="`${model.domain}-${model.family}`">
-                    <td><b>{{ model.family }}</b><small>{{ model.model }}</small></td>
-                    <td><b>{{ model.station }}</b><small>MODELOC {{ model.stationScore || "—" }}</small></td>
-                    <td>{{ Number(model.groupRatio || 0).toFixed(3).replace(/0+$/, "").replace(/\.$/, "") }}x<small>{{ model.group }}</small></td>
-                    <td><b>入 ¥{{ formatRelayMoney(model.inputCny) }} / 出 ¥{{ formatRelayMoney(model.outputCny) }}</b></td>
-                    <td>{{ (model.scenes || []).join("、") }}</td>
-                    <td>{{ model.risk }}</td>
+                  <tr v-for="row in aiUsageRows" :key="row.id" :class="{ failed: row.status === 'failed' }">
+                    <td class="ledger-time">{{ row.time }}</td>
+                    <td>
+                      <strong>{{ row.username || "未知用户" }}</strong>
+                      <small>{{ row.userEmail || `ID ${row.userId || "—"}` }}</small>
+                    </td>
+                    <td>
+                      <strong>{{ row.sceneLabel }}</strong>
+                      <small>{{ row.action }}</small>
+                    </td>
+                    <td class="ledger-model">
+                      <strong>{{ row.model }}</strong>
+                      <small>{{ row.paper }}</small>
+                    </td>
+                    <td>{{ formatNumber(row.promptTokens) }}</td>
+                    <td>{{ formatNumber(row.completionTokens) }}</td>
+                    <td>{{ formatNumber(row.totalTokens) }}</td>
+                    <td>¥{{ formatMoney(row.chargeAmount) }}</td>
+                    <td>
+                      <span class="ledger-status" :class="row.status">{{ row.status === "failed" ? "失败" : "成功" }}</span>
+                      <small v-if="row.latencyMs">{{ row.latencyMs }} ms</small>
+                      <small v-if="row.status === 'failed' && row.fallbackResolved" class="ledger-fallback">
+                        已切换 {{ row.fallbackModel }} 成功
+                      </small>
+                      <small v-if="row.status === 'failed'" class="ledger-error">{{ row.errorMessage || "调用失败" }}</small>
+                    </td>
                   </tr>
-                  <tr v-if="!relayEconomyModels.length">
-                    <td colspan="6" class="relay-empty">当前前 20 没有可公开计算人民币成本的经济模型。</td>
+                  <tr v-if="!aiUsageRows.length">
+                    <td colspan="9" class="ledger-empty">{{ aiUsageLoading ? "正在读取调用记录..." : "暂无调用记录，真实模型调用后会自动出现在这里。" }}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
-            <div class="relay-table-wrap">
-              <table class="relay-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>中转站</th>
-                    <th>采购状态</th>
-                    <th>MODELOC</th>
-                    <th>公开充值</th>
-                    <th>有效倍率</th>
-                    <th>其他低价模型</th>
-                    <th>GPT-5.4 人民币成本</th>
-                    <th>DeepSeek 人民币成本</th>
-                    <th>多少钱买多少</th>
-                    <th>采购结论</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(relay, index) in relayRows" :key="relay.domain">
-                    <td>{{ index + 1 }}</td>
-                    <td>
-                      <strong>{{ relay.name }}</strong>
-                      <a v-if="relay.website" :href="relay.website" target="_blank" rel="noreferrer">{{ relay.domain }}</a>
-                      <span v-else>{{ relay.domain }}</span>
-                    </td>
-                    <td>
-                      <span class="relay-status" :class="{ 'is-open': relay.procurementStatus === '可注册采购' }">
-                        {{ relay.procurementStatus || "需核验" }}
-                      </span>
-                    </td>
-                    <td>
-                      <b>{{ relay.score || "—" }}</b>
-                      <small>{{ relay.models }} 模型 · {{ relay.runs }} 次检测</small>
-                    </td>
-                    <td>
-                      <b>{{ relay.publicPrice }}</b>
-                      <small>{{ relay.pricingSource }}</small>
-                    </td>
-                    <td>{{ relay.multiplier }}</td>
-                    <td class="relay-economy-cell">
-                      <template v-if="relay.economyModels?.length">
-                        <span v-for="model in relay.economyModels.slice(0, 3)" :key="model.family">
-                          <b>{{ model.family }}</b>
-                          <small>{{ model.model }} · {{ model.cost }}</small>
-                        </span>
-                      </template>
-                      <small v-else>未发现公开经济模型报价</small>
-                    </td>
-                    <td class="relay-cost-cell">
-                      <b>{{ relay.gpt54Cost }}</b>
-                      <small v-if="relay.gpt54Model">{{ relay.gpt54Model }}<template v-if="relay.gpt54ModelocScore"> · 实测 {{ relay.gpt54ModelocScore }}</template></small>
-                      <small v-else>{{ relay.detectedGpt54 ? "MODELOC 检测到 GPT-5.4，价格需登录" : "未发现完整 GPT-5.4" }}</small>
-                    </td>
-                    <td class="relay-cost-cell">
-                      <b>{{ relay.deepSeekCost }}</b>
-                      <small v-if="relay.deepSeekModel">{{ relay.deepSeekModel }}</small>
-                      <small v-else>{{ relay.detectedDeepSeek ? "MODELOC 已检测" : "未发现公开 DeepSeek 报价" }}</small>
-                    </td>
-                    <td>{{ relay.buyExample }}</td>
-                    <td><span class="relay-suggestion">{{ relay.suggestion }}</span></td>
-                  </tr>
-                  <tr v-if="!relayRows.length">
-                    <td colspan="11" class="relay-empty">暂无数据。点击“刷新前20”自动调研 MODELOC 与各站公开价格接口。</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="membership-recommendation-grid">
-              <article v-for="plan in relayMembershipPlans" :key="plan.name">
-                <strong>{{ plan.name }}</strong>
-                <span>{{ plan.price }}</span>
-                <p>综述 {{ plan.review }} 次 · 问答 {{ plan.qa }} 次 · PPT {{ plan.ppt }} 次</p>
-                <small>{{ plan.positioning }}</small>
-              </article>
+            <div class="pagination-controls ledger-pagination">
+              <span>{{ paginationText(aiUsageTotal, aiUsagePage, aiUsagePageSize) }}</span>
+              <div>
+                <button class="action-btn text-btn" :disabled="aiUsagePage <= 1 || aiUsageLoading" @click="changeAiUsagePage(aiUsagePage - 1)">上一页</button>
+                <strong>{{ aiUsagePage }} / {{ aiUsagePageCount }}</strong>
+                <button class="action-btn text-btn" :disabled="aiUsagePage >= aiUsagePageCount || aiUsageLoading" @click="changeAiUsagePage(aiUsagePage + 1)">下一页</button>
+              </div>
             </div>
           </section>
 
-          <div class="models-grid">
-            <div class="models-card-col spatial-glass-panel">
-              <h4>翻译服务配置自检</h4>
-              <div class="provider-status-list">
-                <div v-for="prov in translationProviders" :key="prov.id" class="model-status-item">
-                  <span class="status-indicator" :class="prov.configured === 'true' || prov.id === 'google' || prov.id === 'youdao' || prov.id === 'ai' ? 'online' : 'offline'"></span>
-                  <div class="status-details">
-                    <strong>{{ prov.label }} ({{ prov.id.toUpperCase() }})</strong>
-                    <span v-if="prov.id === 'google' || prov.id === 'youdao'">系统内置免密钥服务 · 随时可用</span>
-                    <span v-else-if="prov.id === 'ai'">遵循管理员配置的当前入口 AI 路由</span>
-                    <span v-else-if="prov.configured === 'true'">密钥已成功加载至本地服务 · 运行中</span>
-                    <span v-else style="color: #ef4444;">未配置环境变量 · 无法直接使用</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="models-card-col spatial-glass-panel">
-              <h4>科研翻译使用趋势</h4>
-              <div class="trend-bars">
-                <div v-for="trend in engineUsageTrends" :key="trend.id" class="trend-bar-row">
-                  <span>{{ trend.label }}</span>
-                  <div class="bar-outer">
-                    <div class="bar-inner" :style="{ width: trend.percentage + '%', background: trend.color }"></div>
-                  </div>
-                  <span>{{ trend.percentage.toFixed(1) }}% ({{ formatChars(trend.charCount) }} 字符)</span>
-                </div>
-                <div v-if="engineUsageTrends.reduce((sum, t) => sum + t.charCount, 0) === 0" style="text-align: center; color: #64748b; padding: 24px 0;">
-                  暂无翻译使用记录
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <!-- Tab Content: Logs -->
@@ -1222,7 +1175,7 @@
 
 
 <script setup>
-import { ref, onMounted, computed, watch } from "vue";
+import { ref, onMounted, onBeforeUnmount, computed, watch } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useDialogStore } from "../stores/dialog";
 import { paperpilotApi } from "../services/paperpilotApi";
@@ -1258,6 +1211,8 @@ const siteMessagePage = ref(1);
 const siteMessagePageSize = ref(5);
 const tutorialPage = ref(1);
 const tutorialPageSize = ref(5);
+const aiUsagePage = ref(1);
+const aiUsagePageSize = ref(20);
 const topicAdminQuery = ref("");
 const topicAdminLoading = ref(false);
 const topicAdminGenerating = ref(false);
@@ -1329,7 +1284,6 @@ const paymentOrders = ref([]);
 const paymentTickets = ref([]);
 const teams = ref([]);
 const systemLogs = ref([]);
-const translationProviders = ref([]);
 const siteMessages = ref([]);
 const tutorials = ref([]);
 const forumReports = ref([]);
@@ -1339,10 +1293,17 @@ const modelPool = ref([]);
 const modelPoolRefreshing = ref(false);
 const modelPoolSeeding = ref(false);
 const modelPoolCleaning = ref(false);
+const modelPoolAutoRefresh = ref(true);
+const modelPoolLastRefreshedAt = ref("");
+let modelPoolRefreshTimer = null;
 const showUnconfiguredPool = ref(false);
 const expandedPoolMessages = ref(new Set());
-const relayResearch = ref({ items: [], recommendation: {}, purchasePlan: [], economyModelPlan: [], sceneRoutingPlan: [], membershipPlan: [] });
-const relayResearchLoading = ref(false);
+const aiUsageRows = ref([]);
+const aiUsageTotal = ref(0);
+const aiUsageTotalPages = ref(1);
+const aiUsageSummary = ref({ inputTokens: 0, outputTokens: 0, totalTokens: 0, failed: 0, cost: 0 });
+const aiUsageLoading = ref(false);
+const aiUsageFilters = ref({ keyword: "", scene: "", model: "", status: "" });
 const modelScene = ref("paper_review");
 const modelSceneOptions = [
   {
@@ -1357,8 +1318,8 @@ const modelSceneOptions = [
   },
   {
     value: "topic_research",
-    label: "选题调研",
-    hint: "deep-research、主题簇、研究空白",
+    label: "调研广场",
+    hint: "deep-research、选题卡、代表论文和研究空白",
   },
   {
     value: "meeting_deck",
@@ -1370,6 +1331,18 @@ const modelSceneOptions = [
     label: "AI发帖审核",
     hint: "低价快模型，稳定输出 JSON",
   },
+];
+const aiUsageSceneOptions = [
+  { value: "paper_review", label: "论文综述" },
+  { value: "paper_qa", label: "AI论文问答" },
+  { value: "meeting_deck", label: "PPT生成" },
+  { value: "forum_moderation", label: "AI发帖审核" },
+  { value: "topic_research", label: "选题研究" },
+  { value: "translate", label: "全文翻译" },
+  { value: "summary", label: "论文综述旧记录" },
+  { value: "qa", label: "问答旧记录" },
+  { value: "analyze", label: "解析旧记录" },
+  { value: "report", label: "汇报旧记录" },
 ];
 const globalStats = ref({
   totalUsers: 0,
@@ -1463,6 +1436,7 @@ const forumReportPageCount = computed(() => getPageCount(forumReports.value.leng
 const campusVerificationPageCount = computed(() => getPageCount(campusVerifications.value.length, campusVerificationPageSize.value));
 const siteMessagePageCount = computed(() => getPageCount(siteMessages.value.length, siteMessagePageSize.value));
 const tutorialPageCount = computed(() => getPageCount(tutorials.value.length, tutorialPageSize.value));
+const aiUsagePageCount = computed(() => Math.max(1, Number(aiUsageTotalPages.value) || getPageCount(aiUsageTotal.value, aiUsagePageSize.value)));
 const paginatedUsers = computed(() => paginateRows(filteredUsers.value, userPage.value, userPageSize.value));
 const paginatedPaymentTickets = computed(() => paginateRows(paymentTickets.value, ticketPage.value, ticketPageSize.value));
 const paginatedPaymentOrders = computed(() => paginateRows(paymentOrders.value, orderPage.value, orderPageSize.value));
@@ -1501,6 +1475,10 @@ watch([ticketPageSize, orderPageSize, logPageSize, forumReportPageSize, siteMess
   siteMessagePage.value = 1;
   tutorialPage.value = 1;
 });
+watch(aiUsagePageSize, () => {
+  aiUsagePage.value = 1;
+  loadAiUsageCalls();
+});
 watch(userPageCount, () => keepPageInRange(userPage, userPageCount));
 watch(ticketPageCount, () => keepPageInRange(ticketPage, ticketPageCount));
 watch(orderPageCount, () => keepPageInRange(orderPage, orderPageCount));
@@ -1509,29 +1487,7 @@ watch(logPageCount, () => keepPageInRange(logPage, logPageCount));
 watch(forumReportPageCount, () => keepPageInRange(forumReportPage, forumReportPageCount));
 watch(siteMessagePageCount, () => keepPageInRange(siteMessagePage, siteMessagePageCount));
 watch(tutorialPageCount, () => keepPageInRange(tutorialPage, tutorialPageCount));
-
-const engineUsageTrends = computed(() => {
-  const stats = globalStats.value.engineStats || {};
-  const total = Object.values(stats).reduce((a, b) => Number(a) + Number(b), 0);
-  const providers = [
-    { id: "deepl", label: "DeepL 引擎", color: "#0066ff" },
-    { id: "baidu", label: "Baidu API", color: "#60a5fa" },
-    { id: "google", label: "谷歌翻译", color: "#10b981" },
-    { id: "youdao", label: "有道翻译", color: "#f43f5e" },
-    { id: "microsoft", label: "微软翻译", color: "#eab308" },
-    { id: "ai", label: "AI 翻译器", color: "#a855f7" }
-  ];
-  
-  return providers.map(p => {
-    const charCount = Number(stats[p.id]) || 0;
-    const percentage = total > 0 ? (charCount / total) * 100 : 0;
-    return {
-      ...p,
-      charCount,
-      percentage
-    };
-  }).sort((a, b) => b.charCount - a.charCount);
-});
+watch(aiUsagePageCount, () => keepPageInRange(aiUsagePage, aiUsagePageCount));
 
 const configuredModelRoutes = computed(() => modelPool.value.filter(route => route.keyConfigured).length);
 const availableModelRoutes = computed(() => modelPool.value.filter(route => route.status === "available").length);
@@ -1551,22 +1507,8 @@ const modelPoolDescription = computed(() => ({
   meeting_deck: "这里只管理 PPT 生成专用池。PPT 多轮 Agent 只会读取这个池子，主模型建议 gpt-5.4。",
   forum_moderation: "这里只管理发帖审核模型池。可以配置低价快模型，不必占用 PPT 强模型额度。",
 })[modelScene.value] || "这里只管理当前入口的模型池。");
-const relayRows = computed(() => relayResearch.value.items || []);
-const relayPurchasePlan = computed(() => relayResearch.value.purchasePlan || []);
-const relayEconomyModels = computed(() => relayResearch.value.economyModelPlan || []);
-const relaySceneRoutingPlan = computed(() => relayResearch.value.sceneRoutingPlan || []);
-const relayMembershipPlans = computed(() => relayResearch.value.membershipPlan || []);
-const relayRecommendationCards = computed(() => {
-  const recommendation = relayResearch.value.recommendation || {};
-  return [
-    { key: "paperReview", label: "论文综述", title: "稳价强模型", text: recommendation.paperReview || "优先长上下文、低幻觉模型。" },
-    { key: "paperQa", label: "AI论文问答", title: "低延迟低倍率", text: recommendation.paperQa || "问答可用便宜模型池，失败再切强模型。" },
-    { key: "meetingDeck", label: "PPT生成", title: "gpt-5.4 主路由", text: recommendation.meetingDeck || "多轮 Agent 成本高，次数要控。" },
-    { key: "forumModeration", label: "AI发帖审核", title: "快模型审核", text: recommendation.forumModeration || "用低价稳定 JSON 模型。" },
-  ];
-});
 const visibleModelPool = computed(() => {
-  const rows = [...modelPool.value];
+  const rows = sortedModelPool.value;
   if (showUnconfiguredPool.value) return rows;
   const configured = rows.filter(route =>
     (route.keyConfigured || route.active || route.status === "available")
@@ -1577,17 +1519,41 @@ const visibleModelPool = computed(() => {
   [...configured, ...recommended].forEach(route => merged.set(String(route.id), route));
   return Array.from(merged.values()).slice(0, 12);
 });
+const sortedModelPool = computed(() => [...modelPool.value].sort(compareModelRoutes));
 
-function formatChars(n) {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(2)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return String(n);
+function compareModelRoutes(a, b) {
+  const statusRank = {
+    available: 0,
+    limited: 2,
+    unknown: 3,
+    timeout: 4,
+    unconfigured: 5,
+    auth_error: 6,
+    failed: 7,
+    needs_adapter: 8,
+  };
+  const scoreA = [
+    a.active ? -3 : 0,
+    a.keyConfigured ? 0 : 2,
+    statusRank[a.status] ?? 9,
+    Number.isFinite(Number(a.latencyMs)) ? Number(a.latencyMs) / 1000 : 99,
+    a.template ? 3 : 0,
+    Number(a.priority) || 99,
+  ].reduce((sum, value) => sum + value, 0);
+  const scoreB = [
+    b.active ? -3 : 0,
+    b.keyConfigured ? 0 : 2,
+    statusRank[b.status] ?? 9,
+    Number.isFinite(Number(b.latencyMs)) ? Number(b.latencyMs) / 1000 : 99,
+    b.template ? 3 : 0,
+    Number(b.priority) || 99,
+  ].reduce((sum, value) => sum + value, 0);
+  return scoreA - scoreB;
 }
 
-function formatRelayMoney(value) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return "—";
-  return amount < 1 ? amount.toFixed(3).replace(/0+$/, "").replace(/\.$/, "") : amount.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+function formatNumber(value) {
+  const number = Number(value) || 0;
+  return number.toLocaleString("zh-CN");
 }
 
 function poolStatusLabel(status) {
@@ -1655,6 +1621,31 @@ function formatDateTime(val) {
   return String(val);
 }
 
+function formatTime(val) {
+  if (!val) return "";
+  const date = new Date(val);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function routeLatencyLabel(route) {
+  const latency = Number(route?.latencyMs);
+  if (!Number.isFinite(latency) || latency <= 0) {
+    if (!route?.keyConfigured) return "待配置";
+    if (route?.status === "timeout") return "超时";
+    return "未检测";
+  }
+  return `${Math.round(latency)} ms`;
+}
+
+function routePriorityLabel(route, index) {
+  if (route?.active) return "主路由";
+  if (route?.status === "available" && index < 3) return "优先";
+  if (route?.status === "available") return "备用";
+  if (!route?.keyConfigured || route?.template) return "候选";
+  return "观察";
+}
+
 // Fetch all admin data
 async function fetchAllData() {
   try {
@@ -1719,22 +1710,18 @@ async function fetchAllData() {
     const statsData = await paperpilotApi.getAdminStats();
     globalStats.value = statsData;
 
-    // 6. Fetch Translation Providers Configuration Status
-    const providersData = await paperpilotApi.getTranslationProviders();
-    translationProviders.value = providersData;
-
-    // 7. Fetch site-wide messages
+    // 6. Fetch site-wide messages
     siteMessages.value = await paperpilotApi.getAdminSiteMessages();
 
-    // 8. Fetch forum reports
+    // 7. Fetch forum reports
     forumReports.value = await paperpilotApi.getForumReports();
 
-    // 9. Fetch campus verification requests
+    // 8. Fetch campus verification requests
     campusVerifications.value = await paperpilotApi.getAdminCampusVerifications();
 
-    // 10. Fetch AI model pool status
+    // 9. Fetch AI model pool status
     modelPool.value = await paperpilotApi.getModelPool(modelScene.value);
-    await loadRelayResearch();
+    await loadAiUsageCalls();
 
   } catch (error) {
     console.error("Failed to fetch admin data from backend:", error);
@@ -1745,10 +1732,29 @@ async function fetchAllData() {
 
 onMounted(() => {
   fetchAllData();
+  modelPoolRefreshTimer = window.setInterval(() => {
+    if (activeTab.value === "models" && modelPoolAutoRefresh.value && !modelPoolRefreshing.value) {
+      refreshModelPool(true);
+    }
+  }, 10000);
+});
+
+onBeforeUnmount(() => {
+  if (modelPoolRefreshTimer) {
+    window.clearInterval(modelPoolRefreshTimer);
+    modelPoolRefreshTimer = null;
+  }
 });
 
 watch(modelScene, async () => {
   await loadCurrentModelScene();
+});
+
+watch(activeTab, value => {
+  if (value === "models" && modelPoolAutoRefresh.value && !modelPoolRefreshing.value) {
+    refreshModelPool(true);
+    loadAiUsageCalls();
+  }
 });
 
 async function loadCurrentModelScene() {
@@ -1756,20 +1762,42 @@ async function loadCurrentModelScene() {
     expandedPoolMessages.value = new Set();
     await workspaceStore.hydrateFromBackend(modelScene.value);
     modelPool.value = await paperpilotApi.getModelPool(modelScene.value);
+    if (activeTab.value === "models") refreshModelPool(true);
   } catch (error) {
     dialogStore.alert(error.response?.data?.message || "模型场景加载失败");
   }
 }
 
-async function loadRelayResearch() {
-  relayResearchLoading.value = true;
+async function loadAiUsageCalls() {
+  aiUsageLoading.value = true;
   try {
-    relayResearch.value = await paperpilotApi.getRelayResearchTop();
+    const data = await paperpilotApi.getAdminAiUsageCalls({
+      page: aiUsagePage.value,
+      pageSize: aiUsagePageSize.value,
+      keyword: aiUsageFilters.value.keyword || undefined,
+      scene: aiUsageFilters.value.scene || undefined,
+      model: aiUsageFilters.value.model || undefined,
+      status: aiUsageFilters.value.status || undefined,
+    });
+    aiUsageRows.value = data.rows || [];
+    aiUsageTotal.value = Number(data.total) || 0;
+    aiUsageTotalPages.value = Number(data.totalPages) || getPageCount(aiUsageTotal.value, aiUsagePageSize.value);
+    aiUsageSummary.value = { inputTokens: 0, outputTokens: 0, totalTokens: 0, failed: 0, cost: 0, ...(data.summary || {}) };
   } catch (error) {
-    dialogStore.alert(error.response?.data?.message || "中转站研究数据刷新失败");
+    dialogStore.alert(error.response?.data?.message || "AI 调用明细加载失败");
   } finally {
-    relayResearchLoading.value = false;
+    aiUsageLoading.value = false;
   }
+}
+
+function resetAiUsagePageAndLoad() {
+  aiUsagePage.value = 1;
+  loadAiUsageCalls();
+}
+
+function changeAiUsagePage(page) {
+  aiUsagePage.value = Math.min(Math.max(1, page), aiUsagePageCount.value);
+  loadAiUsageCalls();
 }
 
 async function loadAdminTopics(showLoading = true) {
@@ -1873,12 +1901,13 @@ function openKeyConsole(route) {
   window.open(route.keyUrl, "_blank", "noopener,noreferrer");
 }
 
-async function refreshModelPool() {
+async function refreshModelPool(silent = false) {
   modelPoolRefreshing.value = true;
   try {
     modelPool.value = await paperpilotApi.refreshModelPool(modelScene.value);
+    modelPoolLastRefreshedAt.value = new Date().toISOString();
   } catch (error) {
-    dialogStore.alert(error.response?.data?.message || "模型池刷新失败");
+    if (!silent) dialogStore.alert(error.response?.data?.message || "模型池刷新失败");
   } finally {
     modelPoolRefreshing.value = false;
   }
@@ -1968,7 +1997,9 @@ function formatTokens(n) {
 }
 
 function formatMoney(value) {
-  return Number(value || 0).toLocaleString("zh-CN", {
+  const amount = Number(value || 0);
+  if (amount > 0 && amount < 1) return amount.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+  return amount.toLocaleString("zh-CN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -3436,26 +3467,26 @@ function truncateText(value, length = 100) {
 
 .model-scene-switch {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  padding: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
   margin-bottom: 18px;
   border: 1px solid #dfe7f2;
   border-radius: 16px;
-  background: #ffffff;
+  background: #f8fbff;
 }
 
 .scene-switch-btn {
   display: flex;
-  min-height: 76px;
+  min-height: 68px;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 6px;
-  padding: 14px 16px;
-  border: 1px solid #e4eaf2;
+  gap: 5px;
+  padding: 12px 13px;
+  border: 1px solid transparent;
   border-radius: 12px;
-  background: #f8fbff;
+  background: transparent;
   color: #334155;
   text-align: left;
   cursor: pointer;
@@ -3475,8 +3506,8 @@ function truncateText(value, length = 100) {
 
 .scene-switch-btn.active {
   border-color: #2563eb;
-  background: #eef5ff;
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.25);
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.08);
 }
 
 .models-pane :deep(.reader-panel) {
@@ -3494,7 +3525,7 @@ function truncateText(value, length = 100) {
   padding: 22px;
   margin-bottom: 24px;
   border: 1px solid #dfe7f2;
-  border-radius: 16px;
+  border-radius: 18px;
   background: #ffffff;
 }
 
@@ -3509,7 +3540,15 @@ function truncateText(value, length = 100) {
 .model-pool-header h4 {
   margin: 0;
   color: #0f172a;
-  font-size: 1.05rem;
+  font-size: 1.12rem;
+}
+
+.pool-kicker {
+  display: inline-flex;
+  margin-bottom: 5px;
+  color: #2563eb;
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .model-pool-header p {
@@ -3537,29 +3576,74 @@ function truncateText(value, length = 100) {
   font-weight: 700;
 }
 
+.pool-refresh-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 760;
+}
+
+.pool-refresh-chip::before {
+  width: 7px;
+  height: 7px;
+  content: "";
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.pool-refresh-chip.active::before {
+  background: #10b981;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12);
+}
+
 .model-pool-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(204px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(284px, 1fr));
+  gap: 14px;
 }
 
 .model-pool-card {
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  gap: 10px;
-  aspect-ratio: 1 / 1;
-  min-height: 204px;
-  padding: 14px;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  gap: 12px;
+  min-height: 236px;
+  padding: 16px;
   border: 1px solid #e4eaf2;
-  border-radius: 12px;
+  border-radius: 14px;
   background: #fbfdff;
   overflow: hidden;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
+.model-pool-card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  content: "";
+  background: #cbd5e1;
+}
+
+.model-pool-card:hover {
+  transform: translateY(-2px);
+  border-color: #c7d7ef;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.07);
+}
+
+.model-pool-card.status-available::before { background: linear-gradient(90deg, #10b981, #38bdf8); }
+.model-pool-card.status-limited::before,
+.model-pool-card.status-timeout::before { background: linear-gradient(90deg, #f59e0b, #facc15); }
+.model-pool-card.status-auth_error::before,
+.model-pool-card.status-failed::before { background: linear-gradient(90deg, #ef4444, #fb7185); }
+.model-pool-card.status-needs_adapter::before { background: linear-gradient(90deg, #6366f1, #8b5cf6); }
+
 .model-pool-card.message-expanded {
-  aspect-ratio: auto;
-  min-height: 260px;
+  min-height: 292px;
 }
 
 .pool-card-top,
@@ -3568,6 +3652,18 @@ function truncateText(value, length = 100) {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.pool-rank-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pool-rank {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 850;
 }
 
 .pool-card-body {
@@ -3608,10 +3704,10 @@ function truncateText(value, length = 100) {
 }
 
 .pool-card-body p {
-  margin: 8px 0 4px;
+  margin: 9px 0 5px;
   color: #334155;
-  font-size: 0.84rem;
-  font-weight: 650;
+  font-size: 0.88rem;
+  font-weight: 720;
   line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -3629,6 +3725,37 @@ function truncateText(value, length = 100) {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.pool-health-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pool-health-metrics span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #e6edf6;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.pool-health-metrics small {
+  display: block;
+  color: #7a8798;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.pool-health-metrics strong {
+  display: block;
+  margin-top: 3px;
+  color: #172033;
+  font-size: 0.84rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pool-chip {
@@ -4209,6 +4336,236 @@ function truncateText(value, length = 100) {
   font-size: 1.05rem;
 }
 
+.ai-usage-ledger {
+  margin-top: 24px;
+  padding: 22px;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.ledger-header,
+.ledger-filters,
+.ledger-summary,
+.ledger-pagination {
+  display: flex;
+  align-items: center;
+}
+
+.ledger-header {
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.ledger-header h4 {
+  margin: 2px 0 0;
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.ledger-header p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.ledger-filters {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.2fr) minmax(160px, .7fr) minmax(180px, .8fr) minmax(120px, .55fr) auto;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.ledger-filters label {
+  display: grid;
+  gap: 6px;
+}
+
+.ledger-filters span {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.ledger-filters input,
+.ledger-filters select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  color: #111827;
+  background: #ffffff;
+  font: inherit;
+  font-size: 0.82rem;
+  outline: none;
+}
+
+.ledger-filters input:focus,
+.ledger-filters select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.ledger-filters > button {
+  align-self: end;
+  min-height: 38px;
+}
+
+.ledger-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ledger-summary article {
+  padding: 12px 14px;
+  border: 1px solid rgba(37, 99, 235, 0.1);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.ledger-summary span {
+  display: block;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.ledger-summary strong {
+  display: block;
+  margin-top: 6px;
+  color: #0f172a;
+  font-size: 1.08rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-table-wrap {
+  margin-top: 16px;
+  overflow-x: auto;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.ledger-table {
+  width: 100%;
+  min-width: 1160px;
+  border-collapse: collapse;
+  color: #334155;
+  font-size: 0.78rem;
+}
+
+.ledger-table th {
+  padding: 11px 13px;
+  color: #64748b;
+  font-size: 0.68rem;
+  text-align: left;
+  background: #f8fafc;
+}
+
+.ledger-table td {
+  padding: 13px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  vertical-align: top;
+}
+
+.ledger-table tr.failed {
+  background: #fffafa;
+}
+
+.ledger-table strong,
+.ledger-table small {
+  display: block;
+}
+
+.ledger-table strong {
+  color: #111827;
+}
+
+.ledger-table small {
+  margin-top: 4px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.ledger-time {
+  color: #475569;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-model {
+  max-width: 330px;
+}
+
+.ledger-model strong,
+.ledger-model small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.ledger-status.success {
+  color: #047857;
+  background: #dcfce7;
+}
+
+.ledger-status.failed {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.ledger-error {
+  max-width: 260px;
+  color: #b91c1c !important;
+}
+
+.ledger-fallback {
+  color: #047857 !important;
+  font-weight: 800;
+}
+
+.ledger-empty {
+  padding: 34px !important;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.ledger-pagination {
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 14px;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.ledger-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ledger-pagination strong {
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
 .relay-research-panel {
   margin-top: 24px;
   padding: 24px;
@@ -4745,6 +5102,35 @@ function truncateText(value, length = 100) {
 }
 
 @media (max-width: 900px) {
+  .model-scene-switch {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .model-pool-header,
+  .model-pool-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .model-pool-actions {
+    width: 100%;
+  }
+
+  .route-health-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ledger-header,
+  .ledger-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ledger-filters,
+  .ledger-summary {
+    grid-template-columns: 1fr;
+  }
+
   .site-message-admin-grid,
   .tutorial-admin-grid,
   .payment-admin-grid,
@@ -4787,6 +5173,16 @@ function truncateText(value, length = 100) {
   .admin-pagination {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 560px) {
+  .model-scene-switch {
+    grid-template-columns: 1fr;
+  }
+
+  .pool-health-metrics {
+    grid-template-columns: 1fr;
   }
 }
 </style>

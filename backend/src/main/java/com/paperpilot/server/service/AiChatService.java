@@ -151,6 +151,7 @@ public class AiChatService {
         int fallbackRouteCount = 0;
         for (ModelConfigEntity row : modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(scene)) {
             if (config != null && Objects.equals(row.getId(), config.getId())) continue;
+            if (!row.isActive()) continue;
             if (!StringUtils.hasText(row.getApiKey()) || !StringUtils.hasText(row.getModelName()) || !StringUtils.hasText(row.getBaseUrl())) continue;
             if (fallbackRouteCount >= MAX_POOL_FALLBACK_ROUTES) break;
             fallbackRouteCount++;
@@ -367,7 +368,8 @@ public class AiChatService {
             baseUrl, resolvedKey, resolvedModel, apiFormat, authType, fullUrl, customUserAgent,
             "You are a connection tester. Reply with only OK.",
             "OK",
-            24
+            24,
+            false
         );
     }
 
@@ -465,42 +467,49 @@ public class AiChatService {
         int maxOutputTokens,
         boolean accountUsage
     ) throws Exception {
-        if (!StringUtils.hasText(baseUrl)) throw new IllegalArgumentException("Base URL 不能为空");
-        if (!StringUtils.hasText(model)) throw new IllegalArgumentException("模型名称不能为空");
-        model = normalizeOpenCodeFreeModel(model);
-        if (isCodexBaseUrl(baseUrl, apiFormat)) {
-            return sendViaCodexCli(baseUrl, apiKey, model, systemPrompt, userPrompt);
-        }
-        List<String> endpoints = buildRequestCandidates(baseUrl, normalizeFormat(apiFormat), fullUrl);
-        String lastError = "没有可尝试的请求端点";
-        for (String endpoint : endpoints) {
-            HttpResponse<String> response = null;
-            for (int tokenBudget : tokenBudgetCandidates(maxOutputTokens)) {
-                for (int attempt = 0; attempt < 3; attempt++) {
-                    response = sendToEndpoint(
-                        endpoint, apiKey, model, normalizeFormat(apiFormat), authType, customUserAgent, systemPrompt, userPrompt, tokenBudget
-                    );
-                    if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                        ChatResult parsed = parseChatResult(model, normalizeFormat(apiFormat), response.body());
-                        if (accountUsage && parsed.totalTokens() > 0) {
-                            recordUsage(parsed.modelName(), new UsageEstimate(
-                                parsed.promptTokens(),
-                                parsed.completionTokens(),
-                                parsed.totalTokens()
-                            ), systemPrompt, userPrompt);
-                        }
-                        return parsed;
-                    }
-                    lastError = responseError(response);
-                    if (isTokenBudgetError(response, tokenBudget)) break;
-                    if (!isRetryableStatus(response.statusCode()) || attempt == 2) break;
-                    Thread.sleep(700L * (attempt + 1));
-                }
-                if (response == null || !isTokenBudgetError(response, tokenBudget)) break;
+        long startedAt = System.nanoTime();
+        try {
+            if (!StringUtils.hasText(baseUrl)) throw new IllegalArgumentException("Base URL 不能为空");
+            if (!StringUtils.hasText(model)) throw new IllegalArgumentException("模型名称不能为空");
+            model = normalizeOpenCodeFreeModel(model);
+            if (isCodexBaseUrl(baseUrl, apiFormat)) {
+                ChatResult result = sendViaCodexCli(baseUrl, apiKey, model, systemPrompt, userPrompt);
+                if (accountUsage) recordUsage(result.modelName(), estimateUsage(systemPrompt, userPrompt, result.content()), systemPrompt, userPrompt, elapsedMs(startedAt));
+                return result;
             }
-            if (response == null || (response.statusCode() != 404 && response.statusCode() != 405)) break;
+            List<String> endpoints = buildRequestCandidates(baseUrl, normalizeFormat(apiFormat), fullUrl);
+            String lastError = "没有可尝试的请求端点";
+            for (String endpoint : endpoints) {
+                HttpResponse<String> response = null;
+                for (int tokenBudget : tokenBudgetCandidates(maxOutputTokens)) {
+                    for (int attempt = 0; attempt < 3; attempt++) {
+                        response = sendToEndpoint(
+                            endpoint, apiKey, model, normalizeFormat(apiFormat), authType, customUserAgent, systemPrompt, userPrompt, tokenBudget
+                        );
+                        if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                            ChatResult parsed = parseChatResult(model, normalizeFormat(apiFormat), response.body());
+                            if (accountUsage) {
+                                UsageEstimate usage = parsed.totalTokens() > 0
+                                    ? new UsageEstimate(parsed.promptTokens(), parsed.completionTokens(), parsed.totalTokens())
+                                    : estimateUsage(systemPrompt, userPrompt, parsed.content());
+                                recordUsage(parsed.modelName(), usage, systemPrompt, userPrompt, elapsedMs(startedAt));
+                            }
+                            return parsed;
+                        }
+                        lastError = responseError(response);
+                        if (isTokenBudgetError(response, tokenBudget)) break;
+                        if (!isRetryableStatus(response.statusCode()) || attempt == 2) break;
+                        Thread.sleep(700L * (attempt + 1));
+                    }
+                    if (response == null || !isTokenBudgetError(response, tokenBudget)) break;
+                }
+                if (response == null || (response.statusCode() != 404 && response.statusCode() != 405)) break;
+            }
+            throw new IllegalStateException(lastError);
+        } catch (Exception error) {
+            if (accountUsage) recordFailure(model, systemPrompt, userPrompt, error, elapsedMs(startedAt));
+            throw error;
         }
-        throw new IllegalStateException(lastError);
     }
 
     private List<Integer> tokenBudgetCandidates(int requested) {
@@ -625,11 +634,19 @@ public class AiChatService {
             payload.put("max_tokens", maxTokens);
         }
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(endpoint))
-            .timeout(Duration.ofSeconds(65))
+            .timeout(Duration.ofSeconds(requestTimeoutSeconds(systemPrompt, userPrompt, connectionTest)))
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)));
         applyHeaders(builder, apiKey, authType, apiFormat, customUserAgent, codexEndpoint);
         return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private int requestTimeoutSeconds(String systemPrompt, String userPrompt, boolean connectionTest) {
+        if (connectionTest) return 15;
+        String scene = inferModelConfigScene(systemPrompt, userPrompt);
+        if (ModelConfigService.SCENE_TOPIC_RESEARCH.equals(scene)) return 35;
+        if (ModelConfigService.SCENE_FORUM_MODERATION.equals(scene)) return 20;
+        return 65;
     }
 
     private void applyHeaders(
@@ -888,7 +905,11 @@ public class AiChatService {
             || script == Character.UnicodeScript.HANGUL;
     }
 
-    private void recordUsage(String modelName, UsageEstimate usage, String systemPrompt, String userPrompt) {
+    private long elapsedMs(long startedAt) {
+        return Math.max(0L, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
+    }
+
+    private void recordUsage(String modelName, UsageEstimate usage, String systemPrompt, String userPrompt, long latencyMs) {
         long totalTokens = usage.totalTokens();
         if (totalTokens <= 0) return;
         try {
@@ -901,15 +922,43 @@ public class AiChatService {
                 inferPaperTitle(systemPrompt, userPrompt),
                 usage.promptTokens(),
                 usage.completionTokens(),
-                totalTokens
+                totalTokens,
+                latencyMs
             );
         } catch (Exception ignored) {
             // Token accounting should never make a successful AI response fail.
         }
     }
 
+    private void recordFailure(String modelName, String systemPrompt, String userPrompt, Exception error, long latencyMs) {
+        try {
+            AppUserEntity user = currentUserService.getOrCreateDefaultUser();
+            long promptTokens = estimateUsage(systemPrompt, userPrompt, "").promptTokens();
+            aiUsageService.recordFailure(
+                user.getId(),
+                StringUtils.hasText(modelName) ? normalizeOpenCodeFreeModel(modelName) : "unknown-model",
+                inferModelConfigScene(systemPrompt, userPrompt),
+                inferAction(systemPrompt, userPrompt),
+                inferPaperTitle(systemPrompt, userPrompt),
+                promptTokens,
+                readableError(error),
+                latencyMs
+            );
+        } catch (Exception ignored) {
+            // Failure accounting should never change the original model error.
+        }
+    }
+
+    private String readableError(Throwable error) {
+        String message = error == null ? "" : Objects.toString(error.getMessage(), "");
+        if (!StringUtils.hasText(message) && error != null) message = error.getClass().getSimpleName();
+        message = message.replaceAll("\\s+", " ").trim();
+        return message.length() > 760 ? message.substring(0, 759) + "…" : message;
+    }
+
     private String inferScene(String systemPrompt, String userPrompt) {
         String combined = ((systemPrompt == null ? "" : systemPrompt) + "\n" + (userPrompt == null ? "" : userPrompt)).toLowerCase();
+        if (combined.contains("deep-research") || combined.contains("选题调研") || combined.contains("选题广场") || combined.contains("可执行选题") || combined.contains("topic research")) return ModelConfigService.SCENE_TOPIC_RESEARCH;
         if (combined.contains("translate") || combined.contains("翻译")) return "translate";
         if (combined.contains("meeting report") || combined.contains("组会")) return "report";
         if (combined.contains("summary") || combined.contains("综述")) return "summary";
@@ -922,11 +971,11 @@ public class AiChatService {
         if (combined.contains("内容审核") || combined.contains("审核员") || combined.contains("risklevel") || combined.contains("approved(boolean)")) {
             return ModelConfigService.SCENE_FORUM_MODERATION;
         }
-        if (combined.contains("meeting report") || combined.contains("组会") || combined.contains("ppt")) {
-            return ModelConfigService.SCENE_MEETING_DECK;
-        }
         if (combined.contains("deep-research") || combined.contains("选题调研") || combined.contains("选题广场") || combined.contains("可执行选题") || combined.contains("topic research")) {
             return ModelConfigService.SCENE_TOPIC_RESEARCH;
+        }
+        if (combined.contains("meeting report") || combined.contains("组会") || combined.contains("ppt")) {
+            return ModelConfigService.SCENE_MEETING_DECK;
         }
         if (combined.contains("summary") || combined.contains("综述") || combined.contains("文献综述")) {
             return ModelConfigService.SCENE_PAPER_REVIEW;
@@ -940,6 +989,10 @@ public class AiChatService {
     private String inferAction(String systemPrompt, String userPrompt) {
         String scene = inferScene(systemPrompt, userPrompt);
         return switch (scene) {
+            case ModelConfigService.SCENE_TOPIC_RESEARCH -> {
+                String combined = ((systemPrompt == null ? "" : systemPrompt) + "\n" + (userPrompt == null ? "" : userPrompt));
+                yield combined.contains("质检返工") || combined.contains("quality_error") ? "选题调研返工" : "选题调研";
+            }
             case "translate" -> "PDF双栏翻译";
             case "report" -> "组会论文内容生成";
             case "summary" -> "综述生成";
