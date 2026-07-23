@@ -24,10 +24,12 @@ public class AdminAiUsageController {
         @RequestParam(value = "scene", required = false) String scene,
         @RequestParam(value = "model", required = false) String model,
         @RequestParam(value = "status", required = false) String status,
+        @RequestParam(value = "startDate", required = false) String startDate,
+        @RequestParam(value = "endDate", required = false) String endDate,
         @RequestParam(value = "page", defaultValue = "1") int page,
         @RequestParam(value = "pageSize", defaultValue = "20") int pageSize
     ) {
-        return aiUsageService.adminCalls(keyword, scene, model, status, page, pageSize);
+        return aiUsageService.adminCalls(keyword, scene, model, status, startDate, endDate, page, pageSize);
     }
 
     @DeleteMapping("/calls")

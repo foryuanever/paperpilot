@@ -112,6 +112,69 @@ function formatDate(value) {
 </script>
 
 <style scoped>
+
+/* ═══ TutorialsView — Premium Dual-Theme ═══ */
+.tutorials-page, [class*="tutorial"] {
+  --c-bg:      #f4f5f8;
+  --c-surface: #ffffff;
+  --c-border:  rgba(15,23,42,.08);
+  --c-text:    #0f172a;
+  --c-muted:   #64748b;
+  --c-accent:  #6366f1;
+  --c-accent2: #a855f7;
+  --sh-sm: 0 2px 8px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.04);
+  --r: 16px; --r-sm: 10px; --r-pill: 999px;
+  min-height: 100vh;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: Inter, "PingFang SC", system-ui, sans-serif;
+  transition: background .3s, color .3s;
+}
+:root[data-theme="dark"] .tutorials-page,
+:root[data-theme="dark"] [class*="tutorial"] {
+  --c-bg:      #09090e;
+  --c-surface: rgba(18,24,40,.88);
+  --c-border:  rgba(255,255,255,.07);
+  --c-text:    #f1f5f9;
+  --c-muted:   #94a3b8;
+}
+.tutorials-page h1, .tutorials-page h2, .tutorials-page h3 { color: var(--c-text) !important; }
+.tutorials-page p, .tutorials-page li { color: var(--c-muted) !important; }
+.tutorials-page .tutorial-card, .tutorials-page .step-card, .tutorials-page article {
+  background: var(--c-surface) !important;
+  border: 1px solid var(--c-border) !important;
+  border-radius: var(--r) !important;
+  box-shadow: var(--sh-sm) !important;
+  backdrop-filter: blur(16px);
+  color: var(--c-text) !important;
+  transition: all .25s cubic-bezier(.16,1,.3,1);
+}
+.tutorials-page .tutorial-card:hover, .tutorials-page article:hover {
+  transform: translateY(-3px);
+  border-color: rgba(99,102,241,.25) !important;
+  box-shadow: 0 8px 28px rgba(15,23,42,.1) !important;
+}
+.tutorials-page .step-number {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.tutorials-page .tag-chip {
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: rgba(99,102,241,.1);
+  color: var(--c-accent);
+  font-size: 11.5px;
+  font-weight: 750;
+  border: 1px solid rgba(99,102,241,.15);
+}
+
 .tutorial-page {
   min-height: 100vh;
   padding: 104px clamp(22px, 5vw, 72px) 56px;

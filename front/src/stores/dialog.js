@@ -44,6 +44,16 @@ export const useDialogStore = defineStore("dialog", () => {
     });
   }
 
+  // Compatibility aliases for older admin modules. Keep these inside the
+  // app dialog so operational errors never fall back to browser alert().
+  function showError(message, options = {}) {
+    return alert(message, { ...options, title: options.title || "操作失败", danger: true });
+  }
+
+  function showSuccess(message, options = {}) {
+    return alert(message, { ...options, title: options.title || "操作完成" });
+  }
+
   function confirm(message, options = {}) {
     return openDialog({
       title: "请确认",
@@ -76,6 +86,8 @@ export const useDialogStore = defineStore("dialog", () => {
   return {
     state,
     alert,
+    showError,
+    showSuccess,
     confirm,
     prompt,
     accept: () => finish(true),

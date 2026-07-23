@@ -69,6 +69,37 @@ export const paperpilotApi = {
     const { data } = await apiClient.post(`/api/admin/model-config/pool/${id}/activate`, null, { params: { scene } });
     return data;
   },
+  async assignModelPoolRoute(id, scene = "general", enabled = true) {
+    const { data } = await apiClient.post(`/api/admin/model-config/pool/${id}/assign`, null, { params: { scene, enabled } });
+    return data;
+  },
+  async assignRelayModelToScene(id, modelName, scene = "general", enabled = true) {
+    const { data } = await apiClient.post(`/api/admin/model-config/pool/${id}/assign-model`, null, { params: { modelName, scene, enabled } });
+    return data;
+  },
+  async fetchModelsForConfig(config) {
+    const { data } = await apiClient.post("/api/admin/model-config/models", config, { timeout: 120000 });
+    return data;
+  },
+  async fetchRelayRouteModels(id) {
+    const { data } = await apiClient.get(`/api/admin/model-config/pool/${id}/models`, { timeout: 120000 });
+    return data;
+  },
+  async testModelConfig(id, modelName) {
+    const { data } = await apiClient.post(`/api/admin/pool/${id}/test-model`, null, { params: { modelName } });
+    return data;
+  },
+  async deleteModelRoute(id) {
+    await apiClient.delete(`/api/admin/pool/${id}`);
+  },
+  async deleteRelayRoute(id) {
+    const { data } = await apiClient.delete(`/api/admin/model-config/pool/${id}/relay`);
+    return data;
+  },
+  async testRelayRouteModel(id, modelName) {
+    const { data } = await apiClient.post(`/api/admin/model-config/pool/${id}/test-model`, null, { params: { modelName }, timeout: 210000 });
+    return data;
+  },
   async getRelayResearchTop() {
     const { data } = await apiClient.get("/api/admin/model-config/relay-research/top", { timeout: 60000 });
     return data;
@@ -418,6 +449,16 @@ export const paperpilotApi = {
   },
   async deleteSiteMessage(id) {
     await apiClient.delete(`/api/admin/site-messages/${id}`);
+  },
+
+  // Admin Promotions
+  async getPromotions() {
+    const { data } = await apiClient.get("/api/admin/promotions");
+    return data;
+  },
+  async auditPromotion(id, action, adminNote = "") {
+    const { data } = await apiClient.post(`/api/admin/promotions/${id}/audit`, { action, adminNote });
+    return data;
   },
   async getTutorials() {
     const { data } = await apiClient.get("/api/tutorials");

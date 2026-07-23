@@ -1,3672 +1,1143 @@
 <template>
-  <div class="login-route-root">
-    <div class="ps-home spatial-page">
-      <header class="ps-nav">
-        <router-link class="ps-brand" to="/">
-          <img src="/brand/papersolver-mark-v2.png" alt="" />
-          <strong>PaperSolver</strong>
-        </router-link>
-        <nav aria-label="首页导航">
-          <a href="#product-flow">流程</a>
-          <a href="#advantages">优势</a>
-          <a href="#chapter-pricing">定价</a>
-          <a href="#" @click.prevent="openModal('login')">登录</a>
-        </nav>
-        <button type="button" @click="openModal('register')">免费注册</button>
-      </header>
+  <div class="home-root">
 
-      <section class="ps-hero">
-        <div class="ps-hero-copy" data-reveal>
-          <div class="ps-note-line">
-            <span>文献阅读</span>
-            <span>论文综述</span>
-            <span>组会 PPT</span>
+    <!-- ═══ NAV ═══ -->
+    <header class="home-nav" :class="{ scrolled: navScrolled }">
+      <div class="nav-inner">
+        <router-link class="brand" to="/">
+          <div class="brand-mark">
+            <svg viewBox="0 0 40 40" fill="none">
+              <rect width="40" height="40" rx="10" fill="url(#bg)"/>
+              <path d="M11 29 L15.5 11 L25 11 Q32 11 32 18 Q32 24 25 25 L20 25 L22.5 29Z" fill="white" opacity="0.92"/>
+              <path d="M15.5 24 L18 29" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+              <defs>
+                <linearGradient id="bg" x1="0" y1="0" x2="40" y2="40">
+                  <stop offset="0%" stop-color="#2563eb"/><stop offset="100%" stop-color="#7c3aed"/>
+                </linearGradient>
+              </defs>
+            </svg>
           </div>
-          <h1>读薄论文，讲清组会。</h1>
-          <p>
-            PaperSolver 把导入、阅读、标注、综述、组会汇报和额度管理放进一条连续流程。你从 PDF 开始，不用在多个工具之间来回搬材料。
-          </p>
-          <div class="ps-actions">
-            <button class="ps-primary" type="button" @click="openModal('login')">进入工作台</button>
-            <button class="ps-secondary" type="button" @click="openModal('register')">创建账号</button>
-          </div>
+          <span class="brand-name">PaperSlover</span>
+          <span class="brand-tag">beta</span>
+        </router-link>
+        <nav class="nav-links">
+          <a href="#features">功能</a>
+          <a href="#workflow">使用流程</a>
+          <a href="#why">为什么选我们</a>
+          <a href="#pricing">价格</a>
+        </nav>
+        <div class="nav-ctas">
+          <button class="btn-ghost" @click="openModal('login')">登录</button>
+          <button class="btn-solid" @click="openModal('register')">
+            免费开始
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ═══ HERO — Long, Softly-lit Headline with Unequal Line Lengths ═══ -->
+    <section class="hero">
+      <div class="hero-bg-grid"></div>
+      <div class="hero-glow glow-1"></div>
+      <div class="hero-glow glow-2"></div>
+      <div class="hero-glow glow-3"></div>
+
+      <div class="hero-center" :class="{ in: heroIn }">
+
+        <!-- Pill -->
+        <div class="hero-pill">
+          <span class="pill-dot"></span>
+          AI 学术科研工作台 · 读写研一体化
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
         </div>
 
-        <div class="ps-console" data-reveal="right">
-          <div class="ps-console-tabs">
-            <button
-              v-for="step in productFlowSteps"
-              :key="step.id"
-              type="button"
-              :class="{ active: activeLandingPanel === step.id }"
-              @click="activeLandingPanel = step.id"
-            >
-              <span>{{ step.index }}</span>
-              {{ step.tab }}
-            </button>
-          </div>
+        <!-- Longer, Softly Glowing Headline with Unequal Lengths -->
+        <h1 class="hero-h1">
+          <div class="h1-line-top">从海量 PDF 文献中</div>
+          <div class="h1-line-bot">一站式完成精读、综述与组会汇报</div>
+        </h1>
 
-          <article class="ps-console-window" :key="currentProductFlow.id">
-            <header>
-              <div class="ps-window-dots"><i></i><i></i><i></i></div>
-              <strong>{{ currentProductFlow.title }}</strong>
-              <span>{{ currentProductFlow.status }}</span>
-            </header>
-            <div class="ps-console-body">
-              <div class="ps-flow-diagram" aria-label="产品流程动画">
-                <svg viewBox="0 0 520 220" fill="none" aria-hidden="true">
-                  <path d="M54 112 C128 42 196 42 260 112 S392 182 466 112" />
-                  <path d="M54 112 C134 168 190 168 260 112 S386 56 466 112" />
-                </svg>
-                <span
-                  v-for="(node, index) in currentProductFlow.nodes"
-                  :key="node"
-                  :style="{ '--i': index }"
-                >{{ node }}</span>
+        <!-- Sub caption -->
+        <p class="hero-sub">
+          导入 PDF、精读标注、智能综述、准备汇报，<br class="hide-sm">
+          整条工作流连续衔接，无需在多个工具之间来回搬运。
+        </p>
+
+        <!-- CTAs -->
+        <div class="hero-actions">
+          <button class="cta-primary" @click="openModal('register')">
+            免费开始使用
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </button>
+          <button class="cta-outline" @click="elScrollTo('#workflow')">了解工作流程</button>
+        </div>
+
+        <!-- Social proof -->
+        <div class="hero-proof">
+          <div class="proof-avatars">
+            <span v-for="c in ['#3b82f6','#8b5cf6','#ec4899','#f59e0b','#10b981']" :key="c" :style="{ background: c }"></span>
+          </div>
+          <span>已有 <strong>10,000+</strong> 科研学者在用 · 北大、清华、浙大校园认证用户已加入</span>
+        </div>
+
+        <!-- Stats bar -->
+        <div class="hero-stats">
+          <div class="stat"><strong>10,000+</strong><span>活跃用户</span></div>
+          <div class="stat-div"></div>
+          <div class="stat"><strong>6 大</strong><span>核心工作模块</span></div>
+          <div class="stat-div"></div>
+          <div class="stat"><strong>3 秒</strong><span>快速提炼综述</span></div>
+          <div class="stat-div"></div>
+          <div class="stat"><strong>永久免费</strong><span>基础功能</span></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ═══ FEATURES ═══ -->
+    <section id="features" class="section" ref="featRef">
+      <div class="section-wrap">
+        <div class="s-head" :class="{ in: featIn }">
+          <span class="eyebrow"><i class="ew-dot"></i>六大模块</span>
+          <h2>从入库到汇报，每一步都有对应工具</h2>
+          <p>不是把功能堆在一起，而是让每一步的结果自然流入下一步</p>
+        </div>
+        <div class="feat-grid" :class="{ in: featIn }">
+          <div v-for="(f, i) in features" :key="f.title" class="feat-card" :style="{ '--c': f.color, '--delay': i * 0.06 + 's' }">
+            <div class="fc-icon">
+              <svg :viewBox="f.vb" fill="none" stroke="currentColor" stroke-width="1.7" v-html="f.path"></svg>
+            </div>
+            <div class="fc-body">
+              <h3>{{ f.title }}</h3>
+              <p>{{ f.desc }}</p>
+              <div class="fc-chips">
+                <span v-for="t in f.chips" :key="t">{{ t }}</span>
               </div>
-              <div class="ps-live-panel">
-                <div class="ps-shot-placeholder">
-                  <b>{{ currentProductFlow.previewTitle }}</b>
-                  <em>等待接入真实截图</em>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ WORKFLOW — Full-Page Unbounded Slide Carousel ═══ -->
+    <section id="workflow" class="workflow-section-full">
+      <div class="section-wrap">
+        <div class="s-head" ref="wfHeadRef" :class="{ in: wfHeadIn }">
+          <span class="eyebrow"><i class="ew-dot"></i>使用流程</span>
+          <h2>五步，从一篇 PDF 到一场汇报</h2>
+          <p>每一步都可以单独使用，也可以顺着走完整条研读链条</p>
+        </div>
+      </div>
+
+      <!-- FULL-PAGE UNCONTAINED CAROUSEL (No borders, 100vw unbounded slides) -->
+      <div class="full-carousel-viewport">
+        <div class="full-carousel-track" :style="{ transform: `translateX(-${wfActive * 100}vw)` }">
+          <div
+            v-for="(step, i) in workflowSteps"
+            :key="step.id"
+            class="full-slide-item"
+            :class="{ active: wfActive === i }"
+          >
+            <!-- Left Side: Large Viewport Screenshot -->
+            <div class="full-slide-media">
+              <div class="media-container">
+                <img :src="step.img" :alt="step.title" loading="lazy" />
+                <div class="media-fade-overlay"></div>
+                <div class="media-step-badge">STEP 0{{ i + 1 }}</div>
+              </div>
+            </div>
+
+            <!-- Right Side: Detailed Copy with Staggered Entrance Animations -->
+            <div class="full-slide-info">
+              <div class="info-content-box">
+                <div class="info-meta">
+                  <span class="info-counter">0{{ i + 1 }} / 0{{ workflowSteps.length }}</span>
+                  <span class="info-label">核心环节</span>
                 </div>
-                <div class="ps-live-rows">
-                  <div v-for="row in currentProductFlow.rows" :key="row.label">
-                    <small>{{ row.label }}</small>
-                    <strong>{{ row.text }}</strong>
+
+                <h3 class="info-title">{{ step.title }}</h3>
+                <p class="info-desc">{{ step.desc }}</p>
+
+                <!-- Detailed Highlighting Bullet Points -->
+                <div class="info-highlights-list">
+                  <div v-for="(hl, idx) in step.highlights" :key="idx" class="info-hl-row">
+                    <span class="info-hl-icon">✦</span>
+                    <span class="info-hl-text" v-html="hl"></span>
                   </div>
                 </div>
-                <div class="ps-meter"><i :style="{ width: currentProductFlow.progress }"></i></div>
+
+                <!-- Tags -->
+                <div class="info-tags">
+                  <span v-for="t in step.tags" :key="t" class="info-tag-item">{{ t }}</span>
+                </div>
               </div>
             </div>
-          </article>
-        </div>
-      </section>
-
-      <section id="product-flow" class="ps-flow-section">
-        <div class="ps-section-head" data-reveal>
-          <span>产品流程</span>
-          <h2>从 PDF 到汇报，不拆成孤岛。</h2>
-          <p>流程线不是装饰。每一步都对应项目里真实存在的页面和操作。</p>
-        </div>
-        <div class="ps-flow-chain" data-reveal data-reveal-delay="1">
-          <article v-for="step in productFlowSteps" :key="`chain-${step.id}`">
-            <span>{{ step.index }}</span>
-            <h3>{{ step.tab }}</h3>
-            <p>{{ step.summary }}</p>
-          </article>
-        </div>
-      </section>
-
-      <section id="advantages" class="ps-compare-section">
-        <div class="ps-section-head" data-reveal>
-          <span>产品优势</span>
-          <h2>和常见工具相比，少掉的是搬运成本。</h2>
-          <p>不是多放几个 AI 按钮，而是让文献、笔记、综述、组会和论坛之间互通。</p>
-        </div>
-        <div class="ps-comparison" data-reveal data-reveal-delay="1">
-          <div class="ps-comparison-head">
-            <strong>能力</strong>
-            <strong>普通阅读器 / AI 对话</strong>
-            <strong>PaperSolver</strong>
           </div>
-          <div v-for="row in comparisonRows" :key="row.feature" class="ps-comparison-row">
+        </div>
+
+        <!-- Floating Controls Bar -->
+        <div class="full-carousel-controls">
+          <button class="fc-arrow-btn prev" @click="wfGo(wfActive - 1)" aria-label="上一页">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5"/><path d="m12 5-7 7 7 7"/></svg>
+          </button>
+
+          <div class="fc-dots-wrap">
+            <span
+              v-for="(_, i) in workflowSteps"
+              :key="i"
+              class="fc-dot-item"
+              :class="{ active: wfActive === i }"
+              @click="wfGo(i)"
+            ></span>
+          </div>
+
+          <div class="fc-progress-indicator" title="自动播放中">
+            <svg viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="2.5"/>
+              <circle cx="18" cy="18" r="14" fill="none" stroke="#3b82f6" stroke-width="2.5"
+                stroke-dasharray="88" :stroke-dashoffset="88 - 88 * wfProgress / 100"
+                stroke-linecap="round" transform="rotate(-90 18 18)"/>
+            </svg>
+          </div>
+
+          <button class="fc-arrow-btn next" @click="wfGo(wfActive + 1)" aria-label="下一页">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ WHY CHOOSE US ═══ -->
+    <section id="why" class="section" ref="whyRef">
+      <div class="section-wrap">
+        <div class="s-head" :class="{ in: whyIn }">
+          <span class="eyebrow"><i class="ew-dot"></i>为什么选择我们</span>
+          <h2>科研路上，你值得更好的工具</h2>
+          <p>不只是一个 PDF 阅读器，而是一套从阅读到汇报的完整工作台</p>
+        </div>
+
+        <div class="why-claims" :class="{ in: whyIn }">
+          <div v-for="c in whyClaims" :key="c.title" class="why-card" :style="{ '--c': c.color }">
+            <div class="wc-icon">
+              <svg :viewBox="c.vb" fill="none" stroke="currentColor" stroke-width="1.7" v-html="c.path"></svg>
+            </div>
+            <strong class="wc-title">{{ c.title }}</strong>
+            <p class="wc-desc">{{ c.desc }}</p>
+          </div>
+        </div>
+
+        <!-- Quote banner -->
+        <div class="why-banner" :class="{ in: whyIn }">
+          <div class="wb-left">
+            <div class="wb-q">"</div>
+            <p class="wb-text">做学术本来就很难了，<br>工具不应该再给你添堵。</p>
+            <p class="wb-by">— PaperSlover 产品理念</p>
+          </div>
+          <div class="wb-right">
+            <div v-for="b in whyBadges" :key="b.label" class="wb-badge" :style="{ '--c': b.color }">
+              <svg :viewBox="b.vb" fill="none" stroke="currentColor" stroke-width="2" v-html="b.path"></svg>
+              <span>{{ b.label }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ COMPARISON ═══ -->
+    <section class="section section-alt" ref="cmpRef">
+      <div class="section-wrap">
+        <div class="s-head" :class="{ in: cmpIn }">
+          <span class="eyebrow"><i class="ew-dot"></i>横向对比</span>
+          <h2>少掉的，是整理材料的那段时间</h2>
+          <p>让你把时间花在真正重要的地方，而不是在工具之间反复搬运</p>
+        </div>
+        <div class="cmp-table" :class="{ in: cmpIn }">
+          <div class="cmp-header">
+            <span>你在意的</span>
+            <span class="cmp-bad-h">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              以前的方式
+            </span>
+            <span class="cmp-good-h">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+              PaperSlover
+            </span>
+          </div>
+          <div v-for="row in comparisons" :key="row.feature" class="cmp-row">
             <b>{{ row.feature }}</b>
-            <span>{{ row.market }}</span>
-            <span>{{ row.paperSolver }}</span>
+            <span class="cmp-bad">
+              <span class="ci bad"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+              {{ row.before }}
+            </span>
+            <span class="cmp-good">
+              <span class="ci good"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span>
+              {{ row.after }}
+            </span>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <section id="chapter-pricing" class="ps-pricing-section">
-        <div class="ps-section-head" data-reveal>
-          <span>产品定价</span>
-          <h2>基础开放，高成本任务按套餐扣减。</h2>
-          <p>导入和阅读保持轻量；论文综述、组会 PPT、AI 对话这些消耗模型的任务按次数展示。</p>
+    <!-- ═══ PRICING ═══ -->
+    <section id="pricing" class="section" ref="priceRef">
+      <div class="section-wrap">
+        <div class="s-head" :class="{ in: priceIn }">
+          <span class="eyebrow"><i class="ew-dot"></i>价格方案</span>
+          <h2>基础功能永久免费，高消耗任务按套餐</h2>
+          <p>导入和阅读不计费；综述生成、组会 PPT、深度解析这些重量级操作按套餐使用</p>
         </div>
-        <div class="ps-pricing-grid" data-reveal data-reveal-delay="1">
-          <article
-            v-for="plan in billingPlans"
-            :key="plan.id"
-            :class="{ featured: plan.highlight }"
-          >
-            <span>{{ plan.oneTime ? "加量包" : "订阅方案" }}</span>
-            <h3>{{ plan.name }}</h3>
-            <div class="ps-price">
-              <strong>{{ plan.price }}</strong>
-              <small>{{ plan.period }}</small>
-            </div>
-            <p>{{ plan.tier }} 会员权益</p>
-            <ul>
-              <li v-for="feat in plan.features.slice(0, 4)" :key="feat">{{ feat }}</li>
+        <div class="price-grid" :class="{ in: priceIn }">
+          <div v-for="plan in billingPlans" :key="plan.id" class="price-card" :class="{ featured: plan.highlight }">
+            <div v-if="plan.highlight" class="price-badge">最受欢迎</div>
+            <div class="price-type">{{ plan.oneTime ? '加量包' : '订阅方案' }}</div>
+            <div class="price-name">{{ plan.name }}</div>
+            <div class="price-amount"><strong>{{ plan.price }}</strong><small>{{ plan.period }}</small></div>
+            <ul class="price-list">
+              <li v-for="f in plan.features.slice(0, 4)" :key="f">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>{{ f }}
+              </li>
             </ul>
-            <button type="button" @click="openModal('register')">
-              {{ plan.oneTime ? "购买加量包" : "开始使用" }}
+            <button class="price-btn" :class="{ 'feat-btn': plan.highlight }" @click="openModal('register')">
+              {{ plan.oneTime ? '购买加量包' : '开始使用' }}
             </button>
-          </article>
+          </div>
         </div>
-      </section>
-    </div>
+      </div>
+    </section>
 
-    <!-- Glassmorphic Auth Modal -->
-    <div v-if="showAuthModal" class="spatial-modal-backdrop" @click="closeModal">
-      <div class="spatial-modal-content" @click.stop>
-      <button class="spatial-modal-close" @click="closeModal">&times;</button>
-      
-      <div v-if="authMode === 'login'">
-        <span class="spatial-chapter-eyebrow" style="color: var(--spatial-accent, #0066ff)">LOG IN</span>
-        <h3 class="modal-title">继续进入</h3>
-        <div class="form-grid auth-popover-form">
-          <div class="form-group">
-            <label style="color: #1e293b; font-weight: 600;">邮箱</label>
-            <input v-model="email" type="email" placeholder="输入邮箱 (e.g. student@paperslover.app)" />
-          </div>
-          <div class="form-group">
-            <label style="color: #1e293b; font-weight: 600;">密码</label>
-            <div class="password-input-wrapper">
-              <input v-model="password" :type="showPassword ? 'text' : 'password'" placeholder="输入密码" />
-              <button type="button" class="password-toggle-btn" @click="showPassword = !showPassword">
-                <span v-html="showPassword ? eyeOffIcon : eyeIcon"></span>
-              </button>
-            </div>
-          </div>
-          <div v-if="errorText" class="auth-error">{{ errorText }}</div>
-          <button class="spatial-btn spatial-btn-accent auth-submit" :disabled="loading" @click="submitLogin">
-            {{ loading ? "登录中..." : "进入 PaperSlover" }}
-          </button>
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; width: 100%;">
-            <a href="#" class="auth-link" style="margin: 0;" @click.prevent="authMode = 'register'">没有账号？去注册</a>
-            <a href="#" class="auth-link" style="margin: 0; color: #64748b;" @click.prevent="authMode = 'forgot_password'">忘记密码？</a>
-          </div>
+    <!-- ═══ FOOTER ═══ -->
+    <footer class="home-footer">
+      <div class="footer-inner">
+        <span class="footer-logo">PaperSlover</span>
+        <div class="footer-links">
+          <a href="#features">功能</a>
+          <a href="#workflow">流程</a>
+          <a href="#why">为什么选我们</a>
+          <a href="#pricing">价格</a>
+          <a href="#" @click.prevent="openModal('login')">登录</a>
         </div>
+        <p class="footer-copy">© 2026 PaperSlover · 为每一位科研人设计</p>
       </div>
+    </footer>
 
-      <div v-else-if="authMode === 'register'">
-        <span class="spatial-chapter-eyebrow" style="color: var(--spatial-accent, #0066ff)">REGISTER</span>
-        <h3 class="modal-title">QQ 邮箱注册</h3>
-        <div class="form-grid auth-popover-form" style="max-height: 70vh; overflow-y: auto; padding-right: 8px;">
-          <div class="form-group">
-            <label style="color: #1e293b; font-weight: 600;">QQ 邮箱</label>
-            <div class="register-code-row">
-              <input v-model="email" type="email" placeholder="123456@qq.com" />
-              <button
-                type="button"
-                class="spatial-btn spatial-btn-ghost register-code-btn"
-                :disabled="sendingRegisterCode || registerCodeCooldown > 0"
-                @click="sendRegisterCode"
-              >
-                {{ registerCodeButtonText }}
-              </button>
-            </div>
-          </div>
-          <div class="form-group">
-            <label style="color: #1e293b; font-weight: 600;">6 位验证码</label>
-            <input v-model="verificationCode" inputmode="numeric" maxlength="6" placeholder="输入邮箱验证码" />
-          </div>
-          <div class="form-group">
-            <label style="color: #1e293b; font-weight: 600;">昵称</label>
-            <input v-model="name" placeholder="你的昵称" />
-          </div>
-          <div class="form-group">
-            <label style="color: #1e293b; font-weight: 600;">密码</label>
-            <div class="password-input-wrapper">
-              <input v-model="password" :type="showPassword ? 'text' : 'password'" placeholder="设置密码" />
-              <button type="button" class="password-toggle-btn" @click="showPassword = !showPassword">
-                <span v-html="showPassword ? eyeOffIcon : eyeIcon"></span>
-              </button>
-            </div>
-          </div>
-          <div class="form-group">
-            <label style="color: #1e293b; font-weight: 600;">邀请码 <span style="color:#94a3b8;font-weight:500;">可选</span></label>
-            <input v-model="inviteCode" placeholder="有邀请码可填写，没有可留空" />
-          </div>
-          <div class="form-group">
-            <label style="color: #1e293b; font-weight: 600;">身份角色</label>
-            <div class="role-selector-capsule">
-              <button
-                type="button"
-                class="role-btn"
-                :class="{ active: role === '学生' }"
-                @click="role = '学生'"
-              >
-                学生
-              </button>
-              <button
-                type="button"
-                class="role-btn"
-                :class="{ active: role === '导师' }"
-                @click="role = '导师'"
-              >
-                导师
-              </button>
-              <button
-                type="button"
-                class="role-btn"
-                :class="{ active: role === '管理员' }"
-                @click="role = '管理员'"
-              >
-                管理员
-              </button>
-            </div>
-          </div>
-          <div v-if="role === '导师'" class="form-group transition-input">
-            <label style="color: #1e293b; font-weight: 600;">导师专属邀请码</label>
-            <input v-model="mentorInviteCode" type="password" placeholder="请输入导师特权邀请码 (TUTOR2026)" />
-          </div>
-          <div v-if="role === '管理员'" class="form-group transition-input">
-            <label style="color: #1e293b; font-weight: 600;">管理员专属邀请码</label>
-            <input v-model="mentorInviteCode" type="password" placeholder="请输入管理员特权邀请码 (ADMIN2026)" />
-          </div>
-          <div v-if="registerSuccessText" style="color: #10b981; font-size: 0.85rem; font-weight: 500; text-align: center; margin-top: 8px;">{{ registerSuccessText }}</div>
-          <div v-if="errorText" class="auth-error">{{ errorText }}</div>
-          <button class="spatial-btn spatial-btn-accent auth-submit" :disabled="loading" @click="submitRegister">
-            {{ loading ? "注册中..." : "创建账号并进入" }}
+    <!-- ═══ AUTH MODAL ═══ -->
+    <Transition name="mfade">
+      <div v-if="showAuthModal" class="modal-mask" @click="closeModal">
+        <div class="modal-box" @click.stop>
+          <button class="modal-x" @click="closeModal">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
-          <a href="#" class="auth-link" @click.prevent="authMode = 'login'">已有账号？直接登录</a>
+          <!-- LOGIN -->
+          <div v-if="authMode === 'login'" class="auth-pane">
+            <div class="auth-label">LOG IN</div>
+            <h3 class="auth-title">进入工作台</h3>
+            <div class="auth-form">
+              <label>邮箱</label>
+              <input v-model="email" type="email" placeholder="student@paperslover.app" />
+              <label>密码</label>
+              <div class="pw-wrap">
+                <input v-model="password" :type="showPassword ? 'text' : 'password'" placeholder="输入密码" />
+                <button type="button" class="pw-eye" @click="showPassword = !showPassword" v-html="showPassword ? eyeOffIcon : eyeIcon"></button>
+              </div>
+              <div v-if="errorText" class="auth-err">{{ errorText }}</div>
+              <button class="auth-submit" :disabled="loading" @click="submitLogin">{{ loading ? '登录中…' : '进入 PaperSlover' }}</button>
+              <div class="auth-links">
+                <a href="#" @click.prevent="authMode='register'">没有账号？去注册</a>
+                <a href="#" @click.prevent="authMode='forgot_password'" class="dim">忘记密码</a>
+              </div>
+            </div>
+          </div>
+          <!-- REGISTER -->
+          <div v-else-if="authMode === 'register'" class="auth-pane">
+            <div class="auth-label">REGISTER</div>
+            <h3 class="auth-title">创建账号</h3>
+            <div class="auth-form scroll-form">
+              <label>QQ 邮箱</label>
+              <div class="row-input">
+                <input v-model="email" type="email" placeholder="123456@qq.com" />
+                <button type="button" class="code-btn" :disabled="sendingRegisterCode || registerCodeCooldown > 0" @click="sendRegisterCode">{{ registerCodeButtonText }}</button>
+              </div>
+              <label>验证码</label>
+              <input v-model="verificationCode" inputmode="numeric" maxlength="6" placeholder="6 位邮箱验证码" />
+              <label>昵称</label>
+              <input v-model="name" placeholder="你的昵称" />
+              <label>密码</label>
+              <div class="pw-wrap">
+                <input v-model="password" :type="showPassword ? 'text' : 'password'" placeholder="设置密码" />
+                <button type="button" class="pw-eye" @click="showPassword = !showPassword" v-html="showPassword ? eyeOffIcon : eyeIcon"></button>
+              </div>
+              <label>邀请码 <span class="opt">可选</span></label>
+              <input v-model="inviteCode" placeholder="有邀请码可填" />
+              <label>身份</label>
+              <div class="role-group">
+                <button type="button" :class="{ on: role==='学生' }" @click="role='学生'">学生</button>
+                <button type="button" :class="{ on: role==='导师' }" @click="role='导师'">导师</button>
+                <button type="button" :class="{ on: role==='管理员' }" @click="role='管理员'">管理员</button>
+              </div>
+              <template v-if="role==='导师'">
+                <label>导师邀请码</label>
+                <input v-model="mentorInviteCode" type="password" placeholder="TUTOR2026" />
+              </template>
+              <template v-if="role==='管理员'">
+                <label>管理员邀请码</label>
+                <input v-model="mentorInviteCode" type="password" placeholder="ADMIN2026" />
+              </template>
+              <div v-if="registerSuccessText" class="auth-ok">{{ registerSuccessText }}</div>
+              <div v-if="errorText" class="auth-err">{{ errorText }}</div>
+              <button class="auth-submit" :disabled="loading" @click="submitRegister">{{ loading ? '创建中…' : '创建账号并进入' }}</button>
+              <div class="auth-links"><a href="#" @click.prevent="authMode='login'">已有账号？登录</a></div>
+            </div>
+          </div>
+          <!-- FORGOT -->
+          <div v-else-if="authMode === 'forgot_password'" class="auth-pane">
+            <div class="auth-label">RESET</div>
+            <h3 class="auth-title">找回密码</h3>
+            <div class="auth-form">
+              <label>邮箱</label>
+              <div class="row-input">
+                <input v-model="forgotEmail" type="email" placeholder="you@paperslover.app" />
+                <button type="button" class="code-btn" :disabled="sendingCode" @click="sendForgotCode">{{ sendingCode ? '发送中…' : '获取验证码' }}</button>
+              </div>
+              <label>验证码</label>
+              <input v-model="forgotCode" placeholder="输入验证码" />
+              <label>新密码</label>
+              <div class="pw-wrap">
+                <input v-model="forgotNewPassword" :type="showPassword ? 'text' : 'password'" placeholder="至少 6 位" />
+                <button type="button" class="pw-eye" @click="showPassword = !showPassword" v-html="showPassword ? eyeOffIcon : eyeIcon"></button>
+              </div>
+              <div v-if="forgotSuccessText" class="auth-ok">{{ forgotSuccessText }}</div>
+              <div v-if="errorText" class="auth-err">{{ errorText }}</div>
+              <button class="auth-submit" :disabled="loading" @click="submitResetPassword">{{ loading ? '重置中…' : '确认重置' }}</button>
+              <div class="auth-links"><a href="#" @click.prevent="authMode='login'">返回登录</a></div>
+            </div>
+          </div>
         </div>
       </div>
-
-      <div v-else-if="authMode === 'forgot_password'">
-        <span class="spatial-chapter-eyebrow" style="color: var(--spatial-accent, #0066ff)">RESET PASSWORD</span>
-        <h3 class="modal-title">找回密码</h3>
-        <div class="form-grid auth-popover-form">
-          <div class="form-group">
-            <label style="color: #1e293b; font-weight: 600;">邮箱</label>
-            <div style="display: flex; gap: 8px; align-items: flex-end;">
-              <input v-model="forgotEmail" type="email" placeholder="you@paperslover.app" style="flex: 1;" />
-              <button type="button" class="spatial-btn spatial-btn-accent compact-btn" style="min-height: 44px; padding: 0 12px; font-size: 0.85rem;" :disabled="sendingCode" @click="sendForgotCode">
-                {{ sendingCode ? '发送中...' : '获取验证码' }}
-              </button>
-            </div>
-          </div>
-          <div class="form-group">
-            <label style="color: #1e293b; font-weight: 600;">6位验证码</label>
-            <input v-model="forgotCode" placeholder="输入验证码 (查看控制台日志)" />
-          </div>
-          <div class="form-group">
-            <label style="color: #1e293b; font-weight: 600;">新密码</label>
-            <div class="password-input-wrapper">
-              <input v-model="forgotNewPassword" :type="showPassword ? 'text' : 'password'" placeholder="设置新密码（至少 6 位）" />
-              <button type="button" class="password-toggle-btn" @click="showPassword = !showPassword">
-                <span v-html="showPassword ? eyeOffIcon : eyeIcon"></span>
-              </button>
-            </div>
-          </div>
-          <div v-if="forgotSuccessText" style="color: #10b981; font-size: 0.85rem; font-weight: 500; text-align: center; margin-top: 8px;">{{ forgotSuccessText }}</div>
-          <div v-if="errorText" class="auth-error">{{ errorText }}</div>
-          <button class="spatial-btn spatial-btn-accent auth-submit" :disabled="loading" @click="submitResetPassword">
-            {{ loading ? "重置中..." : "确认重置密码" }}
-          </button>
-          <a href="#" class="auth-link" @click.prevent="authMode = 'login'">返回登录</a>
-        </div>
-      </div>
-      </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from "vue";
-import { useRouter, useRoute } from "vue-router";
-import { useScrollReveal } from "../composables/useScrollReveal";
-import { useAuthStore } from "../stores/auth";
-import { billingPlans } from "../constants/pages";
-import { paperpilotApi } from "../services/paperpilotApi";
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
+import { billingPlans } from '../constants/pages'
+import { paperpilotApi } from '../services/paperpilotApi'
 
-useScrollReveal(".spatial-page");
+const authStore = useAuthStore()
+const router    = useRouter()
+const route     = useRoute()
 
-const authStore = useAuthStore();
-const router = useRouter();
-const route = useRoute();
+/* ── Nav scroll ── */
+const navScrolled = ref(false)
+const onScroll = () => { navScrolled.value = window.scrollY > 40 }
 
-// Auth States
-const showAuthModal = ref(false);
-const authMode = ref("login"); // 'login' or 'register'
-const email = ref("");
-const password = ref("");
-const inviteCode = ref("");
-const name = ref("");
-const role = ref("学生");
-const mentorInviteCode = ref("");
-const verificationCode = ref("");
-const errorText = ref("");
-const loading = ref(false);
-const sendingRegisterCode = ref(false);
-const registerCodeCooldown = ref(0);
-const registerSuccessText = ref("");
-let registerCodeTimer = null;
+/* ── Hero entrance ── */
+const heroIn = ref(false)
 
-// Forgot Password States
-const forgotEmail = ref("");
-const forgotCode = ref("");
-const forgotNewPassword = ref("");
-const sendingCode = ref(false);
-const forgotSuccessText = ref("");
-const activeLandingPanel = ref("library");
+/* ── Scroll reveal ── */
+const featRef    = ref(null); const featIn    = ref(false)
+const wfHeadRef  = ref(null); const wfHeadIn  = ref(false)
+const whyRef     = ref(null); const whyIn     = ref(false)
+const cmpRef     = ref(null); const cmpIn     = ref(false)
+const priceRef   = ref(null); const priceIn   = ref(false)
 
-const productFlowSteps = [
-  {
-    id: "library",
-    index: "01",
-    tab: "文献导入",
-    title: "文献先进入同一个地方",
-    status: "PDF / Zotero / 元数据",
-    previewTitle: "文献库截图槽位",
-    progress: "74%",
-    summary: "上传 PDF、导入 Zotero、补齐题录和标签，后续阅读和组会都从同一份文献继续。",
-    nodes: ["PDF", "Zotero", "元数据", "文献库"],
-    rows: [
-      { label: "PDF", text: "本地论文入库，保留阅读进度" },
-      { label: "Zotero", text: "批量题录导入，减少手动整理" },
-      { label: "TAG", text: "期刊、会议、待读状态可筛选" },
-    ],
-  },
-  {
-    id: "reader",
-    index: "02",
-    tab: "阅读解析",
-    title: "读的时候把证据留下",
-    status: "翻译 / 标注 / 解析",
-    previewTitle: "阅读器截图槽位",
-    progress: "52%",
-    summary: "原文、翻译、内容详解和精确批注并排工作，不把整段误标成一片。",
-    nodes: ["原文", "翻译", "选区标注", "解析"],
-    rows: [
-      { label: "TEXT", text: "选中句子后只标记选区" },
-      { label: "AI", text: "背景、方法、数据、局限分开看" },
-      { label: "NOTE", text: "批注可单独删除，也可全局清除" },
-    ],
-  },
-  {
-    id: "review",
-    index: "03",
-    tab: "论文综述",
-    title: "把一篇论文写成可复用材料",
-    status: "分段 / 重点 / 保存",
-    previewTitle: "论文综述截图槽位",
-    progress: "88%",
-    summary: "基本信息、研究问题、主要发现、汇报价值拆开写，英文和数字重点突出。",
-    nodes: ["基本信息", "研究问题", "主要发现", "汇报价值"],
-    rows: [
-      { label: "INFO", text: "作者、年份、期刊、研究对象" },
-      { label: "FIND", text: "英文、数字和百分号重点标红" },
-      { label: "USE", text: "保存后可导入组会" },
-    ],
-  },
-  {
-    id: "meeting",
-    index: "04",
-    tab: "组会汇报",
-    title: "单篇能讲，多篇也能融合",
-    status: "最多 3 篇 / PPT",
-    previewTitle: "组会汇报截图槽位",
-    progress: "66%",
-    summary: "最多三篇文献合成一条汇报主线，再生成组会重点、关键问题、导师建议和 PPT。",
-    nodes: ["选文献", "融合主线", "讲稿", "PPT"],
-    rows: [
-      { label: "FOCUS", text: "组会重点内容先融合" },
-      { label: "GOAL", text: "汇报目标与关键问题单独生成" },
-      { label: "PPT", text: "多篇文献合并生成 1 个 PPT" },
-    ],
-  },
-  {
-    id: "forum",
-    index: "05",
-    tab: "校园圈",
-    title: "问题回到同校和同行",
-    status: "认证 / 审核 / 通知",
-    previewTitle: "校园圈截图槽位",
-    progress: "58%",
-    summary: "校园认证后按学校筛选帖子，发帖先过 AI 审核，回复和认证结果进入站内通知。",
-    nodes: ["校园认证", "发帖审核", "帖子流", "通知"],
-    rows: [
-      { label: "SCHOOL", text: "认证后进入同校帖子筛选" },
-      { label: "POST", text: "发帖进入 AI 审核队列" },
-      { label: "MSG", text: "回复、置顶、认证反馈进站内通知" },
-    ],
-  },
-  {
-    id: "models",
-    index: "06",
-    tab: "模型额度",
-    title: "贵模型只用在该用的地方",
-    status: "路由 / 成本 / 套餐",
-    previewTitle: "模型中心截图槽位",
-    progress: "79%",
-    summary: "PPT 生成使用高阶模型；综述、问答、发帖审核可以走更便宜的模型，成本分开算。",
-    nodes: ["综述", "问答", "PPT", "审核"],
-    rows: [
-      { label: "PPT", text: "组会 PPT 走高阶模型" },
-      { label: "LOW", text: "审核和问答可走低成本模型" },
-      { label: "PLAN", text: "个人和团队套餐分开展示" },
-    ],
-  },
-];
+let io
+function initIO() {
+  io = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return
+      if (e.target === featRef.value)   featIn.value   = true
+      if (e.target === wfHeadRef.value) wfHeadIn.value = true
+      if (e.target === whyRef.value)    whyIn.value    = true
+      if (e.target === cmpRef.value)    cmpIn.value    = true
+      if (e.target === priceRef.value)  priceIn.value  = true
+    })
+  }, { threshold: 0.1 })
+  ;[featRef, wfHeadRef, whyRef, cmpRef, priceRef].forEach(r => r.value && io.observe(r.value))
+}
 
-const comparisonRows = [
-  {
-    feature: "文献到产出",
-    market: "阅读、总结、PPT 往往分散在多个工具里。",
-    paperSolver: "导入、阅读、综述、组会汇报沿同一份文献继续。",
-  },
-  {
-    feature: "标注与解析",
-    market: "很多工具只给整段摘要，标注和正文脱节。",
-    paperSolver: "选区批注、全文翻译、内容详解围绕正文展开。",
-  },
-  {
-    feature: "组会准备",
-    market: "需要手动把多篇论文拼成讲稿和 PPT。",
-    paperSolver: "最多三篇文献融合成汇报主线，再生成 PPT。",
-  },
-  {
-    feature: "交流与通知",
-    market: "讨论在群聊里丢失，学校身份不清楚。",
-    paperSolver: "校园认证、校园圈筛选、站内通知和论坛审核打通。",
-  },
-  {
-    feature: "模型成本",
-    market: "所有任务常走同一模型，成本不可控。",
-    paperSolver: "按入口路由模型，PPT 用强模型，审核和问答可降成本。",
-  },
-];
+/* ── Workflow full-slide carousel ── */
+const wfActive   = ref(0)
+const wfProgress = ref(0)
+const WF_DURATION = 5000   // ms per slide
+const TICK        = 60     // progress update interval
 
-const currentProductFlow = computed(
-  () => productFlowSteps.find((item) => item.id === activeLandingPanel.value) || productFlowSteps[0],
-);
+let wfSlideTimer    = null
+let wfProgressTimer = null
 
-const landingPanels = [
-  {
-    id: "library",
-    index: "01",
-    tab: "文献入库",
-    title: "先把论文收稳",
-    description: "文献库负责把 PDF、Zotero、搜索结果和手动补全的元数据放到同一个地方。阅读进度、期刊标签、导入源头都能继续追踪。",
-    href: "/library",
-    link: "打开文献库",
-    footer: "适合从一堆 PDF 里先理出秩序。",
-    nodes: ["PDF", "Zotero", "元数据", "标签", "阅读器"],
-    screenTitle: "文献库",
-    screenMeta: "导入与整理",
-    status: "PDF / Zotero / 元数据",
-    shotTitle: "LibraryView",
-    progress: "72%",
-    previewRows: [
-      { label: "PDF", text: "Semantic frameworks to support implementation...", kind: "active" },
-      { label: "Zotero", text: "批量题录导入，保留来源与作者", kind: "soft" },
-      { label: "TAG", text: "期刊、会议、待读状态分开筛选", kind: "warm" },
-    ],
-    points: [
-      { label: "导入", text: "本地 PDF、Zotero、URL 与学术搜索" },
-      { label: "整理", text: "文献类型、期刊标签、来源和笔记" },
-      { label: "衔接", text: "直接进入双栏翻译或逐段阅读" },
-    ],
-  },
-  {
-    id: "reader",
-    index: "02",
-    tab: "精读解析",
-    title: "在正文旁边读懂它",
-    description: "阅读器把原文、翻译、内容详解和标注放在同一个阅读现场。批注精确到选中的句子，不再把整段都涂成一片。",
-    href: "/reading",
-    link: "进入阅读",
-    footer: "适合需要边读、边问、边做笔记的论文。",
-    nodes: ["原文", "翻译", "选区", "批注", "解析"],
-    screenTitle: "AI 阅读器",
-    screenMeta: "原文旁边读",
-    status: "全文翻译已就绪",
-    shotTitle: "ReaderView",
-    progress: "46%",
-    previewRows: [
-      { label: "TEXT", text: "选中句子，标注只落在选区", kind: "active" },
-      { label: "AI", text: "研究背景、方法、局限独立展开", kind: "soft" },
-      { label: "NOTE", text: "单条批注可删除，可清空全局记号", kind: "cool" },
-    ],
-    points: [
-      { label: "翻译", text: "全文翻译、逐段翻译、原文 PDF 切换" },
-      { label: "标注", text: "选取片段后保存，可单独删除" },
-      { label: "解析", text: "研究背景、方法、数据、局限分开看" },
-    ],
-  },
-  {
-    id: "review",
-    index: "03",
-    tab: "论文综述",
-    title: "把一篇论文写成能复用的综述",
-    description: "综述不是把摘要再说一遍。它会拆成基本信息、研究问题、主要发现、价值与局限，并保留分段和重点标记。",
-    href: "/library",
-    link: "生成综述",
-    footer: "适合课程论文、开题准备和组会前的材料整理。",
-    nodes: ["基本信息", "问题", "发现", "价值", "局限"],
-    screenTitle: "论文综述",
-    screenMeta: "一篇一篇生成",
-    status: "分段综述已保存",
-    shotTitle: "ReviewPanel",
-    progress: "88%",
-    previewRows: [
-      { label: "INFO", text: "作者、年份、期刊、研究对象", kind: "active" },
-      { label: "FIND", text: "英文、数字和百分号会重点标红", kind: "warm" },
-      { label: "USE", text: "保存后可一键导入组会", kind: "soft" },
-    ],
-    points: [
-      { label: "分段", text: "每个要点单独成段，不堆成一坨" },
-      { label: "重点", text: "英文、数字和百分号会突出显示" },
-      { label: "复用", text: "综述可继续导入组会汇报" },
-    ],
-  },
-  {
-    id: "meeting",
-    index: "04",
-    tab: "组会汇报",
-    title: "单篇能讲，多篇也能合并讲",
-    description: "组会汇报支持最多三篇文献合并。它不是简单拼接，而是先融合研究问题、汇报目标和关键问题，再生成 PPT。",
-    href: "/meeting-report",
-    link: "准备组会",
-    footer: "适合导师会、课程展示和小组讨论。",
-    nodes: ["最多三篇", "融合", "讲稿", "PPT", "导师建议"],
-    screenTitle: "组会汇报",
-    screenMeta: "单篇或多篇",
-    status: "3 篇以内可融合",
-    shotTitle: "MeetingReport",
-    progress: "64%",
-    previewRows: [
-      { label: "FOCUS", text: "组会重点内容先合并成主线", kind: "active" },
-      { label: "GOAL", text: "汇报目标与关键问题单独生成", kind: "soft" },
-      { label: "PPT", text: "多篇文献合并生成一个 PPT", kind: "cool" },
-    ],
-    points: [
-      { label: "融合", text: "多篇文献合并成一条汇报主线" },
-      { label: "讲稿", text: "生成主讲综述和导师建议修改" },
-      { label: "PPT", text: "组会 PPT 单独走更强模型" },
-    ],
-  },
-  {
-    id: "forum",
-    index: "05",
-    tab: "校园论坛",
-    title: "让问题流到同校和同行那里",
-    description: "论坛承接求助、科研羊毛、论文期刊、研究讨论和校园圈。校园认证后，帖子可以按学校筛选，个人主页显示学校。",
-    href: "/forum",
-    link: "进入论坛",
-    footer: "适合问数据、问投稿、问工具，也适合组内通知。",
-    nodes: ["发帖", "审核", "校园认证", "回复", "通知"],
-    screenTitle: "学术论坛",
-    screenMeta: "帖子先过 AI 审核",
-    status: "校园圈需认证",
-    shotTitle: "ForumView",
-    progress: "54%",
-    previewRows: [
-      { label: "POST", text: "新帖从最新列表上方滑入", kind: "active" },
-      { label: "SCHOOL", text: "校园圈按学校筛选，只显示小水印", kind: "warm" },
-      { label: "MSG", text: "回复、置顶、认证反馈进站内通知", kind: "soft" },
-    ],
-    points: [
-      { label: "审核", text: "发帖先进入 AI 审核，减少垃圾内容" },
-      { label: "校园圈", text: "认证后进入同校帖子筛选" },
-      { label: "消息", text: "回复、置顶、封禁、认证反馈进站内通知" },
-    ],
-  },
-  {
-    id: "models",
-    index: "06",
-    tab: "模型与额度",
-    title: "贵模型只用在该用的地方",
-    description: "不同入口可以单独配置模型：PPT 走更强模型，综述、问答和发帖审核可以用更便宜的模型，成本和体验分开算。",
-    href: "/models",
-    link: "查看额度",
-    footer: "适合控制成本，也适合管理员做模型路由。",
-    nodes: ["综述", "问答", "PPT", "审核", "成本"],
-    screenTitle: "模型与额度",
-    screenMeta: "按入口路由",
-    status: "PPT 使用高阶模型",
-    shotTitle: "ModelCenter",
-    progress: "76%",
-    previewRows: [
-      { label: "GPT", text: "PPT 生成保留高阶模型", kind: "active" },
-      { label: "LOW", text: "审核、问答可切换便宜模型", kind: "soft" },
-      { label: "PLAN", text: "个人 Lite / Plus / Pro / Max 与团队分开", kind: "cool" },
-    ],
-    points: [
-      { label: "场景", text: "综述、问答、PPT、审核分别配置" },
-      { label: "额度", text: "按任务次数显示剩余，不让用户猜" },
-      { label: "会员", text: "个人和团队套餐分别展示" },
-    ],
-  },
-];
+function wfGo(i) {
+  const len = workflowSteps.length
+  wfActive.value = ((i % len) + len) % len
+  wfProgress.value = 0
+  resetWfAuto()
+}
 
-const currentLandingPanel = computed(
-  () => landingPanels.find((item) => item.id === activeLandingPanel.value) || landingPanels[0],
-);
+function resetWfAuto() {
+  clearTimeout(wfSlideTimer)
+  clearInterval(wfProgressTimer)
+  let elapsed = 0
+  wfProgressTimer = setInterval(() => {
+    elapsed += TICK
+    wfProgress.value = Math.min(100, (elapsed / WF_DURATION) * 100)
+  }, TICK)
+  wfSlideTimer = setTimeout(() => {
+    wfGo(wfActive.value + 1)
+  }, WF_DURATION)
+}
 
-const homeJourney = [
-  {
-    step: "01",
-    title: "文献先进入同一个地方",
-    text: "上传 PDF、导入 Zotero、补全题录和标签。后面阅读器、综述和组会用的是同一份文献，不需要反复搬运。",
-    panel: "文献库",
-    slot: "文献卡片、筛选栏、阅读进度截图槽位",
-    tags: ["PDF", "Zotero", "标签"],
-    lines: ["上传 PDF", "补全作者与期刊", "进入阅读器"],
-  },
-  {
-    step: "02",
-    title: "读的时候就把证据留下",
-    text: "选中一句话做批注，逐段翻译，左侧查看研究背景、方法、数据和局限。标注落在选区，不把整段涂乱。",
-    panel: "阅读器",
-    slot: "双栏阅读、精确标注、内容详解截图槽位",
-    tags: ["选区批注", "全文翻译", "论文解析"],
-    lines: ["选中文字", "保存批注", "查看解析"],
-  },
-  {
-    step: "03",
-    title: "综述不是摘要复制",
-    text: "基本信息、研究问题、主要发现、汇报价值分开保存。英文、数字和百分号突出显示，后续能直接进入组会材料。",
-    panel: "论文综述",
-    slot: "综述分段、重点标记、一键导入组会截图槽位",
-    tags: ["基本信息", "主要发现", "汇报价值"],
-    lines: ["生成综述", "保存编辑", "导入组会"],
-  },
-  {
-    step: "04",
-    title: "单篇能讲，多篇也能融合",
-    text: "组会支持最多三篇文献一起准备。先融合组会重点内容、汇报目标和关键问题，再生成主讲综述和 PPT。",
-    panel: "组会汇报",
-    slot: "多文献选择、融合进度、PPT 生成截图槽位",
-    tags: ["最多三篇", "融合主线", "PPT 进度"],
-    lines: ["选择文献", "融合汇报", "生成 PPT"],
-  },
-  {
-    step: "05",
-    title: "问题可以流回同校和同行",
-    text: "校园认证后进入校园圈，同校帖子单独筛选。发帖先进入 AI 审核，回复、置顶和认证反馈进入站内通知。",
-    panel: "校园圈",
-    slot: "认证入口、帖子流、站内通知截图槽位",
-    tags: ["校园认证", "AI 审核", "站内通知"],
-    lines: ["认证学校", "发布问题", "收到回复"],
-  },
-];
+/* ── Misc helpers ── */
+function elScrollTo(hash) {
+  document.querySelector(hash)?.scrollIntoView({ behavior: 'smooth' })
+}
+
+/* ── Auth ── */
+const showAuthModal      = ref(false)
+const authMode           = ref('login')
+const email              = ref('')
+const password           = ref('')
+const name               = ref('')
+const inviteCode         = ref('')
+const role               = ref('学生')
+const mentorInviteCode   = ref('')
+const verificationCode   = ref('')
+const errorText          = ref('')
+const loading            = ref(false)
+const sendingRegisterCode= ref(false)
+const registerCodeCooldown=ref(0)
+const registerSuccessText= ref('')
+const forgotEmail        = ref('')
+const forgotCode         = ref('')
+const forgotNewPassword  = ref('')
+const sendingCode        = ref(false)
+const forgotSuccessText  = ref('')
+const showPassword       = ref(false)
+let rcTimer = null
+
+const eyeIcon    = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
+const eyeOffIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
 
 const registerCodeButtonText = computed(() => {
-  if (sendingRegisterCode.value) return "发送中";
-  if (registerCodeCooldown.value > 0) return `${registerCodeCooldown.value}s`;
-  return "获取验证码";
-});
-
-function isQqEmail(value) {
-  return /^[1-9][0-9]{4,11}@qq\.com$/i.test(String(value || "").trim());
+  if (sendingRegisterCode.value) return '发送中'
+  if (registerCodeCooldown.value > 0) return `${registerCodeCooldown.value}s`
+  return '获取验证码'
+})
+function isQqEmail(v) { return /^[1-9][0-9]{4,11}@qq\.com$/i.test(String(v||'').trim()) }
+function startCooldown() {
+  registerCodeCooldown.value = 60
+  if (rcTimer) clearInterval(rcTimer)
+  rcTimer = setInterval(() => { registerCodeCooldown.value -= 1; if (registerCodeCooldown.value <= 0) { clearInterval(rcTimer); rcTimer = null } }, 1000)
 }
-
-function startRegisterCodeCooldown() {
-  registerCodeCooldown.value = 60;
-  if (registerCodeTimer) clearInterval(registerCodeTimer);
-  registerCodeTimer = setInterval(() => {
-    registerCodeCooldown.value -= 1;
-    if (registerCodeCooldown.value <= 0) {
-      clearInterval(registerCodeTimer);
-      registerCodeTimer = null;
-    }
-  }, 1000);
-}
-
 async function sendRegisterCode() {
-  const normalizedEmail = email.value.trim().toLowerCase();
-  if (!isQqEmail(normalizedEmail)) {
-    errorText.value = "请填写 QQ 邮箱，例如 123456@qq.com";
-    return;
-  }
-  sendingRegisterCode.value = true;
-  errorText.value = "";
-  registerSuccessText.value = "";
-  try {
-    await paperpilotApi.sendRegisterCode(normalizedEmail);
-    email.value = normalizedEmail;
-    registerSuccessText.value = "验证码已发送到 QQ 邮箱，10 分钟内有效。";
-    startRegisterCodeCooldown();
-  } catch (error) {
-    errorText.value = error.response?.data?.message || error.message;
-  } finally {
-    sendingRegisterCode.value = false;
-  }
+  const e = email.value.trim().toLowerCase()
+  if (!isQqEmail(e)) { errorText.value = '请填写 QQ 邮箱，例如 123456@qq.com'; return }
+  sendingRegisterCode.value = true; errorText.value = ''; registerSuccessText.value = ''
+  try { await paperpilotApi.sendRegisterCode(e); email.value = e; registerSuccessText.value = '验证码已发送，10 分钟内有效。'; startCooldown() }
+  catch (err) { errorText.value = err.response?.data?.message || err.message }
+  finally { sendingRegisterCode.value = false }
 }
-
 async function sendForgotCode() {
-  if (!forgotEmail.value) {
-    errorText.value = "请输入邮箱";
-    return;
-  }
-  sendingCode.value = true;
-  errorText.value = "";
-  forgotSuccessText.value = "";
-  try {
-    await paperpilotApi.sendForgotPasswordCode(forgotEmail.value);
-    forgotSuccessText.value = "验证码已成功生成，请在管理员后台日志或终端中查看！";
-  } catch (error) {
-    errorText.value = error.response?.data?.message || error.message;
-  } finally {
-    sendingCode.value = false;
-  }
+  if (!forgotEmail.value) { errorText.value = '请输入邮箱'; return }
+  sendingCode.value = true; errorText.value = ''; forgotSuccessText.value = ''
+  try { await paperpilotApi.sendForgotPasswordCode(forgotEmail.value); forgotSuccessText.value = '验证码已生成，请在系统日志中查看。' }
+  catch (err) { errorText.value = err.response?.data?.message || err.message }
+  finally { sendingCode.value = false }
 }
-
 async function submitResetPassword() {
-  if (!forgotEmail.value || !forgotCode.value || !forgotNewPassword.value) {
-    errorText.value = "请填写所有必填字段";
-    return;
-  }
-  loading.value = true;
-  errorText.value = "";
-  forgotSuccessText.value = "";
+  if (!forgotEmail.value || !forgotCode.value || !forgotNewPassword.value) { errorText.value = '请填写全部字段'; return }
+  loading.value = true; errorText.value = ''; forgotSuccessText.value = ''
   try {
-    await paperpilotApi.resetPasswordWithCode({
-      email: forgotEmail.value,
-      code: forgotCode.value,
-      newPassword: forgotNewPassword.value,
-    });
-    forgotSuccessText.value = "密码重置成功！即将返回登录页面...";
-    setTimeout(() => {
-      authMode.value = "login";
-      forgotSuccessText.value = "";
-      // Pre-fill the new password for login convenience
-      email.value = forgotEmail.value;
-      password.value = forgotNewPassword.value;
-    }, 2000);
-  } catch (error) {
-    errorText.value = error.response?.data?.message || error.message;
-  } finally {
-    loading.value = false;
-  }
+    await paperpilotApi.resetPasswordWithCode({ email: forgotEmail.value, code: forgotCode.value, newPassword: forgotNewPassword.value })
+    forgotSuccessText.value = '密码已重置，即将跳转登录…'
+    setTimeout(() => { authMode.value = 'login'; forgotSuccessText.value = ''; email.value = forgotEmail.value; password.value = forgotNewPassword.value }, 2000)
+  } catch (err) { errorText.value = err.response?.data?.message || err.message }
+  finally { loading.value = false }
 }
-
-const showPassword = ref(false);
-const eyeIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
-const eyeOffIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
-
-function formatTokens(n) {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${Math.round(n / 1000)}K`;
-  return String(n);
-}
-
 function openModal(mode) {
-  authMode.value = mode;
-  errorText.value = "";
-  registerSuccessText.value = "";
-  forgotSuccessText.value = "";
-  showPassword.value = false;
-  // Seed default credentials for easier user testing
-  if (mode === "login") {
-    email.value = "student@paperslover.app";
-    password.value = "Student2026!";
-  } else {
-    email.value = "";
-    password.value = "";
-    verificationCode.value = "";
-    inviteCode.value = "";
-    name.value = "";
-  }
-  showAuthModal.value = true;
+  authMode.value = mode; errorText.value = ''; registerSuccessText.value = ''; forgotSuccessText.value = ''; showPassword.value = false
+  if (mode === 'login') { email.value = 'student@paperslover.app'; password.value = 'Student2026!' }
+  else { email.value = ''; password.value = ''; verificationCode.value = ''; inviteCode.value = ''; name.value = '' }
+  showAuthModal.value = true
 }
-
-function closeModal() {
-  showAuthModal.value = false;
-  showPassword.value = false;
-  errorText.value = "";
-}
-
+function closeModal() { showAuthModal.value = false; showPassword.value = false; errorText.value = '' }
 async function submitLogin() {
-  loading.value = true;
-  errorText.value = "";
-  try {
-    await authStore.login({ email: email.value, password: password.value });
-    if (authStore.session.role === "管理员") {
-      router.push("/admin");
-    } else {
-      router.push("/library");
-    }
-  } catch (error) {
-    errorText.value = error.response?.data?.message || error.message;
-  } finally {
-    loading.value = false;
-  }
+  loading.value = true; errorText.value = ''
+  try { await authStore.login({ email: email.value, password: password.value }); router.push(authStore.session.role === '管理员' ? '/admin' : '/library') }
+  catch (err) { errorText.value = err.response?.data?.message || err.message }
+  finally { loading.value = false }
+}
+async function submitRegister() {
+  if (!isQqEmail(email.value)) { errorText.value = '请使用 QQ 邮箱注册'; return }
+  if (!verificationCode.value || verificationCode.value.length !== 6) { errorText.value = '请输入 6 位验证码'; return }
+  loading.value = true; errorText.value = ''
+  try { await authStore.register({ inviteCode: inviteCode.value, name: name.value, email: email.value, password: password.value, role: role.value, mentorInviteCode: mentorInviteCode.value, verificationCode: verificationCode.value }); router.push(authStore.session.role === '管理员' ? '/admin' : '/library') }
+  catch (err) { errorText.value = err.response?.data?.message || err.message }
+  finally { loading.value = false }
 }
 
-async function submitRegister() {
-  if (!isQqEmail(email.value)) {
-    errorText.value = "注册必须使用 QQ 邮箱，例如 123456@qq.com";
-    return;
+/* ── Static data ── */
+const features = [
+  { title:'文献库',   desc:'上传 PDF、批量导入 Zotero，补全元数据，在同一个地方统一管理所有论文，进度和标签永不丢失。',  vb:'0 0 24 24', path:'<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="13" y2="11"/>',  color:'#3b82f6', chips:['PDF 上传','Zotero 导入','标签筛选'] },
+  { title:'逐段精读', desc:'左侧原文、右侧翻译，选中句子保存批注，背景、方法、局限分开展开。批注落在选区，不会把整段都涂乱。', vb:'0 0 24 24', path:'<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',                                                             color:'#8b5cf6', chips:['全文翻译','精确标注','内容拆解'] },
+  { title:'论文综述', desc:'研究问题、主要发现、汇报价值分段生成，数字和英文关键词重点标出，保存后可直接导入组会使用。',     vb:'0 0 24 24', path:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/>', color:'#10b981', chips:['分段整理','重点标红','一键导入'] },
+  { title:'组会汇报', desc:'最多三篇文献合并成一条主线，生成组会讲稿、导师建议，并输出完整 PPT。单篇同样支持。',             vb:'0 0 24 24', path:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m7 10 3 3 5-5"/>',                                                                                                   color:'#f59e0b', chips:['多篇融合','讲稿生成','PPT 导出'] },
+  { title:'校园论坛', desc:'学校认证后按学校筛选帖子，发帖先过内容检查，回复和通知推送到站内消息，不需要守着群聊。',           vb:'0 0 24 24', path:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="13" y2="14"/>',                               color:'#ec4899', chips:['学校认证','帖子筛选','站内消息'] },
+  { title:'额度管理', desc:'不同操作走不同配置：生成 PPT 用高配，综述和检查可选低成本，按使用量计费，剩余次数随时查。',       vb:'0 0 24 24', path:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',                                                                                                                                    color:'#06b6d4', chips:['按量计费','模型配置','套餐方案'] },
+]
+
+const workflowSteps = [
+  {
+    id: 'lib',
+    title: '统一文献归纳与题录沉淀',
+    desc: '支持快速导入本地 PDF 论文，或一键导入 Zotero 题录数据。系统会自动补全作者、期刊与出版年份，保持元数据完整。',
+    highlights: [
+      '⚡️ <b>无缝接轨 Zotero</b>：一键同步导出文件，免去手动输录',
+      '🏷️ <b>多维度标签分类</b>：按开题、复现、组会自定义标记',
+      '📂 <b>全局云端同步</b>：阅读进度与分类跨终端时刻保存'
+    ],
+    tags: ['PDF 导入', 'Zotero 同步', '元数据自动补全'],
+    img: '/workflow/library.png'
+  },
+  {
+    id: 'read',
+    title: '双栏对齐与选区精准批注',
+    desc: '双栏并行对比阅读，左侧展示原文，右侧实时对照机器翻译。支持句子级别的选区精准高亮，不会涂乱正文版面。',
+    highlights: [
+      '🔍 <b>选区级高亮划线</b>：精确锁定到句子，随时撤销独立批注',
+      '🧩 <b>结构化拆解视图</b>：背景、方法、实验结果与局限分开阅读',
+      '🌐 <b>即时高保真翻译</b>：保持学术专业词汇表达准确'
+    ],
+    tags: ['原文对照', '选区划线批注', '结构化深度解析'],
+    img: '/workflow/reader.png'
+  },
+  {
+    id: 'review',
+    title: '核心要点整理与智能综述',
+    desc: '系统自动提炼研究背景、关键发现、方法亮点与汇报价值。对核心数字、百分比及英文指标进行智能高亮显示。',
+    highlights: [
+      '📊 <b>关键指标高亮</b>：关键数据集与实验增幅一目了然',
+      '📝 <b>结构化综述生成</b>：包含主要贡献、局限与可拓展点',
+      '🔗 <b>直接流转至组会</b>：一键导入组会模块，免去复制粘贴'
+    ],
+    tags: ['结构化综述', '关键数据高亮', '一键转流组会'],
+    img: '/workflow/review.png'
+  },
+  {
+    id: 'meet',
+    title: '多篇文献融合与 PPT 自动生成',
+    desc: '打破单篇文献局限，支持最多同时选择三篇论文合成为统一的组会汇报主线，并自动输出讲稿、导师 Q&A 与完整 PPT。',
+    highlights: [
+      '🔀 <b>多论文主线融合</b>：自动提取多篇文献的关联与对比逻辑',
+      '🎙️ <b>讲稿与问题准备</b>：预估导师可能提问并生成答辩建议',
+      '🖥️ <b>一键导出 PPTX</b>：生成排版规范的高质量演示文稿'
+    ],
+    tags: ['多篇文献融合', '汇报讲稿提炼', '一键导出 PPT'],
+    img: '/workflow/meeting.png'
+  },
+  {
+    id: 'forum',
+    title: '实名校园圈与学术讨论交流',
+    desc: '完成高校校园认证后，可进入专属校园板块参与同校同行的深度学术探讨。内置智能审核机制与站内实时通知。',
+    highlights: [
+      '🎓 <b>高校认证身份</b>：保障学术圈子真实纯粹',
+      '🛡️ <b>智能合规审核</b>：自动化过滤垃圾信息与敏感内容',
+      '🔔 <b>站内消息直达</b>：回复、点赞与认证提醒即时送达'
+    ],
+    tags: ['校园认证', '同行学术探讨', '站内实时通知'],
+    img: '/workflow/forum.png'
   }
-  if (!verificationCode.value || verificationCode.value.length !== 6) {
-    errorText.value = "请输入 6 位邮箱验证码";
-    return;
-  }
-  loading.value = true;
-  errorText.value = "";
-  try {
-    await authStore.register({
-      inviteCode: inviteCode.value,
-      name: name.value,
-      email: email.value,
-      password: password.value,
-      role: role.value,
-      mentorInviteCode: mentorInviteCode.value,
-      verificationCode: verificationCode.value,
-    });
-    if (authStore.session.role === "管理员") {
-      router.push("/admin");
-    } else {
-      router.push("/library");
-    }
-  } catch (error) {
-    errorText.value = error.response?.data?.message || error.message;
-  } finally {
-    loading.value = false;
-  }
-}
+]
+
+const whyClaims = [
+  { title:'整条流程一条线，不再分散',    desc:'从导入 PDF 到输出 PPT，每一步的结果自动流入下一步，节省大量重复劳动。',              color:'#3b82f6', vb:'0 0 24 24', path:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/><circle cx="5" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>'                          },
+  { title:'批注精确到句子，不涂乱整段',  desc:'选中任意一段文字即可保存批注，只落在选区，可单独删除，也可一键清空。',                color:'#8b5cf6', vb:'0 0 24 24', path:'<path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/>'},
+  { title:'组会材料不需要手动拼接',      desc:'最多三篇文献合并成汇报主线，讲稿、关键问题和 PPT 一起生成，不需要手动复制摘要。',    color:'#10b981', vb:'0 0 24 24', path:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m7 10 3 3 5-5"/>'                     },
+  { title:'学校认证，讨论不再丢失',      desc:'按学校筛选帖子，同校同行的经验更容易找到。回复和认证反馈全部推送到站内消息。',        color:'#ec4899', vb:'0 0 24 24', path:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 16.92z"/>'},
+  { title:'按实际使用计费，看得清',      desc:'不同操作用不同配置，基础阅读免费，综述和 PPT 按次数展示。剩余次数随时查看。',        color:'#f59e0b', vb:'0 0 24 24', path:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'                               },
+  { title:'数据留在你自己手里',          desc:'批注、综述、汇报讲稿全部保存在你的账号下，随时导出。你的研究材料永远属于你。',        color:'#06b6d4', vb:'0 0 24 24', path:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'                                     },
+]
+
+const whyBadges = [
+  { label:'永久免费基础功能',    color:'#22c55e', vb:'0 0 24 24', path:'<path d="M20 6 9 17l-5-5"/>'                                                                                    },
+  { label:'无需安装，浏览器直用', color:'#3b82f6', vb:'0 0 24 24', path:'<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>' },
+  { label:'校园认证用户专属权益', color:'#8b5cf6', vb:'0 0 24 24', path:'<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>'                                },
+  { label:'数据安全，随时导出',   color:'#f59e0b', vb:'0 0 24 24', path:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'             },
+]
+
+const comparisons = [
+  { feature:'文献到产出',  before:'阅读、总结、PPT 分散在多个工具，每步都要重新开始',        after:'导入、阅读、综述、汇报衔接同一份文献，结果自然流入下一步'    },
+  { feature:'标注与批注',  before:'很多工具只给整段摘要，标注和正文容易对不上',              after:'选区精确到句子，批注可单独删除，也可以全局清空'                },
+  { feature:'组会准备',    before:'需要手动把多篇论文拼成讲稿，再去做 PPT',                  after:'最多三篇文献融合成主线，讲稿和 PPT 一起生成'                  },
+  { feature:'校园交流',    before:'讨论在群里丢失，发的东西没人管，也找不回来',              after:'学校认证 + 按校筛选 + 站内通知全面替代群聊'                   },
+  { feature:'使用成本',    before:'不清楚每个功能消耗多少，月底账单看不懂',                  after:'不同操作按实际消耗计费，剩余次数随时查，不超出预期'           },
+]
 
 onMounted(() => {
-  if (route.query.auth === "register" || route.query.show === "register") {
-    openModal("register");
-  } else if (route.query.auth === "login" || route.query.show === "login") {
-    openModal("login");
-  }
-});
+  window.addEventListener('scroll', onScroll, { passive: true })
+  setTimeout(() => { heroIn.value = true }, 80)
+  setTimeout(initIO, 200)
+  setTimeout(resetWfAuto, 1200)
+  if (route.query.auth === 'register' || route.query.show === 'register') openModal('register')
+  else if (route.query.auth === 'login'  || route.query.show === 'login')  openModal('login')
+})
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll)
+  io?.disconnect()
+  clearTimeout(wfSlideTimer)
+  clearInterval(wfProgressTimer)
+  if (rcTimer) clearInterval(rcTimer)
+})
 </script>
 
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+<style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap');
 
-.flow-landing {
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+.home-root {
   min-height: 100vh;
+  background: #08080c;
+  color: #e2e2e6;
+  font-family: 'Geist', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
-  color: #111827;
-  background:
-    radial-gradient(circle at 78% 14%, rgba(248, 181, 88, .18), transparent 28%),
-    radial-gradient(circle at 20% 18%, rgba(74, 144, 226, .14), transparent 26%),
-    radial-gradient(circle at 62% 54%, rgba(124, 58, 237, .08), transparent 30%),
-    linear-gradient(180deg, #f7faff 0%, #f8fafc 44%, #f3f6fb 100%);
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-.flow-landing::before {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: .18;
+/* ══ NAV ══ */
+.home-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  transition: background .3s, border-color .3s;
+  border-bottom: 1px solid transparent;
+}
+.home-nav.scrolled { background: rgba(8,8,12,.84); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); border-bottom-color: rgba(255,255,255,.055); }
+.nav-inner { max-width: 100%; margin: 0 auto; padding: 0 48px; height: 62px; display: flex; align-items: center; gap: 24px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; flex-shrink: 0; }
+.brand-mark svg { width: 36px; height: 36px; }
+.brand-name { font-size: 1.05rem; font-weight: 700; color: #f0f0f4; letter-spacing: -.025em; }
+.brand-tag  { font-size: .6rem; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: #71717a; border: 1px solid rgba(255,255,255,.1); border-radius: 99px; padding: 2px 7px; }
+.nav-links  { display: flex; gap: 2px; flex: 1; }
+.nav-links a { color: #71717a; text-decoration: none; font-size: .875rem; font-weight: 500; padding: 5px 13px; border-radius: 99px; transition: color .2s, background .2s; }
+.nav-links a:hover { color: #f0f0f4; background: rgba(255,255,255,.05); }
+.nav-ctas { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.btn-ghost { background: transparent; border: 1px solid rgba(255,255,255,.1); color: #a1a1aa; font-size: .875rem; font-weight: 500; padding: 7px 18px; border-radius: 8px; cursor: pointer; transition: border-color .2s, color .2s; font-family: inherit; }
+.btn-ghost:hover { border-color: rgba(255,255,255,.22); color: #f0f0f4; }
+.btn-solid { display: inline-flex; align-items: center; gap: 6px; background: #fff; color: #09090b; border: none; font-size: .875rem; font-weight: 650; padding: 7px 20px; border-radius: 8px; cursor: pointer; transition: background .2s, transform .15s; font-family: inherit; }
+.btn-solid:hover { background: #e4e4e7; transform: translateY(-1px); }
+
+/* ══ HERO — Longer, Softly Glowing Headline ══ */
+.hero {
+  position: relative;
+  min-height: 100svh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 120px 28px 80px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.hero-bg-grid {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
   background-image:
-    linear-gradient(rgba(37, 99, 235, .06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(37, 99, 235, .06) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: linear-gradient(180deg, #000 0%, transparent 76%);
-  content: "";
-}
-
-.flow-landing > * {
-  position: relative;
-  z-index: 1;
-}
-
-.flow-landing-nav {
-  width: min(1160px, calc(100vw - 64px));
-  height: 66px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.flow-brand,
-.flow-nav-links,
-.flow-landing-auth {
-  display: flex;
-  align-items: center;
-}
-
-.flow-brand {
-  gap: 12px;
-  color: #101827;
-  text-decoration: none;
-  font-size: 18px;
-  font-weight: 850;
-}
-
-.flow-brand-mark {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 12px 28px rgba(38, 59, 96, .1);
-}
-
-.flow-nav-links {
-  gap: 30px;
-  margin-left: auto;
-}
-
-.flow-nav-links a {
-  color: rgba(17, 24, 39, .72);
-  font-size: 14px;
-  font-weight: 750;
-  text-decoration: none;
-}
-
-.flow-nav-links a:hover {
-  color: #2563eb;
-}
-
-.flow-download-btn,
-.flow-primary-btn,
-.flow-secondary-btn {
-  border: 0;
-  cursor: pointer;
-  font-weight: 850;
-  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
-}
-
-.flow-download-btn {
-  height: 38px;
-  padding: 0 22px;
-  border-radius: 999px;
-  color: #fff;
-  background: #111827;
-  box-shadow: 0 14px 28px rgba(17, 24, 39, .16);
-}
-
-.flow-download-btn:hover,
-.flow-primary-btn:hover,
-.flow-secondary-btn:hover {
-  transform: translateY(-1px);
-}
-
-.flow-hero {
-  width: min(1160px, calc(100vw - 64px));
-  min-height: calc(100vh - 66px);
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: minmax(420px, .92fr) minmax(520px, 1.08fr);
-  align-items: center;
-  gap: 56px;
-  padding: 34px 0 72px;
-}
-
-.flow-hero-copy {
-  max-width: 610px;
-}
-
-.flow-pill-row,
-.flow-keywords,
-.flow-hero-actions,
-.flow-section-tags {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.flow-pill-row span,
-.flow-keywords b,
-.flow-section-tags span {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 16px;
-  border: 1px solid rgba(16, 185, 129, .2);
-  border-radius: 999px;
-  color: #1d4ed8;
-  background: rgba(255, 255, 255, .78);
-  box-shadow: 0 8px 20px rgba(37, 99, 235, .05);
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.flow-pill-row span::before,
-.flow-keywords b::before,
-.flow-section-tags span::before {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #f59e0b;
-  content: "";
-}
-
-.flow-hero h1 {
-  margin: 24px 0 20px;
-  color: #101827;
-  font-family: "Outfit", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: clamp(52px, 5.6vw, 78px);
-  line-height: .96;
-  letter-spacing: 0;
-  font-weight: 900;
-  text-wrap: balance;
-}
-
-.flow-hero h1 .hero-brand-word {
-  display: block;
-  color: #2563eb;
-  font-size: 1.04em;
-}
-
-.flow-hero h1 .hero-title-line {
-  display: block;
-  white-space: nowrap;
-}
-
-.flow-hero p {
-  max-width: 56ch;
-  margin: 0;
-  color: rgba(17, 24, 39, .66);
-  font-size: 18px;
-  line-height: 1.9;
-  font-weight: 550;
-}
-
-.flow-keywords {
-  margin-top: 22px;
-}
-
-.flow-keywords b {
-  min-height: 30px;
-  padding: 0 12px;
-  border-color: transparent;
-  background: rgba(37, 99, 235, .08);
-  font-size: 14px;
-}
-
-.flow-hero-actions {
-  margin-top: 32px;
-}
-
-.flow-primary-btn,
-.flow-secondary-btn {
-  height: 58px;
-  padding: 0 28px;
-  border-radius: 12px;
-  font-size: 16px;
-}
-
-.flow-primary-btn {
-  color: #fff;
-  background: linear-gradient(135deg, #111827, #2563eb);
-  box-shadow: 0 24px 44px rgba(37, 99, 235, .22);
-}
-
-.flow-secondary-btn {
-  border: 1px solid rgba(37, 99, 235, .16);
-  color: #111827;
-  background: rgba(255, 255, 255, .78);
-}
-
-.flow-product-stage {
-  display: grid;
-  gap: 18px;
-}
-
-.flow-step-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.flow-step-grid button {
-  min-height: 58px;
-  display: grid;
-  align-content: center;
-  gap: 3px;
-  padding: 10px 12px;
-  border: 1px solid rgba(30, 41, 59, .1);
-  border-radius: 9px;
-  color: rgba(17, 24, 39, .72);
-  background: rgba(255, 255, 255, .78);
-  text-align: left;
-  font-size: 13px;
-  font-weight: 850;
-  box-shadow: 0 10px 24px rgba(30, 41, 59, .06);
-  transition: transform 220ms cubic-bezier(.22, 1, .36, 1), border-color 180ms ease, background 180ms ease, color 180ms ease;
-}
-
-.flow-step-grid button span {
-  color: rgba(17, 24, 39, .44);
-  font-size: 11px;
-}
-
-.flow-step-grid button.active {
-  color: #fff;
-  background: #2563eb;
-  border-color: #2563eb;
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 18px 36px rgba(37, 99, 235, .2);
-}
-
-.flow-step-grid button:not(.active):hover {
-  transform: translateY(-3px);
-  border-color: rgba(37, 99, 235, .24);
-  background: #fff;
-}
-
-.flow-step-grid button.active span {
-  color: rgba(255, 255, 255, .72);
-}
-
-.product-window {
-  overflow: hidden;
-  border: 1px solid rgba(30, 41, 59, .1);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, .78);
-  box-shadow: 0 34px 78px rgba(30, 41, 59, .13);
-  animation: product-float 5.5s ease-in-out infinite;
-}
-
-.product-flow-panel {
-  --panel-accent: #2563eb;
-  --panel-accent-soft: rgba(37, 99, 235, .12);
-  --panel-warm: rgba(245, 158, 11, .13);
-  min-height: 440px;
-  animation: product-float 5.5s ease-in-out infinite, module-swap 420ms cubic-bezier(.16, 1, .3, 1);
-}
-
-.product-flow-panel-reader { --panel-accent: #4f46e5; --panel-accent-soft: rgba(79, 70, 229, .13); --panel-warm: rgba(16, 185, 129, .12); }
-.product-flow-panel-review { --panel-accent: #0f766e; --panel-accent-soft: rgba(15, 118, 110, .12); --panel-warm: rgba(245, 158, 11, .14); }
-.product-flow-panel-meeting { --panel-accent: #7c3aed; --panel-accent-soft: rgba(124, 58, 237, .12); --panel-warm: rgba(14, 165, 233, .12); }
-.product-flow-panel-forum { --panel-accent: #db2777; --panel-accent-soft: rgba(219, 39, 119, .11); --panel-warm: rgba(16, 185, 129, .12); }
-.product-flow-panel-models { --panel-accent: #111827; --panel-accent-soft: rgba(17, 24, 39, .1); --panel-warm: rgba(37, 99, 235, .1); }
-
-.product-flow-head {
-  min-height: 72px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(30, 41, 59, .08);
-}
-
-.product-flow-head div {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.product-flow-head span {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  background: var(--panel-accent-soft);
-  color: var(--panel-accent);
-  font-size: 12px;
-  font-weight: 950;
-}
-
-.product-flow-head strong {
-  min-width: 0;
-  color: #111827;
-  font-size: 19px;
-  line-height: 1.2;
-}
-
-.product-flow-head button {
-  flex: 0 0 auto;
-  height: 38px;
-  padding: 0 16px;
-  border: 0;
-  border-radius: 999px;
-  color: #fff;
-  background: var(--panel-accent);
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.product-flow-body {
-  position: relative;
-  min-height: 302px;
-  display: grid;
-  grid-template-columns: minmax(210px, .82fr) minmax(270px, 1fr);
-  gap: 20px;
-  padding: 22px;
-  background:
-    radial-gradient(circle at 78% 4%, var(--panel-warm), transparent 30%),
-    linear-gradient(135deg, rgba(248, 251, 255, .98), rgba(255, 255, 255, .9));
-}
-
-.flow-map {
-  position: relative;
-  min-height: 238px;
-  overflow: hidden;
-  border: 1px solid rgba(30, 41, 59, .08);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, .58);
-}
-
-.flow-map-lines {
-  position: absolute;
-  inset: 18px 12px;
-  width: calc(100% - 24px);
-  height: calc(100% - 36px);
-}
-
-.flow-map-lines path {
-  stroke: var(--panel-accent);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-dasharray: 10 13;
-  opacity: .34;
-  animation: flow-dash 1.7s linear infinite;
-}
-
-.flow-node {
-  position: absolute;
-  left: calc(11% + var(--x) * 28%);
-  top: calc(28px + (var(--x) * 44px));
-  min-width: 70px;
-  min-height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 12px;
-  border: 1px solid rgba(30, 41, 59, .1);
-  border-radius: 999px;
-  color: #111827;
-  background: #fff;
-  box-shadow: 0 10px 22px rgba(30, 41, 59, .08);
-  font-size: 12px;
-  font-weight: 900;
-  animation: flow-node-in 420ms cubic-bezier(.16, 1, .3, 1) both, node-float 4.2s ease-in-out infinite;
-  animation-delay: var(--delay), calc(var(--delay) + 600ms);
-}
-
-.flow-node:nth-of-type(3) { top: 128px; left: 18%; }
-.flow-node:nth-of-type(4) { top: 146px; left: 49%; }
-.flow-node:nth-of-type(5) { top: 96px; left: 69%; }
-
-.flow-screen {
-  display: grid;
-  align-content: center;
-  gap: 14px;
-  min-width: 0;
-}
-
-.flow-screen-top {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.flow-screen-top b {
-  color: #111827;
-  font-size: 20px;
-  line-height: 1.25;
-}
-
-.flow-screen-top span {
-  color: rgba(17, 24, 39, .52);
-  font-size: 12px;
-  font-weight: 850;
-  white-space: nowrap;
-}
-
-.flow-screen-list {
-  display: grid;
-  gap: 11px;
-}
-
-.flow-screen-row {
-  display: grid;
-  grid-template-columns: 54px minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  min-height: 54px;
-  padding: 12px 14px;
-  border: 1px solid rgba(30, 41, 59, .08);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .72);
-  animation: row-fly-in 360ms cubic-bezier(.16, 1, .3, 1) both;
-  animation-delay: calc(var(--row) * 90ms + 80ms);
-}
-
-.flow-screen-row small {
-  color: var(--panel-accent);
-  font-size: 11px;
-  font-weight: 950;
-}
-
-.flow-screen-row strong {
-  min-width: 0;
-  overflow: hidden;
-  color: rgba(17, 24, 39, .84);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.flow-screen-row.active {
-  border-color: var(--panel-accent);
-  box-shadow: inset 3px 0 0 var(--panel-accent);
-}
-
-.flow-screen-row.warm {
-  background: rgba(255, 251, 235, .74);
-}
-
-.flow-screen-row.cool {
-  background: rgba(239, 246, 255, .78);
-}
-
-.flow-screen-progress {
-  margin-top: 4px;
-}
-
-.product-flow-foot {
-  min-height: 66px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 0 20px;
-  border-top: 1px solid rgba(30, 41, 59, .08);
-}
-
-.product-flow-foot span {
-  color: rgba(17, 24, 39, .58);
-  font-size: 13px;
-  line-height: 1.6;
-  font-weight: 750;
-}
-
-.product-flow-foot div {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.product-flow-foot b {
-  display: inline-flex;
-  align-items: center;
-  min-height: 26px;
-  padding: 0 10px;
-  border-radius: 999px;
-  color: var(--panel-accent);
-  background: var(--panel-accent-soft);
-  font-size: 12px;
-}
-
-.product-window:not(.product-flow-panel) header {
-  height: 50px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 18px;
-  border-bottom: 1px solid rgba(30, 41, 59, .1);
-}
-
-.product-window:not(.product-flow-panel) header i {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: #ff6159;
-}
-
-.product-window:not(.product-flow-panel) header i:nth-child(2) { background: #ffc43d; }
-.product-window:not(.product-flow-panel) header i:nth-child(3) { background: #29c06f; }
-
-.product-window:not(.product-flow-panel) header strong {
-  margin-left: 8px;
-  color: #2563eb;
-  font-size: 13px;
-}
-
-.product-window:not(.product-flow-panel) header span {
-  margin-left: auto;
-  color: rgba(17, 24, 39, .48);
-  font-size: 12px;
-}
-
-.product-window-body {
-  display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
-  min-height: 265px;
-  background:
-    radial-gradient(circle at 80% 20%, rgba(245, 158, 11, .12), transparent 28%),
-    linear-gradient(135deg, rgba(239, 246, 255, .78), rgba(255, 255, 255, .92));
-}
-
-.product-window-body aside {
-  padding: 24px;
-  border-right: 1px solid rgba(30, 41, 59, .1);
-}
-
-.product-window-body aside b,
-.flow-showcase-grid span {
-  color: #2563eb;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.product-window-body aside strong {
-  display: block;
-  margin: 12px 0 8px;
-  color: #101827;
-  font-size: 20px;
-  line-height: 1.35;
-}
-
-.product-window-body aside span,
-.product-window footer,
-.flow-showcase-grid p {
-  color: rgba(17, 24, 39, .56);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.product-window-body main {
-  display: grid;
-  align-content: center;
-  gap: 14px;
-  padding: 24px;
-}
-
-.paper-row {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  padding: 14px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, .74);
-}
-
-.paper-row span {
-  color: #2563eb;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.paper-row b {
-  min-width: 0;
-  overflow: hidden;
-  color: #111827;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-}
-
-.paper-row.active {
-  box-shadow: inset 3px 0 0 #2563eb;
-}
-
-.stage-progress {
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(37, 99, 235, .12);
-}
-
-.stage-progress i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #f59e0b);
-  animation: progress-breathe 2.8s ease-in-out infinite;
-}
-
-.product-window footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  min-height: 58px;
-  padding: 0 18px;
-  border-top: 1px solid rgba(30, 41, 59, .1);
-}
-
-.product-window footer a {
-  color: #2563eb;
-  font-weight: 900;
-  text-decoration: none;
-}
-
-.flow-section,
-.flow-showcase-section,
-.flow-pricing-section {
-  width: min(1160px, calc(100vw - 64px));
-  margin: 0 auto;
-  padding: 92px 0;
-}
-
-.flow-section-split {
-  display: grid;
-  grid-template-columns: minmax(320px, .86fr) minmax(420px, 1fr);
-  gap: 72px;
-  align-items: center;
-  border-top: 1px solid rgba(30, 41, 59, .1);
-}
-
-.flow-section-index {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  color: #2563eb;
-  min-height: 34px;
-  padding: 0 14px;
-  border: 1px solid rgba(37, 99, 235, .16);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .72);
-  font-size: 14px;
-  line-height: 1;
-  font-weight: 900;
-}
-
-.flow-section-copy h2,
-.flow-showcase-section h2 {
-  max-width: 760px;
-  margin: 18px 0;
-  color: #101827;
-  font-size: clamp(34px, 4vw, 54px);
-  line-height: 1.08;
-  letter-spacing: 0;
-}
-
-.flow-section-copy p {
-  max-width: 60ch;
-  margin: 0;
-  color: rgba(17, 24, 39, .64);
-  font-size: 17px;
-  line-height: 1.9;
-}
-
-.flow-section-tags {
-  margin-top: 24px;
-}
-
-.flow-timeline {
-  display: grid;
-  gap: 16px;
-}
-
-.flow-timeline article,
-.flow-showcase-grid article {
-  padding: 24px;
-  border: 1px solid rgba(30, 41, 59, .1);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, .74);
-  box-shadow: 0 18px 44px rgba(30, 41, 59, .06);
-}
-
-.flow-timeline article {
-  display: grid;
-  grid-template-columns: 86px minmax(0, 1fr);
-  align-items: center;
-}
-
-.flow-timeline b {
-  color: #1d4ed8;
-  font-size: 18px;
-}
-
-.flow-timeline span {
-  color: rgba(17, 24, 39, .64);
-}
-
-.flow-showcase-section {
-  border-top: 1px solid rgba(30, 41, 59, .1);
-}
-
-.flow-showcase-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-  margin-top: 34px;
-}
-
-.flow-showcase-grid strong {
-  display: block;
-  margin: 10px 0 8px;
-  color: #101827;
-  font-size: 21px;
-}
-
-.flow-pricing-section {
-  border-top: 1px solid rgba(30, 41, 59, .1);
-}
-
-@keyframes product-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
-@keyframes module-swap {
-  from {
-    opacity: .55;
-    transform: translateX(24px) translateY(8px) scale(.985);
-    filter: blur(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
-  }
-}
-
-@keyframes progress-breathe {
-  0%, 100% { filter: saturate(1); }
-  50% { filter: saturate(1.35) brightness(1.08); }
-}
-
-@keyframes flow-dash {
-  to { stroke-dashoffset: -46; }
-}
-
-@keyframes flow-node-in {
-  from {
-    opacity: 0;
-    transform: translateX(-18px) scale(.92);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-}
-
-@keyframes node-float {
-  0%, 100% { translate: 0 0; }
-  50% { translate: 0 -8px; }
-}
-
-@keyframes row-fly-in {
-  from {
-    opacity: 0;
-    transform: translateX(-24px);
-    filter: blur(5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-    filter: blur(0);
-  }
-}
-
-@media (max-width: 980px) {
-  .flow-landing-nav,
-  .flow-hero,
-  .flow-section,
-  .flow-showcase-section,
-  .flow-pricing-section {
-    width: min(100% - 28px, 760px);
-  }
-
-  .flow-nav-links {
-    display: none;
-  }
-
-  .flow-hero,
-  .flow-section-split {
-    grid-template-columns: 1fr;
-    gap: 36px;
-  }
-
-  .flow-hero {
-    padding-top: 28px;
-  }
-
-  .flow-step-grid,
-  .flow-showcase-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .product-flow-body {
-    grid-template-columns: 1fr;
-  }
-
-  .flow-map {
-    min-height: 210px;
-  }
-}
-
-@media (max-width: 620px) {
-  .flow-hero h1 {
-    font-size: 42px;
-  }
-
-  .flow-step-grid,
-  .product-window-body,
-  .flow-showcase-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .product-flow-head,
-  .product-flow-foot {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .product-flow-foot div {
-    justify-content: flex-start;
-  }
-
-  .flow-screen-row {
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
-
-  .product-window-body aside {
-    border-right: 0;
-    border-bottom: 1px solid rgba(30, 41, 59, .1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .product-window,
-  .stage-progress i,
-  .flow-map-lines path,
-  .flow-node,
-  .flow-screen-row {
-    animation: none;
-  }
-}
-
-.spatial-landing {
-  font-family: 'Inter', -apple-system, sans-serif;
-  overflow-x: hidden;
-}
-
-/* Metallic gradient title text */
-.spatial-hero-title {
-  font-family: 'Outfit', 'Georgia', serif !important;
-  background: linear-gradient(135deg, #0f172a 20%, #0066ff 65%, #60a5fa);
-  -webkit-background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
-  background-clip: text !important;
-  font-weight: 600 !important;
-  letter-spacing: -0.05em !important;
-}
-
-.spatial-chapter-title {
-  font-family: 'Outfit', 'Georgia', serif !important;
-  background: linear-gradient(135deg, #1e293b 30%, #0284c7 80%);
-  -webkit-background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
-  background-clip: text !important;
-  font-weight: 500 !important;
-  letter-spacing: -0.04em !important;
-}
-
-/* Visual timeline board */
-.flow-interactive-board {
-  position: relative;
-  width: 100%;
-  max-width: 460px;
-  margin: 0 auto;
-  padding: 24px 0 24px 48px;
-  background: rgba(255, 255, 255, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 20px;
-  box-shadow: 0 32px 80px rgba(10, 10, 12, 0.03);
-  backdrop-filter: blur(16px);
-}
-
-.flow-track-line {
-  position: absolute;
-  top: 48px;
-  left: 28px;
-  bottom: 48px;
-  width: 2px;
-  background: rgba(0, 102, 255, 0.08);
-}
-
-.flow-pulse-dot {
-  position: absolute;
-  top: 0;
-  left: -4px;
-  width: 10px;
-  height: 10px;
-  background: #0066ff;
-  border-radius: 50%;
-  box-shadow: 0 0 12px #0066ff, 0 0 0 4px rgba(0, 102, 255, 0.18);
-  animation: flow-run 8s linear infinite;
-}
-
-@keyframes flow-run {
-  0% { top: 0%; opacity: 0; }
-  5% { opacity: 1; }
-  95% { opacity: 1; }
-  100% { top: 100%; opacity: 0; }
-}
-
-.flow-board-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 32px;
-  padding: 16px 20px;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(10, 10, 12, 0.02);
-  transition: transform 0.3s, border-color 0.3s, box-shadow 0.3s;
-  position: relative;
-  z-index: 2;
-}
-
-.flow-board-card::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: -26px;
-  width: 10px;
-  height: 10px;
-  background: #fff;
-  border: 2px solid rgba(0, 102, 255, 0.25);
-  border-radius: 50%;
-  transform: translateY(-50%);
-  z-index: 3;
-  transition: background 0.3s, border-color 0.3s;
-}
-
-.flow-board-card:last-child {
-  margin-bottom: 0;
-}
-
-.flow-board-card:hover {
-  transform: translateX(6px) scale(1.02);
-  border-color: rgba(0, 102, 255, 0.2);
-  box-shadow: 0 12px 32px rgba(0, 102, 255, 0.05);
-}
-
-.flow-board-card.active::before {
-  background: #0066ff;
-  border-color: #0066ff;
-  box-shadow: 0 0 8px rgba(0, 102, 255, 0.4);
-}
-
-.flow-card-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: rgba(0, 102, 255, 0.06);
-  border-radius: 10px;
-}
-
-.flow-card-icon svg {
-  width: 20px;
-  height: 20px;
-  color: #0066ff;
-}
-
-.flow-card-info {
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+  background-size: 80px 80px;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 72%, transparent 100%);
+}
+.hero-glow  { position: absolute; border-radius: 50%; pointer-events: none; z-index: 0; filter: blur(110px); }
+.glow-1 { width: 750px; height: 750px; top: -200px; left: -200px; background: radial-gradient(circle,rgba(37,99,235,.22) 0%,transparent 70%);  animation: gf 9s ease-in-out infinite; }
+.glow-2 { width: 650px; height: 650px; top:  100px; right: -160px; background: radial-gradient(circle,rgba(124,58,237,.18) 0%,transparent 70%); animation: gf 11s ease-in-out infinite reverse; }
+.glow-3 { width: 550px; height: 550px; bottom: 0;  left:   25%;   background: radial-gradient(circle,rgba(5,150,105,.12) 0%,transparent 70%);  animation: gf 13s ease-in-out infinite; animation-delay:-4s; }
+@keyframes gf { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-30px)} }
+
+.hero-center {
+  position: relative; z-index: 1;
+  max-width: 900px; width: 100%;
+  opacity: 0; transform: translateY(28px);
+  transition: opacity .85s cubic-bezier(.22,1,.36,1), transform .85s cubic-bezier(.22,1,.36,1);
+}
+.hero-center.in { opacity: 1; transform: translateY(0); }
+
+/* Pill */
+.hero-pill {
+  display: inline-flex; align-items: center; gap: 9px;
+  border: 1px solid rgba(255,255,255,.09); background: rgba(255,255,255,.04);
+  backdrop-filter: blur(10px); border-radius: 99px;
+  padding: 7px 18px 7px 10px; font-size: .82rem; color: #a1a1aa;
+  margin-bottom: 32px; cursor: default; transition: border-color .3s;
+}
+.hero-pill:hover { border-color: rgba(255,255,255,.18); }
+.hero-pill svg   { color: #52525b; }
+.pill-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px #22c55e88; animation: blink 2.4s ease infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── Hero Headline: Long, Softly-lit text with unequal line lengths ── */
+.hero-h1 {
+  margin-bottom: 28px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-}
-
-.flow-card-info strong {
-  font-size: 14px;
-  color: #1e293b;
-  font-weight: 600;
-}
-
-.flow-card-info span {
-  font-size: 12px;
-  color: #64748b;
-}
-
-.register-code-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 118px;
-  gap: 10px;
   align-items: center;
-}
-
-.register-code-btn {
-  min-height: 44px;
-  padding: 0 14px;
-  white-space: nowrap;
-  font-size: 0.86rem;
-  border-radius: 12px;
-}
-
-/* Pricing Grid */
-.home-pricing-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 24px;
-  width: 100%;
-}
-
-.home-pricing-card {
-  padding: 32px 28px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 16px 40px rgba(10, 10, 12, 0.03);
-  display: flex;
-  flex-direction: column;
-  transition: transform 0.3s, border-color 0.3s, box-shadow 0.3s;
-}
-
-.home-pricing-card.featured {
-  border-color: rgba(0, 102, 255, 0.25);
-  background: linear-gradient(180deg, rgba(0, 102, 255, 0.02) 0%, rgba(255, 255, 255, 0.85) 100%);
-  box-shadow: 0 24px 56px rgba(0, 102, 255, 0.07);
-}
-
-.home-pricing-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(0, 102, 255, 0.18);
-  box-shadow: 0 24px 56px rgba(10, 10, 12, 0.05);
-}
-
-.plan-drift-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  color: #0066ff;
-  text-transform: uppercase;
-  margin-bottom: 8px;
-}
-
-.plan-name {
-  font-size: 20px;
-  font-weight: 600;
-  color: #0f172a;
-  margin-bottom: 12px;
-}
-
-.plan-amount {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-
-.plan-amount strong {
-  font-size: 32px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: #0f172a;
-}
-
-.plan-amount span {
-  font-size: 13px;
-  color: #64748b;
-}
-
-.plan-quota {
-  font-size: 13px;
-  font-weight: 600;
-  color: #0066ff;
-  margin-bottom: 24px;
-}
-
-.plan-features {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 32px;
-  display: flex;
-  flex-direction: column;
   gap: 12px;
-  flex: 1;
-}
-
-.plan-features li {
-  font-size: 13px;
-  color: #475569;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.feat-check {
-  color: #10b981;
-  font-weight: bold;
-}
-
-.plan-btn {
-  width: 100%;
-}
-
-/* Modal Overlay Styles */
-.spatial-modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(10, 10, 12, 0.45);
-  backdrop-filter: blur(20px);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: fadeIn 0.3s ease-out;
-}
-
-.spatial-modal-content {
-  position: relative;
-  width: 100%;
-  max-width: 480px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  border-radius: 24px;
-  padding: 40px;
-  box-shadow: 0 32px 80px rgba(10, 10, 12, 0.15);
-  backdrop-filter: blur(40px);
-  animation: modalScaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.spatial-modal-close {
-  position: absolute;
-  top: 20px;
-  right: 24px;
-  background: none;
-  border: none;
-  font-size: 2rem;
-  color: #64748b;
-  cursor: pointer;
-  line-height: 1;
-  transition: color 0.2s;
-}
-
-.spatial-modal-close:hover {
-  color: #0066ff;
-}
-
-.modal-title {
-  margin: 8px 0 24px;
-  font-family: var(--spatial-font-display);
-  font-size: 1.8rem;
-  font-weight: 400;
-  letter-spacing: -0.03em;
-  color: #0f172a;
-}
-
-/* Role Selector Capsule inside Modal */
-.role-selector-capsule {
-  display: flex;
-  background: rgba(0, 0, 0, 0.04);
-  border-radius: 12px;
-  padding: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  margin-top: 6px;
-}
-
-.role-btn {
-  flex: 1;
-  border: none;
-  background: none;
-  color: #64748b;
-  padding: 10px 14px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.role-btn:hover {
-  color: #0066ff;
-}
-
-.role-btn.active {
-  background: #0066ff;
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(0, 102, 255, 0.2);
-}
-
-.transition-input {
-  animation: slideDown 0.25s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes modalScaleUp {
-  from {
-    opacity: 0;
-    transform: scale(0.95) translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.password-input-wrapper {
-  position: relative;
-  width: 100%;
-  display: flex;
-  align-items: center;
-}
-
-.password-input-wrapper input {
-  width: 100%;
-  padding-right: 42px !important;
-}
-
-.password-toggle-btn {
-  position: absolute;
-  right: 12px;
-  background: none;
-  border: none;
-  color: #64748b;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  transition: color 0.2s;
-}
-
-.password-toggle-btn:hover {
-  color: #0066ff;
-}
-
-/* PaperSolver home redesign: real workflow, soft light, motion-rich. */
-.flow-landing {
-  min-height: 100vh;
-  overflow-x: clip;
-  color: #101827;
-  background:
-    linear-gradient(120deg, rgba(235, 246, 255, .82), rgba(255, 255, 255, .94) 38%, rgba(246, 243, 255, .72) 72%, rgba(236, 253, 245, .64)),
-    #f8fbff;
-}
-
-.flow-landing::before {
-  position: fixed;
-  inset: -20% -10% auto;
-  height: 58vh;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 14% 32%, rgba(37, 99, 235, .15), transparent 34%),
-    radial-gradient(circle at 74% 28%, rgba(124, 58, 237, .11), transparent 32%),
-    radial-gradient(circle at 55% 78%, rgba(20, 184, 166, .1), transparent 30%);
-  filter: blur(22px);
-  opacity: .9;
-  content: "";
-  animation: home-ambient 12s ease-in-out infinite alternate;
-}
-
-.flow-landing-nav {
-  position: sticky;
-  top: 14px;
-  z-index: 20;
-  width: min(1180px, calc(100vw - 56px));
-  min-height: 58px;
-  margin: 14px auto 0;
-  padding: 8px 10px 8px 12px;
-  border: 1px solid rgba(148, 163, 184, .22);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, .74);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 12px 34px rgba(37, 99, 235, .08);
-}
-
-.flow-brand {
-  gap: 10px;
-}
-
-.flow-brand strong {
-  color: #101827;
-  font-size: 17px;
-  letter-spacing: 0;
-}
-
-.flow-brand-mark {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  box-shadow: 0 8px 20px rgba(37, 99, 235, .14);
-}
-
-.flow-nav-links {
-  gap: 2px;
-  margin-left: auto;
-  padding: 4px;
-  border-radius: 999px;
-  background: rgba(241, 245, 249, .62);
-}
-
-.flow-nav-links a {
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 999px;
-  color: rgba(15, 23, 42, .62);
-  font-size: 13px;
-  font-weight: 850;
-  transition: color 180ms ease, background 180ms ease, transform 180ms ease;
-}
-
-.flow-nav-links a.active,
-.flow-nav-links a:hover {
-  color: #1d4ed8;
-  background: rgba(255, 255, 255, .86);
-  transform: translateY(-1px);
-}
-
-.flow-landing-auth {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 12px;
-}
-
-.flow-login-btn,
-.flow-download-btn {
-  height: 40px;
-  border: 0;
-  border-radius: 999px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.flow-login-btn {
-  padding: 0 14px;
-  color: rgba(15, 23, 42, .68);
-  background: transparent;
-}
-
-.flow-download-btn {
-  padding: 0 20px;
-  color: #fff;
-  background: linear-gradient(135deg, #122143, #2563eb);
-  box-shadow: 0 14px 28px rgba(37, 99, 235, .2);
-}
-
-.flow-hero {
-  width: min(1180px, calc(100vw - 56px));
-  min-height: calc(100vh - 86px);
-  grid-template-columns: minmax(420px, .88fr) minmax(560px, 1.12fr);
-  gap: 58px;
-  padding: 54px 0 76px;
-}
-
-.flow-hero-copy {
-  max-width: 640px;
-}
-
-.flow-pill-row span,
-.flow-keywords b,
-.flow-section-tags span {
-  min-height: 32px;
-  border: 1px solid rgba(20, 184, 166, .22);
-  background: rgba(255, 255, 255, .66);
-  box-shadow: none;
-}
-
-.flow-hero h1 {
-  margin: 22px 0 22px;
-  max-width: 620px;
-  font-size: clamp(52px, 4.9vw, 72px);
-  line-height: .96;
-  letter-spacing: -.025em;
-}
-
-.flow-hero h1 .hero-brand-word {
-  color: #2563eb;
-}
-
-.flow-hero h1 .hero-title-line {
-  color: #101827;
-}
-
-.flow-hero p {
-  max-width: 58ch;
-  color: rgba(15, 23, 42, .68);
-  font-size: 18px;
-  line-height: 1.9;
-}
-
-.flow-route-ribbon {
-  position: relative;
-  width: min(100%, 560px);
-  min-height: 46px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 24px;
-  padding: 8px 12px;
-  border: 1px solid rgba(37, 99, 235, .12);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .64);
-  overflow: hidden;
-}
-
-.flow-route-ribbon::after {
-  position: absolute;
-  inset: 0 auto 0 -35%;
-  width: 32%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .86), transparent);
-  content: "";
-  animation: home-sheen 3.8s ease-in-out infinite;
-}
-
-.flow-route-ribbon span {
-  position: relative;
-  z-index: 1;
-  color: #1f3f82;
-  font-size: 13px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.flow-route-ribbon i {
-  flex: 1 1 22px;
-  height: 2px;
-  min-width: 16px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(37, 99, 235, .22), rgba(20, 184, 166, .45));
-  background-size: 200% 100%;
-  animation: route-run 1.7s linear infinite;
-}
-
-.flow-primary-btn,
-.flow-secondary-btn {
-  height: 56px;
-  border-radius: 14px;
-  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
-}
-
-.flow-primary-btn:hover,
-.flow-secondary-btn:hover,
-.flow-download-btn:hover {
-  transform: translateY(-2px);
-}
-
-.flow-product-stage {
-  gap: 14px;
-}
-
-.flow-step-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.flow-step-grid button {
-  min-height: 58px;
-  border: 0;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, .72);
-  box-shadow: 0 12px 30px rgba(15, 23, 42, .07);
-}
-
-.flow-step-grid button.active {
-  color: #fff;
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
-}
-
-.product-flow-panel {
-  --panel-accent: #2563eb;
-  --panel-accent-soft: rgba(37, 99, 235, .1);
-  --panel-warm: rgba(20, 184, 166, .09);
-  overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, .2);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, .78);
-  box-shadow: 0 30px 80px rgba(15, 23, 42, .12);
-  animation: product-float 6s ease-in-out infinite, module-swap 420ms cubic-bezier(.16, 1, .3, 1);
-}
-
-.product-window-dots {
-  display: inline-flex;
-  gap: 7px;
-}
-
-.product-window-dots i {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: #fb7185;
-}
-
-.product-window-dots i:nth-child(2) {
-  background: #fbbf24;
-}
-
-.product-window-dots i:nth-child(3) {
-  background: #34d399;
-}
-
-.product-flow-head {
-  min-height: 72px;
-  gap: 12px;
-  padding: 14px 18px;
-  border-bottom: 1px solid rgba(148, 163, 184, .18);
-}
-
-.product-flow-title {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 5px 10px;
-}
-
-.product-flow-title span {
-  grid-row: span 2;
-}
-
-.product-flow-title small {
-  color: rgba(15, 23, 42, .48);
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.product-flow-head button {
-  background: var(--panel-accent);
-  transition: transform 180ms ease, filter 180ms ease;
-}
-
-.product-flow-head button:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.04);
-}
-
-.product-flow-body {
-  grid-template-columns: minmax(220px, .78fr) minmax(300px, 1fr);
-  gap: 18px;
-  min-height: 370px;
-  padding: 20px;
-  background:
-    radial-gradient(circle at 72% 8%, var(--panel-warm), transparent 34%),
-    linear-gradient(135deg, rgba(248, 251, 255, .94), rgba(255, 255, 255, .86));
-}
-
-.flow-map {
-  min-height: 318px;
-  border: 1px solid rgba(148, 163, 184, .18);
-  border-radius: 16px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .72), rgba(248, 251, 255, .82));
-}
-
-.flow-node {
-  border-color: rgba(148, 163, 184, .18);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
-}
-
-.flow-screen {
-  align-content: stretch;
-}
-
-.flow-screen-top b {
-  font-size: 22px;
-}
-
-.flow-screen-top span {
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 10px;
-  border-radius: 999px;
-  color: var(--panel-accent);
-  background: var(--panel-accent-soft);
-}
-
-.screenshot-slot {
-  position: relative;
-  min-height: 136px;
-  overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, .2);
-  border-radius: 16px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, .9), rgba(241, 245, 249, .72)),
-    #fff;
-}
-
-.screenshot-slot::after {
-  position: absolute;
-  inset: 0 auto 0 -45%;
-  width: 40%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .75), transparent);
-  content: "";
-  animation: home-sheen 4.2s ease-in-out infinite;
-}
-
-.screenshot-toolbar {
-  min-height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 12px;
-  border-bottom: 1px solid rgba(148, 163, 184, .16);
-}
-
-.screenshot-toolbar span {
-  color: #0f172a;
-  font-size: 12px;
-  font-weight: 950;
-}
-
-.screenshot-toolbar em {
-  color: rgba(15, 23, 42, .46);
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 800;
-}
-
-.screenshot-skeleton {
-  display: grid;
-  gap: 10px;
-  padding: 16px;
-}
-
-.screenshot-skeleton i {
-  height: 16px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(37, 99, 235, .12), rgba(20, 184, 166, .14), rgba(124, 58, 237, .1));
-}
-
-.screenshot-skeleton i:nth-child(2) {
-  width: 72%;
-}
-
-.screenshot-skeleton i:nth-child(3) {
-  width: 46%;
-}
-
-.flow-screen-row {
-  min-height: 50px;
-  border-color: rgba(148, 163, 184, .18);
-  border-radius: 14px;
-}
-
-.product-flow-foot {
-  border-top-color: rgba(148, 163, 184, .18);
-}
-
-.journey-section {
-  position: relative;
-  width: min(1180px, calc(100vw - 56px));
-  margin: 0 auto;
-  padding: 86px 0 98px;
-}
-
-.journey-section-head {
-  max-width: 760px;
-  margin-bottom: 34px;
-}
-
-.journey-section-head span {
-  color: #2563eb;
-  font-size: 14px;
-  font-weight: 950;
-}
-
-.journey-section-head h2 {
-  max-width: 16ch;
-  margin: 12px 0 16px;
-  color: #101827;
-  font-size: 42px;
   line-height: 1.12;
-  letter-spacing: -.02em;
 }
 
-.journey-section-head p {
-  margin: 0;
-  color: rgba(15, 23, 42, .62);
-  font-size: 17px;
-  line-height: 1.8;
-}
-
-.journey-track {
-  display: grid;
-  gap: 22px;
-}
-
-.journey-step {
-  display: grid;
-  grid-template-columns: minmax(280px, .72fr) minmax(420px, 1fr);
-  gap: 28px;
-  align-items: stretch;
-  padding: 26px;
-  border: 1px solid rgba(148, 163, 184, .18);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, .66);
-  box-shadow: 0 20px 60px rgba(15, 23, 42, .06);
-}
-
-.journey-copy span {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  color: #1d4ed8;
-  background: rgba(37, 99, 235, .1);
-  font-weight: 950;
-}
-
-.journey-copy h3 {
-  margin: 18px 0 12px;
-  color: #101827;
-  font-size: 27px;
-  line-height: 1.24;
-}
-
-.journey-copy p {
-  margin: 0;
-  color: rgba(15, 23, 42, .64);
-  font-size: 16px;
-  line-height: 1.85;
-}
-
-.journey-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 18px;
-}
-
-.journey-actions b {
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 10px;
-  border-radius: 999px;
-  color: #1d4ed8;
-  background: rgba(37, 99, 235, .08);
-  font-size: 12px;
-}
-
-.journey-preview {
-  overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, .2);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, .74);
-}
-
-.journey-preview-bar {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  border-bottom: 1px solid rgba(148, 163, 184, .16);
-}
-
-.journey-preview-bar i {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #fb7185;
-}
-
-.journey-preview-bar i:nth-child(2) {
-  background: #fbbf24;
-}
-
-.journey-preview-bar i:nth-child(3) {
-  background: #34d399;
-}
-
-.journey-preview-bar strong {
-  margin-left: 8px;
-  color: #0f172a;
-  font-size: 13px;
-}
-
-.journey-shot-slot {
-  position: relative;
-  min-height: 150px;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  background:
-    linear-gradient(135deg, rgba(239, 246, 255, .84), rgba(255, 255, 255, .9));
-}
-
-.journey-shot-slot::before {
-  position: absolute;
-  inset: 18px;
-  border: 1px dashed rgba(37, 99, 235, .18);
-  border-radius: 14px;
-  content: "";
-}
-
-.journey-shot-slot span {
-  position: relative;
-  z-index: 1;
-  color: #1d4ed8;
-  font-size: 14px;
-  font-weight: 950;
-}
-
-.journey-shot-slot small {
-  position: relative;
-  z-index: 1;
-  margin-top: -48px;
-  color: rgba(15, 23, 42, .48);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.journey-lines {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-}
-
-.journey-lines em {
-  min-height: 36px;
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  border-radius: 12px;
-  color: rgba(15, 23, 42, .7);
-  background: rgba(248, 250, 252, .9);
-  font-size: 13px;
-  font-style: normal;
-  font-weight: 850;
-}
-
-@keyframes home-ambient {
-  from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
-  to { transform: translate3d(1.5%, 1%, 0) scale(1.04); }
-}
-
-@keyframes home-sheen {
-  0%, 48% { transform: translateX(0); opacity: 0; }
-  58% { opacity: 1; }
-  100% { transform: translateX(460%); opacity: 0; }
-}
-
-@keyframes route-run {
-  to { background-position: -200% 0; }
-}
-
-@media (max-width: 980px) {
-  .flow-landing-nav,
-  .flow-hero,
-  .journey-section,
-  .flow-pricing-section {
-    width: min(100% - 28px, 760px);
-  }
-
-  .flow-nav-links {
-    display: none;
-  }
-
-  .flow-hero {
-    min-height: auto;
-    grid-template-columns: 1fr;
-    padding-top: 42px;
-  }
-
-  .product-flow-body,
-  .journey-step {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 620px) {
-  .flow-landing-nav {
-    top: 10px;
-    min-height: 56px;
-    border-radius: 16px;
-  }
-
-  .flow-brand strong {
-    font-size: 15px;
-  }
-
-  .flow-login-btn {
-    display: none;
-  }
-
-  .flow-download-btn {
-    padding: 0 16px;
-  }
-
-  .flow-hero h1 {
-    font-size: 40px;
-    line-height: .98;
-  }
-
-  .flow-hero h1 .hero-title-line {
-    white-space: normal;
-  }
-
-  .flow-hero p {
-    font-size: 16px;
-  }
-
-  .flow-route-ribbon {
-    align-items: flex-start;
-    flex-direction: column;
-    border-radius: 18px;
-  }
-
-  .flow-route-ribbon i {
-    width: 32px;
-    flex: 0 0 2px;
-  }
-
-  .flow-step-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .product-flow-head,
-  .product-flow-foot {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .flow-map {
-    min-height: 240px;
-  }
-
-  .screenshot-toolbar {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 10px 12px;
-  }
-
-  .journey-section-head h2 {
-    font-size: 32px;
-  }
-
-  .journey-step {
-    padding: 18px;
-    border-radius: 18px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .flow-landing::before,
-  .flow-route-ribbon::after,
-  .flow-route-ribbon i,
-  .screenshot-slot::after {
-    animation: none !important;
-  }
-}
-
-.ps-home {
-  min-height: 100vh;
-  overflow-x: clip;
-  color: #0f172a;
-  background:
-    radial-gradient(circle at 12% 18%, rgba(56, 189, 248, .16), transparent 30%),
-    radial-gradient(circle at 84% 12%, rgba(129, 140, 248, .16), transparent 28%),
-    linear-gradient(135deg, #f6fbff 0%, #ffffff 46%, #f6f8ff 100%);
-}
-
-.ps-nav {
-  position: sticky;
-  top: 18px;
-  z-index: 30;
-  width: min(1180px, calc(100vw - 56px));
-  min-height: 64px;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  margin: 18px auto 0;
-  padding: 10px 12px;
-  border: 1px solid rgba(148, 163, 184, .22);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, .78);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 18px 46px rgba(15, 23, 42, .08);
-}
-
-.ps-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: #0f172a;
-  text-decoration: none;
-}
-
-.ps-brand img {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-}
-
-.ps-brand strong {
-  font-size: 18px;
-  font-weight: 950;
-}
-
-.ps-nav nav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  padding: 4px;
-  border-radius: 999px;
-  background: rgba(241, 245, 249, .72);
-}
-
-.ps-nav nav a {
-  min-height: 34px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 14px;
-  border-radius: 999px;
-  color: rgba(15, 23, 42, .66);
-  font-size: 14px;
-  font-weight: 850;
-  text-decoration: none;
-  transition: color 180ms ease, background 180ms ease, transform 180ms ease;
-}
-
-.ps-nav nav a:hover {
-  color: #1d4ed8;
-  background: #fff;
-  transform: translateY(-1px);
-}
-
-.ps-nav > button,
-.ps-actions button,
-.ps-pricing-grid button {
-  border: 0;
-  cursor: pointer;
-  font-weight: 950;
-}
-
-.ps-nav > button {
-  height: 42px;
-  padding: 0 20px;
-  border-radius: 999px;
-  color: #fff;
-  background: linear-gradient(135deg, #13244a, #2563eb);
-  box-shadow: 0 16px 30px rgba(37, 99, 235, .2);
-}
-
-.ps-hero {
-  width: min(1180px, calc(100vw - 56px));
-  min-height: calc(100vh - 92px);
-  display: grid;
-  grid-template-columns: minmax(390px, .86fr) minmax(560px, 1.14fr);
-  align-items: center;
-  gap: 62px;
-  margin: 0 auto;
-  padding: 58px 0 78px;
-}
-
-.ps-note-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 22px;
-}
-
-.ps-note-line span {
-  min-height: 32px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 13px;
-  border: 1px solid rgba(20, 184, 166, .22);
-  border-radius: 999px;
-  color: #1d4ed8;
-  background: rgba(255, 255, 255, .72);
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.ps-note-line span::before {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #f59e0b;
-  content: "";
-}
-
-.ps-hero h1 {
-  max-width: 13ch;
-  margin: 0 0 22px;
-  color: #0f172a;
-  font-size: 76px;
-  line-height: .95;
-  letter-spacing: -.035em;
-  font-weight: 950;
-  text-wrap: balance;
-}
-
-.ps-hero p {
-  max-width: 58ch;
-  margin: 0;
-  color: rgba(15, 23, 42, .68);
-  font-size: 18px;
-  line-height: 1.9;
-  font-weight: 650;
-}
-
-.ps-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 30px;
-}
-
-.ps-actions button {
-  height: 56px;
-  padding: 0 28px;
-  border-radius: 14px;
-  font-size: 16px;
-  transition: transform 180ms ease, box-shadow 180ms ease;
-}
-
-.ps-actions button:hover,
-.ps-pricing-grid button:hover {
-  transform: translateY(-2px);
-}
-
-.ps-primary {
-  color: #fff;
-  background: linear-gradient(135deg, #13244a, #2563eb);
-  box-shadow: 0 22px 44px rgba(37, 99, 235, .22);
-}
-
-.ps-secondary {
-  color: #0f172a;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .28);
-}
-
-.ps-console {
-  display: grid;
-  gap: 14px;
-}
-
-.ps-console-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.ps-console-tabs button {
-  min-height: 58px;
-  display: grid;
-  align-content: center;
-  gap: 3px;
-  padding: 10px 13px;
-  border: 0;
-  border-radius: 14px;
-  color: rgba(15, 23, 42, .68);
-  background: rgba(255, 255, 255, .78);
-  text-align: left;
-  font-size: 13px;
-  font-weight: 900;
-  box-shadow: 0 14px 32px rgba(15, 23, 42, .07);
-  cursor: pointer;
-  transition: transform 180ms ease, background 180ms ease, color 180ms ease;
-}
-
-.ps-console-tabs button span {
-  color: rgba(15, 23, 42, .42);
-  font-size: 11px;
-}
-
-.ps-console-tabs button.active {
-  color: #fff;
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
-  transform: translateY(-3px);
-}
-
-.ps-console-tabs button.active span {
-  color: rgba(255, 255, 255, .72);
-}
-
-.ps-console-window {
-  overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, .22);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, .82);
-  box-shadow: 0 32px 84px rgba(15, 23, 42, .12);
-  animation: ps-window-in 360ms cubic-bezier(.16, 1, .3, 1), ps-float 6s ease-in-out infinite;
-}
-
-.ps-console-window header {
-  min-height: 62px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 0 18px;
-  border-bottom: 1px solid rgba(148, 163, 184, .18);
-}
-
-.ps-window-dots {
-  display: inline-flex;
-  gap: 7px;
-}
-
-.ps-window-dots i {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: #fb7185;
-}
-
-.ps-window-dots i:nth-child(2) { background: #fbbf24; }
-.ps-window-dots i:nth-child(3) { background: #34d399; }
-
-.ps-console-window header strong {
-  color: #0f172a;
-  font-size: 17px;
-}
-
-.ps-console-window header span {
-  margin-left: auto;
-  color: #1d4ed8;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.ps-console-body {
-  display: grid;
-  grid-template-columns: minmax(240px, .82fr) minmax(320px, 1fr);
-  gap: 20px;
-  padding: 22px;
-}
-
-.ps-flow-diagram {
-  position: relative;
-  min-height: 320px;
-  overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, .18);
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(248, 251, 255, .92), rgba(255, 255, 255, .8));
-}
-
-.ps-flow-diagram svg {
-  position: absolute;
-  inset: 38px 18px;
-  width: calc(100% - 36px);
-  height: calc(100% - 76px);
-}
-
-.ps-flow-diagram path {
-  stroke: #2563eb;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-dasharray: 10 14;
-  opacity: .36;
-  animation: ps-dash 1.7s linear infinite;
-}
-
-.ps-flow-diagram span {
-  position: absolute;
-  left: calc(10% + var(--i) * 21%);
-  top: calc(46% + (var(--i) % 2) * 42px);
-  min-width: 76px;
-  min-height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 12px;
-  border: 1px solid rgba(148, 163, 184, .18);
-  border-radius: 999px;
-  color: #0f172a;
-  background: #fff;
-  font-size: 12px;
-  font-weight: 900;
-  box-shadow: 0 14px 28px rgba(15, 23, 42, .08);
-  animation: ps-node-in 360ms cubic-bezier(.16, 1, .3, 1) both, ps-node-float 4s ease-in-out infinite;
-  animation-delay: calc(var(--i) * 90ms), calc(var(--i) * 120ms + 600ms);
-}
-
-.ps-live-panel {
-  display: grid;
-  align-content: center;
-  gap: 13px;
-}
-
-.ps-shot-placeholder {
-  position: relative;
-  min-height: 132px;
-  display: grid;
-  align-content: center;
-  gap: 8px;
-  overflow: hidden;
-  padding: 22px;
-  border: 1px solid rgba(148, 163, 184, .2);
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(239, 246, 255, .84), rgba(255, 255, 255, .9));
-}
-
-.ps-shot-placeholder::after {
-  position: absolute;
-  inset: 0 auto 0 -38%;
-  width: 34%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .82), transparent);
-  content: "";
-  animation: ps-sheen 3.8s ease-in-out infinite;
-}
-
-.ps-shot-placeholder b {
-  color: #0f172a;
-  font-size: 15px;
-}
-
-.ps-shot-placeholder em {
-  color: rgba(15, 23, 42, .48);
-  font-style: normal;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.ps-live-rows {
-  display: grid;
-  gap: 10px;
-}
-
-.ps-live-rows div {
-  display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  min-height: 48px;
-  padding: 10px 13px;
-  border: 1px solid rgba(148, 163, 184, .18);
-  border-radius: 13px;
-  background: rgba(255, 255, 255, .72);
-  animation: ps-row-in 280ms cubic-bezier(.16, 1, .3, 1) both;
-}
-
-.ps-live-rows small {
-  color: #1d4ed8;
-  font-size: 11px;
-  font-weight: 950;
-}
-
-.ps-live-rows strong {
-  min-width: 0;
-  overflow: hidden;
-  color: rgba(15, 23, 42, .82);
-  text-overflow: ellipsis;
+/* Line 1: Shorter line, softly muted white (淡淡半透明显示) */
+.h1-line-top {
+  font-size: clamp(2.4rem, 5.5vw, 3.8rem);
+  font-weight: 750;
+  letter-spacing: -.03em;
+  color: rgba(255, 255, 255, 0.48);  /* 淡淡半透明显示 */
   white-space: nowrap;
-  font-size: 13px;
 }
 
-.ps-meter {
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(37, 99, 235, .12);
+/* Line 2: Longer line, soft gradient glow (淡淡高质感渐变) */
+.h1-line-bot {
+  font-size: clamp(2.8rem, 6.8vw, 4.8rem);
+  font-weight: 850;
+  letter-spacing: -.04em;
+  background: linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(147,197,253,0.85) 50%, rgba(192,132,252,0.85) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  white-space: nowrap;
 }
 
-.ps-meter i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #14b8a6);
-  animation: ps-meter 2.8s ease-in-out infinite;
-}
+.hero-sub { font-size: 1.05rem; line-height: 1.75; color: #71717a; margin: 0 auto 38px; max-width: 580px; }
 
-.ps-flow-section,
-.ps-compare-section,
-.ps-pricing-section {
-  width: min(1180px, calc(100vw - 56px));
-  margin: 0 auto;
+.hero-actions { display: flex; gap: 14px; justify-content: center; margin-bottom: 38px; flex-wrap: wrap; }
+.cta-primary  { display: inline-flex; align-items: center; gap: 9px; background: #fff; color: #09090b; border: none; font-size: 1rem; font-weight: 700; padding: 14px 32px; border-radius: 99px; cursor: pointer; font-family: inherit; transition: background .2s, transform .2s, box-shadow .2s; }
+.cta-primary:hover { background: #e4e4e7; transform: translateY(-2px); box-shadow: 0 12px 36px rgba(255,255,255,.08); }
+.cta-primary:hover svg { transform: translateX(3px); }
+.cta-primary svg { transition: transform .2s; }
+.cta-outline  { display: inline-flex; align-items: center; background: transparent; border: 1px solid rgba(255,255,255,.12); color: #a1a1aa; font-size: 1rem; font-weight: 500; padding: 14px 32px; border-radius: 99px; cursor: pointer; font-family: inherit; transition: border-color .2s, color .2s, background .2s; }
+.cta-outline:hover { border-color: rgba(255,255,255,.24); color: #d4d4d8; background: rgba(255,255,255,.03); }
+
+.hero-proof { display: flex; align-items: center; justify-content: center; gap: 12px; font-size: .82rem; color: #52525b; margin-bottom: 32px; }
+.proof-avatars { display: flex; }
+.proof-avatars span { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #08080c; display: block; margin-left: -7px; }
+.proof-avatars span:first-child { margin-left: 0; }
+.hero-proof strong { color: #a1a1aa; font-weight: 600; }
+
+.hero-stats { display: flex; align-items: center; justify-content: center; gap: 24px; padding: 16px 28px; border: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.02); border-radius: 14px; backdrop-filter: blur(8px); flex-wrap: wrap; }
+.stat { text-align: center; }
+.stat strong { display: block; font-size: 1.35rem; font-weight: 800; color: #f0f0f4; letter-spacing: -.04em; }
+.stat span   { font-size: .72rem; color: #52525b; font-weight: 500; margin-top: 2px; display: block; }
+.stat-div    { width: 1px; height: 32px; background: rgba(255,255,255,.08); }
+
+/* ══ SECTIONS ══ */
+.section { padding: 88px 28px; }
+.section-alt { background: rgba(255,255,255,.013); }
+.section-wrap { max-width: 100%; margin: 0 auto; }
+.s-head { text-align: center; margin-bottom: 48px; opacity: 0; transform: translateY(20px); transition: opacity .65s ease, transform .65s ease; }
+.s-head.in { opacity: 1; transform: translateY(0); }
+.eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .2em; color: #3f3f46; border: 1px solid rgba(255,255,255,.06); background: rgba(255,255,255,.025); padding: 5px 14px; border-radius: 99px; margin-bottom: 20px; }
+.ew-dot  { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
+.s-head h2 { font-size: clamp(1.65rem, 3.4vw, 2.5rem); font-weight: 750; color: #f0f0f4; letter-spacing: -.03em; line-height: 1.2; margin-bottom: 14px; }
+.s-head p  { font-size: .95rem; color: #52525b; max-width: 500px; margin: 0 auto; line-height: 1.75; }
+
+/* ══ FEATURES ══ */
+.feat-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; opacity: 0; transform: translateY(18px); transition: opacity .65s ease .1s, transform .65s ease .1s; }
+.feat-grid.in { opacity: 1; transform: translateY(0); }
+.feat-card { background: rgba(14,14,20,.75); border: 1px solid rgba(255,255,255,.055); border-radius: 16px; padding: 22px; display: flex; gap: 16px; align-items: flex-start; position: relative; overflow: hidden; transition: border-color .25s, transform .25s, box-shadow .25s; animation: fcIn .5s ease calc(var(--delay,0s)) both; }
+@keyframes fcIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+.feat-card:hover { border-color: rgba(255,255,255,.1); transform: translateY(-3px); box-shadow: 0 16px 48px rgba(0,0,0,.28); }
+.fc-icon { width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0; background: color-mix(in srgb,var(--c) 10%,transparent); border: 1px solid color-mix(in srgb,var(--c) 20%,transparent); display: flex; align-items: center; justify-content: center; color: var(--c); }
+.fc-icon svg { width: 19px; height: 19px; }
+.fc-body h3 { font-size: .9rem; font-weight: 650; color: #e2e2e6; margin-bottom: 7px; }
+.fc-body p  { font-size: .8rem; color: #52525b; line-height: 1.65; margin-bottom: 12px; }
+.fc-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.fc-chips span { font-size: .65rem; font-weight: 500; padding: 2px 8px; border-radius: 99px; color: var(--c); border: 1px solid color-mix(in srgb,var(--c) 20%,transparent); background: color-mix(in srgb,var(--c) 7%,transparent); }
+
+/* ══ WORKFLOW — FULL PAGE UNBOUNDED CAROUSEL (NO BORDER BOX) ══ */
+.workflow-section-full {
   padding: 88px 0;
+  background: rgba(255,255,255,.013);
+  overflow: hidden;
 }
 
-.ps-section-head {
-  max-width: 760px;
-  margin-bottom: 34px;
-}
-
-.ps-section-head span {
-  color: #1d4ed8;
-  font-size: 14px;
-  font-weight: 950;
-}
-
-.ps-section-head h2 {
-  max-width: 18ch;
-  margin: 12px 0 14px;
-  color: #0f172a;
-  font-size: 44px;
-  line-height: 1.12;
-  letter-spacing: -.025em;
-}
-
-.ps-section-head p {
-  margin: 0;
-  color: rgba(15, 23, 42, .62);
-  font-size: 17px;
-  line-height: 1.8;
-}
-
-.ps-flow-chain {
+.full-carousel-viewport {
   position: relative;
+  width: 100%;
+  margin-top: 40px;
+}
+
+.full-carousel-track {
+  display: flex;
+  width: 100%;
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.full-slide-item {
+  min-width: 100vw;
+  width: 100vw;
+  flex-shrink: 0;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 10px;
-  padding: 18px;
-  border: 1px solid rgba(148, 163, 184, .18);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, .62);
+  grid-template-columns: 55% 45%;
+  align-items: center;
+  padding: 0 max(28px, calc((100vw - 1160px) / 2));
+  box-sizing: border-box;
 }
 
-.ps-flow-chain::before {
-  position: absolute;
-  left: 34px;
-  right: 34px;
-  top: 58px;
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #2563eb, #14b8a6, #818cf8, #2563eb);
-  background-size: 200% 100%;
-  content: "";
-  animation: ps-route 2.4s linear infinite;
+/* Left Side: Unbounded Page Image */
+.full-slide-media {
+  padding-right: 48px;
 }
-
-.ps-flow-chain article {
+.media-container {
   position: relative;
-  z-index: 1;
-  min-height: 190px;
-  padding: 18px 14px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, .78);
+  overflow: hidden;
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.media-container img {
+  width: 100%;
+  height: 100%;
+  max-height: 480px;
+  object-fit: cover;
+  object-position: top left;
+  display: block;
+}
+.media-fade-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, transparent 75%, rgba(8, 8, 12, 0.95) 100%);
+  pointer-events: none;
+}
+.media-step-badge {
+  position: absolute;
+  top: 20px; left: 20px;
+  font-family: 'Geist Mono', monospace;
+  font-size: .78rem; font-weight: 600;
+  color: rgba(255,255,255,.45);
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px; padding: 6px 12px;
 }
 
-.ps-flow-chain article span {
-  width: 40px;
-  height: 40px;
-  display: inline-flex;
+/* Right Side: Staggered Entrance Animations for Info Copy */
+.full-slide-info {
+  display: flex;
+  align-items: center;
+  padding-left: 12px;
+}
+.info-content-box {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 460px;
+}
+
+/* Entrance Animation Base States */
+.full-slide-item .info-meta,
+.full-slide-item .info-title,
+.full-slide-item .info-desc,
+.full-slide-item .info-hl-row,
+.full-slide-item .info-tags {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1), transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Slide Active Entrance Staggered Delays */
+.full-slide-item.active .info-meta {
+  opacity: 1; transform: translateY(0); transition-delay: 0.12s;
+}
+.full-slide-item.active .info-title {
+  opacity: 1; transform: translateY(0); transition-delay: 0.20s;
+}
+.full-slide-item.active .info-desc {
+  opacity: 1; transform: translateY(0); transition-delay: 0.28s;
+}
+.full-slide-item.active .info-hl-row:nth-child(1) {
+  opacity: 1; transform: translateY(0); transition-delay: 0.36s;
+}
+.full-slide-item.active .info-hl-row:nth-child(2) {
+  opacity: 1; transform: translateY(0); transition-delay: 0.44s;
+}
+.full-slide-item.active .info-hl-row:nth-child(3) {
+  opacity: 1; transform: translateY(0); transition-delay: 0.52s;
+}
+.full-slide-item.active .info-tags {
+  opacity: 1; transform: translateY(0); transition-delay: 0.60s;
+}
+
+/* Text & Highlight Styling */
+.info-meta {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'Geist Mono', monospace; font-size: .78rem;
+}
+.info-counter { color: #60a5fa; font-weight: 700; background: rgba(59,130,246,.12); padding: 3px 10px; border-radius: 99px; }
+.info-label   { color: #52525b; text-transform: uppercase; letter-spacing: .1em; font-size: .7rem; }
+
+.info-title { font-size: 1.85rem; font-weight: 750; color: #f0f0f4; letter-spacing: -.03em; line-height: 1.25; }
+.info-desc  { font-size: .92rem; color: #80808a; line-height: 1.7; }
+
+/* Detailed Highlights Bullet List */
+.info-highlights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  margin: 6px 0;
+  background: rgba(255,255,255,0.02);
+  border-left: 3px solid #3b82f6;
+  padding: 14px 18px;
+  border-radius: 0 12px 12px 0;
+}
+.info-hl-row { display: flex; align-items: flex-start; gap: 9px; font-size: .86rem; color: #d4d4d8; line-height: 1.5; }
+.info-hl-icon { color: #60a5fa; font-size: .8rem; margin-top: 1px; flex-shrink: 0; }
+.info-hl-text :deep(b) { color: #93c5fd; font-weight: 600; background: rgba(59,130,246,0.12); padding: 1px 6px; border-radius: 4px; }
+
+.info-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.info-tag-item { font-size: .72rem; font-weight: 500; padding: 4px 12px; border-radius: 99px; color: #a1a1aa; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.025); }
+
+/* Floating Carousel Control Bar */
+.full-carousel-controls {
+  display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
-  color: #fff;
-  background: #2563eb;
-  font-size: 13px;
-  font-weight: 950;
+  gap: 20px;
+  margin-top: 48px;
 }
-
-.ps-flow-chain h3 {
-  margin: 18px 0 8px;
-  color: #0f172a;
-  font-size: 18px;
+.fc-arrow-btn {
+  width: 42px; height: 42px; border-radius: 99px;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+  color: #a1a1aa; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background .2s, color .2s; font-family: inherit;
 }
+.fc-arrow-btn:hover { background: rgba(255,255,255,.12); color: #f0f0f4; }
+.fc-dots-wrap { display: flex; gap: 8px; }
+.fc-dot-item { width: 7px; height: 7px; border-radius: 99px; background: rgba(255,255,255,.14); cursor: pointer; transition: background .25s, width .3s cubic-bezier(.22,1,.36,1); }
+.fc-dot-item.active { background: #3b82f6; width: 28px; }
+.fc-progress-indicator { width: 34px; height: 34px; position: relative; }
+.fc-progress-indicator svg { width: 100%; height: 100%; }
+.fc-progress-indicator circle:last-child { transition: stroke-dashoffset .08s linear; }
 
-.ps-flow-chain p {
-  margin: 0;
-  color: rgba(15, 23, 42, .6);
-  font-size: 13px;
-  line-height: 1.7;
+/* ══ WHY CHOOSE US ══ */
+.why-claims { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 40px; opacity: 0; transform: translateY(18px); transition: opacity .65s ease .1s, transform .65s ease .1s; }
+.why-claims.in { opacity: 1; transform: translateY(0); }
+.why-card { display: flex; flex-direction: column; gap: 12px; background: rgba(14,14,20,.7); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; padding: 22px; transition: border-color .25s, transform .25s; }
+.why-card:hover { border-color: rgba(255,255,255,.1); transform: translateY(-3px); }
+.wc-icon { width: 42px; height: 42px; border-radius: 11px; background: color-mix(in srgb,var(--c) 10%,transparent); border: 1px solid color-mix(in srgb,var(--c) 20%,transparent); display: flex; align-items: center; justify-content: center; color: var(--c); }
+.wc-icon svg { width: 19px; height: 19px; }
+.wc-title { font-size: .93rem; font-weight: 650; color: #e2e2e6; }
+.wc-desc  { font-size: .8rem; color: #52525b; line-height: 1.68; }
+
+.why-banner { display: flex; gap: 48px; align-items: center; background: linear-gradient(135deg,rgba(37,99,235,.1),rgba(124,58,237,.08)); border: 1px solid rgba(59,130,246,.18); border-radius: 20px; padding: 40px 48px; opacity: 0; transform: translateY(16px); transition: opacity .65s ease .2s, transform .65s ease .2s; }
+.why-banner.in { opacity: 1; transform: translateY(0); }
+.wb-left { flex: 1; }
+.wb-q    { font-size: 5rem; font-weight: 800; line-height: .6; color: rgba(96,165,250,.25); margin-bottom: 10px; font-family: Georgia, serif; }
+.wb-text { font-size: 1.22rem; font-weight: 650; color: #e2e2e6; line-height: 1.55; letter-spacing: -.02em; margin-bottom: 14px; }
+.wb-by   { font-size: .82rem; color: #52525b; }
+.wb-right { display: flex; flex-direction: column; gap: 14px; flex-shrink: 0; }
+.wb-badge { display: flex; align-items: center; gap: 10px; font-size: .85rem; font-weight: 500; color: #a1a1aa; }
+.wb-badge svg { width: 16px; height: 16px; color: var(--c); flex-shrink: 0; }
+
+/* ══ COMPARISON ══ */
+.cmp-table { border: 1px solid rgba(255,255,255,.07); border-radius: 18px; overflow: hidden; opacity: 0; transform: translateY(18px); transition: opacity .65s ease .1s, transform .65s ease .1s; }
+.cmp-table.in { opacity: 1; transform: translateY(0); }
+.cmp-header { display: grid; grid-template-columns: 1fr 1.4fr 1.4fr; padding: 13px 24px; background: rgba(255,255,255,.022); border-bottom: 1px solid rgba(255,255,255,.055); font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; align-items: center; color: #3f3f46; }
+.cmp-bad-h  { display: flex; align-items: center; gap: 6px; color: #f87171; }
+.cmp-good-h { display: flex; align-items: center; gap: 6px; color: #4ade80; }
+.cmp-row { display: grid; grid-template-columns: 1fr 1.4fr 1.4fr; padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,.038); align-items: start; transition: background .2s; }
+.cmp-row:last-child { border-bottom: none; }
+.cmp-row:hover { background: rgba(255,255,255,.014); }
+.cmp-row b { font-size: .87rem; font-weight: 600; color: #d4d4d8; }
+.cmp-bad, .cmp-good { display: flex; gap: 8px; font-size: .82rem; line-height: 1.55; align-items: flex-start; padding-right: 12px; }
+.cmp-bad  { color: #9ca3af; }
+.cmp-good { color: #86efac; }
+.ci { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.ci.bad  { background: rgba(239,68,68,.12);  color: #f87171; border: 1px solid rgba(239,68,68,.22); }
+.ci.good { background: rgba(34,197,94,.1);   color: #4ade80; border: 1px solid rgba(34,197,94,.22); }
+
+/* ══ PRICING ══ */
+.price-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(230px,1fr)); gap: 14px; opacity: 0; transform: translateY(18px); transition: opacity .65s ease .1s, transform .65s ease .1s; }
+.price-grid.in { opacity: 1; transform: translateY(0); }
+.price-card { background: rgba(14,14,20,.8); border: 1px solid rgba(255,255,255,.07); border-radius: 20px; padding: 26px 22px; position: relative; transition: border-color .25s, transform .25s; }
+.price-card:hover { border-color: rgba(255,255,255,.12); transform: translateY(-3px); }
+.price-card.featured { border-color: rgba(59,130,246,.35); box-shadow: 0 0 0 1px rgba(59,130,246,.18), 0 18px 60px rgba(59,130,246,.1); }
+.price-badge { position: absolute; top: -11px; left: 50%; transform: translateX(-50%); background: linear-gradient(120deg,#2563eb,#7c3aed); color: #fff; font-size: .68rem; font-weight: 700; padding: 3px 13px; border-radius: 99px; white-space: nowrap; }
+.price-type   { font-size: .65rem; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: #3f3f46; margin-bottom: 10px; }
+.price-name   { font-size: 1.15rem; font-weight: 700; color: #f0f0f4; margin-bottom: 14px; }
+.price-amount { display: flex; align-items: baseline; gap: 5px; margin-bottom: 6px; }
+.price-amount strong { font-size: 2rem; font-weight: 800; color: #f0f0f4; letter-spacing: -.04em; }
+.price-amount small  { font-size: .78rem; color: #52525b; }
+.price-list { list-style: none; display: flex; flex-direction: column; gap: 9px; margin: 14px 0 22px; }
+.price-list li { display: flex; align-items: flex-start; gap: 8px; font-size: .82rem; color: #71717a; line-height: 1.4; }
+.price-btn { width: 100%; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); color: #d4d4d8; font-size: .875rem; font-weight: 600; padding: 11px; border-radius: 10px; cursor: pointer; font-family: inherit; transition: background .2s, color .2s; }
+.price-btn:hover { background: rgba(255,255,255,.09); color: #fff; }
+.feat-btn { background: linear-gradient(120deg,#2563eb,#7c3aed); border-color: transparent; color: #fff; box-shadow: 0 4px 20px rgba(59,130,246,.28); }
+.feat-btn:hover { background: linear-gradient(120deg,#3b82f6,#8b5cf6); }
+
+/* ══ FOOTER ══ */
+.home-footer { border-top: 1px solid rgba(255,255,255,.05); padding: 44px 28px; }
+.footer-inner { max-width: 100%; margin: 0 auto; padding: 0 48px; display: flex; flex-direction: column; align-items: center; gap: 20px; text-align: center; }
+.footer-logo  { font-size: 1rem; font-weight: 700; color: #f0f0f4; }
+.footer-links { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; }
+.footer-links a { font-size: .82rem; color: #52525b; text-decoration: none; transition: color .2s; }
+.footer-links a:hover { color: #a1a1aa; }
+.footer-copy  { font-size: .75rem; color: #27272a; }
+
+/* ══ MODAL ══ */
+.mfade-enter-active,.mfade-leave-active{transition:opacity .22s ease}
+.mfade-enter-from,.mfade-leave-to{opacity:0}
+.modal-mask { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,.72); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.modal-box  { background: rgba(12,12,18,.96); border: 1px solid rgba(255,255,255,.1); border-radius: 20px; padding: 36px; width: 100%; max-width: 410px; position: relative; box-shadow: 0 48px 120px rgba(0,0,0,.65); }
+.modal-x    { position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 7px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #71717a; transition: color .2s, background .2s; font-family: inherit; }
+.modal-x:hover { color: #e2e2e6; background: rgba(255,255,255,.08); }
+.auth-label { font-size: .62rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #2563eb; margin-bottom: 8px; }
+.auth-title { font-size: 1.45rem; font-weight: 750; color: #f0f0f4; margin-bottom: 26px; letter-spacing: -.025em; }
+.auth-form  { display: flex; flex-direction: column; gap: 12px; }
+.scroll-form { max-height: 62vh; overflow-y: auto; padding-right: 4px; }
+.scroll-form::-webkit-scrollbar { width: 3px; }
+.scroll-form::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 99px; }
+.auth-form label { font-size: .78rem; font-weight: 600; color: #71717a; margin-bottom: -4px; }
+.auth-form input { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; color: #f0f0f4; font-size: .9rem; padding: 11px 14px; width: 100%; font-family: inherit; outline: none; transition: border-color .2s, background .2s; }
+.auth-form input:focus { border-color: rgba(59,130,246,.5); background: rgba(59,130,246,.04); }
+.auth-form input::placeholder { color: #3f3f46; }
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 42px; }
+.pw-eye { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: #52525b; cursor: pointer; padding: 0; display: flex; align-items: center; transition: color .2s; }
+.pw-eye:hover { color: #a1a1aa; }
+.row-input { display: flex; gap: 8px; }
+.row-input input { flex: 1; min-width: 0; }
+.code-btn { background: rgba(59,130,246,.1); border: 1px solid rgba(59,130,246,.22); color: #60a5fa; font-size: .76rem; font-weight: 600; padding: 0 13px; border-radius: 99px; cursor: pointer; white-space: nowrap; font-family: inherit; transition: background .2s; }
+.code-btn:hover:not(:disabled) { background: rgba(59,130,246,.18); }
+.code-btn:disabled { opacity: .45; cursor: not-allowed; }
+.opt { color: #3f3f46; font-weight: 400; }
+.role-group { display: flex; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07); border-radius: 10px; padding: 3px; gap: 3px; }
+.role-group button { flex: 1; background: transparent; border: none; color: #52525b; font-size: .82rem; font-weight: 500; padding: 7px; border-radius: 7px; cursor: pointer; font-family: inherit; transition: all .2s; }
+.role-group button.on { background: rgba(255,255,255,.07); color: #f0f0f4; }
+.auth-err { font-size: .8rem; color: #f87171; background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.14); padding: 9px 13px; border-radius: 8px; }
+.auth-ok  { font-size: .8rem; color: #86efac; background: rgba(34,197,94,.07); border: 1px solid rgba(34,197,94,.14); padding: 9px 13px; border-radius: 8px; }
+.auth-submit { background: #fff; color: #09090b; border: none; font-size: .93rem; font-weight: 700; padding: 13px; border-radius: 10px; cursor: pointer; font-family: inherit; margin-top: 2px; transition: background .2s, transform .15s; }
+.auth-submit:hover:not(:disabled) { background: #e4e4e7; transform: translateY(-1px); }
+.auth-submit:disabled { opacity: .45; cursor: not-allowed; }
+.auth-links { display: flex; justify-content: space-between; }
+.auth-links a { font-size: .78rem; color: #71717a; text-decoration: none; transition: color .2s; }
+.auth-links a:hover { color: #a1a1aa; }
+.auth-links a.dim { color: #3f3f46; }
+
+/* ══ RESPONSIVE ══ */
+@media (max-width: 1000px) {
+  .nav-links { display: none; }
+  .feat-grid { grid-template-columns: repeat(2,1fr); }
+  .why-claims { grid-template-columns: repeat(2,1fr); }
+  .why-banner { flex-direction: column; gap: 28px; padding: 28px; }
+  .full-slide-item { grid-template-columns: 1fr; padding: 0 24px; }
+  .full-slide-media { padding-right: 0; margin-bottom: 24px; }
+  .full-slide-info { padding-left: 0; }
+  .info-title { font-size: 1.5rem; }
 }
-
-.ps-comparison {
-  overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, .2);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, .72);
-}
-
-.ps-comparison-head,
-.ps-comparison-row {
-  display: grid;
-  grid-template-columns: .72fr 1.1fr 1.1fr;
-  gap: 0;
-}
-
-.ps-comparison-head {
-  background: rgba(241, 245, 249, .76);
-}
-
-.ps-comparison-head strong,
-.ps-comparison-row > * {
-  padding: 18px 20px;
-  border-bottom: 1px solid rgba(148, 163, 184, .16);
-}
-
-.ps-comparison-head strong {
-  color: #0f172a;
-  font-size: 14px;
-}
-
-.ps-comparison-row b {
-  color: #0f172a;
-}
-
-.ps-comparison-row span {
-  color: rgba(15, 23, 42, .62);
-  line-height: 1.7;
-}
-
-.ps-comparison-row span:last-child {
-  color: #14532d;
-  background: rgba(236, 253, 245, .46);
-  font-weight: 800;
-}
-
-.ps-pricing-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
-}
-
-.ps-pricing-grid article {
-  display: grid;
-  gap: 14px;
-  padding: 24px;
-  border: 1px solid rgba(148, 163, 184, .2);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, .74);
-}
-
-.ps-pricing-grid article.featured {
-  border-color: rgba(37, 99, 235, .4);
-  background: linear-gradient(180deg, rgba(239, 246, 255, .86), rgba(255, 255, 255, .78));
-  box-shadow: 0 24px 58px rgba(37, 99, 235, .12);
-}
-
-.ps-pricing-grid article > span {
-  color: #1d4ed8;
-  font-size: 13px;
-  font-weight: 950;
-}
-
-.ps-pricing-grid h3 {
-  margin: 0;
-  color: #0f172a;
-  font-size: 26px;
-}
-
-.ps-price {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.ps-price strong {
-  color: #0f172a;
-  font-size: 34px;
-}
-
-.ps-price small,
-.ps-pricing-grid p {
-  color: rgba(15, 23, 42, .58);
-  font-weight: 750;
-}
-
-.ps-pricing-grid ul {
-  display: grid;
-  gap: 9px;
-  min-height: 116px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.ps-pricing-grid li {
-  color: rgba(15, 23, 42, .68);
-  font-size: 14px;
-  line-height: 1.55;
-}
-
-.ps-pricing-grid li::before {
-  color: #16a34a;
-  font-weight: 950;
-  content: "✓ ";
-}
-
-.ps-pricing-grid button {
-  height: 46px;
-  border-radius: 12px;
-  color: #fff;
-  background: #0f172a;
-  transition: transform 180ms ease, filter 180ms ease;
-}
-
-@keyframes ps-dash {
-  to { stroke-dashoffset: -48; }
-}
-
-@keyframes ps-route {
-  to { background-position: -200% 0; }
-}
-
-@keyframes ps-window-in {
-  from { opacity: 0; transform: translateY(16px) scale(.985); filter: blur(8px); }
-  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-}
-
-@keyframes ps-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-7px); }
-}
-
-@keyframes ps-node-in {
-  from { opacity: 0; transform: translateX(-12px) scale(.94); }
-  to { opacity: 1; transform: translateX(0) scale(1); }
-}
-
-@keyframes ps-node-float {
-  0%, 100% { translate: 0 0; }
-  50% { translate: 0 -7px; }
-}
-
-@keyframes ps-sheen {
-  0%, 45% { transform: translateX(0); opacity: 0; }
-  55% { opacity: 1; }
-  100% { transform: translateX(430%); opacity: 0; }
-}
-
-@keyframes ps-row-in {
-  from { opacity: 0; transform: translateX(-14px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes ps-meter {
-  0%, 100% { filter: saturate(1); }
-  50% { filter: saturate(1.28) brightness(1.06); }
-}
-
-@media (max-width: 1080px) {
-  .ps-hero,
-  .ps-console-body,
-  .ps-comparison-head,
-  .ps-comparison-row {
-    grid-template-columns: 1fr;
-  }
-
-  .ps-flow-chain {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .ps-flow-chain::before {
-    display: none;
-  }
-}
-
-@media (max-width: 680px) {
-  .ps-nav,
-  .ps-hero,
-  .ps-flow-section,
-  .ps-compare-section,
-  .ps-pricing-section {
-    width: min(100% - 28px, 760px);
-  }
-
-  .ps-nav nav {
-    display: none;
-  }
-
-  .ps-nav {
-    top: 10px;
-  }
-
-  .ps-brand strong {
-    font-size: 16px;
-  }
-
-  .ps-nav > button {
-    margin-left: auto;
-    padding: 0 16px;
-  }
-
-  .ps-hero {
-    min-height: auto;
-    grid-template-columns: 1fr;
-    gap: 34px;
-    padding: 44px 0 70px;
-  }
-
-  .ps-hero h1 {
-    max-width: 10ch;
-    font-size: 48px;
-  }
-
-  .ps-console-tabs,
-  .ps-flow-chain {
-    grid-template-columns: 1fr;
-  }
-
-  .ps-flow-diagram {
-    min-height: 240px;
-  }
-
-  .ps-flow-diagram span {
-    left: calc(8% + var(--i) * 20%);
-    min-width: 62px;
-    padding: 0 8px;
-  }
-
-  .ps-section-head h2 {
-    font-size: 34px;
-  }
-
-  .ps-comparison-row > *,
-  .ps-comparison-head strong {
-    padding: 14px 16px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ps-console-window,
-  .ps-flow-diagram path,
-  .ps-flow-diagram span,
-  .ps-shot-placeholder::after,
-  .ps-meter i,
-  .ps-flow-chain::before {
-    animation: none !important;
-  }
+@media (max-width: 640px) {
+  .feat-grid { grid-template-columns: 1fr; }
+  .why-claims { grid-template-columns: 1fr; }
+  .price-grid { grid-template-columns: 1fr; }
+  .cmp-header { grid-template-columns: 1fr; }
+  .cmp-header span:not(:first-child) { display: none; }
+  .cmp-row { grid-template-columns: 1fr; gap: 8px; }
+  .hero-stats { gap: 16px; }
+  .stat-div { display: none; }
+  .h1-line-top { font-size: clamp(1.8rem, 7vw, 2.6rem); }
+  .h1-line-bot { font-size: clamp(2.1rem, 8.5vw, 3.2rem); }
 }
 </style>

@@ -67,6 +67,6 @@ export const pageNavItems = [
   { to: "/search", label: "学术搜索", icon: "search" },
   { to: "/topics", label: "选题广场", icon: "search" },
   { to: "/forum", label: "学术论坛", icon: "forum" },
-  { to: "/models", label: "用量与额度", icon: "models" },
-  { to: "/team", label: "我的team", icon: "team" },
+  { to: "/models", label: "用量与重置", icon: "models" },
+  { to: "/team", label: "管理team", icon: "team" },
 ];

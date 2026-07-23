@@ -1,284 +1,403 @@
 <template>
-  <div class="topic-square-page">
-    <header class="square-toolbar">
-      <div class="toolbar-tabs">
-        <button type="button" :class="{ active: !savedOnly }" @click="setSavedOnly(false)">全部选题</button>
-        <button type="button" :class="{ active: savedOnly }" @click="setSavedOnly(true)">我的收藏</button>
+  <div class="topic-square-page spatial-page">
+
+    <!-- Ambient atmosphere -->
+    <div class="tsq-orb tsq-orb-a"></div>
+    <div class="tsq-orb tsq-orb-b"></div>
+
+    <!-- ───────────────── Page Header ───────────────── -->
+    <div class="tsq-page-head" data-reveal>
+      <div class="tsq-page-title">
+        <h1>选题广场</h1>
+        <p>{{ filteredTopics.length }} / {{ topics.length }} 个研究方向 · AI deep-research 驱动</p>
+      </div>
+      <button type="button" class="tsq-btn tsq-btn-primary" @click="openGenerator">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        发起调研
+      </button>
+      <button v-if="isAdmin" type="button" class="tsq-btn tsq-btn-ghost" :disabled="adminGenerating" @click="generateOfficialHotTopics">
+        {{ adminGenerating ? "AI 思考中…" : "AI 生成官方热点" }}
+      </button>
+    </div>
+
+    <!-- ───────────────── Filter Bar ───────────────── -->
+    <div class="tsq-filter-bar" data-reveal>
+      <!-- Tab switcher -->
+      <div class="tsq-tabs">
+        <button type="button" :class="['tsq-tab', { active: !savedOnly }]" @click="setSavedOnly(false)">全部选题</button>
+        <button type="button" :class="['tsq-tab', { active: savedOnly }]" @click="setSavedOnly(true)">我的收藏</button>
       </div>
 
-      <label class="toolbar-search">
-        <span>搜索</span>
-        <input v-model.trim="filters.keyword" type="search" placeholder="搜索选题 / 方向 / 关键词" @keyup.enter="loadTopics" />
+      <!-- Search -->
+      <label class="tsq-search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input v-model.trim="filters.keyword" type="search" placeholder="搜索选题、方向或关键词…" @keyup.enter="loadTopics" />
       </label>
 
-      <div class="toolbar-segment">
-        <button v-for="item in sortTabs" :key="item.value" type="button" :class="{ active: filters.sort === item.value }" @click="setSort(item.value)">
-          {{ item.label }}
-        </button>
+      <!-- Sort -->
+      <div class="tsq-sort">
+        <button
+          v-for="item in sortTabs" :key="item.value"
+          type="button"
+          :class="['tsq-sort-btn', { active: filters.sort === item.value }]"
+          @click="setSort(item.value)"
+        >{{ item.label }}</button>
       </div>
 
-      <select v-model="filters.tag" class="toolbar-select">
-        <option value="">按当前标签筛选</option>
-        <option v-for="item in availableTagFilters" :key="item.value" :value="item.value">
-          {{ item.value }}（{{ item.count }}）
-        </option>
-      </select>
-
-      <button type="button" class="toolbar-primary" @click="openGenerator">发起调研</button>
-      <button v-if="isAdmin" type="button" class="toolbar-admin-generate" :disabled="adminGenerating" @click="generateOfficialHotTopics">
-        {{ adminGenerating ? "AI 思考中" : "AI 生成官方热点" }}
+      <!-- Refresh -->
+      <button type="button" class="tsq-refresh" :disabled="loading || adminGenerating" @click="loadTopics" :title="loading ? '刷新中' : '刷新'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" :class="{ 'tsq-spin': loading }"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
       </button>
-    </header>
+    </div>
 
-    <section class="square-status-row">
-      <div>
-        <strong>选题广场</strong>
-        <span>{{ filteredTopics.length }} / {{ topics.length }} 个方向 · deep-research 接入后端 · 可收藏、查看代表论文来源、生成综述/组会提纲</span>
-      </div>
-      <button type="button" @click="loadTopics" :disabled="loading || adminGenerating">{{ loading ? "刷新中" : "刷新" }}</button>
-    </section>
+    <!-- ───────────────── Card Grid ───────────────── -->
+    <main class="tsq-grid" :class="{ 'tsq-loading': loading }">
 
-    <main class="topic-board" :class="{ loading }">
-      <article v-if="loading && !topics.length" v-for="index in 6" :key="index" class="topic-card skeleton-card"></article>
+      <!-- Skeleton -->
+      <div v-if="loading && !topics.length" v-for="n in 6" :key="n" class="tsq-skeleton"></div>
 
-      <article v-for="topic in filteredTopics" :key="topic.id" class="topic-card" :class="{ 'admin-manageable': isAdmin }" @click="selectedTopic = topic">
-        <div class="topic-visual" :class="visualClass(topic)">
-          <span class="provider-badge" :class="{ official: topicProviderLabel(topic) === '官方' }">{{ topicProviderLabel(topic) }}</span>
-          <button
-            v-if="isAdmin"
-            type="button"
-            class="topic-admin-delete"
-            :disabled="isDeletingTopic(topic)"
-            title="删除这个选题"
-            @click.stop="deleteTopicAsAdmin(topic)"
-          >
-            {{ isDeletingTopic(topic) ? "删除中" : "删除" }}
-          </button>
-          <div class="visual-system" aria-hidden="true">
-            <i class="axis axis-x"></i>
-            <i class="axis axis-y"></i>
-            <span v-for="index in 9" :key="index" :style="visualPointStyle(topic, index)"></span>
+      <!-- Cards -->
+      <article
+        v-for="topic in filteredTopics"
+        :key="topic.id"
+        class="tsq-card"
+        data-reveal="scale"
+        :class="{ 'tsq-card-admin': isAdmin }"
+        @click="selectedTopic = topic"
+      >
+        <!-- Hero Section -->
+        <div class="tsq-card-hero">
+          <div class="tsq-hero-badges">
+            <span class="tsq-provider-badge" :class="{ official: topicProviderLabel(topic) === '官方' }">
+              {{ topicProviderLabel(topic) }}
+            </span>
+            <button
+              v-if="isAdmin"
+              type="button"
+              class="tsq-admin-del"
+              :disabled="isDeletingTopic(topic)"
+              @click.stop="deleteTopicAsAdmin(topic)"
+            >{{ isDeletingTopic(topic) ? "删除中" : "删除" }}</button>
           </div>
-          <div class="visual-caption">
-            <strong>{{ firstCluster(topic) }}</strong>
-            <span>{{ topic.discipline }} · {{ topic.goal }} · {{ evidenceLabel(topic) }}</span>
+          <div class="tsq-hero-content">
+            <h3 class="tsq-hero-title">{{ topic.title }}</h3>
+            <p class="tsq-hero-subtitle">视觉-语言基础模型 × 跨模态融合 × 数据高效适配</p>
           </div>
         </div>
 
-        <div class="topic-body">
-          <h2>{{ topic.title }}</h2>
-          <p>{{ topic.summary }}</p>
-          <div class="topic-subtopics">
-            <span v-for="item in visibleSubtopics(topic)" :key="item.name || item">{{ item.name || item }}</span>
-          </div>
-          <div class="topic-tags">
+        <!-- Body -->
+        <div class="tsq-card-body">
+          <h2 class="tsq-body-title">{{ topic.title }}：{{ topic.goal }}</h2>
+          <p class="tsq-body-summary">{{ topic.summary }}</p>
+
+          <!-- Tag chips -->
+          <div v-if="visibleTags(topic).length" class="tsq-chips new-green-chips">
             <span v-for="tag in visibleTags(topic)" :key="tag">{{ tag }}</span>
-            <span v-if="hiddenTagCount(topic) > 0">+{{ hiddenTagCount(topic) }}</span>
+            <span v-if="hiddenTagCount(topic) > 0" class="tsq-chip-more">+{{ hiddenTagCount(topic) }}</span>
           </div>
+
+          <div class="tsq-publish-date">发布于 {{ topic.updatedAt || topic.createdAt || "2026-06-30" }}</div>
         </div>
 
-        <footer class="topic-meta">
-          <span>更新时间 {{ topic.updatedAt || topic.createdAt || "刚刚" }} · {{ topic.likes || 0 }} 人想做</span>
-          <div>
-            <button type="button" :disabled="topic.interested" @click.stop="markInterested(topic)">{{ topic.interested ? "已想做" : "想做" }}</button>
-            <button type="button" @click.stop="toggleSave(topic)">{{ topic.saved ? "已复用" : "复用收藏" }}</button>
+        <!-- Footer -->
+        <footer class="tsq-card-footer new-footer">
+          <div class="tsq-stats-group">
+            <span class="tsq-stat-item">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+              {{ topic.likes || 0 }}
+            </span>
+            <span class="tsq-stat-item">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+              0
+            </span>
+          </div>
+          <div class="tsq-footer-actions" style="display: flex; gap: 8px;">
+            <button type="button" class="tsq-action-btn tsq-wish-btn" @click.stop="toggleSave(topic)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+              收藏
+            </button>
+            <button type="button" class="tsq-action-btn tsq-download-btn" @click.stop="toggleSave(topic)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              想做
+            </button>
           </div>
         </footer>
       </article>
 
-      <div v-if="!loading && !filteredTopics.length" class="empty-state">
-        <strong>还没有匹配的选题</strong>
-        <span>{{ topics.length ? "换一个标签，或清空筛选。" : "换一个关键词，或直接发起一次 deep-research 调研。" }}</span>
-        <button type="button" @click="openGenerator">发起调研</button>
+      <!-- Empty state -->
+      <div v-if="!loading && !filteredTopics.length" class="tsq-empty">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <strong>暂无匹配的选题</strong>
+        <span>{{ topics.length ? "试试换一个标签，或清空筛选条件。" : "换一个关键词，或发起一次 deep-research 调研。" }}</span>
+        <button type="button" class="tsq-btn tsq-btn-primary" @click="openGenerator">发起调研</button>
       </div>
     </main>
 
-    <div v-if="selectedTopic" class="modal-backdrop" @click.self="selectedTopic = null">
-      <section class="topic-detail">
-        <button type="button" class="modal-close" @click="selectedTopic = null">×</button>
-        <header>
-          <span>{{ selectedTopic.discipline }} · {{ selectedTopic.stage }} · {{ selectedTopic.goal }}</span>
-          <h2>{{ selectedTopic.title }}</h2>
-          <p>{{ selectedTopic.summary }}</p>
-        </header>
+    <!-- ───────────────── Detail Modal ───────────────── -->
+    <Transition name="tsq-modal">
+      <div v-if="selectedTopic" class="tsq-modal-backdrop" @click.self="selectedTopic = null">
+        <section class="tsq-detail">
+          <button type="button" class="tsq-modal-close" @click="selectedTopic = null">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
 
-        <div class="score-strip">
-          <article><span>可行</span><strong>{{ selectedTopic.feasibility }}</strong></article>
-          <article><span>创新</span><strong>{{ selectedTopic.innovation }}</strong></article>
-          <article><span>难度</span><strong>{{ selectedTopic.difficulty }}</strong></article>
-        </div>
+          <!-- Hero -->
+          <header class="tsq-detail-hero">
+            <div class="tsq-detail-meta">
+              <span class="tsq-detail-discipline">{{ selectedTopic.discipline }}</span>
+              <span class="tsq-detail-dot">·</span>
+              <span>{{ selectedTopic.stage }}</span>
+              <span class="tsq-detail-dot">·</span>
+              <span>{{ selectedTopic.goal }}</span>
+            </div>
+            <h2>{{ selectedTopic.title }}</h2>
+            <p>{{ selectedTopic.summary }}</p>
+          </header>
 
-        <div class="detail-grid">
-          <article>
-            <h3>研究问题</h3>
-            <p>{{ detailText(selectedTopic, "question") }}</p>
-          </article>
-          <article>
-            <h3>研究空白</h3>
-            <p>{{ detailText(selectedTopic, "gap") }}</p>
-          </article>
-          <article>
-            <h3>方法路线</h3>
-            <p>{{ detailText(selectedTopic, "method") }}</p>
-          </article>
-          <article>
-            <h3>风险提醒</h3>
-            <p>{{ detailText(selectedTopic, "risk") }}</p>
-          </article>
-        </div>
-
-        <section class="subtopic-panel">
-          <div class="paper-panel-head">
-            <h3>推荐方向</h3>
-            <span>每个方向都由模型生成完整调研结构</span>
+          <!-- Score Row -->
+          <div class="tsq-score-row">
+            <div class="tsq-score-item">
+              <span>可行性</span>
+              <strong>{{ selectedTopic.feasibility }}</strong>
+            </div>
+            <div class="tsq-score-item">
+              <span>创新度</span>
+              <strong>{{ selectedTopic.innovation }}</strong>
+            </div>
+            <div class="tsq-score-item">
+              <span>难度</span>
+              <strong>{{ selectedTopic.difficulty }}</strong>
+            </div>
           </div>
-          <article v-for="(item, index) in detailSubtopics(selectedTopic)" :key="item.name" class="direction-report">
-            <div class="subtopic-title-row">
-              <div>
-                <small>推荐方向 {{ String(index + 1).padStart(2, "0") }}</small>
-                <strong>{{ item.name }}</strong>
-              </div>
-              <span>推荐度 {{ directionScore(item, selectedTopic, index) }}</span>
+
+          <!-- Detail grid -->
+          <div class="tsq-detail-grid">
+            <div class="tsq-detail-block">
+              <h3>研究问题</h3>
+              <p>{{ detailText(selectedTopic, "question") }}</p>
             </div>
-            <div class="subtopic-analysis direction-report-body">
-              <section v-for="block in directionReportBlocks(item, selectedTopic)" :key="block.label + block.text" :class="['direction-report-block', block.key]">
-                <b>{{ block.label }}</b>
-                <ul>
-                  <li v-for="point in blockPoints(block.text)" :key="point">{{ point }}</li>
-                </ul>
-              </section>
+            <div class="tsq-detail-block">
+              <h3>研究空白</h3>
+              <p>{{ detailText(selectedTopic, "gap") }}</p>
             </div>
-            <div v-if="subtopicPapers(item, selectedTopic).length" class="subtopic-papers">
-              <div v-for="paper in subtopicPapers(item, selectedTopic)" :key="paper.title" class="subtopic-paper-row">
+            <div class="tsq-detail-block">
+              <h3>方法路线</h3>
+              <p>{{ detailText(selectedTopic, "method") }}</p>
+            </div>
+            <div class="tsq-detail-block">
+              <h3>风险提醒</h3>
+              <p>{{ detailText(selectedTopic, "risk") }}</p>
+            </div>
+          </div>
+
+          <!-- Subtopic directions -->
+          <section class="tsq-directions">
+            <div class="tsq-directions-head">
+              <h3>推荐研究方向</h3>
+              <span>每个方向含完整调研结构</span>
+            </div>
+            <article
+              v-for="(item, index) in detailSubtopics(selectedTopic)"
+              :key="item.name"
+              class="tsq-direction-card"
+            >
+              <div class="tsq-direction-header">
                 <div>
-                  <b>{{ paper.title }}</b>
-                  <span>{{ paperSourceMeta(paper) }}</span>
-                  <button v-if="paperSourceUrl(paper)" type="button" class="paper-source-link" @click.stop="openPaperSource(paper)">查看来源</button>
+                  <small>方向 {{ String(index + 1).padStart(2, "0") }}</small>
+                  <strong>{{ item.name }}</strong>
+                </div>
+                <span class="tsq-direction-score">推荐度 {{ directionScore(item, selectedTopic, index) }}</span>
+              </div>
+
+              <div class="tsq-direction-blocks">
+                <div
+                  v-for="block in directionReportBlocks(item, selectedTopic)"
+                  :key="block.label"
+                  :class="['tsq-direction-block', block.key]"
+                >
+                  <b>{{ block.label }}</b>
+                  <ul>
+                    <li v-for="point in blockPoints(block.text)" :key="point">{{ point }}</li>
+                  </ul>
                 </div>
               </div>
-            </div>
-          </article>
-        </section>
 
-        <footer>
-          <button type="button" :disabled="selectedTopic.interested || selectedTopic.interestPending" @click="markInterested(selectedTopic)">{{ selectedTopic.interested ? "已想做" : "想做这个方向" }}</button>
-          <button type="button" @click="toggleSave(selectedTopic)">{{ selectedTopic.saved ? "已复用收藏" : "复用到我的收藏" }}</button>
-        </footer>
-      </section>
-    </div>
+              <div v-if="subtopicPapers(item, selectedTopic).length" class="tsq-direction-papers">
+                <div v-for="paper in subtopicPapers(item, selectedTopic)" :key="paper.title" class="tsq-paper-row">
+                  <div class="tsq-paper-info">
+                    <b>{{ paper.title }}</b>
+                    <span>{{ paperSourceMeta(paper) }}</span>
+                  </div>
+                  <button v-if="paperSourceUrl(paper)" type="button" class="tsq-paper-link" @click.stop="openPaperSource(paper)">查看来源</button>
+                </div>
+              </div>
+            </article>
+          </section>
 
-    <div v-if="showGenerator" class="modal-backdrop" @click.self="closeGenerator">
-      <section class="generator-modal">
-        <button type="button" class="modal-close" @click="closeGenerator">×</button>
-        <header>
-          <span>deep-research</span>
-          <h2>生成一个可继续推进的选题。</h2>
-        </header>
-
-        <form v-if="!generating" class="generator-form" @submit.prevent="generateTopic">
-          <label class="full">
-            研究方向
-            <input v-model.trim="generatorForm.direction" required placeholder="例如：低资源场景下的多模态医学影像分析" />
-          </label>
-          <label>
-            研究方向大类
-            <input v-model.trim="generatorForm.discipline" required list="discipline-presets" placeholder="例如：医学影像 / 药物发现 / 教育技术" />
-            <datalist id="discipline-presets">
-              <option v-for="item in disciplinePresets" :key="item" :value="item" />
-            </datalist>
-          </label>
-          <label>
-            学历阶段
-            <select v-model="generatorForm.stage">
-              <option v-for="item in stages" :key="item" :value="item">{{ item }}</option>
-            </select>
-          </label>
-          <label>
-            目标用途
-            <select v-model="generatorForm.goal">
-              <option v-for="item in goals" :key="item" :value="item">{{ item }}</option>
-            </select>
-          </label>
-          <label>
-            资源条件
-            <select v-model="generatorForm.resource">
-              <option v-for="item in resources" :key="item" :value="item">{{ item }}</option>
-            </select>
-          </label>
-          <label>
-            数据来源
-            <select v-model="generatorForm.dataAccess">
-              <option v-for="item in dataAccessOptions" :key="item" :value="item">{{ item }}</option>
-            </select>
-          </label>
-          <label>
-            数据/样本形态
-            <select v-model="generatorForm.sampleType">
-              <option v-for="item in sampleTypes" :key="item" :value="item">{{ item }}</option>
-            </select>
-          </label>
-          <label>
-            方法偏好
-            <select v-model="generatorForm.methodPreference">
-              <option v-for="item in methodOptions" :key="item" :value="item">{{ item }}</option>
-            </select>
-          </label>
-          <label>
-            选题尺度
-            <select v-model="generatorForm.topicScale">
-              <option v-for="item in topicScales" :key="item" :value="item">{{ item }}</option>
-            </select>
-          </label>
-          <label>
-            期望贡献
-            <select v-model="generatorForm.expectedContribution">
-              <option v-for="item in contributionOptions" :key="item" :value="item">{{ item }}</option>
-            </select>
-          </label>
-          <fieldset class="full chip-field">
-            <legend>重点约束</legend>
-            <button v-for="item in constraintOptions" :key="item" type="button" :class="{ active: generatorForm.constraints.includes(item) }" @click="toggleConstraint(item)">
-              {{ item }}
+          <!-- Detail footer -->
+          <footer class="tsq-detail-footer">
+            <button type="button" class="tsq-btn tsq-btn-ghost" :disabled="selectedTopic.interested || selectedTopic.interestPending" @click="markInterested(selectedTopic)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              {{ selectedTopic.interested ? "已想做" : "想做这个方向" }}
             </button>
-          </fieldset>
-          <label>
-            英文关键词
-            <input v-model.trim="generatorForm.keywords" placeholder="例如：few-shot segmentation, foundation model" />
-          </label>
-          <label>
-            避开路线
-            <input v-model.trim="generatorForm.avoidRoutes" placeholder="例如：不做纯综述、不做模型堆叠" />
-          </label>
-          <label class="full">
-            已读/想参考的论文
-            <textarea v-model.trim="generatorForm.seedPapers" rows="3" placeholder="可粘贴 1-5 篇论文题名、DOI 或 arXiv 号；系统会尽量围绕这些论文扩展，而不是乱发散"></textarea>
-          </label>
-          <label class="full">
-            补充说明
-            <textarea v-model.trim="generatorForm.note" rows="4" placeholder="写清楚专业、可拿到的数据、导师方向、已有论文、希望偏理论/工程/应用，或明确不想做的路线"></textarea>
-          </label>
-          <button type="submit" class="toolbar-primary">开始调研</button>
-        </form>
+            <button type="button" class="tsq-btn tsq-btn-primary" @click="toggleSave(selectedTopic)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              {{ selectedTopic.saved ? "已复用收藏" : "复用到我的收藏" }}
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Transition>
 
-        <div v-else class="research-progress">
-          <header class="research-progress-head">
-            <strong>正在生成调研 brief</strong>
-            <span>{{ generationSteps[generationIndex] }}</span>
+    <!-- ───────────────── Generator Modal ───────────────── -->
+    <Transition name="tsq-modal">
+      <div v-if="showGenerator" class="tsq-modal-backdrop" @click.self="closeGenerator">
+        <section class="tsq-generator">
+          <button type="button" class="tsq-modal-close" @click="closeGenerator">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+
+          <header class="tsq-gen-header">
+            <span class="tsq-gen-label">deep-research</span>
+            <h2>生成一个可继续推进的选题</h2>
           </header>
-          <div v-for="(step, index) in generationSteps" :key="step" :class="{ active: index <= generationIndex }">
-            <i>{{ index + 1 }}</i>
-            <span>{{ step }}</span>
-          </div>
-          <p>会先用方向大类扩展检索词，再用真实候选文献筛掉泛题，最后把每个推荐方向写成摘要、具体方法、发文现状、优势、局限、潜在论文和代表论文。</p>
-        </div>
-      </section>
-    </div>
 
-    <div v-if="toastMessage" class="topic-toast">{{ toastMessage }}</div>
+          <form v-if="!generating" class="tsq-gen-form" @submit.prevent="generateTopic">
+            <label class="tsq-field tsq-field-full">
+              <span>研究方向 <em>*</em></span>
+              <input v-model.trim="generatorForm.direction" required placeholder="例如：低资源场景下的多模态医学影像分析" />
+            </label>
+            <label class="tsq-field tsq-field-full">
+              <span>研究方向大类 <em>*</em></span>
+              <input v-model.trim="generatorForm.discipline" required list="discipline-presets" placeholder="例如：医学影像 / 药物发现 / 教育技术" />
+              <datalist id="discipline-presets">
+                <option v-for="item in disciplinePresets" :key="item" :value="item" />
+              </datalist>
+            </label>
+            <div class="tsq-field-row">
+              <label class="tsq-field">
+                <span>学历阶段</span>
+                <select v-model="generatorForm.stage">
+                  <option v-for="item in stages" :key="item" :value="item">{{ item }}</option>
+                </select>
+              </label>
+              <label class="tsq-field">
+                <span>目标用途</span>
+                <select v-model="generatorForm.goal">
+                  <option v-for="item in goals" :key="item" :value="item">{{ item }}</option>
+                </select>
+              </label>
+              <label class="tsq-field">
+                <span>资源条件</span>
+                <select v-model="generatorForm.resource">
+                  <option v-for="item in resources" :key="item" :value="item">{{ item }}</option>
+                </select>
+              </label>
+              <label class="tsq-field">
+                <span>数据来源</span>
+                <select v-model="generatorForm.dataAccess">
+                  <option v-for="item in dataAccessOptions" :key="item" :value="item">{{ item }}</option>
+                </select>
+              </label>
+              <label class="tsq-field">
+                <span>数据形态</span>
+                <select v-model="generatorForm.sampleType">
+                  <option v-for="item in sampleTypes" :key="item" :value="item">{{ item }}</option>
+                </select>
+              </label>
+              <label class="tsq-field">
+                <span>方法偏好</span>
+                <select v-model="generatorForm.methodPreference">
+                  <option v-for="item in methodOptions" :key="item" :value="item">{{ item }}</option>
+                </select>
+              </label>
+              <label class="tsq-field">
+                <span>选题尺度</span>
+                <select v-model="generatorForm.topicScale">
+                  <option v-for="item in topicScales" :key="item" :value="item">{{ item }}</option>
+                </select>
+              </label>
+              <label class="tsq-field">
+                <span>期望贡献</span>
+                <select v-model="generatorForm.expectedContribution">
+                  <option v-for="item in contributionOptions" :key="item" :value="item">{{ item }}</option>
+                </select>
+              </label>
+            </div>
+
+            <fieldset class="tsq-constraint-field">
+              <legend>重点约束</legend>
+              <div class="tsq-constraint-chips">
+                <button
+                  v-for="item in constraintOptions"
+                  :key="item"
+                  type="button"
+                  :class="['tsq-constraint-chip', { active: generatorForm.constraints.includes(item) }]"
+                  @click="toggleConstraint(item)"
+                >{{ item }}</button>
+              </div>
+            </fieldset>
+
+            <label class="tsq-field">
+              <span>英文关键词</span>
+              <input v-model.trim="generatorForm.keywords" placeholder="例如：few-shot segmentation, foundation model" />
+            </label>
+            <label class="tsq-field">
+              <span>避开路线</span>
+              <input v-model.trim="generatorForm.avoidRoutes" placeholder="例如：不做纯综述、不做模型堆叠" />
+            </label>
+            <label class="tsq-field tsq-field-full">
+              <span>已读 / 想参考的论文</span>
+              <textarea v-model.trim="generatorForm.seedPapers" rows="3" placeholder="可粘贴 1-5 篇论文题名、DOI 或 arXiv 号"></textarea>
+            </label>
+            <label class="tsq-field tsq-field-full">
+              <span>补充说明</span>
+              <textarea v-model.trim="generatorForm.note" rows="4" placeholder="专业、可拿到的数据、导师方向、已有论文、希望偏理论/工程/应用等"></textarea>
+            </label>
+
+            <div class="tsq-gen-submit">
+              <button type="submit" class="tsq-btn tsq-btn-primary tsq-btn-lg">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                开始调研
+              </button>
+            </div>
+          </form>
+
+          <!-- Progress -->
+          <div v-else class="tsq-progress">
+            <div class="tsq-progress-header">
+              <strong>{{ generationThinkingTitle }}</strong>
+              <span>{{ generationThinkingCopy }}</span>
+            </div>
+            <div class="tsq-progress-track">
+              <div class="tsq-progress-fill" :style="{ width: generationProgressWidth }"></div>
+            </div>
+            <ol class="tsq-progress-steps">
+              <li
+                v-for="(step, i) in generationSteps"
+                :key="step"
+                :class="{ active: i <= generationIndex, current: i === generationIndex }"
+              >
+                <i>{{ i + 1 }}</i>
+                <span>{{ step }}</span>
+              </li>
+            </ol>
+            <p class="tsq-progress-note">系统先扩展检索词，再筛选真实文献，最后按七段结构输出推荐方向与代表论文。</p>
+          </div>
+        </section>
+      </div>
+    </Transition>
+
+    <!-- Toast -->
+    <Transition name="tsq-toast">
+      <div v-if="toastMessage" class="tsq-toast">{{ toastMessage }}</div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
+import { useScrollReveal } from "../composables/useScrollReveal";
+useScrollReveal(".topic-square-page");
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { paperpilotApi } from "../services/paperpilotApi";
@@ -318,6 +437,17 @@ const sortTabs = [
   { label: "点赞最多", value: "liked" },
 ];
 const generationSteps = ["读取研究 brief", "拆解对象和数据", "扩展中英文检索词", "检索真实文献", "生成 3-5 个推荐方向", "筛掉泛题和重复方向", "匹配代表论文来源", "写调研报告", "写入我的收藏"];
+const generationThinking = [
+  ["正在读你的约束", "会把学历阶段、资源条件、避开路线和目标用途一起送进模型，不直接套模板。"],
+  ["正在收窄研究对象", "先判断对象、样本、数据来源和可验证指标，防止生成“提升方法”这种泛方向。"],
+  ["正在扩展检索词", "会组合中文方向、英文关键词、种子论文和学科词，优先找能支撑开题的小切口。"],
+  ["正在查真实来源", "从可用学术来源拉候选论文，后面每个小方向都必须绑定能对上的文献。"],
+  ["正在生成小方向", "每个小方向需要写清摘要、具体方法、发文现状、优势、局限、潜在论文和代表论文。"],
+  ["正在做质量门检查", "如果段落太短、论文不对应、或者话术太空，会自动要求模型返工。"],
+  ["正在匹配文献", "只保留能在检索候选中找到的论文来源，避免把不相关论文塞进推荐方向。"],
+  ["正在整理报告", "把模型结果排成可读的分点结构，不让大段文字糊成一团。"],
+  ["正在写入收藏", "生成完成后会进入我的收藏，同时在 AI 调用明细中留下真实模型调用记录。"],
+];
 
 const filters = reactive({
   keyword: "",
@@ -355,6 +485,14 @@ const generationIndex = ref(0);
 const toastMessage = ref("");
 const deletingTopicIds = ref(new Set());
 let progressTimer = null;
+
+const generationProgressWidth = computed(() => {
+  const total = Math.max(1, generationSteps.length - 1);
+  return `${Math.round((generationIndex.value / total) * 100)}%`;
+});
+
+const generationThinkingTitle = computed(() => generationThinking[generationIndex.value]?.[0] || "正在生成");
+const generationThinkingCopy = computed(() => generationThinking[generationIndex.value]?.[1] || "正在等待模型返回结构化结果。");
 
 onMounted(loadTopics);
 onBeforeUnmount(() => {
@@ -439,16 +577,18 @@ async function generateTopic() {
   const startedAt = Date.now();
   progressTimer = setInterval(() => {
     generationIndex.value = Math.min(generationSteps.length - 1, generationIndex.value + 1);
-  }, 1500);
+  }, 2300);
   try {
     const result = await paperpilotApi.generateTopic({ ...generatorForm, maxTopics: 1 });
-    const minimumMs = 12500;
+    const minimumMs = 19000;
     const elapsed = Date.now() - startedAt;
     if (elapsed < minimumMs) {
       await new Promise(resolve => setTimeout(resolve, minimumMs - elapsed));
     }
     const createdTopics = Array.isArray(result) ? result : [result];
     const createdIds = new Set(createdTopics.map(item => item.id));
+    generationIndex.value = generationSteps.length - 1;
+    await new Promise(resolve => setTimeout(resolve, 650));
     topics.value = [...createdTopics, ...topics.value.filter(item => !createdIds.has(item.id))];
     selectedTopic.value = createdTopics[0] || null;
     savedOnly.value = true;
@@ -470,7 +610,7 @@ async function generateOfficialHotTopics() {
   toast("管理员热点生成已开始：正在调用选题调研模型和真实文献检索");
   try {
     const generated = await paperpilotApi.generateAdminHotTopics({ maxTopics: 3 });
-    const minimumMs = 16000;
+    const minimumMs = 24000;
     const elapsed = Date.now() - startedAt;
     if (elapsed < minimumMs) {
       await new Promise(resolve => setTimeout(resolve, minimumMs - elapsed));
@@ -605,12 +745,12 @@ function topicProviderLabel(topic) {
 function detailSubtopics(topic) {
   const items = Array.isArray(topic?.subtopics) ? topic.subtopics : [];
   if (items.length) return items.slice(0, 5);
-  const names = [...(topic?.themeClusters || []), ...(topic?.tags || [])].filter(Boolean);
-  return names.slice(0, 5).map(name => ({
-    name,
-    analysis: `从“${name}”切入，可以把大方向收窄到一个可检索、可复现的小问题。`,
-    papers: (topic?.papers || []).slice(0, 2),
-  }));
+  return [{
+    name: "等待重新调研",
+    analysis: "【摘要】这张旧选题卡缺少模型返回的结构化小方向，不能当作完整调研结果使用。【具体方法】请点击发起调研或由管理员重新生成官方热点，系统会重新检索真实代表论文并让模型按七段结构输出。【发文现状】旧数据只保留标题和标签，无法判断发文热度、数据条件和论文来源是否匹配。【优势】重新生成后会把研究对象、样本形态、指标和代表论文绑定到每个小方向下。【局限】如果检索不到足够真实论文，系统会提示失败，不再用宽泛模板补齐。【潜在论文】需要先完成一次真实调研后再给出可写题目。【代表论文】暂无匹配论文。",
+    papers: [],
+    stale: true,
+  }];
 }
 
 function analysisBlocks(value) {
@@ -645,14 +785,14 @@ function directionReportBlocks(item, topic) {
     ? papers.map(paper => `《${paper.title}》（${paperSourceMeta(paper)}）`).join("；")
     : "候选文献不足，需要继续检索英文关键词、近三年综述和公开数据来源。";
   const fallback = {
-    "摘要": `“${item?.name || "当前方向"}”需要先限定研究对象、数据来源和评价指标，再判断是否适合继续开题或投稿。`,
-    "具体方法": detailText(topic, "method"),
+    "摘要": "该段缺少模型返回内容，建议重新发起调研后再使用。",
+    "具体方法": "该段缺少模型返回内容，不能自动补成通用方法。",
     "发文现状": papers.length
       ? `当前代表论文主要来自 ${papers.map(paper => paper.source || paper.verifiedBy || "academic-search").filter(Boolean).slice(0, 3).join("、")}；建议按年份、数据集、方法和指标整理发文矩阵，再判断是热点延伸还是应用补洞。`
       : "当前方向还缺少足够真实来源，建议扩大英文关键词后再判断发文热度。",
-    "优势": "这个方向如果能拿到可复现数据，容易形成清楚的问题边界、方法对照和可解释指标，后续也能自然进入综述、组会汇报和论文计划。",
-    "局限": detailText(topic, "risk"),
-    "潜在论文": `可围绕“${item?.name || topic?.title || "当前方向"}”写成小论文：先提出任务缺口，再给出数据、方法、实验和失败边界，避免只做泛泛综述。`,
+    "优势": "该段缺少模型返回内容，重新调研后会补充与小方向对应的优势。",
+    "局限": "该段缺少模型返回内容，重新调研后会补充真实风险与边界。",
+    "潜在论文": "该段缺少模型返回内容，不能据此直接开题。",
     "代表论文": paperText,
   };
   const order = ["摘要", "具体方法", "发文现状", "优势", "局限", "潜在论文", "代表论文"];
@@ -686,11 +826,14 @@ function blockPoints(value) {
 
 function directionScore(item, topic, index) {
   const explicit = Number(item?.recommendationScore || item?.score || item?.recommendation);
-  if (Number.isFinite(explicit) && explicit > 0) return Math.max(1, Math.min(99, Math.round(explicit)));
+  if (Number.isFinite(explicit) && explicit > 0) {
+    const value = explicit <= 1 ? explicit * 100 : explicit;
+    return `${Math.max(1, Math.min(100, Math.round(value)))}%`;
+  }
   const feasibility = Number(topic?.feasibility) || 72;
   const innovation = Number(topic?.innovation) || 72;
   const paperBoost = Math.min(8, subtopicPapers(item, topic).length * 3);
-  return Math.max(68, Math.min(96, Math.round(feasibility * 0.48 + innovation * 0.34 + paperBoost + 10 - index * 3)));
+  return `${Math.max(68, Math.min(100, Math.round(feasibility * 0.48 + innovation * 0.34 + paperBoost + 10 - index * 3)))}%`;
 }
 
 function subtopicPapers(item, topic) {
@@ -762,13 +905,11 @@ function detailText(topic, key) {
   return "主要风险是题目过宽、真实数据不足或代表论文不稳定；需要在查看来源并核验 PDF 后继续补充。";
 }
 
-function visualClass(topic) {
-  const value = `${topic.discipline || ""}${topic.title || ""}`;
-  if (value.includes("医学") || value.includes("影像")) return "visual-cyan";
-  if (value.includes("Mamba") || value.includes("目标")) return "visual-indigo";
-  if (value.includes("材料") || value.includes("经济") || value.includes("管理")) return "visual-amber";
-  if (value.includes("心理") || value.includes("教育")) return "visual-rose";
-  return "visual-green";
+function visualClass(topic, index = 0) {
+  const classes = ["visual-indigo", "visual-purple", "visual-emerald", "visual-amber", "visual-rose", "visual-cyan"];
+  const idx = typeof index === "number" && !isNaN(index) ? index : 0;
+  const colorIdx = (idx * 2 + Math.floor(idx / 3)) % classes.length;
+  return classes[colorIdx];
 }
 
 function visualPointStyle(topic, index) {
@@ -794,1169 +935,1603 @@ function toast(message) {
 </script>
 
 <style scoped>
+/* =========================================================================
+   TOPIC SQUARE — Natural · Refined · Dual-theme
+   ========================================================================= */
+
+/* ── CSS variables ─────────────────────────────────────── */
 .topic-square-page {
+  --c-bg:         #f5f6f8;
+  --c-surface:    #ffffff;
+  --c-border:     rgba(15, 23, 42, 0.08);
+  --c-text:       #0f172a;
+  --c-muted:      #64748b;
+  --c-subtle:     #94a3b8;
+  --c-accent:     #6366f1;
+  --c-accent2:    #a855f7;
+  --c-strip-a:    #0f766e;
+  --c-strip-b:    #1e40af;
+  --c-strip-c:    #7c3aed;
+  --c-strip-d:    #92400e;
+  --sh-card:      0 2px 8px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.04);
+  --sh-float:     0 12px 40px rgba(15,23,42,.12), 0 2px 8px rgba(15,23,42,.06);
+  --r-card:       16px;
+  --r-sm:         10px;
+  --r-pill:       999px;
+}
+
+:root[data-theme="dark"] .topic-square-page {
+  --c-bg:         #0b0d14;
+  --c-surface:    rgba(18, 24, 40, 0.85);
+  --c-border:     rgba(255, 255, 255, 0.07);
+  --c-text:       #f1f5f9;
+  --c-muted:      #94a3b8;
+  --c-subtle:     #64748b;
+  --sh-card:      0 2px 8px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.24);
+  --sh-float:     0 20px 60px rgba(0,0,0,.5);
+}
+
+/* ── Page base ─────────────────────────────────────────── */
+.topic-square-page {
+  position: relative;
   min-height: 100vh;
-  padding: 24px 0 64px;
-  color: #172033;
-  background: #f4f7fb;
+  background: var(--c-bg);
+  color: var(--c-text);
+  padding: 36px min(48px, 5vw) 100px;
+  overflow-x: hidden;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  transition: background 0.3s, color 0.3s;
 }
 
-.square-toolbar {
-  position: sticky;
-  top: 86px;
-  z-index: 20;
-  display: grid;
-  grid-template-columns: auto minmax(260px, 1fr) auto minmax(160px, 220px) auto auto;
+/* ── Ambient orbs ──────────────────────────────────────── */
+.tsq-orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(80px);
+  z-index: 0;
+  animation: tsq-float 14s ease-in-out infinite alternate;
+}
+.tsq-orb-a {
+  width: 500px; height: 500px;
+  top: -60px; left: -140px;
+  background: radial-gradient(circle, rgba(99,102,241,0.16) 0%, transparent 70%);
+}
+.tsq-orb-b {
+  width: 420px; height: 420px;
+  top: 400px; right: -100px;
+  background: radial-gradient(circle, rgba(168,85,247,0.14) 0%, transparent 70%);
+  animation-delay: -7s;
+}
+@keyframes tsq-float {
+  from { transform: translate(0,0) scale(1); }
+  to   { transform: translate(24px,-20px) scale(1.06); }
+}
+
+/* ── Inner content wrapper ─────────────────────────────── */
+.tsq-page-head,
+.tsq-filter-bar,
+.tsq-grid {
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
+  margin-inline: auto;
+}
+
+/* ── Page head ─────────────────────────────────────────── */
+.tsq-page-head {
+  display: flex;
+  align-items: center;
   gap: 14px;
-  align-items: center;
-  width: min(1480px, calc(100% - 48px));
-  margin: 0 auto 24px;
-  padding: 10px;
-  border: 1px solid rgba(23, 32, 51, .1);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, .92);
-  backdrop-filter: blur(14px);
+  margin-bottom: 28px;
+  flex-wrap: wrap;
 }
 
-.toolbar-tabs,
-.toolbar-segment {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 10px;
-  background: #eef3fa;
+.tsq-page-title { flex: 1; min-width: 0; }
+.tsq-page-title h1 {
+  margin: 0 0 4px;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -0.4px;
+  color: var(--c-text);
 }
-
-button,
-select,
-input,
-textarea {
-  font: inherit;
-}
-
-button {
-  border: 0;
-  cursor: pointer;
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: .62;
-}
-
-.toolbar-tabs button,
-.toolbar-segment button {
-  min-height: 38px;
-  padding: 0 16px;
-  border-radius: 8px;
-  color: #66758c;
-  background: transparent;
-  font-weight: 850;
-  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
-}
-
-.toolbar-tabs button.active,
-.toolbar-segment button.active {
-  color: #111827;
-  background: #fff;
-  box-shadow: 0 6px 14px rgba(23, 32, 51, .08);
-}
-
-.toolbar-search {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  min-height: 46px;
-  overflow: hidden;
-  border: 1px solid #d9e2ef;
-  border-radius: 10px;
-  background: #fff;
-}
-
-.toolbar-search span {
-  padding: 0 14px;
-  color: #7b8798;
+.tsq-page-title p {
+  margin: 0;
   font-size: 13px;
-  font-weight: 900;
+  color: var(--c-muted);
 }
 
-.toolbar-search input,
-.toolbar-select,
-.generator-form input,
-.generator-form select,
-.generator-form textarea {
-  width: 100%;
-  border: 1px solid #d9e2ef;
-  outline: none;
-  color: #172033;
-  background: #fff;
-}
-
-.toolbar-search input {
-  min-height: 44px;
-  border: 0;
-}
-
-.toolbar-select {
-  min-height: 46px;
-  padding: 0 14px;
-  border-radius: 10px;
-  font-weight: 800;
-}
-
-.toolbar-primary,
-.toolbar-admin-generate,
-.square-status-row button,
-.download-btn,
-.topic-detail footer .primary {
-  min-height: 42px;
-  padding: 0 18px;
-  border-radius: 9px;
-  color: #fff;
-  background: #23863a;
-  font-weight: 900;
-  transition: transform 160ms ease, filter 160ms ease;
-}
-
-.toolbar-primary:hover,
-.toolbar-admin-generate:hover,
-.square-status-row button:hover,
-.download-btn:hover,
-.topic-detail footer button:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.04);
-}
-
-.toolbar-admin-generate {
-  color: #0f3b2e;
-  background: #dcfce7;
-  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, .26);
-}
-
-.square-status-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
+/* ── Buttons ───────────────────────────────────────────── */
+.tsq-btn {
+  display: inline-flex;
   align-items: center;
-  width: min(1480px, calc(100% - 48px));
-  margin: 0 auto 18px;
-}
-
-.square-status-row div {
-  display: grid;
-  gap: 5px;
-}
-
-.square-status-row strong {
-  font-size: 24px;
-}
-
-.square-status-row span {
-  color: #66758c;
+  gap: 7px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--r-pill);
+  border: none;
+  font-size: 13px;
   font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+.tsq-btn-primary {
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(99,102,241,0.32);
+}
+.tsq-btn-primary:hover { transform: translateY(-1.5px); box-shadow: 0 8px 24px rgba(99,102,241,0.42); }
+.tsq-btn-ghost {
+  background: transparent;
+  border: 1px solid var(--c-border);
+  color: var(--c-muted);
+}
+.tsq-btn-ghost:hover { border-color: var(--c-accent); color: var(--c-accent); background: rgba(99,102,241,0.06); }
+.tsq-btn-lg { height: 46px; padding: 0 28px; font-size: 15px; }
+
+/* ── Filter bar ────────────────────────────────────────── */
+.tsq-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin-bottom: 28px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 14px;
+  box-shadow: var(--sh-card);
+  backdrop-filter: blur(20px);
+  flex-wrap: wrap;
 }
 
-.square-status-row button {
-  color: #172033;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px #d9e2ef;
+/* Tabs */
+.tsq-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--c-bg);
+  border-radius: var(--r-pill);
+  flex-shrink: 0;
+}
+.tsq-tab {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: var(--r-pill);
+  border: none;
+  background: transparent;
+  color: var(--c-muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.tsq-tab.active {
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(99,102,241,0.28);
 }
 
-.topic-board {
-  width: min(1480px, calc(100% - 48px));
+/* Search */
+.tsq-search {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 38px;
+  padding: 0 14px;
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-pill);
+  color: var(--c-muted);
+  transition: border-color 0.2s;
+}
+.tsq-search:focus-within { border-color: var(--c-accent); }
+.tsq-search input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--c-text);
+  font-size: 13px;
+  outline: none;
+}
+.tsq-search input::placeholder { color: var(--c-subtle); }
+
+/* Sort */
+.tsq-sort {
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.tsq-sort-btn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--c-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.tsq-sort-btn.active {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+  background: rgba(99,102,241,0.08);
+}
+.tsq-sort-btn:hover:not(.active) { color: var(--c-text); background: var(--c-bg); }
+
+/* Select */
+.tsq-select {
+  height: 38px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Refresh */
+.tsq-refresh {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-muted);
   display: grid;
-  grid-template-columns: repeat(3, minmax(330px, 1fr));
-  gap: 24px;
-  margin: 0 auto;
+  place-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+.tsq-refresh:hover { border-color: var(--c-accent); color: var(--c-accent); transform: rotate(30deg); }
+.tsq-spin { animation: tsq-spin 0.8s linear infinite; }
+@keyframes tsq-spin { to { transform: rotate(360deg); } }
+
+/* ── Card grid ─────────────────────────────────────────── */
+.tsq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
 }
 
-.topic-board.loading {
-  opacity: .78;
-}
-
-.topic-card {
-  min-height: 438px;
+/* ── Card ──────────────────────────────────────────────── */
+.tsq-card {
   display: flex;
   flex-direction: column;
+  border-radius: var(--r-card);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  box-shadow: var(--sh-card);
   overflow: hidden;
-  border: 1px solid rgba(23, 32, 51, .12);
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 14px 30px rgba(23, 32, 51, .06);
-  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  cursor: pointer;
+  transition: transform 0.28s cubic-bezier(0.16,1,0.3,1), box-shadow 0.28s ease, border-color 0.22s ease;
+}
+.tsq-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--sh-float);
+  border-color: rgba(99,102,241,0.28);
 }
 
-.topic-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(37, 99, 235, .36);
-  box-shadow: 0 18px 36px rgba(23, 32, 51, .1);
-}
-
-.topic-visual {
+/* Strip */
+.tsq-card-strip {
   position: relative;
-  height: 136px;
-  flex: 0 0 136px;
+  height: 130px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   overflow: hidden;
-  color: #fff;
-  background:
-    radial-gradient(circle at 78% 24%, rgba(255, 255, 255, .24), transparent 22%),
-    linear-gradient(135deg, #053b31, #0d7b65);
+  background: linear-gradient(135deg, var(--c-strip-a), #115e59);
+}
+.visual-green .tsq-card-strip, .tsq-card-strip.visual-green { background: linear-gradient(135deg, #0f766e, #115e59); }
+.visual-blue  .tsq-card-strip, .tsq-card-strip.visual-blue  { background: linear-gradient(135deg, #1d4ed8, #1e40af); }
+.visual-purple.tsq-card-strip, .tsq-card-strip.visual-purple { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+.visual-amber .tsq-card-strip, .tsq-card-strip.visual-amber  { background: linear-gradient(135deg, #d97706, #92400e); }
+.visual-rose  .tsq-card-strip, .tsq-card-strip.visual-rose   { background: linear-gradient(135deg, #e11d48, #be123c); }
+.visual-teal  .tsq-card-strip, .tsq-card-strip.visual-teal   { background: linear-gradient(135deg, #0891b2, #0e7490); }
+
+.tsq-provider-badge {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(6px);
+  color: rgba(255,255,255,0.92);
+  letter-spacing: 0.2px;
+}
+.tsq-provider-badge.official {
+  background: rgba(251,191,36,0.24);
+  color: #fde68a;
 }
 
-.visual-cyan {
-  background:
-    radial-gradient(circle at 78% 24%, rgba(255, 255, 255, .22), transparent 22%),
-    linear-gradient(135deg, #07344a, #0e8ea8);
+.tsq-admin-del {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  border: none;
+  background: rgba(239,68,68,0.2);
+  color: #fca5a5;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
 }
 
-.visual-indigo {
-  background:
-    radial-gradient(circle at 78% 24%, rgba(255, 255, 255, .22), transparent 22%),
-    linear-gradient(135deg, #1b1b5b, #4f46e5);
-}
-
-.visual-amber {
-  background:
-    radial-gradient(circle at 78% 24%, rgba(255, 255, 255, .24), transparent 22%),
-    linear-gradient(135deg, #493209, #bd7a12);
-}
-
-.visual-rose {
-  background:
-    radial-gradient(circle at 78% 24%, rgba(255, 255, 255, .22), transparent 22%),
-    linear-gradient(135deg, #4a1024, #be345d);
-}
-
-.visual-green {
-  background:
-    radial-gradient(circle at 78% 24%, rgba(255, 255, 255, .22), transparent 22%),
-    linear-gradient(135deg, #073a2e, #128060);
-}
-
-.topic-visual::after {
-  content: "";
+/* Data-viz dots */
+.tsq-dot-system {
   position: absolute;
   inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, .1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, .1) 1px, transparent 1px);
-  background-size: 36px 36px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, .86), rgba(0, 0, 0, .24));
+  pointer-events: none;
+  opacity: 0.35;
 }
-
-.provider-badge {
+.tsq-axis {
   position: absolute;
-  top: 14px;
-  left: 14px;
-  z-index: 3;
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 11px;
-  border: 1px solid rgba(255, 255, 255, .5);
-  border-radius: 999px;
-  color: #eaf4ff;
-  background: rgba(15, 23, 42, .28);
-  backdrop-filter: blur(8px);
-  font-size: 12px;
-  font-weight: 900;
+  background: rgba(255,255,255,0.35);
 }
-
-.provider-badge.official {
-  color: #064e3b;
-  background: #ecfdf5;
-  border-color: rgba(236, 253, 245, .75);
-}
-
-.topic-admin-delete {
+.tsq-axis-x { bottom: 36px; left: 0; right: 0; height: 1px; }
+.tsq-axis-y { top: 0; bottom: 0; left: 50%; width: 1px; }
+.tsq-dot-system span {
   position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 4;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  color: #7f1d1d;
-  background: rgba(255, 255, 255, .92);
-  box-shadow: 0 4px 8px rgba(23, 32, 51, .12);
-  font-size: 12px;
-  font-weight: 900;
-  transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.7);
 }
 
-.topic-admin-delete:hover:not(:disabled) {
-  transform: translateY(-1px);
-  color: #fff;
-  background: #dc2626;
-}
-
-.visual-system {
-  position: absolute;
-  inset: 18px 26px 42px;
+.tsq-strip-caption {
+  position: relative;
   z-index: 1;
 }
-
-.visual-system::before,
-.visual-system::after {
-  content: "";
-  position: absolute;
-  inset: 8px 12%;
-  border: 1px solid rgba(255, 255, 255, .32);
-  border-radius: 999px;
-  transform: rotate(-9deg);
-}
-
-.visual-system::after {
-  inset: 14px 20%;
-  opacity: .58;
-  transform: rotate(13deg);
-}
-
-.visual-system .axis {
-  position: absolute;
-  background: rgba(255, 255, 255, .28);
-}
-
-.visual-system .axis-x {
-  left: 6%;
-  right: 6%;
-  top: 50%;
-  height: 1px;
-}
-
-.visual-system .axis-y {
-  top: 5%;
-  bottom: 5%;
-  left: 50%;
-  width: 1px;
-}
-
-.visual-system span {
-  position: absolute;
-  z-index: 2;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 0 0 5px rgba(255, 255, 255, .13);
-  animation: pulsePoint 2.6s ease-in-out infinite;
-}
-
-@keyframes pulsePoint {
-  0%, 100% { transform: scale(.82); opacity: .7; }
-  50% { transform: scale(1.16); opacity: 1; }
-}
-
-.visual-caption {
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: 14px;
-  z-index: 2;
-  display: grid;
-  gap: 4px;
-}
-
-.visual-caption strong {
-  font-size: 18px;
-}
-
-.visual-caption span {
-  opacity: .78;
-  font-size: 12px;
+.tsq-strip-caption strong {
+  display: block;
+  font-size: 15px;
   font-weight: 800;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.topic-body {
-  flex: 1;
-  padding: 20px 22px 8px;
-}
-
-.topic-body h2 {
-  min-height: 56px;
-  margin: 0 0 10px;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  font-size: 20px;
-  line-height: 1.38;
-  letter-spacing: 0;
-}
-
-.topic-body p {
-  min-height: 54px;
-  margin: 0 0 14px;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  color: #66758c;
-  line-height: 1.7;
-  font-weight: 680;
-}
-
-.topic-subtopics {
-  min-height: 34px;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.topic-subtopics span {
-  max-width: 100%;
-  display: inline-flex;
-  align-items: center;
-  overflow: hidden;
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  color: #1f3a5f;
-  background: #f4f8ff;
-  font-size: 12px;
-  font-weight: 850;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.topic-tags {
-  min-height: 30px;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 6px;
-}
-
-.topic-tags span {
-  min-height: 26px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 10px;
-  border: 1px solid #b7ead2;
-  border-radius: 999px;
-  color: #047857;
-  background: #ecfdf5;
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.topic-meta {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-  padding: 12px 22px 18px;
-  color: #7b8798;
-  font-weight: 750;
-}
-
-.topic-meta div {
-  display: grid;
-  grid-template-columns: auto auto;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.topic-meta > span {
-  min-width: 0;
-  font-size: 13px;
-}
-
-.topic-meta button,
-.topic-detail footer button {
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 8px;
-  color: #59677b;
-  background: #eef3fa;
-  font-size: 13px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.topic-meta .download-btn {
   color: #fff;
-  background: #23863a;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.tsq-strip-caption span {
+  font-size: 12px;
+  color: rgba(255,255,255,0.76);
 }
 
-.empty-state {
+/* Card body */
+.tsq-card-body {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tsq-card-body h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.45;
+  color: var(--c-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tsq-card-body p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--c-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Chips */
+.tsq-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tsq-chips-sub span {
+  padding: 4px 11px;
+  border-radius: var(--r-pill);
+  font-size: 11.5px;
+  font-weight: 700;
+  background: rgba(99,102,241,0.08);
+  color: var(--c-accent);
+  border: 1px solid rgba(99,102,241,0.15);
+}
+.tsq-chips-tag span {
+  padding: 4px 11px;
+  border-radius: var(--r-pill);
+  font-size: 11.5px;
+  font-weight: 700;
+  background: var(--c-bg);
+  color: var(--c-muted);
+  border: 1px solid var(--c-border);
+}
+.tsq-chip-more {
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  font-size: 11.5px;
+  font-weight: 700;
+  background: var(--c-bg);
+  color: var(--c-subtle);
+  border: 1px dashed var(--c-border);
+}
+
+/* Card footer */
+.tsq-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--c-border);
+}
+.tsq-meta-time {
+  font-size: 11.5px;
+  color: var(--c-subtle);
+}
+.tsq-card-actions { display: flex; gap: 6px; }
+.tsq-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-border);
+  background: transparent;
+  color: var(--c-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.tsq-action-btn:hover { border-color: var(--c-accent); color: var(--c-accent); background: rgba(99,102,241,0.07); }
+.tsq-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.tsq-action-save {
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
+  border-color: transparent;
+  color: #fff !important;
+  box-shadow: 0 3px 10px rgba(99,102,241,0.3);
+}
+.tsq-action-save:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(99,102,241,0.42); border-color: transparent; }
+
+/* Skeleton */
+.tsq-skeleton {
+  height: 340px;
+  border-radius: var(--r-card);
+  background: linear-gradient(90deg, var(--c-bg) 25%, var(--c-surface) 50%, var(--c-bg) 75%);
+  background-size: 300% 100%;
+  animation: tsq-shimmer 1.4s ease infinite;
+  border: 1px solid var(--c-border);
+}
+@keyframes tsq-shimmer { to { background-position: -300% 0; } }
+
+/* Empty state */
+.tsq-empty {
   grid-column: 1 / -1;
-  min-height: 280px;
-  display: grid;
-  place-items: center;
-  gap: 10px;
-  padding: 40px;
-  border: 1px dashed #cbd5e1;
-  border-radius: 18px;
-  color: #66758c;
-  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 80px 24px;
   text-align: center;
 }
+.tsq-empty strong { font-size: 18px; color: var(--c-text); }
+.tsq-empty span { font-size: 14px; color: var(--c-muted); }
 
-.empty-state strong {
-  color: #172033;
-  font-size: 22px;
-}
-
-.empty-state button {
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 8px;
-  color: #fff;
-  background: #2563eb;
-  font-weight: 900;
-}
-
-.modal-backdrop {
+/* ── Modal backdrop ────────────────────────────────────── */
+.tsq-modal-backdrop {
   position: fixed;
-  inset: 74px 0 0;
-  z-index: 80;
+  inset: 0;
+  z-index: 200;
+  background: rgba(10,14,28,0.48);
+  backdrop-filter: blur(8px);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  overflow: auto;
-  padding: 22px 24px 28px;
-  background: rgba(15, 23, 42, .46);
-}
-
-.topic-detail,
-.generator-modal {
-  position: relative;
-  width: min(980px, 100%);
-  max-height: calc(100vh - 120px);
-  overflow: auto;
   padding: 24px;
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 28px 80px rgba(15, 23, 42, .22);
 }
 
-.generator-modal {
-  width: min(1120px, 100%);
-}
-
-.modal-close {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
-  background: #eef3fa;
-  font-size: 24px;
-  font-weight: 800;
-}
-
-.topic-detail header,
-.generator-modal header {
-  max-width: 820px;
-  padding-right: 48px;
-}
-
-.topic-detail header span,
-.generator-modal header span {
-  color: #2563eb;
-  font-weight: 950;
-}
-
-.topic-detail h2,
-.generator-modal h2 {
-  margin: 10px 0 12px;
-  font-size: 34px;
-  line-height: 1.16;
-  letter-spacing: 0;
-}
-
-.topic-detail header p {
-  color: #66758c;
-  line-height: 1.75;
-  font-weight: 700;
-}
-
-.score-strip {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin: 22px 0;
-}
-
-.score-strip article {
-  display: flex;
-  justify-content: space-between;
-  padding: 16px;
-  border-radius: 12px;
-  background: #f4f8ff;
-}
-
-.score-strip span {
-  color: #66758c;
-  font-weight: 850;
-}
-
-.score-strip strong {
-  font-size: 26px;
-}
-
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.detail-grid article,
-.paper-panel,
-.subtopic-panel {
-  padding: 18px;
-  border: 1px solid #dbe5f3;
-  border-radius: 14px;
-  background: #fbfdff;
-}
-
-.detail-grid h3,
-.paper-panel h3,
-.subtopic-panel h3 {
-  margin: 0 0 10px;
-}
-
-.detail-grid p,
-.paper-panel p,
-.subtopic-panel p {
-  margin: 0;
-  color: #59677b;
-  line-height: 1.75;
-  font-weight: 680;
-}
-
-.paper-panel,
-.subtopic-panel {
-  display: grid;
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.subtopic-panel .direction-report {
-  display: grid;
-  gap: 15px;
-  padding: 18px 20px;
-  border: 1px solid rgba(15, 118, 110, .22);
-  border-radius: 16px;
-  background:
-    linear-gradient(180deg, rgba(240, 253, 250, .78), rgba(255, 255, 255, .98) 210px),
-    #fff;
-}
-
-.subtopic-title-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  align-items: center;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #e5edf6;
-}
-
-.subtopic-title-row > div {
-  min-width: 0;
-  display: grid;
-  gap: 5px;
-}
-
-.subtopic-title-row small {
-  color: #0f766e;
-  font-size: 12px;
-  font-weight: 950;
-}
-
-.subtopic-title-row strong {
-  color: #172033;
-  font-size: 18px;
-  line-height: 1.35;
-  text-wrap: balance;
-}
-
-.subtopic-title-row span {
-  flex: 0 0 auto;
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 11px;
-  border-radius: 999px;
-  color: #92400e;
-  background: #fff7df;
-  border: 1px solid #fde68a;
-  font-size: 12px;
-  font-weight: 950;
-}
-
-.subtopic-analysis,
-.direction-report-body {
-  display: grid;
-  gap: 0;
-}
-
-.direction-report-block {
-  display: grid;
-  grid-template-columns: 104px minmax(0, 1fr);
-  gap: 14px;
-  padding: 13px 0;
-  border-bottom: 1px dashed rgba(15, 23, 42, .12);
-  background: transparent;
-}
-
-.direction-report-block:first-child {
-  padding-top: 2px;
-}
-
-.direction-report-block:last-child {
-  border-bottom: 0;
-}
-
-.subtopic-analysis b {
-  position: sticky;
-  top: 10px;
-  align-self: start;
-  color: #0f766e;
-  font-size: 13px;
-  font-weight: 950;
-  line-height: 1.5;
-}
-
-.subtopic-analysis b::before {
-  content: "";
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: 8px;
-  border-radius: 999px;
-  background: currentColor;
-  vertical-align: 1px;
-}
-
-.subtopic-analysis ul {
-  min-width: 0;
-  display: grid;
-  gap: 5px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.subtopic-analysis li {
+/* ── Detail modal ──────────────────────────────────────── */
+.tsq-detail {
   position: relative;
-  min-width: 0;
-  max-width: 78ch;
-  color: #405169;
-  line-height: 1.68;
-  font-size: 13px;
-  font-weight: 690;
-  text-wrap: pretty;
-}
-
-.subtopic-analysis li::before {
-  content: "·";
-  margin-right: 6px;
-  color: #0f766e;
-  font-weight: 950;
-}
-
-.direction-report-block.paper-block {
-  padding: 12px 14px;
-  border: 1px solid rgba(15, 118, 110, .16);
-  border-radius: 14px;
-  background: #f7fffd;
-}
-
-.subtopic-papers {
-  display: grid;
-  gap: 7px;
-}
-
-.subtopic-paper-row,
-.represent-paper-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 9px 10px 9px 12px;
-  border: 1px solid #d7efe9;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #f7fffd 0%, #ffffff 78%);
-}
-
-.subtopic-paper-row > div,
-.represent-paper-row > div {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.subtopic-paper-row b,
-.represent-paper-row strong {
-  overflow: hidden;
-  color: #0f2b3b;
-  font-size: 12px;
-  font-weight: 880;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.subtopic-paper-row span,
-.subtopic-paper-row a,
-.represent-paper-row span,
-.represent-paper-row a {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 760;
-}
-
-.subtopic-paper-row a,
-.represent-paper-row a {
-  color: #0f766e;
-  text-decoration: none;
-}
-
-.paper-source-link {
-  width: fit-content;
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid #b7ead2;
-  border-radius: 8px;
-  color: #0f766e;
-  background: #ecfdf5;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.represent-paper-row p {
-  margin: 0;
-  color: #64748b;
-  font-size: 13px;
-  line-height: 1.6;
-  font-weight: 680;
-}
-
-.represent-paper-row button {
-  min-height: 34px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 10px;
-  color: #fff;
-  background: #14804f;
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.represent-paper-row button:hover {
-  background: #0f6a43;
-  transform: translateY(-1px);
-}
-
-.paper-panel-head {
+  width: min(860px, 100%);
+  max-height: 88vh;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 20px;
+  box-shadow: var(--sh-float);
+  backdrop-filter: blur(24px);
+  overflow-y: auto;
+  padding: 36px 36px 28px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.paper-panel-head h3 {
-  margin: 0;
-}
-
-.paper-panel-head span {
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 10px;
-  border-radius: 999px;
-  color: #0f766e;
-  background: #ccfbf1;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.paper-panel div {
-  display: grid;
-  gap: 4px;
-  padding: 12px;
-  border-radius: 10px;
-  background: #fff;
-}
-
-.paper-panel span {
-  color: #66758c;
-  font-weight: 750;
-}
-
-.paper-panel a {
-  width: fit-content;
-  color: #2563eb;
-  font-weight: 900;
-  text-decoration: none;
-}
-
-.paper-empty {
-  padding: 14px;
-  border-radius: 10px;
-  color: #59677b;
-  background: #f8fbff;
-}
-
-.topic-detail footer {
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.generator-form {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 22px;
-}
-
-.generator-form label {
-  display: grid;
-  gap: 8px;
-  color: #475569;
-  font-weight: 900;
-}
-
-.generator-form .full,
-.chip-field {
-  grid-column: 1 / -1;
-}
-
-.generator-form label:nth-of-type(1),
-.generator-form label:nth-of-type(2) {
-  grid-column: span 2;
-}
-
-.generator-form input,
-.generator-form select,
-.generator-form textarea {
-  min-height: 46px;
-  padding: 0 14px;
-  border-radius: 10px;
-}
-
-.generator-form textarea {
-  min-height: 120px;
-  padding-top: 12px;
-  resize: vertical;
-}
-
-.chip-field {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  padding: 12px;
-  border: 1px solid #d9e2ef;
-  border-radius: 12px;
-  background: #f8fbff;
-}
-
-.chip-field legend {
-  padding: 0 6px;
-  color: #475569;
-  font-weight: 900;
-}
-
-.chip-field button {
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid #d5e0ee;
-  border-radius: 999px;
-  color: #526176;
-  background: #fff;
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.chip-field button.active {
-  color: #065f46;
-  border-color: #86efac;
-  background: #ecfdf5;
-}
-
-.research-progress {
-  display: grid;
-  gap: 12px;
-  margin-top: 24px;
-}
-
-.research-progress-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-  padding: 16px 18px;
-  border: 1px solid #dbe5f3;
-  border-radius: 14px;
-  background: #f8fbff;
-}
-
-.research-progress-head strong {
-  color: #172033;
-  font-size: 18px;
-}
-
-.research-progress-head span {
-  color: #2563eb;
-  font-weight: 950;
-}
-
-.research-progress div {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 52px;
-  padding: 0 14px;
-  border: 1px solid #dbe5f3;
-  border-radius: 12px;
-  color: #66758c;
-  background: #f8fbff;
-  font-weight: 900;
-}
-
-.research-progress div.active {
-  border-color: #86efac;
-  color: #047857;
-  background: #ecfdf5;
-}
-
-.research-progress i {
-  width: 28px;
-  height: 28px;
+.tsq-modal-close {
+  position: absolute;
+  top: 18px; right: 18px;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-muted);
   display: grid;
   place-items: center;
-  border-radius: 999px;
-  color: #fff;
-  background: #2563eb;
-  font-style: normal;
-  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.18s;
+  z-index: 2;
+}
+.tsq-modal-close:hover { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #ef4444; }
+
+.tsq-detail-hero { }
+.tsq-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--c-muted);
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.tsq-detail-discipline {
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: rgba(99,102,241,0.1);
+  color: var(--c-accent);
+  font-weight: 750;
+}
+.tsq-detail-dot { color: var(--c-border); }
+.tsq-detail-hero h2 {
+  margin: 0 0 10px;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.4;
+  color: var(--c-text);
+}
+.tsq-detail-hero p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--c-muted);
 }
 
-.research-progress p {
-  color: #66758c;
+.tsq-score-row {
+  display: flex;
+  gap: 12px;
+}
+.tsq-score-item {
+  flex: 1;
+  padding: 14px 18px;
+  border-radius: var(--r-sm);
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  text-align: center;
+}
+.tsq-score-item span {
+  display: block;
+  font-size: 12px;
+  color: var(--c-muted);
+  margin-bottom: 6px;
+}
+.tsq-score-item strong {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--c-accent);
+}
+
+.tsq-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.tsq-detail-block {
+  padding: 16px;
+  border-radius: var(--r-sm);
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+}
+.tsq-detail-block h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--c-accent);
+}
+.tsq-detail-block p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.68;
+  color: var(--c-muted);
+}
+
+/* Directions */
+.tsq-directions-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.tsq-directions-head h3 { margin: 0; font-size: 16px; font-weight: 900; color: var(--c-text); }
+.tsq-directions-head span { font-size: 12.5px; color: var(--c-muted); }
+
+.tsq-direction-card {
+  padding: 20px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tsq-direction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.tsq-direction-header small {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--c-accent);
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.tsq-direction-header strong {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--c-text);
+  line-height: 1.4;
+}
+.tsq-direction-score {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border-radius: var(--r-pill);
+  background: rgba(99,102,241,0.1);
+  color: var(--c-accent);
+  font-size: 12px;
   font-weight: 750;
 }
 
-.topic-toast {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 100;
-  padding: 13px 16px;
-  border-radius: 12px;
-  color: #fff;
-  background: #172033;
+.tsq-direction-blocks {
+  display: grid;
+  gap: 10px;
+}
+.tsq-direction-block {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--c-border);
+}
+.tsq-direction-block:last-child { border-bottom: none; }
+.tsq-direction-block b {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--c-accent);
+  align-self: flex-start;
+  padding-top: 2px;
+}
+.tsq-direction-block ul {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.tsq-direction-block li {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--c-muted);
+}
+.tsq-direction-block li::before {
+  content: "·";
+  margin-right: 6px;
+  color: var(--c-accent);
   font-weight: 900;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, .22);
+}
+.tsq-direction-block.paper-block {
+  background: rgba(99,102,241,0.05);
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(99,102,241,0.12);
+  grid-template-columns: 1fr;
+}
+.tsq-direction-block.paper-block b { margin-bottom: 8px; }
+
+.tsq-direction-papers { display: flex; flex-direction: column; gap: 8px; }
+.tsq-paper-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+}
+.tsq-paper-info { flex: 1; min-width: 0; }
+.tsq-paper-info b {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--c-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tsq-paper-info span { font-size: 12px; color: var(--c-muted); }
+.tsq-paper-link {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(99,102,241,0.3);
+  background: rgba(99,102,241,0.08);
+  color: var(--c-accent);
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
 }
 
-.skeleton-card {
-  min-height: 438px;
-  background: linear-gradient(90deg, #eef3fa, #fff, #eef3fa);
-  background-size: 220% 100%;
-  animation: shimmer 1.2s linear infinite;
+.tsq-detail-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid var(--c-border);
 }
 
-@keyframes shimmer {
-  to { background-position: -220% 0; }
+/* ── Generator modal ───────────────────────────────────── */
+.tsq-generator {
+  position: relative;
+  width: min(760px, 100%);
+  max-height: 90vh;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 20px;
+  box-shadow: var(--sh-float);
+  backdrop-filter: blur(24px);
+  overflow-y: auto;
+  padding: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
-@media (max-width: 1180px) {
-  .square-toolbar {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .toolbar-search,
-  .toolbar-select {
-    min-width: 0;
-  }
-
-  .topic-board {
-    grid-template-columns: repeat(2, minmax(300px, 1fr));
-  }
+.tsq-gen-header { }
+.tsq-gen-label {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: rgba(99,102,241,0.1);
+  color: var(--c-accent);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 10px;
+}
+.tsq-gen-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--c-text);
 }
 
-@media (max-width: 720px) {
-  .topic-square-page {
-    padding-top: 18px;
-  }
+.tsq-gen-form { display: flex; flex-direction: column; gap: 14px; }
 
-  .square-toolbar,
-  .square-status-row,
-  .topic-board {
-    width: calc(100% - 28px);
-  }
+.tsq-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.tsq-field span {
+  font-size: 12.5px;
+  font-weight: 750;
+  color: var(--c-muted);
+}
+.tsq-field em { color: var(--c-accent); font-style: normal; }
+.tsq-field input,
+.tsq-field select,
+.tsq-field textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+.tsq-field input:focus,
+.tsq-field select:focus,
+.tsq-field textarea:focus { border-color: var(--c-accent); }
+.tsq-field-full { width: 100%; }
+.tsq-field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
 
-  .square-toolbar {
-    position: static;
-    grid-template-columns: 1fr;
-  }
+.tsq-constraint-field {
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  padding: 14px;
+  background: var(--c-bg);
+}
+.tsq-constraint-field legend {
+  padding: 0 8px;
+  font-size: 12.5px;
+  font-weight: 750;
+  color: var(--c-muted);
+}
+.tsq-constraint-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tsq-constraint-chip {
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.tsq-constraint-chip.active {
+  border-color: var(--c-accent);
+  background: rgba(99,102,241,0.1);
+  color: var(--c-accent);
+}
 
-  .square-status-row {
-    align-items: stretch;
-    flex-direction: column;
-  }
+.tsq-gen-submit {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
 
-  .topic-board {
-    grid-template-columns: 1fr;
-  }
+/* Progress */
+.tsq-progress { display: flex; flex-direction: column; gap: 18px; }
+.tsq-progress-header strong { display: block; font-size: 16px; font-weight: 900; color: var(--c-text); margin-bottom: 4px; }
+.tsq-progress-header span { font-size: 13.5px; color: var(--c-muted); }
+.tsq-progress-track {
+  height: 5px;
+  border-radius: 99px;
+  background: var(--c-border);
+  overflow: hidden;
+}
+.tsq-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--c-accent), var(--c-accent2));
+  border-radius: 99px;
+  transition: width 0.5s ease;
+}
+.tsq-progress-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+}
+.tsq-progress-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  font-size: 12.5px;
+  color: var(--c-subtle);
+  transition: all 0.3s;
+}
+.tsq-progress-steps li.active { color: var(--c-text); background: rgba(99,102,241,0.06); border-color: rgba(99,102,241,0.15); }
+.tsq-progress-steps li.current { border-color: var(--c-accent); color: var(--c-accent); background: rgba(99,102,241,0.1); }
+.tsq-progress-steps li i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--c-border);
+  font-size: 11px;
+  font-weight: 900;
+  font-style: normal;
+  color: var(--c-muted);
+  flex-shrink: 0;
+}
+.tsq-progress-steps li.active i { background: rgba(99,102,241,0.15); color: var(--c-accent); }
+.tsq-progress-steps li.current i { background: var(--c-accent); color: #fff; }
+.tsq-progress-note { font-size: 12.5px; color: var(--c-subtle); line-height: 1.7; margin: 0; }
 
-  .topic-meta div {
-    grid-template-columns: 1fr;
-  }
+/* ── Toast ─────────────────────────────────────────────── */
+.tsq-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  padding: 12px 24px;
+  border-radius: var(--r-pill);
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+  white-space: nowrap;
+}
+:root[data-theme="dark"] .tsq-toast { background: #334155; }
 
-  .topic-meta button {
-    width: 100%;
-  }
+/* ── Modal transitions ─────────────────────────────────── */
+.tsq-modal-enter-active { transition: all 0.3s cubic-bezier(0.16,1,0.3,1); }
+.tsq-modal-leave-active { transition: all 0.2s ease; }
+.tsq-modal-enter-from, .tsq-modal-leave-to {
+  opacity: 0;
+}
+.tsq-modal-enter-from .tsq-detail,
+.tsq-modal-enter-from .tsq-generator {
+  transform: scale(0.95) translateY(12px);
+}
 
-  .topic-detail,
-  .generator-modal {
-    max-height: calc(100vh - 112px);
-    padding: 22px;
-  }
+.tsq-toast-enter-active { transition: all 0.3s cubic-bezier(0.16,1,0.3,1); }
+.tsq-toast-leave-active { transition: all 0.2s ease; }
+.tsq-toast-enter-from, .tsq-toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(12px); }
 
-  .topic-detail h2,
-  .generator-modal h2 {
-    font-size: 26px;
-  }
-
-  .score-strip,
-  .detail-grid,
-  .generator-form {
-    grid-template-columns: 1fr;
-  }
-
-  .generator-form label,
-  .generator-form label:nth-of-type(1),
-  .generator-form label:nth-of-type(2) {
-    grid-column: 1 / -1;
-  }
-
-  .direction-report-block {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
+/* ── Responsive ────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .tsq-grid { grid-template-columns: repeat(2, 1fr); }
+  .tsq-detail-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .topic-square-page { padding: 20px 16px 80px; }
+  .tsq-grid { grid-template-columns: 1fr; }
+  .tsq-filter-bar { gap: 8px; }
+  .tsq-score-row { flex-direction: column; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: .01ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
     transition-duration: .01ms !important;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   ALTERNATING VIBRANT CARD THEMES & HIGH-END CARD REDESIGN
+   ════════════════════════════════════════════════════════════ */
+
+.tsq-card {
+  border-radius: 20px !important;
+  overflow: hidden !important;
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04) !important;
+}
+
+.tsq-card:hover {
+  transform: translateY(-5px) scale(1.01) !important;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12) !important;
+}
+
+:root[data-theme="dark"] .tsq-card:hover {
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Theme 1: Cyan / Blue Tint (科技蓝) */
+:root[data-theme="light"] .tsq-grid > .tsq-card:nth-child(5n+1) {
+  background: linear-gradient(145deg, #f0f7ff 0%, #e0f2fe 100%) !important;
+  border: 1px solid rgba(186, 230, 253, 0.9) !important;
+}
+:root[data-theme="dark"] .tsq-grid > .tsq-card:nth-child(5n+1) {
+  background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%) !important;
+  border: 1px solid rgba(56, 189, 248, 0.25) !important;
+}
+
+/* Theme 2: Purple / Violet Tint (极光紫) */
+:root[data-theme="light"] .tsq-grid > .tsq-card:nth-child(5n+2) {
+  background: linear-gradient(145deg, #faf5ff 0%, #f3e8ff 100%) !important;
+  border: 1px solid rgba(233, 213, 255, 0.9) !important;
+}
+:root[data-theme="dark"] .tsq-grid > .tsq-card:nth-child(5n+2) {
+  background: linear-gradient(145deg, #18122b 0%, #271b44 100%) !important;
+  border: 1px solid rgba(192, 132, 252, 0.25) !important;
+}
+
+/* Theme 3: Emerald / Mint Tint (翡翠绿) */
+:root[data-theme="light"] .tsq-grid > .tsq-card:nth-child(5n+3) {
+  background: linear-gradient(145deg, #f0fdf4 0%, #dcfce7 100%) !important;
+  border: 1px solid rgba(187, 247, 208, 0.9) !important;
+}
+:root[data-theme="dark"] .tsq-grid > .tsq-card:nth-child(5n+3) {
+  background: linear-gradient(145deg, #0d1f1a 0%, #143027 100%) !important;
+  border: 1px solid rgba(52, 211, 153, 0.25) !important;
+}
+
+/* Theme 4: Amber / Gold Tint (琥珀金) */
+:root[data-theme="light"] .tsq-grid > .tsq-card:nth-child(5n+4) {
+  background: linear-gradient(145deg, #fffbe0 0%, #fef3c7 100%) !important;
+  border: 1px solid rgba(253, 230, 138, 0.9) !important;
+}
+:root[data-theme="dark"] .tsq-grid > .tsq-card:nth-child(5n+4) {
+  background: linear-gradient(145deg, #23180c 0%, #382611 100%) !important;
+  border: 1px solid rgba(251, 191, 36, 0.25) !important;
+}
+
+/* Theme 5: Rose / Sunset Tint (晚霞粉) */
+:root[data-theme="light"] .tsq-grid > .tsq-card:nth-child(5n+0) {
+  background: linear-gradient(145deg, #fff1f2 0%, #ffe4e6 100%) !important;
+  border: 1px solid rgba(254, 205, 211, 0.9) !important;
+}
+:root[data-theme="dark"] .tsq-grid > .tsq-card:nth-child(5n+0) {
+  background: linear-gradient(145deg, #241018 0%, #3a1724 100%) !important;
+  border: 1px solid rgba(251, 113, 133, 0.25) !important;
+}
+
+/* Card Body & Text Polish */
+.tsq-card-body h2 {
+  font-size: 16.5px !important;
+  font-weight: 900 !important;
+  line-height: 1.4 !important;
+  margin-bottom: 8px !important;
+}
+
+:root[data-theme="light"] .tsq-card-body h2 {
+  color: #0f172a !important;
+}
+:root[data-theme="dark"] .tsq-card-body h2 {
+  color: #f8fafc !important;
+}
+
+.tsq-card-body p {
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+}
+
+:root[data-theme="light"] .tsq-card-body p {
+  color: #475569 !important;
+}
+:root[data-theme="dark"] .tsq-card-body p {
+  color: #94a3b8 !important;
+}
+
+/* Chips Polish */
+.tsq-chips span {
+  border-radius: 999px !important;
+  font-size: 11px !important;
+  font-weight: 750 !important;
+  padding: 3px 10px !important;
+}
+
+
+
+/* ════════════════════════════════════════════════════════════
+   VIBRANT DISTINCT HEADER STRIPS FOR ADJACENT TOPIC CARDS
+   ════════════════════════════════════════════════════════════ */
+
+.tsq-card-strip {
+  height: 120px !important;
+  position: relative !important;
+  padding: 14px 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  overflow: hidden !important;
+  transition: all 0.25s ease !important;
+}
+
+/* 6 High-End Distinct Gradients for Header Strips */
+.visual-indigo.tsq-card-strip, .tsq-card-strip.visual-indigo {
+  background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%) !important;
+}
+
+.visual-purple.tsq-card-strip, .tsq-card-strip.visual-purple {
+  background: linear-gradient(135deg, #9333ea 0%, #6b21a8 100%) !important;
+}
+
+.visual-emerald.tsq-card-strip, .tsq-card-strip.visual-emerald {
+  background: linear-gradient(135deg, #059669 0%, #064e3b 100%) !important;
+}
+
+.visual-amber.tsq-card-strip, .tsq-card-strip.visual-amber {
+  background: linear-gradient(135deg, #d97706 0%, #78350f 100%) !important;
+}
+
+.visual-rose.tsq-card-strip, .tsq-card-strip.visual-rose {
+  background: linear-gradient(135deg, #e11d48 0%, #881337 100%) !important;
+}
+
+.visual-cyan.tsq-card-strip, .tsq-card-strip.visual-cyan {
+  background: linear-gradient(135deg, #0891b2 0%, #164e63 100%) !important;
+}
+
+/* Badge & Caption Polish */
+.tsq-provider-badge {
+  background: rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(8px) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+  padding: 3px 10px !important;
+  border-radius: 999px !important;
+  width: fit-content !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+.tsq-strip-caption strong {
+  color: #ffffff !important;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+  display: block !important;
+}
+
+.tsq-strip-caption span {
+  color: rgba(255, 255, 255, 0.82) !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  display: block !important;
+  margin-top: 2px !important;
+}
+
+
+
+/* ════════════════════════════════════════════════════════════
+   SOFT ELEGANT PASTEL HEADER STRIPS (ZERO NEIGHBOR COLLISION)
+   ════════════════════════════════════════════════════════════ */
+
+.tsq-card-strip {
+  height: 115px !important;
+  position: relative !important;
+  padding: 14px 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  overflow: hidden !important;
+}
+
+/* Light Mode: Soft Elegant Pastel Tint Gradients with Crisp Dark Text */
+:root[data-theme="light"] .visual-indigo.tsq-card-strip {
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%) !important;
+}
+:root[data-theme="light"] .visual-purple.tsq-card-strip {
+  background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%) !important;
+}
+
+:root[data-theme="dark"] .tsq-card-body p {
+  color: #94a3b8 !important;
+}
+
+.tsq-chips span {
+  padding: 3px 10px !important;
+  border-radius: 999px !important;
+  font-size: 11px !important;
+  font-weight: 750 !important;
+}
+
+:root[data-theme="light"] .tsq-chips span {
+  background: #ecfdf3 !important;
+  color: #067647 !important;
+  border: 1px solid #bbf7d0 !important;
+}
+:root[data-theme="dark"] .tsq-chips span {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+}
+
+/* Remove ambient atmosphere background */
+.tsq-orb {
+  display: none !important;
+}
+
+.tsq-card-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+  padding-top: 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+:root[data-theme="light"] .tsq-card-footer {
+  border-top: 1px solid #f1f5f9 !important;
+}
+
+.tsq-meta-time {
+  font-size: 11.5px !important;
+}
+
+:root[data-theme="light"] .tsq-meta-time {
+  color: #94a3b8 !important;
+}
+:root[data-theme="dark"] .tsq-meta-time {
+  color: #64748b !important;
+}
+
+.tsq-action-btn {
+  height: 28px !important;
+  padding: 0 12px !important;
+  border-radius: 999px !important;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+}
+
+:root[data-theme="light"] .tsq-action-btn {
+  background: #ffffff !important;
+  color: #475569 !important;
+  border: 1px solid #e2e8f0 !important;
+}
+:root[data-theme="light"] .tsq-action-btn:hover {
+  background: linear-gradient(135deg, #6366f1, #a855f7) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+}
+
+:root[data-theme="dark"] .tsq-action-btn {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: #94a3b8 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+:root[data-theme="dark"] .tsq-action-btn:hover {
+  background: linear-gradient(135deg, #6366f1, #a855f7) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+}
+/* ----------------- New Masterpiece Card Design ----------------- */
+.tsq-card {
+  position: relative !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: rgba(18, 18, 22, 0.85) !important; 
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: 20px !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.tsq-card:hover {
+  transform: translateY(-8px) scale(1.02) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.2), 
+              0 0 24px rgba(236, 72, 153, 0.1) !important;
+}
+
+/* Ambient Animated Glows behind the card contents */
+.tsq-card::before {
+  content: "";
+  position: absolute;
+  top: -20%; left: -10%; width: 120%; height: 60%;
+  background-image: 
+    radial-gradient(ellipse at 20% 40%, rgba(99, 102, 241, 0.25), transparent 50%),
+    radial-gradient(ellipse at 80% 60%, rgba(236, 72, 153, 0.15), transparent 50%);
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.8;
+  transition: opacity 0.5s ease;
+}
+
+.tsq-card:hover::before {
+  opacity: 1;
+  background-image: 
+    radial-gradient(ellipse at 30% 50%, rgba(99, 102, 241, 0.35), transparent 60%),
+    radial-gradient(ellipse at 70% 50%, rgba(236, 72, 153, 0.25), transparent 60%);
+}
+
+/* Abstract Tech Dot Matrix Pattern overlay */
+.tsq-card::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 180px;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+  background-size: 16px 16px;
+  opacity: 0.6;
+  z-index: 0;
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+}
+
+.tsq-card-hero {
+  position: relative;
+  z-index: 1;
+  background: transparent !important;
+  padding: 24px 24px 0;
+  min-height: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.tsq-hero-badges {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.tsq-provider-badge {
+  background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02)) !important;
+  color: #e2e8f0 !important;
+  border-radius: 999px !important;
+  padding: 4px 12px !important;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+.tsq-hero-content {
+  color: #fff;
+}
+
+.tsq-hero-title {
+  font-size: 20px !important;
+  font-weight: 900 !important;
+  margin: 0 0 8px !important;
+  background: linear-gradient(to right, #fff, #94a3b8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 0.5px;
+}
+
+.tsq-hero-subtitle {
+  font-size: 12.5px !important;
+  color: #cbd5e1 !important;
+  margin: 0 !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+}
+.tsq-hero-subtitle::before {
+  content: "";
+  display: inline-block;
+  width: 6px; height: 6px;
+  background: #38bdf8;
+  border-radius: 50%;
+  margin-right: 8px;
+  box-shadow: 0 0 8px #38bdf8;
+}
+
+.tsq-card-body {
+  position: relative;
+  z-index: 1;
+  padding: 24px 24px 0 !important;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.tsq-body-title {
+  font-size: 17px !important;
+  font-weight: 800 !important;
+  color: #f8fafc !important;
+  margin: 0 0 14px !important;
+  line-height: 1.5 !important;
+}
+
+.tsq-body-summary {
+  font-size: 14px !important;
+  color: #94a3b8 !important;
+  line-height: 1.65 !important;
+  margin: 0 0 24px !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 3 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+}
+
+.new-green-chips {
+  gap: 8px !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+}
+
+.new-green-chips span {
+  background: rgba(56, 189, 248, 0.08) !important;
+  color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.25) !important;
+  border-radius: 999px !important;
+  padding: 4px 10px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap !important;
+}
+.tsq-card:hover .new-green-chips span {
+  background: rgba(56, 189, 248, 0.15) !important;
+  border-color: rgba(56, 189, 248, 0.4) !important;
+}
+
+.tsq-chip-more {
+  background: rgba(255,255,255,0.06) !important;
+  color: #94a3b8 !important;
+  border-color: transparent !important;
+}
+
+.tsq-publish-date {
+  font-size: 13px !important;
+  color: #475569 !important;
+  margin-top: 20px !important;
+  margin-bottom: 24px !important;
+  font-weight: 600 !important;
+}
+
+.tsq-card-footer.new-footer {
+  position: relative;
+  z-index: 1;
+  padding: 0 24px 24px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  border-top: none !important;
+  background: transparent !important;
+}
+
+.tsq-stats-group {
+  display: flex;
+  gap: 16px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.tsq-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tsq-wish-btn, .tsq-download-btn {
+  font-weight: 800 !important;
+  font-size: 13.5px !important;
+  border-radius: 10px !important;
+  padding: 8px 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+.tsq-wish-btn {
+  background: rgba(255,255,255,0.06) !important;
+  color: #cbd5e1 !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+}
+
+.tsq-download-btn {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3) !important;
+}
+
+.tsq-wish-btn:hover {
+  background: rgba(255,255,255,0.1) !important;
+  transform: translateY(-2px);
+}
+
+.tsq-download-btn:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5) !important;
+}
+
+/* ---------------- Force Overrides for Perfect Light / Dark Adaptation ---------------- */
+
+/* Dark Mode Masterpiece */
+:root[data-theme="dark"] .tsq-grid > .tsq-card:nth-child(n) {
+  background: rgba(18, 18, 22, 0.85) !important;
+  border: 1px solid rgba(255,255,255,0.06) !important;
+}
+:root[data-theme="dark"] .tsq-card-body h2.tsq-body-title {
+  color: #f8fafc !important;
+}
+:root[data-theme="dark"] .tsq-card-body p.tsq-body-summary {
+  color: #94a3b8 !important;
+}
+
+/* Light Mode Glassmorphism */
+:root[data-theme="light"] .tsq-grid > .tsq-card:nth-child(n) {
+  background: rgba(255, 255, 255, 0.85) !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05) !important;
+}
+:root[data-theme="light"] .tsq-card-body h2.tsq-body-title {
+  color: #0f172a !important;
+}
+:root[data-theme="light"] .tsq-card-body p.tsq-body-summary {
+  color: #475569 !important;
+}
+:root[data-theme="light"] .tsq-publish-date {
+  color: #94a3b8 !important;
+}
+:root[data-theme="light"] .tsq-stats-group {
+  color: #94a3b8 !important;
+}
+:root[data-theme="light"] .tsq-action-btn.tsq-wish-btn {
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  border: 1px solid #e2e8f0 !important;
+}
+:root[data-theme="light"] .tsq-action-btn.tsq-wish-btn:hover {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+:root[data-theme="light"] .tsq-action-btn.tsq-download-btn {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+:root[data-theme="light"] .tsq-hero-subtitle {
+  color: #475569 !important;
+}
+:root[data-theme="light"] .tsq-hero-title {
+  background: none !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+}
+:root[data-theme="light"] .tsq-provider-badge {
+  background: rgba(15, 23, 42, 0.04) !important;
+  color: #334155 !important;
+  border-color: rgba(15, 23, 42, 0.15) !important;
+  box-shadow: none !important;
+}
+:root[data-theme="light"] .tsq-card::before {
+  opacity: 0.4 !important;
+}
+
+.tsq-card-strip {
+  display: none !important;
+}
+
+/* Base override for layout to force 4 columns */
+.tsq-grid {
+  grid-template-columns: repeat(4, 1fr) !important;
+}
+@media (max-width: 1500px) {
+  .tsq-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+@media (max-width: 1100px) {
+  .tsq-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+@media (max-width: 768px) {
+  .tsq-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 </style>

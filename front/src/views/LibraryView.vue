@@ -90,7 +90,6 @@
         <div class="library-table-scroll">
           <table class="library-table">
             <colgroup>
-              <col class="col-check" />
               <col class="col-title" />
               <col class="col-authors" />
               <col class="col-type" />
@@ -104,7 +103,6 @@
             </colgroup>
             <thead>
               <tr>
-                <th class="checkbox-cell"><input type="checkbox" /></th>
                 <th>标题与来源</th>
                 <th>作者</th>
                 <th>文献类型</th>
@@ -119,7 +117,6 @@
             </thead>
             <tbody>
               <tr v-for="paper in filteredDocuments" :key="paper.id">
-                <td class="checkbox-cell"><input type="checkbox" /></td>
                 <td class="doc-title-cell">
                   <div
                     class="doc-title-main"
@@ -174,7 +171,7 @@
                 <td class="action-cell">
                   <div class="action-inline">
                     <template v-if="canTryRead(paper)">
-                      <button class="spatial-btn spatial-btn-dual" @click="openDualReader(paper)">双栏翻译</button>
+                      <button class="spatial-btn spatial-btn-dual" @click="openDualReader(paper)">对照翻译</button>
                       <button class="spatial-btn spatial-btn-line-ai" @click="openLineAiReader(paper)">
                         <span>逐段翻译</span>
                       </button>
@@ -250,7 +247,7 @@
           <label class="file-drop field-wide">
             <input type="file" accept="application/pdf,.pdf" @change="selectPersonalPdf" />
             <strong>{{ personalPdf?.name || "选择本地 PDF" }}</strong>
-            <small>上传后由 PaperSolver 储存，并可直接进入双栏或逐段翻译。</small>
+            <small>上传后由 PaperSolver 储存，并可直接进入对照或逐段翻译。</small>
           </label>
           <footer class="field-wide">
             <button type="button" class="spatial-btn spatial-btn-ghost" @click="resetPersonalPaper">清空</button>
@@ -2398,4 +2395,206 @@ onUnmounted(() => {
 
   .library-head-stat { padding: 0 12px; }
 }
+
+/* ── PAGINATION BAR BASE STYLES ── */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  font-size: 13px;
+}
+
+.pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--spatial-line);
+  border-radius: 8px;
+  color: var(--spatial-gray);
+  background: var(--spatial-surface);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.pagination-btn:hover {
+  color: var(--spatial-graphite);
+  background: var(--spatial-warm-2);
+}
+
+.page-number-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--spatial-line);
+  border-radius: 8px;
+  color: var(--spatial-gray);
+  background: var(--spatial-surface);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'Geist Mono', monospace, sans-serif;
+  transition: all .2s ease;
+}
+
+.page-number-pill.active {
+  background: #6366f1;
+  border-color: #4f46e5;
+  color: #ffffff;
+}
+
+.page-size-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--spatial-line);
+  border-radius: 8px;
+  color: var(--spatial-gray);
+  background: var(--spatial-surface);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* ── DARK MODE ADAPTATIONS FOR LIBRARY VIEW PANELS & CARDS ── */
+:root[data-theme="dark"] .pagination-bar {
+  background: transparent !important;
+  border-top-color: rgba(255, 255, 255, 0.08) !important;
+  color: #a8b3c7 !important;
+}
+
+:root[data-theme="dark"] .pagination-btn {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #cbd5e1 !important;
+}
+
+:root[data-theme="dark"] .pagination-btn:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #ffffff !important;
+}
+
+:root[data-theme="dark"] .page-number-pill {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #a8b3c7 !important;
+}
+
+:root[data-theme="dark"] .page-number-pill.active {
+  background: rgba(99, 102, 241, 0.22) !important;
+  border: 1px solid rgba(129, 140, 248, 0.45) !important;
+  color: #a5b4fc !important;
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.25) !important;
+}
+
+:root[data-theme="dark"] .page-size-pill {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #cbd5e1 !important;
+}
+
+:root[data-theme="dark"] .library-management-panel {
+  background: #101827 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #eef4ff !important;
+}
+
+:root[data-theme="dark"] .zotero-import-panel {
+  background: #101827 !important;
+}
+
+:root[data-theme="dark"] .zotero-copy {
+  background: rgba(139, 92, 246, 0.08) !important;
+  border-color: rgba(139, 92, 246, 0.22) !important;
+  color: #eef4ff !important;
+}
+
+:root[data-theme="dark"] .zotero-copy h3 {
+  color: #f4f4f6 !important;
+}
+
+:root[data-theme="dark"] .zotero-copy p {
+  color: #a8b3c7 !important;
+}
+
+:root[data-theme="dark"] .zotero-copy span {
+  color: #c084fc !important;
+}
+
+:root[data-theme="dark"] .zotero-format-row b {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #cbd5e1 !important;
+}
+
+:root[data-theme="dark"] .zotero-file-drop {
+  background: rgba(139, 92, 246, 0.06) !important;
+  border-color: rgba(139, 92, 246, 0.35) !important;
+  color: #c084fc !important;
+}
+
+:root[data-theme="dark"] .zotero-file-drop strong {
+  color: #f4f4f6 !important;
+}
+
+:root[data-theme="dark"] .zotero-file-drop small {
+  color: #a8b3c7 !important;
+}
+
+:root[data-theme="dark"] .file-drop,
+:root[data-theme="dark"] .pdf-upload-drop {
+  background: rgba(59, 130, 246, 0.06) !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+  color: #60a5fa !important;
+}
+
+:root[data-theme="dark"] .file-drop strong,
+:root[data-theme="dark"] .pdf-upload-drop strong {
+  color: #f4f4f6 !important;
+}
+
+:root[data-theme="dark"] .file-drop small,
+:root[data-theme="dark"] .pdf-upload-drop small {
+  color: #94a3b8 !important;
+}
+
+:root[data-theme="dark"] .zotero-failed-details {
+  background: rgba(18, 26, 40, 0.9) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+:root[data-theme="dark"] .zotero-failed-details summary {
+  color: #94a3b8 !important;
+}
+
+:root[data-theme="dark"] .zotero-failed-details strong {
+  color: #f4f4f6 !important;
+}
+
+:root[data-theme="dark"] .note-modal,
+:root[data-theme="dark"] .pdf-link-modal,
+:root[data-theme="dark"] .journal-tag-modal {
+  background: #121a28 !important;
+  border-color: rgba(226, 235, 255, 0.14) !important;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6) !important;
+  color: #eef4ff !important;
+}
+
+:root[data-theme="dark"] .note-modal header h3 {
+  color: #f4f4f6 !important;
+}
+
+:root[data-theme="dark"] .note-paper-title {
+  color: #a8b3c7 !important;
+}
 </style>
+
+

@@ -1,58 +1,116 @@
 <template>
   <main class="membership-page">
+    <!-- Ambient atmosphere orbs -->
+    <div class="ambient-orb orb-1"></div>
+    <div class="ambient-orb orb-2"></div>
+
+    <!-- ── Page Header ──────────────────────────────────────── -->
     <header class="membership-topbar">
       <div>
-        <span class="page-chip">会员与套餐</span>
-        <h1>按研究任务买套餐，次数清楚，成本可控。</h1>
-        <p>基础导入与翻译保持开放；论文综述、组会 PPT、AI 文章对话按套餐次数扣减。</p>
+        <div class="topbar-badge-row">
+          <span class="page-chip">用量与重置中心</span>
+          <span class="reset-tag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+            订阅周期到期自动复位
+          </span>
+        </div>
+        <h1>科研用量按任务智能结算，周期自动重置透明可控。</h1>
+        <p>基础文献导入与翻译全量开放；论文综述、组会 PPT、AI 对话按套餐用量扣减，按订阅周期自动全额重置。</p>
       </div>
       <button class="ghost-button refresh-button" :disabled="loading" @click="load">
         <span aria-hidden="true" :class="{ spinning: loading }">↻</span>
-        {{ loading ? "更新中" : "刷新" }}
+        {{ loading ? "更新中" : "刷新用量" }}
       </button>
     </header>
 
-    <section class="current-strip">
-      <div class="member-rank">
-        <div class="member-card-bg" aria-hidden="true" :style="{ '--gold-card-image': `url(${goldCardReference})` }">
-          <span></span>
-        </div>
-        <div class="member-card-top">
-          <strong>{{ membership.active ? memberPeriodLabel : "体验会员" }}</strong>
-          <button type="button" @click="scrollToPlans">更多 <i aria-hidden="true"></i></button>
-        </div>
-        <div class="member-card-main">
-          <div>
-            <small>{{ membership.active ? "剩余" : "当前状态" }}</small>
-            <strong v-if="membership.active" class="remaining-days">
-              <b>{{ remainingDays }}</b>
-              <span>天</span>
-            </strong>
-            <strong v-else class="remaining-days inactive">
-              <b>0</b>
-              <span>天</span>
-            </strong>
+    <!-- ── Current Usage & Member Card Banner ─────────────────── -->
+    <section class="current-strip-linear">
+      <!-- 💳 Horizontal Membership Status Banner -->
+      <div class="horizontal-membership-bar">
+        <div class="vip-status-main">
+          <div class="vip-badge-glow">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
+            <strong>{{ membership.active ? memberPeriodLabel : "体验会员" }}</strong>
+          </div>
+          <div class="vip-details">
+            <span class="vip-name">{{ membership.name }}</span>
+            <span class="vip-expire">{{ membership.active ? `有效期至 ${formatFullDate(membership.expiresAt)}` : "当前未开通高级套餐" }}</span>
           </div>
         </div>
-        <div class="member-card-bottom">
-          <span>{{ membership.name }}</span>
-          <p>{{ membership.active ? `有效期至 ${formatFullDate(membership.expiresAt)}` : "当前未购买套餐" }}</p>
+
+        <div class="vip-metrics">
+          <div class="metric-item">
+            <small>剩余可用</small>
+            <strong>{{ remainingDays }} <span class="unit">天</span></strong>
+          </div>
+          <div class="metric-divider"></div>
+          <div class="metric-item">
+            <small>订阅状态</small>
+            <strong class="status-active">{{ membership.active ? "🟢 正常使用中" : "⚪ 未订阅" }}</strong>
+          </div>
+          <div class="metric-divider"></div>
+          <div class="metric-item">
+            <small>自动重置</small>
+            <strong>到期自动复位</strong>
+          </div>
         </div>
+
+        <button type="button" class="upgrade-vip-btn" @click="scrollToPlans">
+          套餐方案与开通 →
+        </button>
       </div>
-      <div class="entitlement-line">
-        <div v-for="item in benefitItems" :key="item.key" class="entitlement-item" :class="quotaTone(item)">
-          <span>{{ item.label }}</span>
-          <strong>{{ benefitUsageLabel(item) }}</strong>
-          <i v-if="!item.unlimited" class="quota-meter"><b :style="{ width: `${quotaPercent(item)}%` }"></b></i>
+
+      <!-- 📏 Full-Width Linear Rows Dashboard -->
+      <div class="entitlement-linear-panel">
+        <div class="panel-header">
+          <div>
+            <span class="panel-tag">当期用量仪表盘</span>
+            <h3>当期权益指标与重置进度</h3>
+          </div>
+          <span class="reset-cycle-pill">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+            到期自动复位
+          </span>
+        </div>
+
+        <div class="entitlement-linear-rows">
+          <div v-for="item in benefitItems" :key="item.key" class="linear-row">
+            <div class="row-left">
+              <span class="homepage-icon-box" :class="benefitBoxClass(item.key)">
+                <svg v-if="item.key === 'translation'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                <svg v-else-if="item.key === 'review'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="13" y2="11"/></svg>
+                <svg v-else-if="item.key === 'ppt'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="3"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><path d="M7 12l3-3 3 3 4-4"/></svg>
+                <svg v-else-if="item.key === 'chat'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </span>
+              <div class="row-title-block">
+                <strong>{{ item.label }}</strong>
+                <small v-if="!item.unlimited">当期额度 {{ item.quota }} 次</small>
+                <small v-else>全量开放免扣减</small>
+              </div>
+            </div>
+
+            <div class="row-center-meter">
+              <div v-if="!item.unlimited" class="linear-meter-track">
+                <b :style="{ width: `${quotaPercent(item)}%` }"></b>
+              </div>
+              <span v-else class="linear-unlimited-label">✓ 不限次数</span>
+            </div>
+
+            <div class="row-right">
+              <span class="row-stat-text">{{ benefitUsageLabel(item) }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
+    <!-- ── Plan Workbench ──────────────────────────────────────── -->
     <section class="plan-workbench">
       <div class="plan-heading">
         <div>
-          <h2>套餐选择</h2>
-          <p>次数按成功完成后扣减。PPT 生成使用更重的组会 Agent 流程，因此额度比综述更谨慎。</p>
+          <h2>套餐开通与重置</h2>
+          <p>用量按成功完成后扣减，每个重置周期自动恢复当期额度。PPT 生成包含完整组会 Agent 流程。</p>
         </div>
         <div class="cycle-switch" role="tablist" aria-label="套餐周期">
           <button v-for="option in cycles" :key="option.id" :class="{ active: selectedCycle === option.id }" @click="selectedCycle = option.id">
@@ -84,12 +142,12 @@
                   </div>
                   <p>{{ planCopy(plan.id) }}</p>
                 </div>
-                <span class="plan-icon">{{ planBadge(plan.id) }}</span>
+                <span class="plan-icon-badge">{{ planBadge(plan.id) }}</span>
               </header>
 
               <div class="price-line">
                 <strong>¥{{ planPrice(plan) }}</strong>
-                <span>{{ cycleLabel(selectedCycle) }}</span>
+                <span>/ {{ cycleLabel(selectedCycle) }}</span>
               </div>
 
               <ul class="center-plan-features">
@@ -101,7 +159,7 @@
                   </div>
                 </li>
               </ul>
-              <p class="settlement-note">未使用次数到期清零，续费后重新获得当期权益。</p>
+              <p class="settlement-note">每个重置周期用量独立计算，次月重置或续费后自动充沛额度。</p>
 
               <button class="plan-buy-button" @click.stop="selectAndCheckout(plan.id)">
                 开通该套餐
@@ -112,6 +170,7 @@
       </div>
     </section>
 
+    <!-- ── Floating Checkout Bar ───────────────────────────────── -->
     <section class="checkout-bar">
       <div>
         <span>本次开通</span>
@@ -130,6 +189,7 @@
       <p v-if="paymentMessage" class="payment-message">{{ paymentMessage }}</p>
     </section>
 
+    <!-- ── Orders Section ──────────────────────────────────────── -->
     <section class="orders-section">
       <div class="section-title">
         <div>
@@ -140,7 +200,7 @@
       </div>
 
       <div v-if="orders.length" class="orders-table">
-        <div class="order-head"><span>订单</span><span>套餐</span><span>金额</span><span>状态</span><span>操作</span></div>
+        <div class="order-head"><span>订单号</span><span>开通套餐</span><span>订单金额</span><span>状态</span><span>售后操作</span></div>
         <div v-for="order in orders" :key="order.orderNo" class="order-item">
           <div><strong>{{ order.orderNo }}</strong><small>{{ formatDate(order.createdAt) }}</small></div>
           <span>{{ orderPlanName(order) }}</span>
@@ -152,6 +212,7 @@
       <div v-else class="orders-empty">还没有套餐订单。开通后这里会显示支付状态、工单和退款进度。</div>
     </section>
 
+    <!-- Ticket Dialog -->
     <dialog ref="ticketDialog" class="ticket-dialog">
       <form method="dialog" @submit.prevent="submitTicket">
         <div class="dialog-heading">
@@ -169,6 +230,8 @@
 </template>
 
 <script setup>
+import { useScrollReveal } from "../composables/useScrollReveal";
+useScrollReveal(".model-center-page");
 import { computed, onMounted, ref } from "vue";
 import { useUsageStore } from "../stores/usage";
 import { paperpilotApi } from "../services/paperpilotApi";
@@ -238,6 +301,26 @@ const memberPeriodLabel = computed(() => {
   if (cycle === "quarterly") return "季卡90天";
   return "月卡30天";
 });
+function benefitIcon(key) {
+  return {
+    translation: "🌐",
+    review: "📄",
+    ppt: "📊",
+    chat: "💬",
+    team_seats: "👥"
+  }[key] || "✨";
+}
+
+function benefitBoxClass(key) {
+  return {
+    translation: "box-blue",
+    review: "box-purple",
+    ppt: "box-emerald",
+    chat: "box-amber",
+    team_seats: "box-blue"
+  }[key] || "box-purple";
+}
+
 const benefitItems = computed(() => {
   const benefits = membership.value.benefits || {};
   const row = (key, label) => ({ key, label, ...(benefits[key] || { quota: 0, used: 0, remaining: 0 }) });
@@ -443,930 +526,945 @@ async function submitTicket() {
 </script>
 
 <style scoped>
-.membership-page {
-  min-height: 100vh;
-  padding: 32px clamp(20px, 4vw, 64px) 64px;
-  color: #172033;
-  background: #f5f7fb;
-  font-family: Inter, "Microsoft YaHei", system-ui, sans-serif;
-}
+/* ════════════════════════════════════════════════════════════
+   USAGE & RESET CENTER — Clean Horizontal & Linear Design
+   ════════════════════════════════════════════════════════════ */
 
-.membership-topbar,
-.current-strip,
-.plan-workbench,
-.checkout-bar,
-.orders-section {
-  width: min(1280px, 100%);
+.membership-page {
+  --c-bg:       #f8fafc;
+  --c-surface:  #ffffff;
+  --c-border:   #e2e8f0;
+  --c-text:     #0f172a;
+  --c-muted:    #475569;
+  --c-subtle:   #94a3b8;
+  --c-accent:   #6366f1;
+  --c-accent2:  #a855f7;
+  --r: 20px; --r-sm: 12px; --r-pill: 999px;
+  --sh-sm: 0 2px 10px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.03);
+  --sh-md: 0 10px 32px rgba(15,23,42,.08);
+  --sh-lg: 0 20px 60px rgba(15,23,42,.14);
+
+  position: relative;
+  min-height: 100vh;
+  background: var(--c-bg);
+  color: var(--c-text);
+  padding: 36px clamp(16px, 4vw, 56px) 130px;
+  font-family: Inter, "PingFang SC", system-ui, sans-serif;
+  transition: background 0.3s ease, color 0.3s ease;
+  width: 100%;
+  box-sizing: border-box;
   margin: 0 auto;
 }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
+:root[data-theme="dark"] .membership-page {
+  --c-bg:       #09090e;
+  --c-surface:  #111827;
+  --c-border:   rgba(255, 255, 255, 0.08);
+  --c-text:     #f1f5f9;
+  --c-muted:    #94a3b8;
+  --c-subtle:   #64748b;
+  --sh-sm: 0 2px 10px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  --sh-md: 0 10px 32px rgba(0,0,0,.45);
+  --sh-lg: 0 20px 60px rgba(0,0,0,.65);
 }
 
-button {
-  cursor: pointer;
+/* Ambient Orbs */
+.ambient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  pointer-events: none;
+  opacity: 0.22;
 }
+.orb-1 { top: -100px; left: 10%; width: 400px; height: 400px; background: radial-gradient(circle, #818cf8, #c084fc); }
+.orb-2 { top: 200px; right: 5%; width: 500px; height: 500px; background: radial-gradient(circle, #38bdf8, #818cf8); }
 
+/* ── Topbar ─────────────────────────────────────────────── */
 .membership-topbar {
+  position: relative;
+  z-index: 2;
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 20px;
-  margin-bottom: 18px;
+  margin-bottom: 28px;
 }
 
-.page-chip,
-.section-title span,
-.checkout-bar > div > span {
-  color: #235dd8;
+.topbar-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.page-chip {
+  padding: 4px 14px;
+  border-radius: var(--r-pill);
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--c-accent);
   font-size: 12px;
-  font-weight: 850;
+  font-weight: 800;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+:root[data-theme="dark"] .page-chip {
+  background: rgba(99, 102, 241, 0.18);
+  color: #818cf8;
+}
+
+.reset-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--r-pill);
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
 .membership-topbar h1 {
-  max-width: 760px;
-  margin: 8px 0 8px;
-  font-size: 28px;
-  line-height: 1.28;
-  letter-spacing: 0;
-  text-wrap: balance;
+  margin: 0 0 8px;
+  font-size: clamp(22px, 2.5vw, 30px);
+  font-weight: 900;
+  color: var(--c-text);
+  line-height: 1.25;
+  letter-spacing: -0.5px;
 }
 
-.membership-topbar p,
-.plan-heading p,
-.checkout-bar p {
+.membership-topbar p {
   margin: 0;
-  color: #5e6c83;
   font-size: 14px;
-  line-height: 1.7;
+  color: var(--c-muted);
+  max-width: 760px;
+  line-height: 1.6;
 }
 
 .ghost-button {
-  height: 38px;
-  padding: 0 14px;
-  border: 1px solid #d8e1ed;
-  border-radius: 8px;
-  color: #27334a;
-  background: #fff;
-  font-weight: 850;
-}
-
-.refresh-button {
-  min-width: 86px;
-}
-
-.refresh-button span {
-  display: inline-block;
-  margin-right: 6px;
-}
-
-.spinning {
-  animation: spin .7s linear infinite;
-}
-
-.current-strip {
-  display: grid;
-  grid-template-columns: minmax(620px, 1.15fr) minmax(360px, .85fr);
-  gap: 24px;
-  align-items: stretch;
-}
-
-.member-rank,
-.entitlement-line,
-.plan-workbench,
-.checkout-bar,
-.orders-section {
-  border: 1px solid #dfe6f0;
-  border-radius: 12px;
-  background: #fff;
-}
-
-.member-rank {
-  position: relative;
-  overflow: hidden;
-  aspect-ratio: 1245 / 556;
-  min-height: 0;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 0;
-  padding: clamp(24px, 2.2vw, 34px) clamp(24px, 2.6vw, 34px) clamp(22px, 2vw, 30px) clamp(32px, 3.2vw, 46px);
-  border-color: #f0bf54;
-  border-radius: 18px;
-  background:
-    linear-gradient(110deg, #fff9ed 0%, #f9e7bd 50%, #e8bf61 100%);
-  box-shadow: 0 22px 44px rgba(174, 117, 34, .14);
-}
-
-.member-card-bg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.member-card-bg::before {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  background:
-    radial-gradient(ellipse 46% 54% at 100% 0%, rgba(82, 76, 72, .76) 0%, rgba(105, 96, 88, .68) 34%, rgba(184, 154, 106, .3) 56%, rgba(226, 190, 128, 0) 78%),
-    linear-gradient(90deg, rgba(255, 249, 235, .99) 0%, rgba(255, 244, 220, .97) 40%, rgba(247, 221, 174, .74) 58%, rgba(226, 190, 128, .28) 76%, rgba(226, 190, 128, 0) 94%);
-  content: "";
-}
-
-.member-card-bg::after {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 68%;
-  z-index: 1;
-  background-image: var(--gold-card-image);
-  background-size: auto 100%;
-  background-position: right center;
-  background-repeat: no-repeat;
-  opacity: .98;
-  content: "";
-}
-
-.member-card-bg span {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  background:
-    radial-gradient(ellipse 44% 52% at 100% 0%, rgba(72, 67, 64, .58) 0%, rgba(96, 88, 82, .5) 34%, rgba(174, 146, 100, .18) 58%, rgba(226, 190, 128, 0) 80%),
-    linear-gradient(90deg, rgba(255, 248, 232, .99) 0%, rgba(255, 244, 219, .98) 38%, rgba(247, 224, 181, .66) 58%, rgba(226, 190, 128, .18) 78%, rgba(226, 190, 128, 0) 96%);
-}
-
-.member-card-top,
-.member-card-main,
-.member-card-bottom {
-  position: relative;
-  z-index: 2;
-}
-
-.member-card-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.member-card-top > strong {
-  color: #050505;
-  font-size: clamp(22px, 2.05vw, 30px);
-  line-height: 1.1;
-  font-weight: 400;
-  letter-spacing: 0;
-}
-
-.member-card-top button {
-  height: clamp(34px, 3vw, 42px);
-  min-width: clamp(88px, 8.4vw, 112px);
+  height: 42px;
+  padding: 0 20px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-muted);
+  font-size: 13px;
+  font-weight: 750;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  border: 0;
-  border-radius: 999px;
-  padding: 0 clamp(14px, 1.5vw, 20px);
-  color: #111;
-  background: rgba(255, 255, 255, .96);
-  font-size: clamp(16px, 1.45vw, 20px);
-  font-weight: 500;
-  box-shadow: 0 8px 16px rgba(87, 63, 42, .1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--sh-sm);
+  white-space: nowrap;
+}
+.ghost-button:hover {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+  transform: translateY(-1px);
+}
+.spinning { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+/* ── Current Strip (Horizontal Banner + Linear Rows) ────── */
+.current-strip-linear {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-bottom: 44px;
 }
 
-.member-card-top button i {
-  width: 0;
-  height: 0;
-  border-top: clamp(5px, .55vw, 7px) solid transparent;
-  border-bottom: clamp(5px, .55vw, 7px) solid transparent;
-  border-left: clamp(7px, .75vw, 10px) solid #111;
-}
-
-.member-card-main {
+/* 💳 Horizontal Membership Status Banner (Subtle Glass Bar) */
+.horizontal-membership-bar {
   display: flex;
   align-items: center;
-  gap: 0;
-  align-self: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 28px;
+  border-radius: var(--r);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  box-shadow: var(--sh-sm);
+}
+@media (max-width: 900px) {
+  .horizontal-membership-bar { flex-direction: column; align-items: flex-start; }
 }
 
-.member-card-main small {
-  color: #050505;
-  font-size: clamp(20px, 1.9vw, 26px);
-  font-weight: 400;
-}
-
-.remaining-days {
+.vip-status-main {
   display: flex;
-  align-items: baseline;
-  gap: clamp(10px, 1vw, 15px);
-  margin-top: 0;
-  color: #080808;
-}
-
-.remaining-days b {
-  font-size: clamp(42px, 4.2vw, 58px);
-  line-height: .88;
-  font-weight: 800;
-  letter-spacing: 0;
-}
-
-.remaining-days span {
-  font-size: clamp(20px, 1.8vw, 26px);
-  font-weight: 400;
-}
-
-.remaining-days.inactive {
-  opacity: .7;
-}
-
-.member-card-bottom {
-  display: grid;
-  gap: 0;
-}
-
-.member-card-bottom span {
-  display: none;
-}
-
-.member-card-bottom p {
-  margin: 0;
-  color: rgba(22, 16, 8, .5);
-  font-size: clamp(17px, 1.55vw, 22px);
-  font-weight: 400;
-  letter-spacing: 0;
-}
-
-.entitlement-line {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0;
-  overflow: hidden;
-  padding: 10px 14px;
-}
-
-.entitlement-item {
-  display: grid;
-  grid-template-columns: 132px 142px minmax(180px, 1fr);
   align-items: center;
   gap: 16px;
-  min-height: 48px;
-  padding: 8px 4px;
-  border-top: 1px solid #edf1f6;
 }
 
-.entitlement-item:first-child {
-  border-top: 0;
+.vip-badge-glow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.18), rgba(245, 158, 11, 0.12));
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #d97706;
+  font-size: 13.5px;
+  font-weight: 850;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+}
+:root[data-theme="dark"] .vip-badge-glow {
+  color: #fbbf24;
 }
 
-.entitlement-item span {
-  color: #68758b;
+.vip-details {
+  display: flex;
+  flex-direction: column;
+}
+.vip-name {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--c-text);
+}
+.vip-expire {
+  font-size: 12px;
+  color: var(--c-muted);
+}
+
+.vip-metrics {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.metric-item {
+  display: flex;
+  flex-direction: column;
+}
+.metric-item small {
+  font-size: 11px;
+  color: var(--c-subtle);
+}
+.metric-item strong {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--c-text);
+}
+.metric-item strong .unit {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-muted);
+}
+.status-active { color: #10b981 !important; }
+
+.metric-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--c-border);
+}
+
+.upgrade-vip-btn {
+  height: 38px;
+  padding: 0 20px;
+  border-radius: var(--r-pill);
+  border: none;
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.upgrade-vip-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+}
+
+/* 📏 Full-Width Linear Rows Panel (No Box Tiles!) */
+.entitlement-linear-panel {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r);
+  padding: 24px 30px;
+  box-shadow: var(--sh-sm);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--c-border);
+}
+.panel-tag {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--c-accent);
+  margin-bottom: 2px;
+}
+.panel-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--c-text);
+}
+
+.reset-cycle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--r-pill);
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
   font-size: 12px;
   font-weight: 800;
+  border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
-.entitlement-item strong {
-  color: #172033;
-  font-size: 18px;
-  font-variant-numeric: tabular-nums;
+/* Linear Row List */
+.entitlement-linear-rows {
+  display: flex;
+  flex-direction: column;
 }
 
-.quota-meter {
-  height: 7px;
+.linear-row {
+  display: grid;
+  grid-template-columns: 240px 1fr 140px;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--c-border);
+  transition: background 0.18s ease;
+}
+.linear-row:last-child {
+  border-bottom: none;
+}
+.linear-row:hover {
+  background: rgba(99, 102, 241, 0.035);
+  border-radius: var(--r-sm);
+}
+@media (max-width: 768px) {
+  .linear-row { grid-template-columns: 1fr; gap: 10px; }
+}
+
+.row-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.row-title-block strong {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 850;
+  color: var(--c-text);
+}
+.row-title-block small {
+  font-size: 11.5px;
+  color: var(--c-muted);
+}
+
+.row-center-meter {
+  width: 100%;
+}
+
+.linear-meter-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
   overflow: hidden;
-  border-radius: 99px;
-  background: #e9eef7;
 }
-
-.quota-meter b {
+.linear-meter-track b {
   display: block;
   height: 100%;
   border-radius: inherit;
-  transition: width .18s ease;
+  background: linear-gradient(90deg, #6366f1, #a855f7);
+  transition: width 0.4s ease;
 }
 
-.quota-good .quota-meter b { background: #16a36a; }
-.quota-mid .quota-meter b { background: #f2b01e; }
-.quota-low .quota-meter b { background: #ef4444; }
-.quota-unlimited .quota-meter { display: none; }
-
-.plan-workbench {
-  margin-top: 22px;
-  padding: 22px;
-}
-
-.plan-heading,
-.section-title,
-.checkout-bar {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.plan-heading h2,
-.section-title h2 {
-  margin: 0 0 6px;
-  font-size: 20px;
-}
-
-.cycle-switch {
-  display: flex;
-  padding: 4px;
-  border-radius: 9px;
-  background: #edf2f8;
-}
-
-.cycle-switch button {
-  height: 32px;
-  min-width: 62px;
-  border: 0;
-  border-radius: 6px;
-  color: #58677d;
-  background: transparent;
+.linear-unlimited-label {
   font-size: 12px;
-  font-weight: 850;
+  color: #10b981;
+  font-weight: 800;
 }
 
-.cycle-switch button.active {
-  color: #1f58d8;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(36, 56, 90, .12);
+.row-right {
+  text-align: right;
 }
-
-.cycle-switch small {
-  margin-left: 4px;
-  color: #168158;
-}
-
-.plan-groups {
-  display: grid;
-  gap: 22px;
-  margin-top: 18px;
-}
-
-.plan-group {
-  display: grid;
-  gap: 12px;
-}
-
-.plan-group-title {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.plan-group-title span {
-  color: #172033;
+.row-stat-text {
   font-size: 15px;
   font-weight: 950;
+  color: var(--c-accent);
+  font-variant-numeric: tabular-nums;
 }
 
-.plan-group-title p {
+/* 🎨 Homepage Micro-Glow Icon Box */
+.homepage-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.homepage-icon-box.box-blue {
+  background: rgba(37, 99, 235, 0.08);
+  border: 1.5px solid rgba(37, 99, 235, 0.3);
+  color: #2563eb;
+}
+:root[data-theme="dark"] .homepage-icon-box.box-blue {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+}
+
+.homepage-icon-box.box-purple {
+  background: rgba(147, 51, 234, 0.08);
+  border: 1.5px solid rgba(147, 51, 234, 0.3);
+  color: #9333ea;
+}
+:root[data-theme="dark"] .homepage-icon-box.box-purple {
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(168, 85, 247, 0.4);
+  color: #c084fc;
+}
+
+.homepage-icon-box.box-emerald {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1.5px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+}
+:root[data-theme="dark"] .homepage-icon-box.box-emerald {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+.homepage-icon-box.box-amber {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1.5px solid rgba(245, 158, 11, 0.3);
+  color: #d97706;
+}
+:root[data-theme="dark"] .homepage-icon-box.box-amber {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+
+.linear-row:hover .homepage-icon-box {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* ── Plan Workbench ──────────────────────────────────────── */
+.plan-workbench {
+  position: relative;
+  z-index: 2;
+  margin-bottom: 44px;
+}
+
+.plan-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+.plan-heading h2 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--c-text);
+}
+.plan-heading p {
   margin: 0;
-  color: #6a758a;
-  font-size: 12px;
+  font-size: 13.5px;
+  color: var(--c-muted);
+}
+
+/* Cycle Switch Pill */
+.cycle-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-pill);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  box-shadow: var(--sh-sm);
+}
+.cycle-switch button {
+  height: 36px;
+  padding: 0 18px;
+  border-radius: var(--r-pill);
+  border: none;
+  background: transparent;
+  color: var(--c-muted);
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cycle-switch button.active {
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+}
+.cycle-switch button small {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  font-size: 10px;
+  font-weight: 900;
+}
+.cycle-switch button.active small {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+/* Plan Groups & Cards Grid */
+.plan-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+.plan-group-title {
+  margin-bottom: 18px;
+}
+.plan-group-title span {
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--c-text);
+  display: block;
+}
+.plan-group-title p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--c-muted);
 }
 
 .plan-cards {
   display: grid;
-  gap: 16px;
-  padding-bottom: 4px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
 }
-
-.plan-cards-personal {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
 .plan-cards-team {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (max-width: 1120px) {
+  .plan-cards { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .plan-cards, .plan-cards-team { grid-template-columns: 1fr; }
 }
 
 .plan-card {
-  --tier: #14946f;
-  --tier-soft: #ffffff;
-  --tier-line: #e2e8f0;
-  min-width: 0;
-  padding: 24px;
-  border: 1px solid var(--tier-line);
-  border-radius: 16px;
-  background: var(--tier-soft);
-  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  position: relative;
+  border-radius: var(--r);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  box-shadow: var(--sh-sm);
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
-
-.plan-card.study {
-  --tier: #2563eb;
-  --tier-soft: #f8fbff;
-  --tier-line: #a8c7ff;
+.plan-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: var(--sh-md);
 }
-
-.plan-card.pro {
-  --tier: #7c3aed;
-  --tier-soft: #fbf8ff;
-  --tier-line: #cbb6ff;
-}
-
-.plan-card.max {
-  --tier: #be185d;
-  --tier-soft: #fff7fb;
-  --tier-line: #f3a6c8;
-}
-
-.plan-card.team_plus {
-  --tier: #e06d1b;
-  --tier-soft: #fffaf5;
-  --tier-line: #f2bc8f;
-}
-
-.plan-card.team_pro {
-  --tier: #b45309;
-  --tier-soft: #fff8ed;
-  --tier-line: #e9b86f;
-}
-
-.plan-card:hover,
 .plan-card.active {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 18px rgba(31, 48, 84, .08);
-}
-
-.plan-card.active {
-  border-color: var(--tier);
+  border-color: var(--c-accent) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18), var(--sh-md) !important;
+  background: rgba(99, 102, 241, 0.03) !important;
 }
 
 .plan-card header {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 16px;
 }
-
 .plan-title-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 4px;
 }
-
 .plan-title-row h3 {
   margin: 0;
-  font-size: 20px;
-}
-
-.plan-title-row em {
-  padding: 4px 9px;
-  border-radius: 999px;
-  color: var(--tier);
-  background: #fff;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 850;
-}
-
-.plan-card header p {
-  margin: 6px 0 0;
-  color: #5f6e84;
-  font-size: 12px;
-  line-height: 1.65;
-}
-
-.plan-icon {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border-radius: 10px;
-  color: var(--tier);
-  background: rgba(255, 255, 255, .9);
+  font-size: 18px;
   font-weight: 900;
+  color: var(--c-text);
+}
+.plan-title-row em {
+  font-style: normal;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--c-accent);
+  font-size: 10.5px;
+  font-weight: 800;
+}
+.plan-card p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--c-muted);
+  line-height: 1.55;
+}
+.plan-icon-badge {
+  font-size: 20px;
 }
 
 .price-line {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 18px 0 16px;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--c-border);
 }
-
 .price-line strong {
-  color: var(--tier);
-  font-size: 30px;
+  font-size: 32px;
+  font-weight: 950;
+  color: var(--c-text);
+  font-family: tabular-nums;
   line-height: 1;
 }
-
 .price-line span {
-  padding: 5px 9px;
-  border-radius: 999px;
-  color: var(--tier);
-  background: rgba(255, 255, 255, .8);
   font-size: 12px;
-  font-weight: 800;
+  color: var(--c-muted);
+  font-weight: 700;
 }
 
+/* Feature list */
 .center-plan-features {
-  display: grid;
-  gap: 12px;
-  min-height: 250px;
-  margin: 0;
-  padding: 0;
   list-style: none;
+  padding: 0;
+  margin: 0 0 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-
 .center-plan-features li {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  display: flex;
+  align-items: flex-start;
   gap: 10px;
-  align-items: start;
 }
-
-.center-plan-features li.excluded {
-  opacity: .72;
-}
-
 .feature-check {
-  color: #16b981;
-  font-size: 16px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  font-size: 11px;
   font-weight: 900;
-  line-height: 1.4;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
-
 .feature-check.excluded {
-  color: #ef4444;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--c-subtle);
 }
-
-.center-plan-features strong {
+.center-plan-features li div strong {
   display: block;
-  color: #23304a;
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--c-text);
 }
-
-.center-plan-features small {
+.center-plan-features li div small {
   display: block;
-  margin-top: 2px;
-  color: #66758b;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 11.5px;
+  color: var(--c-muted);
 }
 
 .settlement-note {
-  margin: 14px 0 0;
-  padding: 10px 12px;
-  border: 1px solid #e7edf5;
-  border-radius: 10px;
-  color: #6c7890;
-  text-align: center;
-  font-size: 12px;
-  background: #fff;
-}
-
-.plan-buy-button,
-.primary-button,
-.ticket-button {
-  height: 38px;
-  border: 0;
-  border-radius: 8px;
-  font-weight: 850;
+  font-size: 11px;
+  color: var(--c-subtle);
+  margin-bottom: 16px;
+  line-height: 1.5;
 }
 
 .plan-buy-button {
   width: 100%;
-  margin-top: 18px;
-  color: #fff;
-  background: var(--tier);
+  height: 42px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-size: 13.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.plan-card:hover .plan-buy-button,
+.plan-card.active .plan-buy-button {
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.38);
 }
 
+/* ── Checkout Bar ────────────────────────────────────────── */
 .checkout-bar {
-  position: relative;
-  margin-top: 14px;
-  padding: 20px 22px;
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  width: min(1020px, calc(100vw - 32px));
+  padding: 16px 26px;
+  border-radius: var(--r);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  box-shadow: var(--sh-lg);
+  backdrop-filter: blur(24px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+@media (max-width: 700px) {
+  .checkout-bar { flex-direction: column; align-items: stretch; }
 }
 
+.checkout-bar > div:first-child span {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--c-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
 .checkout-bar > div:first-child strong {
   display: block;
-  margin: 5px 0;
-  font-size: 18px;
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--c-text);
+}
+.checkout-bar > div:first-child p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--c-muted);
 }
 
 .checkout-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
 }
 
 .pay-methods {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
-
 .pay-methods button {
   height: 38px;
-  min-width: 104px;
-  border: 1px solid #dfe6ee;
-  border-radius: 8px;
-  color: #29364c;
-  background: #fff;
-  font-weight: 800;
+  padding: 0 16px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-muted);
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.18s;
 }
-
 .pay-methods button.active {
-  border-color: #245de0;
-  background: #f4f7ff;
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+  background: rgba(99, 102, 241, 0.08);
 }
-
-.pay-methods i {
-  display: inline-grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  margin-right: 7px;
-  border-radius: 5px;
-  color: #fff;
-  background: #2074ef;
+.pay-methods button i {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.15);
   font-style: normal;
-  font-size: 12px;
-}
-
-.pay-methods button:last-child i {
-  background: #1ca950;
+  font-size: 10px;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
 }
 
 .primary-button {
-  padding: 0 18px;
-  color: #fff;
-  background: #245ce0;
+  height: 44px;
+  padding: 0 26px;
+  border-radius: var(--r-pill);
+  border: none;
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 850;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.primary-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
+}
+.primary-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
-.primary-button:disabled,
-.ghost-button:disabled {
-  opacity: .58;
-  cursor: wait;
-}
-
-.payment-message {
-  position: absolute;
-  right: 22px;
-  bottom: -26px;
-  margin: 0;
-  color: #536179;
-  font-size: 12px;
-}
-
+/* ── Orders Section ──────────────────────────────────────── */
 .orders-section {
-  margin-top: 42px;
-  padding: 22px;
+  position: relative;
+  z-index: 2;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r);
+  padding: 26px 30px;
+  box-shadow: var(--sh-sm);
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.section-title span {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--c-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.section-title h2 {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--c-text);
 }
 
 .orders-table {
-  margin-top: 16px;
-  border-top: 1px solid #e8edf4;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-
-.order-head,
-.order-item {
-  display: grid;
-  grid-template-columns: 1.8fr 1fr .7fr .8fr .8fr;
-  gap: 16px;
-  align-items: center;
-  padding: 13px 4px;
-}
-
 .order-head {
-  color: #718099;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.order-item {
-  border-top: 1px solid #eef2f6;
-  font-size: 13px;
-}
-
-.order-item > div {
   display: grid;
-  gap: 4px;
+  grid-template-columns: 1.5fr 1.2fr 1fr 1fr 1fr;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--c-subtle);
+  border-bottom: 1px solid var(--c-border);
 }
-
-.order-item small {
-  color: #8590a2;
-  font-size: 11px;
+.order-item {
+  display: grid;
+  grid-template-columns: 1.5fr 1.2fr 1fr 1fr 1fr;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: var(--r-sm);
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  font-size: 13px;
+  color: var(--c-text);
 }
+.order-item strong { font-weight: 800; }
+.order-item small { color: var(--c-muted); display: block; font-size: 11px; }
 
 .status {
-  width: max-content;
-  padding: 4px 7px;
-  border-radius: 99px;
-  color: #58657a;
-  background: #eff3f8;
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--r-pill);
   font-size: 11px;
   font-weight: 800;
+  width: fit-content;
 }
-
-.status.paid {
-  color: #0a8055;
-  background: #e8f8ef;
-}
-
-.status.failed {
-  color: #c73838;
-  background: #fff0f0;
-}
+.status.paid, .status.success { background: rgba(16, 185, 129, 0.12); color: #10b981; }
+.status.pending { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+.status.failed, .status.cancelled { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
 
 .ticket-button {
-  width: max-content;
-  padding: 0 10px;
-  border: 1px solid #d8e1ee;
-  color: #2855a9;
-  background: #fff;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-border);
+  background: transparent;
+  color: var(--c-muted);
   font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 0.18s;
+  width: fit-content;
 }
+.ticket-button:hover { border-color: var(--c-accent); color: var(--c-accent); }
 
 .orders-empty {
-  padding: 34px 0;
-  color: #7a879a;
+  padding: 36px;
   text-align: center;
+  color: var(--c-subtle);
   font-size: 13px;
+  background: var(--c-bg);
+  border-radius: var(--r-sm);
+  border: 1px dashed var(--c-border);
 }
 
+/* ── Ticket Dialog ───────────────────────────────────────── */
 .ticket-dialog {
-  width: min(520px, calc(100vw - 32px));
-  padding: 0;
-  border: 0;
-  border-radius: 12px;
-  box-shadow: 0 16px 40px rgba(13, 27, 57, .24);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r);
+  background: var(--c-surface);
+  color: var(--c-text);
+  box-shadow: var(--sh-lg);
+  padding: 28px 32px;
+  width: min(480px, calc(100vw - 32px));
 }
-
 .ticket-dialog::backdrop {
-  background: rgba(22, 31, 47, .38);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
 }
-
-.ticket-dialog form {
-  display: grid;
-  gap: 14px;
-  padding: 24px;
-}
-
 .dialog-heading {
   display: flex;
-  align-items: start;
+  align-items: flex-start;
   justify-content: space-between;
+  margin-bottom: 20px;
 }
-
-.dialog-heading span {
-  color: #2860dd;
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.dialog-heading h2 {
-  margin: 5px 0 0;
-  font-size: 16px;
-}
-
-.close-button {
-  border: 0;
-  color: #6e7b91;
-  background: transparent;
-  font-size: 26px;
-  line-height: 1;
-}
+.dialog-heading span { font-size: 11px; font-weight: 800; color: var(--c-accent); text-transform: uppercase; }
+.dialog-heading h2 { margin: 2px 0 0; font-size: 18px; font-weight: 900; }
+.close-button { border: none; background: transparent; color: var(--c-muted); font-size: 20px; cursor: pointer; }
 
 .ticket-dialog label {
-  display: grid;
-  gap: 7px;
-  color: #47556c;
-  font-size: 12px;
-  font-weight: 800;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-size: 12.5px;
+  font-weight: 750;
+  color: var(--c-muted);
 }
-
-.ticket-dialog input,
-.ticket-dialog select,
-.ticket-dialog textarea {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 10px;
-  border: 1px solid #d9e1ed;
-  border-radius: 7px;
-  color: #1d293c;
-  background: #fff;
-  resize: vertical;
+.ticket-dialog input, .ticket-dialog select, .ticket-dialog textarea {
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-size: 13.5px;
+  outline: none;
 }
-
-.ticket-error {
-  margin: 0;
-  color: #c73636;
-  font-size: 12px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-@media (max-width: 980px) {
-  .membership-topbar,
-  .plan-heading,
-  .checkout-bar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .current-strip {
-    grid-template-columns: 1fr;
-  }
-
-  .member-rank {
-    min-height: 0;
-  }
-
-  .plan-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .entitlement-item {
-    grid-template-columns: 118px 124px minmax(120px, 1fr);
-    gap: 12px;
-  }
-
-  .checkout-actions {
-    width: 100%;
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .pay-methods {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .payment-message {
-    position: static;
-  }
-
-  .order-head {
-    display: none;
-  }
-
-  .order-item {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (max-width: 560px) {
-  .membership-page {
-    padding: 22px 14px 42px;
-  }
-
-  .membership-topbar h1 {
-    font-size: 23px;
-  }
-
-  .member-rank {
-    min-height: 0;
-    padding: 22px 20px 20px;
-  }
-
-  .member-card-top button {
-    height: 36px;
-    padding: 0 14px;
-  }
-
-  .member-card-main {
-    align-self: center;
-  }
-
-  .member-card-bg span {
-    background: linear-gradient(90deg, rgba(255, 248, 232, .99) 0%, rgba(255, 244, 219, .97) 48%, rgba(255, 235, 195, .7) 64%, rgba(255, 255, 255, 0) 82%);
-  }
-
-  .plan-cards,
-  .order-item {
-    grid-template-columns: 1fr;
-  }
-
-  .entitlement-item {
-    grid-template-columns: 1fr auto;
-    gap: 6px 12px;
-    padding: 11px 2px;
-  }
-
-  .entitlement-item .quota-meter {
-    grid-column: 1 / -1;
-  }
-  .cycle-switch {
-    width: 100%;
-    overflow-x: auto;
-  }
-
-  .cycle-switch button {
-    flex: 1;
-  }
+.ticket-dialog input:focus, .ticket-dialog select:focus, .ticket-dialog textarea:focus {
+  border-color: var(--c-accent);
 }
 </style>

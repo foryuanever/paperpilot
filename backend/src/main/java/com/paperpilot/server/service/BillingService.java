@@ -14,8 +14,8 @@ public class BillingService {
     private static final String KEY_UNIT_PRICE = "unit_price";
     private static final String KEY_MULTIPLIER = "multiplier";
     private static final String KEY_PPT_AGENT_MIN_CHARGE = "ppt_agent_min_charge";
-    private static final double DEFAULT_UNIT_PRICE = 0.01D;
-    private static final double DEFAULT_MULTIPLIER = 1.0D;
+    private static final double DEFAULT_UNIT_PRICE = 0.0025D;
+    private static final double DEFAULT_MULTIPLIER = 4.0D;
     private static final double DEFAULT_PPT_AGENT_MIN_CHARGE = 0.0D;
 
     private final BillingSettingRepository repository;
@@ -25,10 +25,20 @@ public class BillingService {
     }
 
     public double unitPrice() {
-        return readDouble(KEY_UNIT_PRICE, DEFAULT_UNIT_PRICE);
+        double saved = readDouble(KEY_UNIT_PRICE, DEFAULT_UNIT_PRICE);
+        double multiplier = rawMultiplier();
+        if (saved > DEFAULT_UNIT_PRICE * 2 && multiplier > 1.0D) {
+            return saved / multiplier;
+        }
+        return saved;
     }
 
     public double multiplier() {
+        double saved = rawMultiplier();
+        return saved <= 1.0D ? DEFAULT_MULTIPLIER : saved;
+    }
+
+    private double rawMultiplier() {
         return readDouble(KEY_MULTIPLIER, DEFAULT_MULTIPLIER);
     }
 
@@ -38,9 +48,17 @@ public class BillingService {
 
     public double calculateCharge(long totalTokens) {
         if (totalTokens <= 0) return 0.0D;
-        return BigDecimal.valueOf(totalTokens)
+        return calculateCharge(totalTokens, 0L);
+    }
+
+    public double calculateCharge(long promptTokens, long completionTokens) {
+        long safePrompt = Math.max(0L, promptTokens);
+        long safeCompletion = Math.max(0L, completionTokens);
+        if (safePrompt + safeCompletion <= 0) return 0.0D;
+        BigDecimal billableTokens = BigDecimal.valueOf(safePrompt)
+            .add(BigDecimal.valueOf(safeCompletion).multiply(BigDecimal.valueOf(multiplier())));
+        return billableTokens
             .multiply(BigDecimal.valueOf(unitPrice()))
-            .multiply(BigDecimal.valueOf(multiplier()))
             .divide(BigDecimal.valueOf(1000), 6, RoundingMode.HALF_UP)
             .doubleValue();
     }
@@ -49,12 +67,29 @@ public class BillingService {
         return calculateCharge(totalTokens);
     }
 
+    public double calculateCharge(String action, long promptTokens, long completionTokens) {
+        return calculateCharge(promptTokens, completionTokens);
+    }
+
+    public double normalizeInputUnitPrice(double savedUnitPrice, double multiplier) {
+        if (savedUnitPrice <= 0) return unitPrice();
+        if (savedUnitPrice > DEFAULT_UNIT_PRICE * 2 && multiplier > 1.0D) {
+            return savedUnitPrice / multiplier;
+        }
+        return savedUnitPrice;
+    }
+
+    public double outputUnitPrice(double inputUnitPrice, double multiplier) {
+        return Math.max(0.0D, inputUnitPrice) * Math.max(1.0D, multiplier);
+    }
+
     public Map<String, Object> settings() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("unitPrice", unitPrice());
+        result.put("outputUnitPrice", outputUnitPrice(unitPrice(), multiplier()));
         result.put("multiplier", multiplier());
         result.put("pptAgentMinCharge", pptAgentMinCharge());
-        result.put("formula", "Token 用量按供应商返回的 usage 原值记录；费用 = 真实 Token × 站内单价 × 收费倍率 / 1000");
+        result.put("formula", "费用 = 输入单价 / 1000 × (文字输入 + 文字输出 × 补全倍率)");
         result.put("currency", "CNY");
         return result;
     }

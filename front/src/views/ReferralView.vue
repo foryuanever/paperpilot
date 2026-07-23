@@ -187,6 +187,78 @@ function redeemPoints() {
 </script>
 
 <style scoped>
+
+/* ═══ ReferralView — Premium Dual-Theme ═══ */
+.referral-page, [class*="referral"] {
+  --c-bg:      #f4f5f8;
+  --c-surface: #ffffff;
+  --c-border:  rgba(15,23,42,.08);
+  --c-text:    #0f172a;
+  --c-muted:   #64748b;
+  --c-accent:  #6366f1;
+  --c-accent2: #a855f7;
+  --sh-sm: 0 2px 8px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.04);
+  --r: 16px; --r-sm: 10px; --r-pill: 999px;
+  min-height: 100vh;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: Inter, "PingFang SC", system-ui, sans-serif;
+  transition: background .3s, color .3s;
+}
+:root[data-theme="dark"] .referral-page,
+:root[data-theme="dark"] [class*="referral"] {
+  --c-bg:      #09090e;
+  --c-surface: rgba(18,24,40,.88);
+  --c-border:  rgba(255,255,255,.07);
+  --c-text:    #f1f5f9;
+  --c-muted:   #94a3b8;
+}
+
+/* All surface cards */
+.referral-page section, .referral-page article,
+.referral-page .card, .referral-page .panel {
+  background: var(--c-surface) !important;
+  border: 1px solid var(--c-border) !important;
+  border-radius: var(--r) !important;
+  box-shadow: var(--sh-sm) !important;
+  backdrop-filter: blur(16px);
+  color: var(--c-text) !important;
+}
+.referral-page h1, .referral-page h2, .referral-page h3 { color: var(--c-text) !important; }
+.referral-page p, .referral-page span { color: var(--c-muted); }
+.referral-page strong { color: var(--c-text) !important; }
+
+/* Invite code box */
+.referral-page input[readonly] {
+  background: var(--c-bg) !important;
+  border: 1px solid var(--c-border) !important;
+  color: var(--c-text) !important;
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  outline: none;
+}
+
+/* CTA buttons */
+.referral-page button:not(.secondary), .referral-page .cta-btn {
+  border-radius: var(--r-pill) !important;
+  border: none !important;
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2)) !important;
+  color: #fff !important;
+  font-weight: 800 !important;
+  box-shadow: 0 4px 14px rgba(99,102,241,.3) !important;
+  transition: all .2s !important;
+}
+.referral-page button:hover { transform: translateY(-1px) !important; }
+.referral-page .reward-item, .referral-page .tier-card {
+  padding: 16px 20px;
+  border-radius: var(--r-sm) !important;
+  background: var(--c-bg) !important;
+  border: 1px solid var(--c-border) !important;
+}
+
 .referral-page {
   display: grid;
   gap: 26px;

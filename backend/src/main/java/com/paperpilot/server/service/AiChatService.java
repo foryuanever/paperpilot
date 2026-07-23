@@ -24,6 +24,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -116,7 +117,17 @@ public class AiChatService {
         int maxOutputTokens,
         List<String> fallbackModels
     ) throws Exception {
-        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, true);
+        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, true, Set.of());
+    }
+
+    public ChatResult chatJsonWithModelFallbackSkipping(
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        List<String> fallbackModels,
+        Set<String> skippedModels
+    ) throws Exception {
+        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, true, skippedModels);
     }
 
     public ChatResult chatJsonWithModelFallbackUnmetered(
@@ -125,7 +136,7 @@ public class AiChatService {
         int maxOutputTokens,
         List<String> fallbackModels
     ) throws Exception {
-        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, false);
+        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, false, Set.of());
     }
 
     private ChatResult chatJsonWithModelFallback(
@@ -133,7 +144,8 @@ public class AiChatService {
         String userPrompt,
         int maxOutputTokens,
         List<String> fallbackModels,
-        boolean accountUsage
+        boolean accountUsage,
+        Set<String> skippedModels
     ) throws Exception {
         String scene = inferModelConfigScene(systemPrompt, userPrompt);
         ModelConfigEntity config = activeSceneConfig(scene);
@@ -167,19 +179,32 @@ public class AiChatService {
                 ));
             }
         }
+        if (routes.isEmpty()) {
+            throw new IllegalStateException("当前入口未配置可用模型，请在管理员 AI 路由中为 " + scene + " 配置第三方 OpenAI 兼容中转。");
+        }
         String lastError = "没有可用模型";
         LinkedHashSet<String> attempted = new LinkedHashSet<>();
-        for (ModelRoute route : routes) {
-            if (!StringUtils.hasText(route.model())) continue;
-            String attemptKey = route.baseUrl() + " " + route.model();
-            if (!attempted.add(attemptKey)) continue;
-            try {
-                return send(route.baseUrl(), route.apiKey(), route.model(), route.apiFormat(), route.authType(), route.fullUrl(), route.customUserAgent(), systemPrompt, userPrompt, maxOutputTokens, accountUsage);
-            } catch (Exception error) {
-                lastError = route.model() + "：" + error.getMessage();
+        boolean hadSkippedRoutes = false;
+        for (int pass = 0; pass < 2; pass++) {
+            for (ModelRoute route : routes) {
+                if (!StringUtils.hasText(route.model())) continue;
+                String normalizedModel = normalizeOpenCodeFreeModel(route.model());
+                if (pass == 0 && skippedModels != null && skippedModels.contains(normalizedModel)) {
+                    hadSkippedRoutes = true;
+                    continue;
+                }
+                String attemptKey = route.baseUrl() + " " + route.model();
+                if (!attempted.add(attemptKey)) continue;
+                try {
+                    return send(route.baseUrl(), route.apiKey(), route.model(), route.apiFormat(), route.authType(), route.fullUrl(), route.customUserAgent(), systemPrompt, userPrompt, maxOutputTokens, accountUsage);
+                } catch (Exception error) {
+                    lastError = route.model() + "：" + error.getMessage();
+                }
             }
+            if (!attempted.isEmpty() || !hadSkippedRoutes) break;
+            lastError = "未被质量门跳过的模型已耗尽，正在放开跳过列表重试完整模型池";
         }
-        throw new IllegalStateException(lastError);
+        throw new IllegalStateException("模型池全部尝试失败，最后错误：" + lastError);
     }
 
     public ChatResult chatJsonForDeckAgent(
@@ -644,7 +669,8 @@ public class AiChatService {
     private int requestTimeoutSeconds(String systemPrompt, String userPrompt, boolean connectionTest) {
         if (connectionTest) return 15;
         String scene = inferModelConfigScene(systemPrompt, userPrompt);
-        if (ModelConfigService.SCENE_TOPIC_RESEARCH.equals(scene)) return 35;
+        if (ModelConfigService.SCENE_TOPIC_RESEARCH.equals(scene)) return 90;
+        if (ModelConfigService.SCENE_PAPER_QA.equals(scene)) return 90;
         if (ModelConfigService.SCENE_FORUM_MODERATION.equals(scene)) return 20;
         return 65;
     }
@@ -988,15 +1014,15 @@ public class AiChatService {
 
     private String inferAction(String systemPrompt, String userPrompt) {
         String scene = inferScene(systemPrompt, userPrompt);
+        String combined = ((systemPrompt == null ? "" : systemPrompt) + "\n" + (userPrompt == null ? "" : userPrompt));
         return switch (scene) {
             case ModelConfigService.SCENE_TOPIC_RESEARCH -> {
-                String combined = ((systemPrompt == null ? "" : systemPrompt) + "\n" + (userPrompt == null ? "" : userPrompt));
                 yield combined.contains("质检返工") || combined.contains("quality_error") ? "选题调研返工" : "选题调研";
             }
             case "translate" -> "PDF双栏翻译";
             case "report" -> "组会论文内容生成";
             case "summary" -> "综述生成";
-            case "qa" -> "论文问答";
+            case "qa" -> combined.contains("用户当前选中内容") ? "论文选区提问" : "论文问答";
             default -> "论文解析";
         };
     }

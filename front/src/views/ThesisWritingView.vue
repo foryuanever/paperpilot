@@ -545,6 +545,168 @@ function restoreVersion(version) {
 </script>
 
 <style scoped>
+
+/* ═══ ThesisWritingView — Premium Dual-Theme ═══ */
+.thesis-page {
+  --c-bg:      #f4f5f8;
+  --c-surface: #ffffff;
+  --c-border:  rgba(15,23,42,.08);
+  --c-text:    #0f172a;
+  --c-muted:   #64748b;
+  --c-subtle:  #94a3b8;
+  --c-accent:  #6366f1;
+  --c-accent2: #a855f7;
+  --sh-sm: 0 2px 8px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.04);
+  --r: 14px; --r-sm: 8px; --r-pill: 999px;
+  min-height: 100vh;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: Inter, "PingFang SC", system-ui, sans-serif;
+  transition: background .3s, color .3s;
+  display: flex;
+  flex-direction: column;
+}
+:root[data-theme="dark"] .thesis-page {
+  --c-bg:      #09090e;
+  --c-surface: rgba(18,24,40,.9);
+  --c-border:  rgba(255,255,255,.07);
+  --c-text:    #f1f5f9;
+  --c-muted:   #94a3b8;
+  --c-subtle:  #64748b;
+}
+
+.thesis-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-surface) !important;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 1px 4px rgba(15,23,42,.06);
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.thesis-title-block { flex: 1; min-width: 0; }
+.title-input {
+  width: 100%;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--c-text) !important;
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 0;
+}
+.title-input::placeholder { color: var(--c-subtle); }
+.thesis-meta { display: flex; align-items: center; gap: 10px; margin-top: 4px; font-size: 12.5px; color: var(--c-muted); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block; }
+.save-state { font-size: 12px; }
+.save-state.saving { color: #f59e0b; }
+.save-state.saved  { color: #10b981; }
+
+.thesis-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.action-button {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-muted);
+  font-size: 13px;
+  font-weight: 700;
+  transition: all .18s;
+  white-space: nowrap;
+}
+.action-button:hover { border-color: var(--c-accent); color: var(--c-accent); }
+.action-button.primary {
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(99,102,241,.28);
+}
+.action-button.primary:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(99,102,241,.38); }
+.star-button {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--c-border);
+  background: transparent;
+  color: var(--c-subtle);
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+  transition: all .18s;
+}
+.star-button.active { color: #f59e0b; border-color: rgba(245,158,11,.3); background: rgba(245,158,11,.08); }
+
+.writing-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  flex: 1;
+  height: calc(100vh - 65px);
+  overflow: hidden;
+}
+@media (max-width: 768px) { .writing-shell { grid-template-columns: 1fr; } }
+
+.outline-pane {
+  border-right: 1px solid var(--c-border);
+  background: var(--c-surface) !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.pane-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-bg);
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--c-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.editor-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--c-surface);
+}
+.editor-pane textarea, .section-editor {
+  flex: 1;
+  padding: 28px;
+  border: none;
+  background: var(--c-surface) !important;
+  color: var(--c-text) !important;
+  font-size: 15px;
+  line-height: 1.85;
+  resize: none;
+  outline: none;
+  font-family: inherit;
+}
+
+.thesis-progress {
+  padding: 10px 16px;
+  border-top: 1px solid var(--c-border);
+}
+.progress-label { font-size: 12px; color: var(--c-muted); margin-bottom: 6px; }
+.progress-bar {
+  height: 4px;
+  border-radius: 99px;
+  background: var(--c-border);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--c-accent), var(--c-accent2));
+  transition: width .3s ease;
+}
+
 .thesis-page {
   --desk-blue: #1769e8;
   --desk-blue-dark: #0b55c7;

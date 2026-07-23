@@ -6,78 +6,74 @@
     <section class="team-shell" data-reveal>
       <!-- Horizontal Seats Header -->
       <header class="team-seats-header">
-        <div class="seats-left-container">
-          <div class="seats-label-row">
-            <h2>实验室席位</h2>
-            <span class="seats-count-badge">{{ teamStore.usedSeats }} / {{ teamStore.totalSeats }}</span>
-          </div>
-          <p class="seats-helper-text">
-            团队席位用于协作任务、公告同步和共享材料管理；导师车队可开放团队成员加入。
-          </p>
-          <div class="seats-avatar-row">
-            <div
-              v-for="member in teamStore.members"
-              :key="member.id"
-              class="seat-circle-avatar"
-              :class="{ 'current-user-seat': member.isCurrentUser }"
-              :data-user-email="member.email"
-              title="查看个人卡片"
-            >
-              <div class="avatar-inner-wrapper">
-                <img
-                  v-if="member.isCurrentUser && authStore.profile.avatarUrl"
-                  :src="authStore.profile.avatarUrl"
-                  :alt="member.name"
-                  class="seat-img"
-                />
-                <span
-                  v-else
-                  class="seat-fallback"
-                  :style="{ backgroundColor: getAvatarColor(member.role) }"
-                >
-                  {{ getMemberInitial(member.name) }}
-                </span>
-                <span class="status-indicator-dot" :class="member.status"></span>
-              </div>
-              <span class="seat-member-name">{{ member.name.replace("导师", "").trim() }}</span>
+        <div class="header-top-bar">
+          <div class="header-titles">
+            <div class="seats-label-row">
+              <h2>实验室席位</h2>
+              <span class="seats-count-badge">{{ teamStore.usedSeats }} / {{ teamStore.totalSeats }}</span>
+              <span class="member-plan-pill" :class="{ active: hasTeamFleetPlan }">
+                {{ hasTeamFleetPlan ? "导师车队共享中" : "待开通团队车队" }}
+              </span>
             </div>
-            <!-- Empty seats -->
+            <p class="seats-helper-text">
+              课题组席位用于科研任务调度、组会 PPT / 论文综述材料同步及团队成员实时状态协同。
+            </p>
+          </div>
+
+          <div class="header-actions">
+            <div class="team-identity-plate">
+              <span class="plate-label">实验室编号</span>
+              <strong class="plate-code">{{ teamStore.teamIdentifier }}</strong>
+            </div>
             <button
-              v-if="hasWriteAccess && teamStore.usedSeats < teamStore.totalSeats"
-              class="seat-circle-avatar empty-seat-btn"
+              v-if="hasWriteAccess"
+              class="invite-main-btn"
               @click="showInviteModal = true"
-              :title="`添加成员，当前可用 ${teamStore.totalSeats - teamStore.usedSeats} 个席位`"
             >
-              <span class="avatar-inner-wrapper"><span class="plus-symbol">+</span></span>
-              <span class="seat-member-name">添加</span>
-            </button>
-            <button
-              v-else-if="hasWriteAccess"
-              class="seat-circle-avatar empty-seat-btn locked-seat-btn"
-              @click="showToast('席位已满，继续加人需开通或升级团队会员')"
-              title="开通导师车队或团队 Plus 后可管理团队席位"
-            >
-              <span class="avatar-inner-wrapper"><span class="plus-symbol">+</span></span>
-              <span class="seat-member-name">升级</span>
+              + 邀请成员
             </button>
           </div>
         </div>
 
-        <div class="seats-right-container">
-          <div class="team-plan-flag" :class="{ active: hasTeamFleetPlan }">
-            <span>{{ teamFleetLabel }}</span>
-            <strong>{{ hasTeamFleetPlan ? "全队共享权益" : "待开通团队权益" }}</strong>
-          </div>
-          <div class="team-identity-plate">
-            <span class="plate-label">团队标示号</span>
-            <strong class="plate-code">{{ teamStore.teamIdentifier }}</strong>
-          </div>
-          <button
-            v-if="hasWriteAccess"
-            class="invite-main-btn"
-            @click="showInviteModal = true"
+        <!-- Non-grid Organic Rounded Circle Seats Row -->
+        <div class="seats-avatar-row">
+          <div
+            v-for="member in teamStore.members"
+            :key="member.id"
+            class="seat-circle-avatar"
+            :class="{ 'current-user-seat': member.isCurrentUser }"
+            :data-user-email="member.email"
+            title="查看个人科研卡片"
           >
-            邀请成员
+            <div class="avatar-inner-wrapper">
+              <img
+                v-if="member.isCurrentUser && authStore.profile.avatarUrl"
+                :src="authStore.profile.avatarUrl"
+                :alt="member.name"
+                class="seat-img"
+              />
+              <span
+                v-else
+                class="seat-fallback"
+                :style="{ background: getAvatarColor(member.role) }"
+              >
+                {{ getMemberInitial(member.name) }}
+              </span>
+              <span class="status-indicator-dot" :class="member.status"></span>
+            </div>
+            <span class="seat-member-name">{{ member.name.replace("导师", "").trim() }}</span>
+            <span class="seat-role-tag" :class="getRoleClass(member.role)">{{ member.role }}</span>
+          </div>
+
+          <!-- Empty seat add button -->
+          <button
+            v-if="hasWriteAccess && teamStore.usedSeats < teamStore.totalSeats"
+            class="seat-circle-avatar empty-seat-btn"
+            @click="showInviteModal = true"
+            :title="`添加成员，当前可用 ${teamStore.totalSeats - teamStore.usedSeats} 个席位`"
+          >
+            <div class="avatar-inner-wrapper"><span class="plus-symbol">+</span></div>
+            <span class="seat-member-name">加人</span>
           </button>
         </div>
       </header>
@@ -113,7 +109,7 @@
                   <span
                     v-else
                     class="avatar-large-fallback"
-                    :style="{ backgroundColor: getAvatarColor(member.role) }"
+                    :style="{ background: getAvatarColor(member.role) }"
                   >
                     {{ getMemberInitial(member.name) }}
                   </span>
@@ -162,9 +158,10 @@
                     <button
                       v-if="member.id !== currentMemberId"
                       class="action-btn-link"
-                      @click="toggleRole(member)"
+                      :class="{ danger: !member.disabledBenefits }"
+                      @click="toggleMemberBenefits(member)"
                     >
-                      变更角色
+                      {{ member.disabledBenefits ? "恢复权益" : "关停权益" }}
                     </button>
                     <button
                       v-if="member.id !== currentMemberId"
@@ -645,16 +642,7 @@
               <span>邮箱</span>
               <input v-model="newMemberEmail" type="email" placeholder="输入邮箱地址" required />
             </label>
-            <div class="form-grid single">
-              <label>
-                <span>角色</span>
-                <select v-model="newMemberRole">
-                  <option value="学生">学生</option>
-                  <option value="特权用户">特权用户</option>
-                  <option value="管理员">管理员</option>
-                </select>
-              </label>
-            </div>
+
             <div class="form-actions">
               <button type="button" class="apple-btn" @click="showInviteModal = false">取消</button>
               <button type="submit" class="apple-btn apple-btn-primary">发送邀请</button>
@@ -679,7 +667,7 @@
               <span
                 v-else
                 class="avatar-fallback"
-                :style="{ backgroundColor: getAvatarColor(selectedMember.role) }"
+                :style="{ background: getAvatarColor(selectedMember.role) }"
               >
                 {{ getMemberInitial(selectedMember.name) }}
               </span>
@@ -1150,10 +1138,11 @@ function canViewQuota(member) {
 }
 
 function getAvatarColor(role) {
-  if (role === "导师") return "#0a84ff";
-  if (role === "管理员") return "#8e8e93";
-  if (role === "特权用户") return "#bf5af2";
-  return "#34c759";
+  if (role === "导师") return "linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)";
+  if (role === "管理员") return "linear-gradient(135deg, #f43f5e 0%, #fb923c 100%)";
+  if (role === "特权用户") return "linear-gradient(135deg, #d946ef 0%, #8b5cf6 100%)";
+  // Exact match with ForumView.vue .post-avatar
+  return "linear-gradient(135deg, #176ce4, #643bd4)"; 
 }
 
 function getRoleClass(role) {
@@ -1605,6 +1594,16 @@ onUnmounted(() => {
   if (toastTimer) clearTimeout(toastTimer);
   if (clockTimer) clearInterval(clockTimer);
 });
+
+function toggleMemberBenefits(member) {
+  member.disabledBenefits = !member.disabledBenefits;
+  if (member.disabledBenefits) {
+    showToast(`已关停 ${member.name} 的团队权益`);
+  } else {
+    showToast(`已恢复 ${member.name} 的团队权益`);
+  }
+}
+
 </script>
 
 <style scoped>
@@ -1624,8 +1623,9 @@ onUnmounted(() => {
 }
 
 .team-shell {
-  max-width: 1280px;
+  width: 100%;
   margin: 0 auto;
+  padding: 40px 48px;
   display: flex;
   flex-direction: column;
   gap: 32px;
@@ -2703,11 +2703,22 @@ onUnmounted(() => {
   border-radius: 16px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+:root[data-theme="dark"] .benefit-item {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 .benefit-item.enabled {
   background: #eefcf5;
   border-color: #c7ead7;
+}
+
+:root[data-theme="dark"] .benefit-item.enabled {
+  background: rgba(16, 185, 129, 0.1) !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
 }
 
 .benefit-item span {
@@ -2716,10 +2727,18 @@ onUnmounted(() => {
   font-weight: 750;
 }
 
+:root[data-theme="dark"] .benefit-item span {
+  color: #94a3b8 !important;
+}
+
 .benefit-item strong {
   color: #142033;
   font-size: 18px;
   font-weight: 850;
+}
+
+:root[data-theme="dark"] .benefit-item strong {
+  color: #f1f5f9 !important;
 }
 
 .research-rhythm-panel {
@@ -2729,6 +2748,12 @@ onUnmounted(() => {
   border: 1px solid #dfe7f1;
   border-radius: 18px;
   background: #ffffff;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+:root[data-theme="dark"] .research-rhythm-panel {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 .research-rhythm-panel > div {
@@ -2738,6 +2763,10 @@ onUnmounted(() => {
   gap: 4px;
   padding: 16px;
   border-right: 1px solid #e8edf4;
+}
+
+:root[data-theme="dark"] .research-rhythm-panel > div {
+  border-right: 1px solid rgba(255, 255, 255, 0.07) !important;
 }
 
 .research-rhythm-panel > div:last-child {
@@ -2750,15 +2779,27 @@ onUnmounted(() => {
   font-weight: 760;
 }
 
+:root[data-theme="dark"] .research-rhythm-panel span {
+  color: #94a3b8 !important;
+}
+
 .research-rhythm-panel strong {
   color: #121a2a;
   font-size: 20px;
   font-weight: 860;
 }
 
+:root[data-theme="dark"] .research-rhythm-panel strong {
+  color: #f1f5f9 !important;
+}
+
 .research-rhythm-panel small {
   color: #8a96a8;
   font-size: 10px;
+}
+
+:root[data-theme="dark"] .research-rhythm-panel small {
+  color: #64748b !important;
 }
 
 /* Student Tasks Checklist */
@@ -3478,7 +3519,7 @@ onUnmounted(() => {
 }
 
 .team-shell {
-  max-width: 1640px;
+  max-width: 100%;
   gap: 0;
   padding-top: 30px;
 }
@@ -4756,7 +4797,7 @@ onUnmounted(() => {
 }
 
 .team-shell {
-  max-width: 1480px;
+  max-width: 100%;
   gap: 24px;
 }
 
@@ -5556,6 +5597,17 @@ onUnmounted(() => {
   border-radius: 14px;
   background: #f8fbff;
   border: 1px solid #dce5f0;
+  transition: all 0.2s ease;
+}
+
+:root[data-theme="dark"] .student-task-item .document-file-row,
+:root[data-theme="dark"] .announcement-task-item .document-file-row,
+:root[data-theme="dark"] .admin-item-card .document-file-row,
+:root[data-theme="dark"] .student-task-item .document-link-row,
+:root[data-theme="dark"] .announcement-task-item .document-link-row,
+:root[data-theme="dark"] .admin-item-card .document-link-row {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 .student-task-item .document-file-icon,
@@ -5748,5 +5800,1265 @@ onUnmounted(() => {
     gap: 10px;
   }
 }
+
+
+
+/* ════════════════════════════════════════════════════════════
+   TEAM VIEW — FULL DUAL-THEME OVERRIDES (LIGHT & DARK MODE)
+   ════════════════════════════════════════════════════════════ */
+
+/* Members Table & Container */
+.members-cards-container {
+  border-radius: 20px !important;
+  overflow: hidden !important;
+  transition: all 0.22s ease !important;
+}
+
+:root[data-theme="dark"] .members-cards-container {
+  background: #111827 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+  color: #f1f5f9 !important;
+}
+
+:root[data-theme="light"] .members-cards-container {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.06) !important;
+  color: #0f172a !important;
+}
+
+.roster-table-head {
+  padding: 12px 20px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+}
+
+:root[data-theme="dark"] .roster-table-head {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #94a3b8 !important;
+}
+
+:root[data-theme="light"] .roster-table-head {
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+/* Member Rows */
+.member-management-card {
+  padding: 16px 20px !important;
+  transition: all 0.2s ease !important;
+}
+
+:root[data-theme="dark"] .member-management-card {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  color: #f1f5f9 !important;
+}
+:root[data-theme="dark"] .member-management-card:hover {
+  background: rgba(99, 102, 241, 0.08) !important;
+}
+
+:root[data-theme="light"] .member-management-card {
+  background: #ffffff !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  color: #0f172a !important;
+}
+:root[data-theme="light"] .member-management-card:hover {
+  background: #f8fafc !important;
+}
+
+/* Member Identity Info */
+.identity-info strong {
+  font-size: 14.5px !important;
+  font-weight: 850 !important;
+}
+:root[data-theme="dark"] .identity-info strong { color: #f1f5f9 !important; }
+:root[data-theme="light"] .identity-info strong { color: #0f172a !important; }
+
+.email-subtext { font-size: 12px !important; }
+:root[data-theme="dark"] .email-subtext { color: #94a3b8 !important; }
+:root[data-theme="light"] .email-subtext { color: #64748b !important; }
+
+/* Member Role Badges */
+.role-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 3px 10px !important;
+  border-radius: 999px !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+}
+
+:root[data-theme="dark"] .role-badge.student,
+:root[data-theme="dark"] .role-badge.role-student {
+  background: rgba(16, 185, 129, 0.18) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+}
+:root[data-theme="light"] .role-badge.student,
+:root[data-theme="light"] .role-badge.role-student {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #047857 !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+}
+
+:root[data-theme="dark"] .role-badge.tutor,
+:root[data-theme="dark"] .role-badge.role-tutor {
+  background: rgba(99, 102, 241, 0.22) !important;
+  color: #a5b4fc !important;
+  border: 1px solid rgba(99, 102, 241, 0.45) !important;
+}
+:root[data-theme="light"] .role-badge.tutor,
+:root[data-theme="light"] .role-badge.role-tutor {
+  background: rgba(99, 102, 241, 0.12) !important;
+  color: #4f46e5 !important;
+  border: 1px solid rgba(99, 102, 241, 0.3) !important;
+}
+
+:root[data-theme="dark"] .role-badge.admin,
+:root[data-theme="dark"] .role-badge.role-admin {
+  background: rgba(245, 158, 11, 0.2) !important;
+  color: #fbbf24 !important;
+  border: 1px solid rgba(245, 158, 11, 0.4) !important;
+}
+:root[data-theme="light"] .role-badge.admin,
+:root[data-theme="light"] .role-badge.role-admin {
+  background: rgba(245, 158, 11, 0.12) !important;
+  color: #b45309 !important;
+  border: 1px solid rgba(245, 158, 11, 0.3) !important;
+}
+
+/* Bottom Metrics Bar */
+.summary-metric-cards, .tutor-metric-card, .seat-usage-bar, .team-summary-bar {
+  border-radius: 18px !important;
+  padding: 16px 24px !important;
+}
+
+:root[data-theme="dark"] .summary-metric-cards,
+:root[data-theme="dark"] .tutor-metric-card,
+:root[data-theme="dark"] .seat-usage-bar,
+:root[data-theme="dark"] .team-summary-bar {
+  background: #111827 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #f1f5f9 !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
+}
+
+:root[data-theme="light"] .summary-metric-cards,
+:root[data-theme="light"] .tutor-metric-card,
+:root[data-theme="light"] .seat-usage-bar,
+:root[data-theme="light"] .team-summary-bar {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.05) !important;
+}
+
+/* Action Links */
+.action-btn-link {
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+}
+:root[data-theme="dark"] .action-btn-link:not(.danger) { color: #818cf8 !important; }
+:root[data-theme="light"] .action-btn-link:not(.danger) { color: #4f46e5 !important; }
+:root[data-theme="dark"] .action-btn-link.danger { color: #f87171 !important; }
+:root[data-theme="light"] .action-btn-link.danger { color: #dc2626 !important; }
+
+
+
+/* ════════════════════════════════════════════════════════════
+   TEAM VIEW — TOTAL DUAL-THEME PAGE OVERRIDES (LIGHT & DARK)
+   ════════════════════════════════════════════════════════════ */
+
+/* Page Background */
+.team-page {
+  transition: all 0.25s ease !important;
+}
+
+:root[data-theme="dark"] .team-page {
+  background: #09090e !important;
+  color: #f1f5f9 !important;
+}
+
+:root[data-theme="light"] .team-page {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* Seats Header */
+.team-seats-header {
+  border-radius: 24px !important;
+  transition: all 0.25s ease !important;
+}
+
+:root[data-theme="dark"] .team-seats-header {
+  background: #111827 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+  color: #f1f5f9 !important;
+}
+
+:root[data-theme="light"] .team-seats-header {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.06) !important;
+  color: #0f172a !important;
+}
+
+:root[data-theme="dark"] .team-seats-header h2,
+:root[data-theme="dark"] .team-seats-header h3 {
+  color: #f1f5f9 !important;
+}
+:root[data-theme="light"] .team-seats-header h2,
+:root[data-theme="light"] .team-seats-header h3 {
+  color: #0f172a !important;
+}
+
+:root[data-theme="dark"] .team-seats-header p,
+:root[data-theme="dark"] .team-seats-header span {
+  color: #94a3b8 !important;
+}
+:root[data-theme="light"] .team-seats-header p,
+:root[data-theme="light"] .team-seats-header span {
+  color: #64748b !important;
+}
+
+/* Dashboard Columns & Cards */
+:root[data-theme="dark"] .dashboard-col,
+:root[data-theme="dark"] .student-view-card,
+:root[data-theme="dark"] .tutor-view-card {
+  color: #f1f5f9 !important;
+}
+
+:root[data-theme="light"] .dashboard-col,
+:root[data-theme="light"] .student-view-card,
+:root[data-theme="light"] .tutor-view-card {
+  color: #0f172a !important;
+}
+
+
+
+/* ════════════════════════════════════════════════════════════
+   TEAM VIEW STREAMLINE DESIGN — Organic, Spacious, Non-Grid
+   ════════════════════════════════════════════════════════════ */
+
+.team-shell {
+  max-width: 100%;
+  margin: 0 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 32px !important;
+}
+
+/* Header Stream Banner */
+.stream-hero-header {
+  padding: 24px 28px !important;
+  border-radius: 24px !important;
+  background: var(--c-surface) !important;
+  border: 1px solid var(--c-border) !important;
+  box-shadow: var(--sh-sm) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 20px !important;
+}
+
+.stream-header-top {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 20px !important;
+}
+
+.stream-title-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.stream-title-row h2 {
+  margin: 0 !important;
+  font-size: 24px !important;
+  font-weight: 950 !important;
+  color: var(--c-text) !important;
+}
+
+.stream-badge {
+  padding: 3px 12px !important;
+  border-radius: 999px !important;
+  background: rgba(99, 102, 241, 0.12) !important;
+  color: #818cf8 !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+  border: 1px solid rgba(99, 102, 241, 0.25) !important;
+}
+
+.stream-plan-pill {
+  padding: 3px 12px !important;
+  border-radius: 999px !important;
+  background: rgba(245, 158, 11, 0.12) !important;
+  color: #fbbf24 !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+  border: 1px solid rgba(245, 158, 11, 0.25) !important;
+}
+.stream-plan-pill.active {
+  background: rgba(16, 185, 129, 0.12) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
+}
+
+.stream-subtitle {
+  margin: 4px 0 0 !important;
+  font-size: 13.5px !important;
+  color: var(--c-muted) !important;
+}
+.code-text {
+  color: var(--c-accent) !important;
+  font-family: monospace !important;
+}
+
+.stream-invite-btn {
+  height: 40px !important;
+  padding: 0 22px !important;
+  border-radius: 999px !important;
+  border: none !important;
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2)) !important;
+  color: #ffffff !important;
+  font-size: 13.5px !important;
+  font-weight: 850 !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35) !important;
+  transition: all 0.2s ease !important;
+}
+.stream-invite-btn:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45) !important;
+}
+
+/* Stream Avatars Bar */
+.stream-avatar-bar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+  padding-top: 14px !important;
+  border-top: 1px solid var(--c-border) !important;
+  flex-wrap: wrap !important;
+}
+
+.stream-avatar-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 4px 12px 4px 4px !important;
+  border-radius: 999px !important;
+  background: var(--c-bg) !important;
+  border: 1px solid var(--c-border) !important;
+  transition: all 0.18s ease !important;
+}
+.stream-avatar-item:hover {
+  border-color: rgba(99, 102, 241, 0.3) !important;
+  transform: translateY(-2px) !important;
+}
+
+.avatar-ring {
+  position: relative !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  flex-shrink: 0 !important;
+}
+.avatar-ring img, .avatar-fallback {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  display: grid !important;
+  place-items: center !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  font-size: 12px !important;
+}
+
+.avatar-name {
+  font-size: 12.5px !important;
+  font-weight: 800 !important;
+  color: var(--c-text) !important;
+}
+
+.add-ring {
+  background: rgba(148, 163, 184, 0.12) !important;
+  display: grid !important;
+  place-items: center !important;
+  color: var(--c-muted) !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+}
+
+/* De-clutter Member Roster List (Remove text clutter & heavy boxes) */
+.member-management-card {
+  padding: 14px 18px !important;
+  border-radius: 16px !important;
+  background: var(--c-surface) !important;
+  border: 1px solid var(--c-border) !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  box-shadow: none !important;
+}
+.card-details-grid {
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+.card-detail-item {
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+/* Restore Box Backgrounds for Panels */
+.admin-action-section, .my-stats-panel, .tasks-checklist-panel, .announcements-briefing {
+  border-radius: 22px !important;
+  padding: 24px !important;
+  margin-bottom: 24px !important;
+}
+
+:root[data-theme="light"] .admin-action-section,
+:root[data-theme="light"] .my-stats-panel,
+:root[data-theme="light"] .tasks-checklist-panel,
+:root[data-theme="light"] .announcements-briefing {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.04) !important;
+}
+
+:root[data-theme="dark"] .admin-action-section,
+:root[data-theme="dark"] .my-stats-panel,
+:root[data-theme="dark"] .tasks-checklist-panel,
+:root[data-theme="dark"] .announcements-briefing {
+  background: #111827 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Increase Font Sizes for Tasks & Announcements */
+.admin-items-list .item-title-row h5 {
+  font-size: 16.5px !important;
+  font-weight: 800 !important;
+  margin-bottom: 8px !important;
+  line-height: 1.4 !important;
+}
+
+.admin-items-list .task-desc-truncated,
+.admin-items-list p {
+  font-size: 14.5px !important;
+  line-height: 1.6 !important;
+  margin-bottom: 12px !important;
+}
+
+.section-title-bar h4 {
+  font-size: 20px !important;
+  font-weight: 900 !important;
+}
+
+
+
+/* ════════════════════════════════════════════════════════════
+   STREAMLINED TEAM VIEW — FULL DUAL-THEME OVERRIDES
+   ════════════════════════════════════════════════════════════ */
+
+:root[data-theme="dark"] .team-page {
+  background: #09090e !important;
+  color: #f1f5f9 !important;
+}
+
+:root[data-theme="light"] .team-page {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+:root[data-theme="dark"] .stream-hero-header {
+  background: #111827 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+  color: #f1f5f9 !important;
+}
+
+:root[data-theme="light"] .stream-hero-header {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.06) !important;
+  color: #0f172a !important;
+}
+
+:root[data-theme="dark"] .stream-hero-header h2 {
+  color: #f1f5f9 !important;
+}
+:root[data-theme="light"] .stream-hero-header h2 {
+  color: #0f172a !important;
+}
+
+/* Member Cards Container */
+:root[data-theme="dark"] .members-cards-container {
+  background: #111827 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+  color: #f1f5f9 !important;
+}
+
+:root[data-theme="light"] .members-cards-container {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.06) !important;
+  color: #0f172a !important;
+}
+
+/* Member Management Row Cards */
+:root[data-theme="dark"] .member-management-card {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  color: #f1f5f9 !important;
+}
+:root[data-theme="dark"] .member-management-card:hover {
+  background: rgba(99, 102, 241, 0.08) !important;
+}
+
+:root[data-theme="light"] .member-management-card {
+  background: #ffffff !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  color: #0f172a !important;
+}
+:root[data-theme="light"] .member-management-card:hover {
+  background: #f8fafc !important;
+}
+
+/* Fix White Blocks in Dark Mode */
+:root[data-theme="dark"] .card-detail-item {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+:root[data-theme="dark"] .card-detail-item span {
+  color: #94a3b8 !important;
+}
+:root[data-theme="dark"] .card-detail-item strong {
+  color: #f8fafc !important;
+}
+
+:root[data-theme="dark"] .member-benefit-strip span {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+}
+:root[data-theme="dark"] .member-benefit-strip span.muted {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: #64748b !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+
+
+/* ════════════════════════════════════════════════════════════
+   TEAM VIEW — ORGANIC NON-GRID SEATS & TOTAL DARK MODE FIX
+   ════════════════════════════════════════════════════════════ */
+
+/* Page Background */
+.team-page {
+  transition: all 0.25s ease !important;
+}
+:root[data-theme="dark"] .team-page {
+  background: #09090e !important;
+  color: #f1f5f9 !important;
+}
+:root[data-theme="light"] .team-page {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* Organic Seats Header */
+.team-seats-header {
+  padding: 26px 28px !important;
+  border-radius: 24px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 22px !important;
+}
+
+:root[data-theme="dark"] .team-seats-header {
+  background: #111827 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+  color: #f1f5f9 !important;
+}
+:root[data-theme="light"] .team-seats-header {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.06) !important;
+  color: #0f172a !important;
+}
+
+.header-top-bar {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 20px !important;
+}
+
+.seats-label-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+.seats-label-row h2 {
+  margin: 0 !important;
+  font-size: 22px !important;
+  font-weight: 950 !important;
+}
+:root[data-theme="dark"] .seats-label-row h2 { color: #f1f5f9 !important; }
+:root[data-theme="light"] .seats-label-row h2 { color: #0f172a !important; }
+
+.seats-count-badge {
+  padding: 3px 12px !important;
+  border-radius: 999px !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+}
+:root[data-theme="dark"] .seats-count-badge {
+  background: rgba(99, 102, 241, 0.18) !important;
+  color: #a5b4fc !important;
+  border: 1px solid rgba(99, 102, 241, 0.4) !important;
+}
+:root[data-theme="light"] .seats-count-badge {
+  background: rgba(99, 102, 241, 0.08) !important;
+  color: #4f46e5 !important;
+  border: 1px solid rgba(99, 102, 241, 0.25) !important;
+}
+
+.seats-helper-text {
+  margin: 6px 0 0 0 !important;
+  font-size: 13px !important;
+}
+:root[data-theme="dark"] .seats-helper-text { color: #94a3b8 !important; }
+:root[data-theme="light"] .seats-helper-text { color: #64748b !important; }
+
+.team-identity-plate {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  padding: 6px 14px !important;
+  border-radius: 12px !important;
+}
+:root[data-theme="dark"] .team-identity-plate {
+  background: rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+:root[data-theme="light"] .team-identity-plate {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.plate-code {
+  font-size: 13px !important;
+  font-weight: 850 !important;
+}
+:root[data-theme="dark"] .plate-code { color: #818cf8 !important; }
+:root[data-theme="light"] .plate-code { color: #4f46e5 !important; }
+
+.invite-main-btn {
+  height: 36px !important;
+  padding: 0 20px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(135deg, #6366f1, #a855f7) !important;
+  color: #ffffff !important;
+  font-size: 13px !important;
+  font-weight: 850 !important;
+  border: none !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
+}
+
+/* Organic Non-Grid Circle Seats Row */
+.seats-avatar-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 18px !important;
+  overflow-x: auto !important;
+  padding-bottom: 6px !important;
+}
+
+.seat-circle-avatar {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 6px !important;
+  cursor: pointer !important;
+}
+
+.avatar-inner-wrapper {
+  position: relative !important;
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 50% !important;
+  display: grid !important;
+  place-items: center !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15) !important;
+}
+
+:root[data-theme="dark"] .avatar-inner-wrapper {
+  border: 2px solid rgba(255, 255, 255, 0.12) !important;
+}
+:root[data-theme="light"] .avatar-inner-wrapper {
+  border: 2px solid #ffffff !important;
+}
+
+.seat-img, .seat-fallback {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  display: grid !important;
+  place-items: center !important;
+  color: #ffffff !important;
+  font-size: 18px !important;
+  font-weight: 900 !important;
+}
+
+.seat-member-name {
+  font-size: 12.5px !important;
+  font-weight: 850 !important;
+}
+:root[data-theme="dark"] .seat-member-name { color: #f1f5f9 !important; }
+:root[data-theme="light"] .seat-member-name { color: #0f172a !important; }
+
+.seat-role-tag {
+  font-size: 10px !important;
+  font-weight: 850 !important;
+  padding: 1px 8px !important;
+  border-radius: 999px !important;
+}
+
+:root[data-theme="dark"] .seat-role-tag.student,
+:root[data-theme="dark"] .seat-role-tag.role-student {
+  background: rgba(16, 185, 129, 0.18) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+}
+:root[data-theme="light"] .seat-role-tag.student,
+:root[data-theme="light"] .seat-role-tag.role-student {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #047857 !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+}
+
+:root[data-theme="dark"] .seat-role-tag.tutor,
+:root[data-theme="dark"] .seat-role-tag.role-tutor {
+  background: rgba(99, 102, 241, 0.22) !important;
+  color: #a5b4fc !important;
+  border: 1px solid rgba(99, 102, 241, 0.45) !important;
+}
+:root[data-theme="light"] .seat-role-tag.tutor,
+:root[data-theme="light"] .seat-role-tag.role-tutor {
+  background: rgba(99, 102, 241, 0.12) !important;
+  color: #4f46e5 !important;
+  border: 1px solid rgba(99, 102, 241, 0.3) !important;
+}
+
+/* All Section Cards in Dark Mode */
+:root[data-theme="dark"] .student-glass-card,
+:root[data-theme="dark"] .my-stats-panel,
+:root[data-theme="dark"] .tasks-checklist-panel,
+:root[data-theme="dark"] .announcements-briefing,
+:root[data-theme="dark"] .admin-action-section,
+:root[data-theme="dark"] .members-cards-container {
+  background: #111827 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+  color: #f1f5f9 !important;
+}
+
+:root[data-theme="dark"] .student-glass-card h3,
+:root[data-theme="dark"] .student-glass-card h4,
+:root[data-theme="dark"] .my-stats-panel h3,
+:root[data-theme="dark"] .my-stats-panel h4,
+:root[data-theme="dark"] .tasks-checklist-panel h3,
+:root[data-theme="dark"] .tasks-checklist-panel h4,
+:root[data-theme="dark"] .announcements-briefing h3,
+:root[data-theme="dark"] .announcements-briefing h4 {
+  color: #f1f5f9 !important;
+}
+
+/* Extra Dark Mode Fixes */
+:root[data-theme="dark"] .seats-avatar-row {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+:root[data-theme="dark"] .task-count-indicator {
+  border-color: rgba(255,255,255,0.12) !important;
+  color: #94a3b8 !important;
+  background: rgba(255,255,255,0.04) !important;
+}
+
+:root[data-theme="dark"] .image-attachment-card {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+}
+
+:root[data-theme="dark"] .research-rhythm-panel > div {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+}
+
+:root[data-theme="dark"] .benefit-item {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root[data-theme="dark"] .benefit-item.enabled {
+  background: rgba(16, 185, 129, 0.1) !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
+}
+
+/* Fix avatar padding so image fills the circle */
+.avatar-inner-wrapper {
+  padding: 0 !important;
+}
+
+/* Fix resource cards dark mode and hover */
+:root[data-theme="dark"] .resource-card {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid rgba(255, 255, 255, 0.04) !important;
+}
+
+:root[data-theme="dark"] .resource-card:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Fix white dividers across the page */
+:root[data-theme="dark"] .admin-item-card,
+:root[data-theme="dark"] .briefing-ann-card,
+:root[data-theme="dark"] .student-task-item {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+}
+
+:root[data-theme="dark"] .checklist-header,
+:root[data-theme="dark"] .resources-header,
+:root[data-theme="dark"] .col-header-row,
+:root[data-theme="dark"] .team-resources-section,
+:root[data-theme="dark"] .student-status-heading,
+:root[data-theme="dark"] .sign-in-header,
+:root[data-theme="dark"] .section-title-bar {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+:root[data-theme="dark"] .admin-item-card:last-child,
+:root[data-theme="dark"] .briefing-ann-card:last-child,
+:root[data-theme="dark"] .student-task-item:last-child {
+  border-bottom: 0 !important;
+}
+
+:root[data-theme="dark"] .benefit-lane {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Fix fallback avatar text to be pure bright white and bring status dot forward */
+.seat-fallback {
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2) !important;
+}
+
+.status-indicator-dot {
+  z-index: 10 !important;
+}
+/* ════════════════════════════════════════════════════════════
+   TEAM VIEW — CANONICAL DUAL-THEME FIX (v-final, no duplicates)
+   ════════════════════════════════════════════════════════════ */
+
+/* Page */
+.team-page {
+  transition: background 0.25s ease, color 0.25s ease;
+}
+:root[data-theme="dark"] .team-page {
+  background: #09090e !important;
+  color: #f1f5f9 !important;
+}
+:root[data-theme="light"] .team-page {
+  background: #f4f7fb !important;
+  color: #1c1c1e !important;
+}
+
+/* Seats Header */
+.team-seats-header {
+  border-radius: 24px;
+  padding: 26px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+:root[data-theme="dark"] .team-seats-header {
+  background: #111827 !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4) !important;
+  color: #f1f5f9 !important;
+}
+:root[data-theme="light"] .team-seats-header {
+  background: #ffffff !important;
+  border: 1px solid #dce7f4 !important;
+  box-shadow: 0 12px 40px rgba(30,53,92,0.07) !important;
+  color: #1c1c1e !important;
+}
+
+.header-top-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.seats-label-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.seats-label-row h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 950;
+}
+:root[data-theme="dark"] .seats-label-row h2 { color: #f1f5f9 !important; }
+:root[data-theme="light"] .seats-label-row h2 { color: #0f172a !important; }
+
+.seats-count-badge {
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 850;
+}
+:root[data-theme="dark"] .seats-count-badge {
+  background: rgba(99,102,241,0.18) !important;
+  color: #a5b4fc !important;
+  border: 1px solid rgba(99,102,241,0.4) !important;
+}
+:root[data-theme="light"] .seats-count-badge {
+  background: rgba(99,102,241,0.08) !important;
+  color: #4f46e5 !important;
+  border: 1px solid rgba(99,102,241,0.25) !important;
+}
+
+.seats-helper-text {
+  margin: 6px 0 0 0;
+  font-size: 13px;
+}
+:root[data-theme="dark"] .seats-helper-text { color: #94a3b8 !important; }
+:root[data-theme="light"] .seats-helper-text { color: #64748b !important; }
+
+.team-identity-plate {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 6px 14px;
+  border-radius: 12px;
+}
+:root[data-theme="dark"] .team-identity-plate {
+  background: rgba(0,0,0,0.3) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+}
+:root[data-theme="light"] .team-identity-plate {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+}
+.plate-label { font-size: 10px; }
+:root[data-theme="dark"] .plate-label { color: #94a3b8 !important; }
+:root[data-theme="light"] .plate-label { color: #64748b !important; }
+.plate-code { font-size: 13px; font-weight: 850; }
+:root[data-theme="dark"] .plate-code { color: #818cf8 !important; }
+:root[data-theme="light"] .plate-code { color: #4f46e5 !important; }
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.invite-main-btn {
+  height: 36px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 850;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(99,102,241,0.35);
+}
+
+/* Organic Seats Avatar Row */
+.seats-avatar-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scrollbar-width: none;
+}
+.seats-avatar-row::-webkit-scrollbar { display: none; }
+
+.seat-circle-avatar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  min-width: 58px;
+}
+
+/* CANONICAL avatar-inner-wrapper - single source of truth */
+.avatar-inner-wrapper {
+  position: relative;
+  width: 52px !important;
+  height: 52px !important;
+  min-width: 52px !important;
+  min-height: 52px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transition: all 0.25s ease;
+  padding: 0 !important;
+}
+:root[data-theme="dark"] .avatar-inner-wrapper {
+  border: 2px solid rgba(255,255,255,0.1) !important;
+  background: transparent !important;
+}
+:root[data-theme="light"] .avatar-inner-wrapper {
+  border: 2px solid #ffffff !important;
+  background: #ffffff !important;
+}
+
+.seat-circle-avatar:hover .avatar-inner-wrapper {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(99,102,241,0.25);
+}
+:root[data-theme="dark"] .seat-circle-avatar:hover .avatar-inner-wrapper {
+  border-color: rgba(129,140,248,0.5) !important;
+}
+:root[data-theme="light"] .seat-circle-avatar:hover .avatar-inner-wrapper {
+  border-color: #6366f1 !important;
+}
+
+.seat-img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 50% !important;
+}
+
+.seat-fallback {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #ffffff !important;
+  font-size: 18px !important;
+  font-weight: 800 !important;
+}
+
+.status-indicator-dot {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  background: #aeaeb2;
+}
+.status-indicator-dot.online { background: #34c759; box-shadow: 0 0 6px rgba(52,199,89,0.6); }
+.status-indicator-dot.offline { background: #aeaeb2; }
+
+.seat-member-name {
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:root[data-theme="dark"] .seat-member-name { color: #cbd5e1 !important; }
+:root[data-theme="light"] .seat-member-name { color: #334155 !important; }
+
+.seat-role-tag {
+  font-size: 9.5px;
+  font-weight: 850;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+:root[data-theme="dark"] .seat-role-tag {
+  background: rgba(99,102,241,0.18) !important;
+  color: #a5b4fc !important;
+  border: 1px solid rgba(99,102,241,0.35) !important;
+}
+:root[data-theme="light"] .seat-role-tag {
+  background: rgba(99,102,241,0.08) !important;
+  color: #4f46e5 !important;
+  border: 1px solid rgba(99,102,241,0.2) !important;
+}
+
+.empty-seat-btn .avatar-inner-wrapper {
+  background: transparent !important;
+}
+:root[data-theme="dark"] .empty-seat-btn .avatar-inner-wrapper {
+  border: 1.5px dashed rgba(129,140,248,0.35) !important;
+}
+:root[data-theme="light"] .empty-seat-btn .avatar-inner-wrapper {
+  border: 1.5px dashed rgba(99,102,241,0.3) !important;
+}
+
+.plus-symbol {
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1;
+}
+:root[data-theme="dark"] .plus-symbol { color: rgba(165,180,252,0.6) !important; }
+:root[data-theme="light"] .plus-symbol { color: rgba(99,102,241,0.5) !important; }
+
+/* Dashboard Columns */
+:root[data-theme="dark"] .dashboard-col,
+:root[data-theme="dark"] .left-col,
+:root[data-theme="dark"] .right-col { color: #f1f5f9 !important; }
+:root[data-theme="light"] .dashboard-col,
+:root[data-theme="light"] .left-col,
+:root[data-theme="light"] .right-col { color: #0f172a !important; }
+
+/* Section Cards */
+:root[data-theme="dark"] .student-glass-card,
+:root[data-theme="dark"] .my-stats-panel,
+:root[data-theme="dark"] .tasks-checklist-panel,
+:root[data-theme="dark"] .announcements-briefing,
+:root[data-theme="dark"] .admin-action-section,
+:root[data-theme="dark"] .members-cards-container {
+  background: #111827 !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4) !important;
+  color: #f1f5f9 !important;
+}
+:root[data-theme="dark"] .student-glass-card h3,
+:root[data-theme="dark"] .student-glass-card h4,
+:root[data-theme="dark"] .my-stats-panel h3,
+:root[data-theme="dark"] .my-stats-panel h4,
+:root[data-theme="dark"] .tasks-checklist-panel h3,
+:root[data-theme="dark"] .announcements-briefing h3,
+:root[data-theme="dark"] .admin-action-section h3,
+:root[data-theme="dark"] .admin-action-section h4,
+:root[data-theme="dark"] .members-cards-container h3 {
+  color: #f1f5f9 !important;
+}
+:root[data-theme="dark"] .col-header-row h3 { color: #f1f5f9 !important; }
+:root[data-theme="light"] .col-header-row h3 { color: #0f172a !important; }
+
+/* Roster Table Head */
+:root[data-theme="dark"] .roster-table-head {
+  background: rgba(255,255,255,0.03) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+  color: #94a3b8 !important;
+}
+:root[data-theme="light"] .roster-table-head {
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+/* Member Management Cards */
+:root[data-theme="dark"] .member-management-card {
+  border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+  color: #f1f5f9 !important;
+}
+:root[data-theme="dark"] .member-management-card:hover { background: rgba(99,102,241,0.08) !important; }
+:root[data-theme="light"] .member-management-card {
+  border-bottom: 1px solid #f1f5f9 !important;
+  color: #0f172a !important;
+}
+:root[data-theme="light"] .member-management-card:hover { background: #f8fafc !important; }
+
+/* Member Identity */
+:root[data-theme="dark"] .identity-info strong { color: #f1f5f9 !important; }
+:root[data-theme="dark"] .email-subtext { color: #94a3b8 !important; }
+:root[data-theme="light"] .identity-info strong { color: #0f172a !important; }
+:root[data-theme="light"] .email-subtext { color: #64748b !important; }
+
+/* Role Badges */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+}
+:root[data-theme="dark"] .role-badge { background: rgba(99,102,241,0.18) !important; color: #a5b4fc !important; border: 1px solid rgba(99,102,241,0.4) !important; }
+:root[data-theme="light"] .role-badge { background: rgba(99,102,241,0.08) !important; color: #4f46e5 !important; border: 1px solid rgba(99,102,241,0.25) !important; }
+:root[data-theme="dark"] .role-badge.student { background: rgba(16,185,129,0.18) !important; color: #34d399 !important; border-color: rgba(16,185,129,0.4) !important; }
+:root[data-theme="light"] .role-badge.student { background: rgba(16,185,129,0.1) !important; color: #047857 !important; border-color: rgba(16,185,129,0.25) !important; }
+:root[data-theme="dark"] .role-badge.tutor { background: rgba(99,102,241,0.22) !important; color: #a5b4fc !important; border-color: rgba(99,102,241,0.45) !important; }
+:root[data-theme="dark"] .role-badge.admin { background: rgba(245,158,11,0.2) !important; color: #fbbf24 !important; border-color: rgba(245,158,11,0.4) !important; }
+:root[data-theme="light"] .role-badge.admin { background: rgba(245,158,11,0.12) !important; color: #b45309 !important; border-color: rgba(245,158,11,0.3) !important; }
+
+/* Status Tags */
+.status-tag, .status-pill, .task-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+}
+:root[data-theme="dark"] .status-tag { background: rgba(99,102,241,0.18) !important; color: #a5b4fc !important; border: 1px solid rgba(99,102,241,0.4) !important; }
+:root[data-theme="light"] .status-tag { background: rgba(99,102,241,0.08) !important; color: #4f46e5 !important; border: 1px solid rgba(99,102,241,0.2) !important; }
+:root[data-theme="dark"] .status-tag.done { background: rgba(16,185,129,0.18) !important; color: #34d399 !important; border-color: rgba(16,185,129,0.4) !important; }
+:root[data-theme="light"] .status-tag.done { background: rgba(16,185,129,0.1) !important; color: #059669 !important; border-color: rgba(16,185,129,0.25) !important; }
+:root[data-theme="dark"] .status-tag.published { background: rgba(56,189,248,0.18) !important; color: #38bdf8 !important; border-color: rgba(56,189,248,0.4) !important; }
+:root[data-theme="light"] .status-tag.published { background: rgba(56,189,248,0.1) !important; color: #0284c7 !important; border-color: rgba(56,189,248,0.25) !important; }
+
+/* Action links */
+:root[data-theme="dark"] .action-btn-link:not(.danger) { color: #818cf8 !important; }
+:root[data-theme="light"] .action-btn-link:not(.danger) { color: #4f46e5 !important; }
+:root[data-theme="dark"] .action-btn-link.danger { color: #f87171 !important; }
+:root[data-theme="light"] .action-btn-link.danger { color: #dc2626 !important; }
+
+/* Tutor Inline Forms */
+:root[data-theme="dark"] .admin-action-section { background: #111827 !important; border: 1px solid rgba(255,255,255,0.08) !important; color: #f1f5f9 !important; }
+:root[data-theme="dark"] .admin-action-section h4 { color: #f1f5f9 !important; }
+:root[data-theme="dark"] .tutor-inline-form { background: rgba(255,255,255,0.03) !important; border: 1px solid rgba(255,255,255,0.08) !important; border-radius: 14px !important; }
+:root[data-theme="dark"] .tutor-inline-form input,
+:root[data-theme="dark"] .tutor-inline-form textarea {
+  background: #1f293d !important; color: #f1f5f9 !important; border: 1px solid rgba(255,255,255,0.12) !important; border-radius: 10px !important;
+}
+:root[data-theme="dark"] .tutor-inline-form input::placeholder,
+:root[data-theme="dark"] .tutor-inline-form textarea::placeholder { color: #94a3b8 !important; }
+:root[data-theme="dark"] .uploader-dropzone { background: rgba(255,255,255,0.04) !important; border: 1px dashed rgba(255,255,255,0.18) !important; color: #a5b4fc !important; }
+:root[data-theme="dark"] .admin-item-card, :root[data-theme="dark"] .task-card {
+  background: rgba(255,255,255,0.03) !important; border: 1px solid rgba(255,255,255,0.07) !important; color: #f1f5f9 !important;
+}
+:root[data-theme="dark"] .admin-item-card h5, :root[data-theme="dark"] .task-card h5 { color: #f1f5f9 !important; }
+:root[data-theme="dark"] .task-desc-truncated { color: #94a3b8 !important; }
 
 </style>

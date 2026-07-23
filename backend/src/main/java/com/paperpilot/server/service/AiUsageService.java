@@ -91,15 +91,25 @@ public class AiUsageService {
         entity.setScene(blankTo(scene, "analyze"));
         entity.setAction(blankTo(action, "论文解析"));
         entity.setPaperTitle(blankTo(paperTitle, "当前论文"));
-        entity.setPromptTokens(promptTokens);
-        entity.setCompletionTokens(completionTokens);
-        entity.setTotalTokens(totalTokens);
+        long safePromptTokens = Math.max(0L, promptTokens);
+        long safeCompletionTokens = Math.max(0L, completionTokens);
+        long safeTotalTokens = Math.max(0L, totalTokens);
+        if (safeTotalTokens <= 0L) safeTotalTokens = safePromptTokens + safeCompletionTokens;
+        if (safeTotalTokens > 0L && safeCompletionTokens <= 0L && safePromptTokens > 0L) {
+            safeCompletionTokens = Math.max(0L, safeTotalTokens - safePromptTokens);
+        }
+        if (safeTotalTokens > 0L && safePromptTokens <= 0L && safeCompletionTokens > 0L) {
+            safePromptTokens = Math.max(0L, safeTotalTokens - safeCompletionTokens);
+        }
+        entity.setPromptTokens(safePromptTokens);
+        entity.setCompletionTokens(safeCompletionTokens);
+        entity.setTotalTokens(safeTotalTokens);
         entity.setStatus(blankTo(status, "success"));
         entity.setErrorMessage(clip(errorMessage, 760));
         entity.setLatencyMs(Math.max(0L, latencyMs));
         entity.setUnitPrice(billingService.unitPrice());
         entity.setBillingMultiplier(billingService.multiplier());
-        entity.setChargeAmount("success".equalsIgnoreCase(status) ? billingService.calculateCharge(action, totalTokens) : 0.0D);
+        entity.setChargeAmount("success".equalsIgnoreCase(status) ? billingService.calculateCharge(action, safePromptTokens, safeCompletionTokens) : 0.0D);
         repository.save(entity);
     }
 
@@ -114,14 +124,19 @@ public class AiUsageService {
         long completionTokens,
         long totalTokens
     ) {
-        if (userId == null || totalTokens <= 0) return;
+        long safePromptTokens = Math.max(0L, promptTokens);
+        long safeCompletionTokens = Math.max(0L, completionTokens);
+        long safeTotalTokens = Math.max(0L, totalTokens);
+        if (safeTotalTokens <= 0L) safeTotalTokens = safePromptTokens + safeCompletionTokens;
+        if (userId == null || safeTotalTokens <= 0) return;
+        final long tokensToCharge = safeTotalTokens;
         appUserRepository.findById(userId).ifPresent(user -> {
             long current = user.getTokenUsed() == null ? 0L : user.getTokenUsed();
-            user.setTokenUsed(current + totalTokens);
+            user.setTokenUsed(current + tokensToCharge);
             appUserRepository.save(user);
             membershipService.consume(user, action);
         });
-        record(userId, modelName, scene, action, paperTitle, promptTokens, completionTokens, totalTokens);
+        record(userId, modelName, scene, action, paperTitle, safePromptTokens, safeCompletionTokens, safeTotalTokens);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -136,14 +151,19 @@ public class AiUsageService {
         long totalTokens,
         long latencyMs
     ) {
-        if (userId == null || totalTokens <= 0) return;
+        long safePromptTokens = Math.max(0L, promptTokens);
+        long safeCompletionTokens = Math.max(0L, completionTokens);
+        long safeTotalTokens = Math.max(0L, totalTokens);
+        if (safeTotalTokens <= 0L) safeTotalTokens = safePromptTokens + safeCompletionTokens;
+        if (userId == null || safeTotalTokens <= 0) return;
+        final long tokensToCharge = safeTotalTokens;
         appUserRepository.findById(userId).ifPresent(user -> {
             long current = user.getTokenUsed() == null ? 0L : user.getTokenUsed();
-            user.setTokenUsed(current + totalTokens);
+            user.setTokenUsed(current + tokensToCharge);
             appUserRepository.save(user);
             membershipService.consume(user, action);
         });
-        record(userId, modelName, scene, action, paperTitle, promptTokens, completionTokens, totalTokens, "success", "", latencyMs);
+        record(userId, modelName, scene, action, paperTitle, safePromptTokens, safeCompletionTokens, safeTotalTokens, "success", "", latencyMs);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -161,10 +181,12 @@ public class AiUsageService {
         record(userId, modelName, scene, action, paperTitle, Math.max(0L, promptTokens), 0L, Math.max(0L, promptTokens), "failed", errorMessage, latencyMs);
     }
 
-    public Map<String, Object> adminCalls(String keyword, String scene, String model, String status, int page, int pageSize) {
+    public Map<String, Object> adminCalls(String keyword, String scene, String model, String status, String startDate, String endDate, int page, int pageSize) {
         int safePage = Math.max(1, page);
         int safeSize = Math.min(100, Math.max(5, pageSize));
         String trimmedKeyword = StringUtils.hasText(keyword) ? keyword.trim().toLowerCase() : "";
+        LocalDateTime startAt = parseStartDate(startDate);
+        LocalDateTime endBefore = parseEndDate(endDate);
         List<Long> matchedUserIds = StringUtils.hasText(trimmedKeyword)
             ? appUserRepository.findAll().stream()
                 .filter(user ->
@@ -199,6 +221,12 @@ public class AiUsageService {
             if (StringUtils.hasText(status) && !"全部".equals(status)) {
                 predicates.add(cb.equal(root.get("status"), status.trim()));
             }
+            if (startAt != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), startAt));
+            }
+            if (endBefore != null) {
+                predicates.add(cb.lessThan(root.get("createdAt"), endBefore));
+            }
             return cb.and(predicates.toArray(Predicate[]::new));
         };
         Page<AiUsageRecordEntity> result = repository.findAll(
@@ -206,10 +234,11 @@ public class AiUsageService {
             PageRequest.of(safePage - 1, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"))
         );
         List<AiUsageRecordEntity> rows = result.getContent();
-        long inputTokens = rows.stream().mapToLong(r -> safe(r.getPromptTokens())).sum();
-        long outputTokens = rows.stream().mapToLong(r -> safe(r.getCompletionTokens())).sum();
-        long failed = rows.stream().filter(r -> "failed".equalsIgnoreCase(blankTo(r.getStatus(), ""))).count();
-        double cost = rows.stream().mapToDouble(this::chargeOf).sum();
+        List<AiUsageRecordEntity> summaryRows = repository.findAll(spec);
+        long inputTokens = summaryRows.stream().mapToLong(r -> safe(r.getPromptTokens())).sum();
+        long outputTokens = summaryRows.stream().mapToLong(r -> safe(r.getCompletionTokens())).sum();
+        long failed = summaryRows.stream().filter(r -> "failed".equalsIgnoreCase(blankTo(r.getStatus(), ""))).count();
+        double cost = summaryRows.stream().mapToDouble(this::chargeOf).sum();
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("page", safePage);
         response.put("pageSize", safeSize);
@@ -220,10 +249,21 @@ public class AiUsageService {
             "outputTokens", outputTokens,
             "totalTokens", inputTokens + outputTokens,
             "failed", failed,
+            "matchedCalls", summaryRows.size(),
             "cost", money(cost)
         ));
         response.put("rows", rows.stream().map(this::adminCallRow).toList());
         return response;
+    }
+
+    private LocalDateTime parseStartDate(String value) {
+        if (!StringUtils.hasText(value)) return null;
+        return LocalDate.parse(value.trim()).atStartOfDay();
+    }
+
+    private LocalDateTime parseEndDate(String value) {
+        if (!StringUtils.hasText(value)) return null;
+        return LocalDate.parse(value.trim()).plusDays(1).atStartOfDay();
     }
 
     public Map<String, Object> clearAdminCalls() {
@@ -431,10 +471,14 @@ public class AiUsageService {
         row.put("paper", displayPaperTitle(record.getPaperTitle(), "未关联论文"));
         row.put("promptTokens", safe(record.getPromptTokens()));
         row.put("completionTokens", safe(record.getCompletionTokens()));
+        row.put("inputTokens", safe(record.getPromptTokens()));
+        row.put("outputTokens", safe(record.getCompletionTokens()));
         row.put("totalTokens", safe(record.getTotalTokens()));
         row.put("chargeAmount", chargeOf(record));
         row.put("unitPrice", unitPriceOf(record));
+        row.put("outputUnitPrice", billingService.outputUnitPrice(unitPriceOf(record), multiplierOf(record)));
         row.put("billingMultiplier", multiplierOf(record));
+        row.put("billingFormula", "$" + unitPriceOf(record) + " / 1000 × (" + safe(record.getPromptTokens()) + " + " + safe(record.getCompletionTokens()) + " × " + multiplierOf(record) + ")");
         row.put("status", blankTo(record.getStatus(), "success"));
         row.put("latencyMs", safe(record.getLatencyMs()));
         row.put("errorMessage", blankTo(record.getErrorMessage(), ""));
@@ -485,7 +529,7 @@ public class AiUsageService {
         return switch (blankTo(scene, "")) {
             case ModelConfigService.SCENE_PAPER_REVIEW, "summary", "report" -> "论文综述";
             case ModelConfigService.SCENE_PAPER_QA, "qa", "analyze" -> "AI论文问答";
-            case ModelConfigService.SCENE_TOPIC_RESEARCH -> "选题研究";
+            case ModelConfigService.SCENE_TOPIC_RESEARCH -> "选题大厅";
             case ModelConfigService.SCENE_MEETING_DECK -> "PPT生成";
             case ModelConfigService.SCENE_FORUM_MODERATION -> "AI发帖审核";
             case "translate" -> "全文翻译";
@@ -528,20 +572,26 @@ public class AiUsageService {
     private double chargeOf(AiUsageRecordEntity record) {
         if ("failed".equalsIgnoreCase(blankTo(record.getStatus(), ""))) return 0.0D;
         double saved = money(record.getChargeAmount());
-        double calculated = billingService.calculateCharge(record.getAction(), safe(record.getTotalTokens()));
-        if (billingService.isPptAgentAction(record.getAction())) return calculated;
-        if (saved > 0) return saved;
-        return calculated;
+        double calculated = calculateCharge(unitPriceOf(record), multiplierOf(record), safe(record.getPromptTokens()), safe(record.getCompletionTokens()));
+        return calculated > 0 ? calculated : saved;
+    }
+
+    private double calculateCharge(double unitPrice, double multiplier, long promptTokens, long completionTokens) {
+        long safePrompt = Math.max(0L, promptTokens);
+        long safeCompletion = Math.max(0L, completionTokens);
+        if (unitPrice <= 0 || safePrompt + safeCompletion <= 0) return 0.0D;
+        double billableTokens = safePrompt + safeCompletion * Math.max(1.0D, multiplier);
+        return Math.round((unitPrice * billableTokens / 1000.0D) * 1_000_000D) / 1_000_000D;
     }
 
     private double unitPriceOf(AiUsageRecordEntity record) {
         double saved = money(record.getUnitPrice());
-        return saved > 0 ? saved : billingService.unitPrice();
+        return billingService.normalizeInputUnitPrice(saved, multiplierOf(record));
     }
 
     private double multiplierOf(AiUsageRecordEntity record) {
         double saved = money(record.getBillingMultiplier());
-        return saved > 0 ? saved : billingService.multiplier();
+        return saved > 1.0D ? saved : billingService.multiplier();
     }
 
     private String inferPlanId(long tokenLimit) {

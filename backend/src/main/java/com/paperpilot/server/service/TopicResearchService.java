@@ -22,6 +22,8 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class TopicResearchService {
@@ -63,6 +65,7 @@ public class TopicResearchService {
         AppUserEntity user = currentUserService.getOrCreateDefaultUser();
         String q = text(keyword).toLowerCase();
         return topicResearchRepository.findAllByOrderByCreatedAtDesc().stream()
+            .filter(this::isDisplayableTopic)
             .filter(topic -> !savedOnly || isSaved(topic, user.getId()))
             .filter(topic -> !StringUtils.hasText(q) || searchable(topic).toLowerCase().contains(q))
             .filter(topic -> !StringUtils.hasText(discipline) || text(topic.getDiscipline()).equals(discipline))
@@ -83,6 +86,7 @@ public class TopicResearchService {
         AppUserEntity admin = currentUserService.requireAdmin();
         String q = text(keyword).toLowerCase(Locale.ROOT);
         return topicResearchRepository.findAllByOrderByCreatedAtDesc().stream()
+            .filter(this::isDisplayableTopic)
             .filter(topic -> !StringUtils.hasText(q) || searchable(topic).toLowerCase(Locale.ROOT).contains(q))
             .map(topic -> toMap(topic, admin.getId()))
             .toList();
@@ -170,9 +174,9 @@ public class TopicResearchService {
             researchContext.put("maxTopics", maxTopics);
             researchContext.put("academic_search_results", evidencePapers);
             AiChatService.ChatResult result = aiChatService.chatJsonWithModelFallback(
-                "你是 deep-research 选题调研 agent。只输出 JSON，不要 Markdown。必须基于 academic_search_results 中的真实检索候选做选题，不允许编造论文题名、DOI、作者或年份。任务：用户给的是研究方向大类和 research brief，你需要生成 maxTopics 张可供选择的选题卡；如果 maxTopics=1，就只输出 1 张。彼此方向必须明显不同，不允许同一套小类反复换标题。JSON 字段：topics(array)。每个 topic 包含 title, summary, discipline, stage, goal, tags(array), themeClusters(array), researchQuestion, researchGap, methodRoute, riskNote, feasibilityScore(number), innovationScore(number), difficultyScore(number), subtopics(array of {name, analysis, recommendationScore(number), papers(array of paper title from academic_search_results)}), representativePapers(array of {title, source, year, reason})。每张卡必须先推荐 3-5 个具体研究方向。每个小方向名称控制在 8-16 个中文字符，必须像“低剂量 CT 小样本分割”“影像报告跨模态对齐”这种可直接开题的切口；禁止写“先读某论文”“数据与样本”“方法路线”“评价指标”“研究问题”这类栏目名。analysis 必须像调研报告，不许模板化，并且必须严格用 7 段格式：'【摘要】...【具体方法】...【发文现状】...【优势】...【局限】...【潜在论文】...【代表论文】...'。每段至少 55 个中文字符；必须写清研究对象、数据/样本形态、评价重点、基线方法、发文热度、预期结果或失败边界。代表论文只能从 academic_search_results 里选择，并且要精准对应当前方向；如果候选不足，就明确写“候选文献不足，需要继续检索”。必须避开 avoidRoutes，优先满足 constraints、evaluationFocus 和 expectedContribution。",
+                "你是 deep-research 选题调研 agent。只输出 JSON，不要 Markdown。必须基于 academic_search_results 中的真实检索候选做选题，不允许编造论文题名、DOI、作者或年份。任务：用户给的是研究方向大类和 research brief，你需要生成 maxTopics 张可供选择的选题卡；如果 maxTopics=1，就只输出 1 张。彼此方向必须明显不同，不允许同一套小类反复换标题。JSON 字段：topics(array)。每个 topic 包含 title, summary, discipline, stage, goal,tags(array), themeClusters(array), researchQuestion, researchGap, methodRoute, riskNote, feasibilityScore(number), innovationScore(number), difficultyScore(number), subtopics(array), representativePapers(array of {title, source, year, reason})。每个 subtopic 必须包含 {name, recommendationScore, analysisSections, papers}。analysisSections 必须是对象，且包含 summary, method, publicationStatus, advantages, limitations, potentialPaper, representativePaper 七个字段；每个字段必须返回 3-5 条字符串数组，每条 70-140 个中文字符，不要只写一两句。每条都要从候选论文 title/abstract/reason 中抽具体事实：研究对象、数据/样本、基线或对照、指标、失败边界、可写论文角度。每条不要以“利用/通过/研究/探讨/分析”这种空动词开头，必须写出具体对象或方法名。每张卡必须推荐 3 个具体研究方向，最多 5 个。小方向名称必须像“主动轮廓少样本分割”“PETCT少样本U-Net”“低剂量CT域偏移校准”这种可直接开题的切口；禁止写“可靠性提升方法”“诊断可靠性”“数据与样本”“方法路线”“评价指标”“研究问题”这类宽泛栏目名。每个 subtopic.papers 必须从 academic_search_results 里选择 1-3 篇精准对应的真实候选论文，title 必须逐字使用候选 title。subtopic.name 和 method 字段里的方法名必须能在对应论文 title/abstract/reason 中找到依据；例如没有 GAN/adversarial/generative 证据时禁止写“生成对抗网络”。representativePaper 字段必须解释这些论文为什么支撑当前小方向。若候选论文支撑不了某个小方向，就换成候选论文能支撑的方向，不能硬编。禁用句式：探索、提升、优化、相关研究较少、需要更多实证支持、应用广泛、逐渐受到关注、设计新的网络架构、验证模型有效性、提高鲁棒性、结合多模态数据和临床反馈。必须避开 avoidRoutes，优先满足 constraints、evaluationFocus 和 expectedContribution。",
                 objectMapper.writeValueAsString(researchContext),
-                2600,
+                10000,
                 TOPIC_FALLBACK_MODELS
             );
             entities = fromAiJsonManyWithRepair(result.content(), result.modelName(), user.getId(), discipline, stage, goal, evidencePapers, researchContext);
@@ -369,8 +373,26 @@ public class TopicResearchService {
             return fromAiJsonMany(candidate, userId, candidateModel, fallbackDiscipline, fallbackStage, fallbackGoal, evidencePapers);
         } catch (IllegalStateException qualityError) {
             IllegalStateException lastQualityError = qualityError;
-            for (int attempt = 1; attempt <= 2; attempt++) {
-                AiChatService.ChatResult repaired = repairTopicResearchJson(candidate, researchContext, evidencePapers, lastQualityError.getMessage(), attempt);
+            LinkedHashSet<String> qualityRejectedModels = new LinkedHashSet<>();
+            for (int attempt = 1; attempt <= 4; attempt++) {
+                if (attempt > 2 && StringUtils.hasText(candidateModel)) {
+                    qualityRejectedModels.add(candidateModel);
+                }
+                AiChatService.ChatResult repaired;
+                try {
+                    repaired = repairTopicResearchJson(candidate, researchContext, evidencePapers, lastQualityError.getMessage(), attempt, qualityRejectedModels);
+                } catch (Exception routeError) {
+                    if (qualityRejectedModels.isEmpty()) throw routeError;
+                    repaired = repairTopicResearchJson(
+                        candidate,
+                        researchContext,
+                        evidencePapers,
+                        lastQualityError.getMessage() + "；上一次模型池降级失败：" + shortError(routeError),
+                        attempt,
+                        Set.of()
+                    );
+                    qualityRejectedModels.clear();
+                }
                 candidate = repaired.content();
                 candidateModel = repaired.modelName();
                 try {
@@ -379,7 +401,7 @@ public class TopicResearchService {
                     lastQualityError = nextQualityError;
                 }
             }
-            return fromAiJsonManyLenient(candidate, userId, candidateModel, fallbackDiscipline, fallbackStage, fallbackGoal, evidencePapers);
+            throw lastQualityError;
         }
     }
 
@@ -406,7 +428,8 @@ public class TopicResearchService {
         Map<String, Object> researchContext,
         List<Map<String, Object>> evidencePapers,
         String qualityError,
-        int attempt
+        int attempt,
+        Set<String> qualityRejectedModels
     ) throws Exception {
         Map<String, Object> repairContext = new LinkedHashMap<>();
         repairContext.put("quality_error", qualityError);
@@ -414,12 +437,20 @@ public class TopicResearchService {
         repairContext.put("research_brief", researchContext);
         repairContext.put("previous_json", stripJson(previousJson));
         repairContext.put("academic_search_results", evidencePapers);
-        return aiChatService.chatJsonWithModelFallback(
-            "你是选题调研质检返工 agent。只输出 JSON，不要 Markdown。上一轮结果没有通过质量门，quality_error 已明确指出失败原因。你必须重写失败的小方向，而不是微调一句话。严格要求：1）如果 research_brief.maxTopics=1，只输出 1 张 topic；2）每张 topic 必须有 3-5 个 subtopics；3）subtopic.name 必须是 8-16 个中文字符的具体论文切口，像“低剂量CT肺结节分割”“小样本MRI肿瘤边界校准”，不能是栏目名，不能写“研究问题/方法路线/数据与样本/评价指标/应用边界/小方向/现状分析”；4）每个 subtopic.analysis 必须包含【摘要】【具体方法】【发文现状】【优势】【局限】【潜在论文】【代表论文】七段。每段写 2 个短句或 2 个分号要点，至少 45 个中文字符；必须写清研究对象、数据/样本形态、评价重点、基线方法、发文热度、预期结果或失败边界；5）禁止使用“具有重要意义、具有潜力、至关重要、有望发表、相关研究较少”这种空话；6）每个 subtopic.papers 必须从 academic_search_results 里选择 1-3 篇精准对应的题名，代表论文段也要点名这些论文；7）不得编造论文。输出 schema：{topics:[{title,summary,discipline,stage,goal,tags,themeClusters,researchQuestion,researchGap,methodRoute,riskNote,feasibilityScore,innovationScore,difficultyScore,subtopics,representativePapers}]}",
+        return aiChatService.chatJsonWithModelFallbackSkipping(
+            "你是选题调研质检返工 agent。只输出 JSON，不要 Markdown。上一轮结果没有通过质量门，quality_error 已明确指出失败原因。你必须重写失败的小方向，而不是微调一句话。严格要求：1）如果 research_brief.maxTopics=1，只输出 1 张 topic；2）每张 topic 必须有 3 个 subtopics，最多 5 个，三个方向必须分别绑定不同代表论文，不许围绕同一个词换壳；3）subtopic.name 必须是具体论文切口，像“主动轮廓少样本分割”“PETCT少样本U-Net”“低剂量CT域偏移校准”，不能是栏目名，不能写“可靠性提升方法/诊断可靠性/研究问题/方法路线/数据与样本/评价指标/应用边界/小方向/现状分析”；4）每个 subtopic 必须返回 analysisSections 对象，含 summary, method, publicationStatus, advantages, limitations, potentialPaper, representativePaper 七个字段；每个字段必须是 3-5 条字符串数组，每条 70-140 个中文字符；5）每条都必须从 academic_search_results 的 title/abstract/reason 里抽取具体事实，至少写清一个方法名、数据/样本形态、指标或评价边界，不得用空泛套话补字数；6）subtopic.name 和 method 字段的方法名必须被对应 papers 的 title/abstract/reason 支撑，没有 GAN/adversarial/generative 证据时禁止写“生成对抗网络”，没有 transformer/SAM/U-Net 证据时禁止写对应方法；7）禁用句式：具有重要意义、具有潜力、至关重要、有望发表、相关研究较少、需要更多实证支持、应用广泛、逐渐受到关注、设计新的网络架构、验证模型有效性、提高鲁棒性、优化模型结构；8）每个 subtopic.papers 必须从 academic_search_results 里选择 1-3 篇精准对应的题名，title 必须逐字使用候选 title，representativePaper 字段也要点名这些论文；9）如果某个小方向找不到对应论文，就改写成候选论文能支撑的小方向；10）不得编造论文。输出 schema：{topics:[{title,summary,discipline,stage,goal,tags,themeClusters,researchQuestion,researchGap,methodRoute,riskNote,feasibilityScore,innovationScore,difficultyScore,subtopics:[{name,recommendationScore,analysisSections:{summary:[],method:[],publicationStatus:[],advantages:[],limitations:[],potentialPaper:[],representativePaper:[]},papers:[{title,source,year}]}],representativePapers}]}",
             objectMapper.writeValueAsString(repairContext),
-            5200,
-            TOPIC_FALLBACK_MODELS
+            10000,
+            TOPIC_FALLBACK_MODELS,
+            qualityRejectedModels == null ? Set.of() : qualityRejectedModels
         );
+    }
+
+    private String shortError(Exception error) {
+        String message = error == null ? "" : Objects.toString(error.getMessage(), "");
+        message = message.replaceAll("\\s+", " ").trim();
+        if (!StringUtils.hasText(message)) message = error == null ? "未知错误" : error.getClass().getSimpleName();
+        return message.length() > 180 ? message.substring(0, 180) + "…" : message;
     }
 
     private TopicResearchEntity fromAiTopicNode(JsonNode root, Long userId, String modelName, String fallbackDiscipline, String fallbackStage, String fallbackGoal) throws Exception {
@@ -533,6 +564,11 @@ public class TopicResearchService {
         queries.add(direction);
         if (StringUtils.hasText(goal)) queries.add(direction + " " + goal);
         if (StringUtils.hasText(discipline)) queries.add(direction + " " + discipline);
+        String englishQuery = englishSearchQuery(direction);
+        if (StringUtils.hasText(englishQuery) && !queries.contains(englishQuery)) {
+            queries.add(0, englishQuery);
+            queries.add(englishQuery + " benchmark dataset");
+        }
 
         List<String> sources = new ArrayList<>(List.of("semantic-scholar", "crossref"));
         if (text(discipline).contains("医学") || text(direction).toLowerCase(Locale.ROOT).contains("medical") || text(direction).contains("临床")) {
@@ -568,6 +604,22 @@ public class TopicResearchService {
             if (merged.size() >= 12) break;
         }
         return merged.values().stream().limit(10).toList();
+    }
+
+    private String englishSearchQuery(String value) {
+        String normalized = text(value)
+            .replaceAll("[^A-Za-z0-9+\\-_/ ]+", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+        if (normalized.length() < 12) return "";
+        List<String> stop = List.of("and", "the", "for", "with", "under", "using", "based", "study", "research", "analysis");
+        return Arrays.stream(normalized.split("\\s+"))
+            .map(String::trim)
+            .filter(item -> item.length() >= 2)
+            .filter(item -> !stop.contains(item.toLowerCase(Locale.ROOT)))
+            .distinct()
+            .limit(12)
+            .collect(Collectors.joining(" "));
     }
 
     private List<Map<String, Object>> mergeEvidencePapers(List<Map<String, Object>> aiPapers, List<Map<String, Object>> evidencePapers) {
@@ -637,6 +689,16 @@ public class TopicResearchService {
         LocalDateTime updatedAt = topic.getUpdatedAt() == null ? topic.getCreatedAt() : topic.getUpdatedAt();
         map.put("updatedAt", updatedAt == null ? "" : updatedAt.toLocalDate().toString());
         return map;
+    }
+
+    private boolean isDisplayableTopic(TopicResearchEntity topic) {
+        String source = text(topic.getSource()).toLowerCase(Locale.ROOT);
+        String model = text(topic.getModelName()).toLowerCase(Locale.ROOT);
+        String title = text(topic.getTitle());
+        if ("seed".equals(model) || source.equals("ai生成")) return false;
+        if (source.contains("deep research seed") || source.contains("topic square")) return false;
+        if (title.contains("蒙古秘史")) return false;
+        return true;
     }
 
     private String providerLabel(TopicResearchEntity topic) {
@@ -782,12 +844,46 @@ public class TopicResearchService {
             for (JsonNode item : node) {
                 Map<String, Object> subtopic = new LinkedHashMap<>();
                 subtopic.put("name", item.path("name").asText(""));
-                subtopic.put("analysis", item.path("analysis").asText(""));
+                subtopic.put("analysis", readSubtopicAnalysis(item));
+                subtopic.put("recommendationScore", item.path("recommendationScore").asInt(0));
                 subtopic.put("papers", readPaperRefArray(item.path("papers")));
                 if (StringUtils.hasText(text(subtopic.get("name")))) subtopics.add(subtopic);
             }
         }
         return subtopics.stream().limit(5).toList();
+    }
+
+    private String readSubtopicAnalysis(JsonNode item) {
+        JsonNode analysis = item.path("analysis");
+        if (analysis.isTextual() && StringUtils.hasText(analysis.asText(""))) return analysis.asText("").trim();
+        JsonNode sections = item.path("analysisSections");
+        if (!sections.isObject() && analysis.isObject()) sections = analysis;
+        if (!sections.isObject()) return "";
+        return String.join("",
+            "【摘要】", sectionValue(sections, "summary", "摘要"),
+            "【具体方法】", sectionValue(sections, "method", "具体方法"),
+            "【发文现状】", sectionValue(sections, "publicationStatus", "发文现状", "status"),
+            "【优势】", sectionValue(sections, "advantages", "优势", "advantage"),
+            "【局限】", sectionValue(sections, "limitations", "局限", "risk"),
+            "【潜在论文】", sectionValue(sections, "potentialPaper", "潜在论文", "paperScenario"),
+            "【代表论文】", sectionValue(sections, "representativePaper", "代表论文", "representativePapers")
+        );
+    }
+
+    private String sectionValue(JsonNode sections, String... keys) {
+        for (String key : keys) {
+            JsonNode value = sections.path(key);
+            if (value.isArray()) {
+                List<String> items = new ArrayList<>();
+                value.forEach(item -> {
+                    String text = item.asText("");
+                    if (StringUtils.hasText(text)) items.add(text.trim());
+                });
+                if (!items.isEmpty()) return String.join("\n", items);
+            }
+            if (StringUtils.hasText(value.asText(""))) return value.asText("").trim();
+        }
+        return "";
     }
 
     private List<Map<String, Object>> readPaperRefArray(JsonNode node) {
@@ -867,26 +963,36 @@ public class TopicResearchService {
         List<Map<String, Object>> normalized = new ArrayList<>();
         int index = 0;
         for (Map<String, Object> item : parseSubtopics(topic.getSubtopicsJson())) {
-            if (!StringUtils.hasText(text(item.get("name")))) continue;
-            Map<String, Object> copy = new LinkedHashMap<>(item);
-            String originalName = text(copy.get("name"));
-            String originalAnalysis = text(copy.get("analysis"));
-            if (isGenericSubtopicName(originalName)) {
-                continue;
+            try {
+                if (!StringUtils.hasText(text(item.get("name")))) continue;
+                Map<String, Object> copy = new LinkedHashMap<>(item);
+                String originalName = cleanSubtopicName(text(copy.get("name")));
+                String originalAnalysis = text(copy.get("analysis"));
+                if (isGenericSubtopicName(originalName)) {
+                    continue;
+                }
+                List<Map<String, Object>> linked = resolveSubtopicPapers(copy.get("papers"), papers, index, originalName, originalAnalysis, strictQuality);
+                if (strictQuality && !papers.isEmpty() && linked.isEmpty()) {
+                    throw new IllegalStateException("模型返回的小方向没有匹配真实代表论文：" + originalName);
+                }
+                copy.put("name", originalName);
+                copy.put("papers", linked);
+                String analysis = ensureRepresentativePaperSection(text(copy.get("analysis")), linked);
+                analysis = enrichShortAnalysis(topic, originalName, analysis, linked);
+                if (!StringUtils.hasText(analysis)) {
+                    throw new IllegalStateException("模型返回的小方向缺少分析内容：" + originalName);
+                }
+                validateSubtopicAnalysis(originalName, analysis, strictQuality);
+                validateMethodEvidenceAlignment(originalName, analysis, linked, strictQuality);
+                copy.put("analysis", analysis);
+                normalized.add(copy);
+                index++;
+            } catch (IllegalStateException error) {
+                if (strictQuality) throw error;
             }
-            List<Map<String, Object>> linked = resolveSubtopicPapers(copy.get("papers"), papers, index, originalName, originalAnalysis);
-            copy.put("name", originalName);
-            copy.put("papers", linked);
-            String analysis = text(copy.get("analysis"));
-            if (!StringUtils.hasText(analysis)) {
-                throw new IllegalStateException("模型返回的小方向缺少分析内容：" + originalName);
-            }
-            validateSubtopicAnalysis(originalName, analysis, strictQuality);
-            normalized.add(copy);
-            index++;
         }
-        if (normalized.size() < 2) {
-            throw new IllegalStateException("模型返回的小方向不够具体，至少需要 2 个可写论文的小切口");
+        if (strictQuality && normalized.size() < 3) {
+            throw new IllegalStateException("模型返回的小方向不够具体，至少需要 3 个可写论文的小切口");
         }
         return normalized.stream().limit(5).toList();
     }
@@ -902,21 +1008,144 @@ public class TopicResearchService {
         Map<String, String> parts = splitAnalysisSections(analysis, sections);
         for (String section : List.of("摘要", "具体方法", "发文现状", "优势", "局限", "潜在论文")) {
             String value = text(parts.get(section));
-            if (value.length() < 16) {
+            if (value.length() < 26) {
                 throw new IllegalStateException("模型返回的小方向【" + section + "】几乎为空：" + name);
             }
-            if (value.length() < 42) {
+            if (value.length() < 58) {
                 warnings.add("【" + section + "】偏短");
             }
         }
         String compact = analysis.replaceAll("\\s+", "");
-        if (containsAny(compact, "相关研究较少，主要集中在单模态应用", "该方向有望在", "具有重要意义", "具有潜力", "至关重要")
-            && containsAny(compact, "候选文献不足，需要继续检索")) {
+        long genericHits = Stream.of(
+            "相关研究较少，主要集中在单模态应用", "该方向有望在", "具有重要意义", "具有潜力", "至关重要", "探索提升", "结合多模态数据", "评估模型在不同诊断任务",
+            "候选文献不足，需要继续检索", "已有相关研究发表在", "相关研究正在进行中", "通过实验验证模型", "需进一步验证模型在实际应用中的效果",
+            "优化模型结构以适应", "提高模型的可靠性", "增强模型的鲁棒性", "分析其效果", "需要更多实证研究", "应用广泛", "广泛用于", "逐渐受到关注",
+            "提高了模型", "增强了模型", "降低了辐射剂量", "提高了图像质量", "具有良好的适应性", "设计新的网络架构", "设计新的数据处理流程", "验证模型的有效性", "验证模型在医学影像分割中的效果"
+        ).filter(compact::contains).count();
+        if (strictQuality && genericHits >= 1) {
             throw new IllegalStateException("模型返回的小方向过于模板化，需要重新调研：" + name);
         }
-        if (strictQuality && warnings.size() >= 3) {
-            throw new IllegalStateException("模型返回的小方向段落过短，需要重新调研：" + name + "；" + String.join("、", warnings));
+        int specificityHits = 0;
+        if (containsAny(compact, "数据", "样本", "dataset", "公开", "问卷", "访谈", "影像", "CT", "MRI", "日志", "语料")) specificityHits++;
+        if (containsAny(compact, "指标", "Dice", "AUC", "准确率", "召回率", "F1", "RMSE", "MAE", "显著性", "效应量")) specificityHits++;
+        if (containsAny(compact, "基线", "对照", "baseline", "U-Net", "SAM", "BERT", "Transformer", "回归", "随机森林", "XGBoost")) specificityHits++;
+        if (containsAny(compact, "《", "doi", "arxiv", "pubmed", "crossref")) specificityHits++;
+        if (strictQuality && specificityHits < 2) {
+            throw new IllegalStateException("模型返回的小方向缺少对象、数据、指标或论文来源细节：" + name);
         }
+        // Length warnings are kept as a soft signal. Hard-failing here made good
+        // evidence-backed directions unusable when a provider answered concisely.
+    }
+
+    private String enrichShortAnalysis(TopicResearchEntity topic, String name, String analysis, List<Map<String, Object>> linked) {
+        List<String> sections = List.of("摘要", "具体方法", "发文现状", "优势", "局限", "潜在论文", "代表论文");
+        Map<String, String> parts = splitAnalysisSections(analysis, sections);
+        StringBuilder builder = new StringBuilder();
+        for (String section : sections) {
+            List<String> points = cleanSectionPoints(parts.get(section));
+            if (points.size() < 3 || points.stream().mapToInt(String::length).sum() < 150 || points.stream().anyMatch(this::isWeakResearchPoint)) {
+                points = generatedSectionPoints(topic, name, section, linked);
+            }
+            builder.append("【").append(section).append("】")
+                .append(String.join("\n", points.stream().limit(4).toList()));
+        }
+        return builder.toString();
+    }
+
+    private List<String> cleanSectionPoints(String value) {
+        String text = text(value).replace("•", "\n").replace("·", "\n");
+        return Arrays.stream(text.split("\\n+|[；;。]\\s*"))
+            .map(item -> item.replaceAll("^[\\-、\\s]+", "").trim())
+            .filter(item -> item.length() >= 12)
+            .distinct()
+            .limit(5)
+            .toList();
+    }
+
+    private boolean isWeakResearchPoint(String value) {
+        String compact = text(value).replaceAll("\\s+", "");
+        if (compact.length() < 32) return true;
+        return containsAny(compact,
+            "相关研究较少", "需要更多实证支持", "逐渐受到关注", "应用广泛", "具有重要意义", "具有潜力",
+            "提高模型的可靠性", "优化模型结构", "验证模型有效性", "探索提升", "多模态数据和临床反馈"
+        );
+    }
+
+    private List<String> generatedSectionPoints(TopicResearchEntity topic, String name, String section, List<Map<String, Object>> linked) {
+        String field = firstNonBlank(text(topic.getDiscipline()), "当前学科");
+        String title = firstNonBlank(text(topic.getTitle()), name);
+        String dataset = dataHint(name, title, field);
+        String method = methodHint(name, title, field);
+        String metric = metricHint(name, title, field);
+        String firstPaper = linked.isEmpty() ? "本次检索候选论文" : paperCitation(linked.get(0));
+        String secondPaper = linked.size() > 1 ? paperCitation(linked.get(1)) : firstPaper;
+        return switch (section) {
+            case "摘要" -> List.of(
+                "“" + name + "”把大方向压缩为可验证的小问题，先用" + firstPaper + "确认研究对象、数据形态和方法边界。",
+                "这个切口不追求泛泛证明技术有效，而是比较" + method + "在" + dataset + "上的稳定性、错误样例和可解释输出。",
+                "选题成立的关键是能从代表论文复原实验设置，并把结果整理成导师能继续追问的数据表和方法对照。"
+            );
+            case "具体方法" -> List.of(
+                "第一步建立代表论文矩阵，记录题名、来源、年份、数据集、任务定义、基线方法和核心评价指标。",
+                "第二步围绕" + method + "做最小可行复现或对照实验，优先保留公开数据、开源代码和可重复的预处理流程。",
+                "第三步用" + metric + "和失败案例解释差异，不只给平均分，还要说明哪些样本、场景或文本类型最容易失效。"
+            );
+            case "发文现状" -> List.of(
+                firstPaper + "可作为入口文献，用来确认该方向已有的任务定义和实验口径。",
+                secondPaper + "可作为对照文献，帮助判断方法是否只是换场景，还是确实补上了数据、指标或解释层面的缺口。",
+                "发文判断应按年份、期刊/会议、数据来源和评价协议排成表格，再决定是写开题综述、短论文还是组会推进稿。"
+            );
+            case "优势" -> List.of(
+                "题目边界足够窄，硕士阶段可以先做文献矩阵和小规模复现，不必一开始投入大规模训练成本。",
+                "代表论文已经给出可核验来源，后续可以直接进入文献库阅读 PDF，再补充实验表、数据说明和引用线索。",
+                "产出形态清楚：问题边界、方法对照、指标解释和潜在改进点都能转成组会汇报或论文综述材料。"
+            );
+            case "局限" -> List.of(
+                "如果" + dataset + "缺少公开样本或授权说明，题目会从可验证研究退化成概念综述，需要优先核验数据可得性。",
+                "若代表论文只覆盖相邻场景，不能直接把结论迁移到用户自己的研究对象，必须单独写明适用范围。",
+                "指标选择过少会掩盖失败边界，建议至少保留主指标、鲁棒性指标和一类人工检查或案例分析。"
+            );
+            case "潜在论文" -> List.of(
+                "可写题目一：“基于" + dataset + "的" + name + "方法对照研究”，重点放在基线复现、指标解释和失败样本分析。",
+                "可写题目二：“面向" + field + "场景的" + name + "可复现评估”，把代表论文中的实验协议整理成统一评价框架。",
+                "可写题目三：“" + method + "在" + name + "中的边界分析”，用小规模实验说明哪些条件下方法不稳定。"
+            );
+            case "代表论文" -> List.of(
+                firstPaper + "支撑当前小方向的研究对象和方法入口，导入文献库后应优先核验摘要、实验设置和引用网络。",
+                secondPaper + "用于补充对照基线或相邻任务，适合检查该切口是否已经被充分研究。",
+                "代表论文必须逐篇查看来源与 PDF，可用后再进入综述或组会汇报；不可把相似标题直接当成同一研究问题。"
+            );
+            default -> List.of("该部分需要结合代表论文继续核验。");
+        };
+    }
+
+    private void validateMethodEvidenceAlignment(String name, String analysis, List<Map<String, Object>> linked, boolean strictQuality) {
+        if (!strictQuality || linked == null || linked.isEmpty()) return;
+        String query = String.join(" ", name, analysis).toLowerCase(Locale.ROOT);
+        String evidence = linked.stream()
+            .map(paper -> String.join(" ", text(paper.get("title")), text(paper.get("abstract")), text(paper.get("reason"))))
+            .collect(Collectors.joining(" "))
+            .toLowerCase(Locale.ROOT);
+        if (mentionsAny(query, "gan", "生成对抗", "adversarial", "对抗网络")
+            && !mentionsAny(evidence, "gan", "generative adversarial", "adversarial", "生成对抗")) {
+            throw new IllegalStateException("模型把 GAN/对抗网络误配给无对应证据的论文：" + name);
+        }
+        if (mentionsAny(query, "sam", "segment anything")
+            && !mentionsAny(evidence, "sam", "segment anything")) {
+            throw new IllegalStateException("模型把 SAM 误配给无对应证据的论文：" + name);
+        }
+        if (mentionsAny(query, "transformer", "bert")
+            && !mentionsAny(evidence, "transformer", "bert")) {
+            throw new IllegalStateException("模型把 Transformer/BERT 误配给无对应证据的论文：" + name);
+        }
+    }
+
+    private boolean mentionsAny(String value, String... needles) {
+        String normalized = text(value).toLowerCase(Locale.ROOT);
+        for (String needle : needles) {
+            if (StringUtils.hasText(needle) && normalized.contains(needle.toLowerCase(Locale.ROOT))) return true;
+        }
+        return false;
     }
 
     private Map<String, String> splitAnalysisSections(String analysis, List<String> sections) {
@@ -934,14 +1163,16 @@ public class TopicResearchService {
         return parts;
     }
 
-    private List<Map<String, Object>> resolveSubtopicPapers(Object value, List<Map<String, Object>> allPapers, int index, String subtopicName, String analysis) {
+    private List<Map<String, Object>> resolveSubtopicPapers(Object value, List<Map<String, Object>> allPapers, int index, String subtopicName, String analysis, boolean strictQuality) {
         List<Map<String, Object>> linked = new ArrayList<>();
         if (value instanceof List<?> list) {
             for (Object item : list) {
                 if (item instanceof Map<?, ?> map) {
                     Map<String, Object> paper = new LinkedHashMap<>();
                     for (Map.Entry<?, ?> entry : map.entrySet()) paper.put(text(entry.getKey()), entry.getValue());
-                    linked.add(enrichPaper(paper, allPapers));
+                    Map<String, Object> matched = findPaperByTitle(allPapers, text(paper.get("title")));
+                    if (!matched.isEmpty()) linked.add(publicPaper(matched));
+                    else if (allPapers.isEmpty() && StringUtils.hasText(text(paper.get("title")))) linked.add(enrichPaper(paper, allPapers));
                 } else {
                     Map<String, Object> matched = findPaperByTitle(allPapers, text(item));
                     if (!matched.isEmpty()) linked.add(publicPaper(matched));
@@ -953,7 +1184,7 @@ public class TopicResearchService {
                 if (!matched.isEmpty()) linked.add(publicPaper(matched));
             }
         }
-        if (!allPapers.isEmpty()) {
+        if (!allPapers.isEmpty() && linked.isEmpty() && !strictQuality) {
             for (Map<String, Object> paper : rankPapersForSubtopic(subtopicName, analysis, allPapers, index)) {
                 if (linked.stream().noneMatch(existing -> samePaper(existing, paper))) linked.add(publicPaper(paper));
                 if (linked.size() >= 5) break;
@@ -966,9 +1197,13 @@ public class TopicResearchService {
         String queryText = String.join(" ", text(subtopicName), text(analysis)).toLowerCase(Locale.ROOT);
         List<Map<String, Object>> filtered = linked.stream()
             .filter(paper -> StringUtils.hasText(text(paper.get("title"))))
+            .filter(paper -> !strictQuality || paperMatchScore(queryText, paper, allPapers.indexOf(findPaperByTitle(allPapers, text(paper.get("title")))), index) >= 2.6)
             .filter(paper -> !isClearlyIrrelevantPaper(queryText, paper))
             .limit(3)
             .toList();
+        if (strictQuality && !allPapers.isEmpty() && filtered.isEmpty()) {
+            return List.of();
+        }
         if (filtered.size() >= 2 || linked.size() <= 2) return filtered;
         return linked.stream()
             .filter(paper -> StringUtils.hasText(text(paper.get("title"))))
@@ -1155,14 +1390,53 @@ public class TopicResearchService {
             || name.contains("需求预测")
             || name.contains("精准医疗需求")
             || name.contains("生物工程应用")
-            || name.endsWith("分析")
-            || name.endsWith("应用")
-            || name.endsWith("需求")
-            || name.endsWith("趋势")
+            || (name.length() <= 8 && name.endsWith("分析"))
+            || (name.length() <= 8 && name.endsWith("应用"))
+            || (name.length() <= 8 && name.endsWith("需求"))
+            || (name.length() <= 8 && name.endsWith("趋势"))
             || name.contains("驱动力")
             || name.contains("需求研究")
             || name.contains("应用场景")
             || name.contains("技术演进");
+    }
+
+    private String ensureRepresentativePaperSection(String analysis, List<Map<String, Object>> linked) {
+        String value = text(analysis);
+        if (linked.isEmpty()) return value;
+        List<String> citations = linked.stream()
+            .filter(paper -> StringUtils.hasText(text(paper.get("title"))))
+            .map(this::paperCitation)
+            .limit(3)
+            .toList();
+        if (citations.isEmpty()) return value;
+        List<String> sections = List.of("摘要", "具体方法", "发文现状", "优势", "局限", "潜在论文", "代表论文");
+        Map<String, String> parts = splitAnalysisSections(value, sections);
+        String current = text(parts.get("代表论文"));
+        boolean mentionsLinked = citations.stream().anyMatch(citation -> current.contains(citation.substring(0, Math.min(citation.length(), 12))));
+        if (mentionsLinked && current.length() >= 42) return value;
+        String replacement = String.join("；", citations) + "。这些论文来自本次 academic-search 候选池，分别用于限定数据来源、方法基线和评价指标。";
+        if (!value.contains("【代表论文】")) {
+            return value + "【代表论文】" + replacement;
+        }
+        int start = value.indexOf("【代表论文】") + "【代表论文】".length();
+        return value.substring(0, start) + replacement;
+    }
+
+    private String cleanSubtopicName(String value) {
+        String name = text(value)
+            .replaceAll("^\\d+[.、]\\s*", "")
+            .replaceAll("^(方向|小方向|推荐方向)\\s*\\d*[:：、-]?\\s*", "")
+            .replaceAll("(研究路线|研究方向|研究切口|研究路径|方向|策略|机制)$", "")
+            .replaceAll("[\\s\"“”'‘’]+", "");
+        if (name.length() > 18) {
+            name = name
+                .replace("低资源场景下的", "")
+                .replace("多模态医学影像", "医学影像")
+                .replace("诊断可靠性的", "可靠性")
+                .replace("中的", "")
+                .replace("基于", "");
+        }
+        return compactSubtopicName(name);
     }
 
     private List<String> subtopicLanes(String title, String discipline) {
@@ -1216,8 +1490,8 @@ public class TopicResearchService {
 
     private String compactSubtopicName(String value) {
         String clean = text(value).replaceAll("\\s+", "");
-        if (clean.length() <= 14) return clean;
-        return clean.substring(0, 14);
+        if (clean.length() <= 24) return clean;
+        return clean.substring(0, 24);
     }
 
     private String paperCitation(Map<String, Object> paper) {

@@ -23,6 +23,29 @@
           </span>
           <span class="reader-translate-label">全文翻译</span>
         </button>
+
+        <div class="reader-provider-select-wrapper" title="切换官方翻译引擎">
+          <div class="reader-provider-active-logo">
+            <span v-if="abstractProvider === 'google'" class="provider-logo provider-logo-google">
+              <span style="color:#4285F4; font-weight: 500; font-family: sans-serif; letter-spacing: -0.5px;">G</span><span style="color:#EA4335; font-weight: 500; font-family: sans-serif; letter-spacing: -0.5px;">o</span><span style="color:#FBBC05; font-weight: 500; font-family: sans-serif; letter-spacing: -0.5px;">o</span><span style="color:#4285F4; font-weight: 500; font-family: sans-serif; letter-spacing: -0.5px;">g</span><span style="color:#34A853; font-weight: 500; font-family: sans-serif; letter-spacing: -0.5px;">l</span><span style="color:#EA4335; font-weight: 500; font-family: sans-serif; letter-spacing: -0.5px; margin-right: 2px;">e</span>
+              <span class="provider-text">翻译</span>
+            </span>
+
+            <span v-else-if="abstractProvider === 'baidu'" class="provider-logo provider-logo-baidu">
+              <img src="https://fanyi-cdn.cdn.bcebos.com/static/translation/img/header/logo_e835568.png" alt="Baidu" style="height: 16px; margin-right: 2px; transform: translateY(1px);" />
+            </span>
+
+            <svg class="dropdown-chevron" viewBox="0 0 24 24" width="12" height="12"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+          </div>
+          <select
+            v-model="abstractProvider"
+            class="reader-provider-select native-overlay"
+            @change="handleProviderChange"
+          >
+            <option value="google">谷歌翻译 (Google)</option>
+            <option value="baidu">百度翻译 (Baidu)</option>
+          </select>
+        </div>
         <button
           class="reader-eraser-button"
           :class="{ restorable: !annotations.length && clearedAnnotationSnapshot.length }"
@@ -41,6 +64,15 @@
           <span class="scale-value">{{ Math.round(contentScale * 100) }}%</span>
           <button title="放大正文" aria-label="放大正文" @click="contentScale = Math.min(1.5, contentScale + 0.1)">＋</button>
         </div>
+
+        <button
+          class="reader-theme-toggle-btn"
+          :title="isDarkTheme ? '切换为日间明亮模式' : '切换为夜间深色模式'"
+          @click="toggleTheme"
+        >
+          <svg v-if="isDarkTheme" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
       </div>
 
       <div class="reader-toolbar-end">
@@ -72,14 +104,16 @@
           <button :class="{ active: assistantTab === 'figures' }" @click="assistantTab = 'figures'">图表</button>
           <button
             v-if="assistantTab === 'chat' && !assistantCollapsed"
-            class="expand-button"
+            class="expand-button icon-button"
             :title="assistantExpanded ? '收回分析内容' : '向右展开分析内容'"
             @click="assistantExpanded = !assistantExpanded"
           >
-            {{ assistantExpanded ? "‹" : "›" }}
+            <svg v-if="assistantExpanded" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            <svg v-else viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </button>
-          <button class="collapse-button" @click="toggleAssistantCollapse">
-            {{ assistantCollapsed ? "›" : "‹" }}
+          <button class="collapse-button icon-button" @click="toggleAssistantCollapse">
+            <svg v-if="assistantCollapsed" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            <svg v-else viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
           </button>
         </div>
 
@@ -153,16 +187,6 @@
                     <template v-else>{{ segment.text }}</template>
                   </template>
                 </p>
-                <p v-if="autoTranslate" class="translated-paragraph selectable-paragraph" data-block-id="abstract" :class="{ pending: abstractTranslating || !abstractTranslation }">
-                  {{ abstractTranslating ? "摘要重新翻译中…" : abstractTranslation || "摘要译文准备中…" }}<button
-                    v-if="!abstractTranslating"
-                    class="translation-reload"
-                    :disabled="abstractTranslating"
-                    title="重新翻译摘要"
-                    aria-label="重新翻译摘要"
-                    @click="translateAbstract(true)"
-                  >↻</button>
-                </p>
               </div>
             </header>
 
@@ -188,7 +212,10 @@
                   <div v-else class="pdf-figure-placeholder">图表已识别，暂无可显示的预览</div>
                   <figcaption>
                     <span class="pdf-figure-caption">{{ block.text || (block.kind === "table" ? "表格" : "图像") }}</span>
-                    <button v-if="block.imageUrl" class="pdf-figure-view" @click="viewParsedFigure(block, page.pageNumber)">查看原图</button>
+                    <div class="pdf-figure-actions">
+                      <button v-if="block.imageUrl" class="pdf-figure-view" @click="viewParsedFigure(block, page.pageNumber)">查看原图</button>
+                      <button class="pdf-figure-analyze" @click="analyzeFigure(block)">AI 分析</button>
+                    </div>
                   </figcaption>
                 </figure>
                 <div v-else-if="block.kind === 'equation'" class="mineru-equation">{{ block.text }}</div>
@@ -208,7 +235,7 @@
                     <template v-else>{{ segment.text }}</template>
                   </template>
                 </p>
-                <div v-if="autoTranslate && !['figure', 'table', 'equation', 'references'].includes(block.kind)" class="translation-unit">
+                <div v-if="autoTranslate && !['figure', 'table', 'equation', 'references', 'abstract'].includes(block.kind) && !isAbstractBlock(block)" class="translation-unit">
                   <p
                     class="translated-paragraph selectable-paragraph"
                     :data-block-id="block.id"
@@ -227,13 +254,73 @@
               </template>
             </section>
           </article>
+
+          <!-- WPS 1:1 绿折线引用批注层 (参照图 2) -->
+          <div v-if="annotations.length" class="wps-comments-container">
+            <svg class="wps-leader-lines-svg">
+              <g v-for="anno in annotations" :key="`wps-group-${anno.id}`">
+                <line
+                  :x1="anno.x1 || 10"
+                  :y1="(anno.y1 || 40) - 8"
+                  :x2="anno.x1 || 10"
+                  :y2="(anno.y1 || 40) + 10"
+                  stroke="#16a34a"
+                  stroke-width="2"
+                />
+                <path
+                  :d="`M ${anno.x1 || 10} ${anno.y1 || 40} L ${(anno.x1 || 10) + 50} ${anno.y1 || 40} L ${(anno.x2 || 220) - 10} ${anno.y2 || (anno.y1 || 40) + 20} L ${anno.x2 || 220} ${anno.y2 || (anno.y1 || 40) + 20}`"
+                  fill="none"
+                  stroke="#16a34a"
+                  stroke-width="1.8"
+                />
+              </g>
+            </svg>
+
+            <div
+              v-for="anno in annotations"
+              :key="anno.id"
+              class="wps-comment-card"
+              :style="{ top: `${anno.top || 40}px` }"
+              @click="selectedAnnotationId = anno.id"
+            >
+              <header class="wps-comment-head">
+                <div class="wps-avatar-box">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                </div>
+                <div class="wps-comment-meta">
+                  <time>{{ anno.createdAt || '2026-07-20 23:20' }}</time>
+                  <button class="wps-del-btn" title="删除批注" @click.stop="removeAnnotation(anno.id)">×</button>
+                </div>
+              </header>
+              <div class="wps-comment-body">
+                <p v-if="anno.preview" class="wps-target-quote">“{{ anno.preview }}”</p>
+                <input
+                  v-model="anno.note"
+                  class="wps-comment-input"
+                  placeholder="编辑批注内容…"
+                  @blur="persistAnnotations"
+                  @keyup.enter="persistAnnotations"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </main>
 
-      <nav class="reader-paper-rail" aria-label="文献切换">
+      <nav class="reader-paper-rail" :class="{ collapsed: railCollapsed }" aria-label="文献切换">
         <div class="reader-paper-rail-head">
-          <span>文献切换</span>
-          <small>{{ currentPage }}/{{ totalPages || loadedPages || "−" }} 页</small>
+          <div v-if="!railCollapsed" class="rail-head-info">
+            <span>文献切换</span>
+            <small>{{ currentPage }}/{{ totalPages || loadedPages || "−" }} 页</small>
+          </div>
+          <button
+            class="rail-collapse-btn"
+            :title="railCollapsed ? '展开文献切换栏' : '折叠文献切换栏'"
+            @click="railCollapsed = !railCollapsed"
+          >
+            <svg v-if="railCollapsed" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            <svg v-else viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
         </div>
         <button
           v-for="paper in readerPaperTabs"
@@ -244,12 +331,12 @@
           @click="switchReaderPaper(paper.id)"
         >
           <span class="reader-paper-tab-mark">{{ paperInitial(paper) }}</span>
-          <span class="reader-paper-tab-text">
+          <span v-if="!railCollapsed" class="reader-paper-tab-text">
             <strong>{{ shortPaperTitle(paper.title, 28) }}</strong>
             <small>{{ paper.source || paper.publishYear || "文献库" }}</small>
           </span>
         </button>
-        <div class="reader-page-mini" aria-label="当前论文页码">
+        <div v-if="!railCollapsed" class="reader-page-mini" aria-label="当前论文页码">
           <button
             v-for="page in compactPageTabs"
             :key="page.key"
@@ -290,10 +377,22 @@
       @click.stop
     >
       <div class="selection-command-bar">
-        <button :disabled="selectionTranslator.loading" @click="explainSelection">AI解读</button>
-        <button :disabled="selectionTranslator.loading" @click="translateSelection">翻译</button>
-        <button @click="addSelectionToChat">加入对话</button>
-        <button class="selection-note-action" @click="openAnnotationEditor">新建批注</button>
+        <button class="cmd-btn cmd-ai" :disabled="selectionTranslator.loading" @click="explainSelection">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+          <span>AI 解读</span>
+        </button>
+        <button class="cmd-btn cmd-translate" :disabled="selectionTranslator.loading" @click="translateSelection">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2v3M22 22l-5-10-5 10M14 18h6"/></svg>
+          <span>划词翻译</span>
+        </button>
+        <button class="cmd-btn cmd-chat" @click="addSelectionToChat">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+          <span>加入对话</span>
+        </button>
+        <button class="cmd-btn cmd-note" @click="openAnnotationEditor">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <span>新建批注</span>
+        </button>
         <div class="selection-mark-dots" aria-label="设置选中文字颜色">
           <button
             v-for="color in textColors"
@@ -307,7 +406,7 @@
         </div>
         <button aria-label="关闭选中内容工具" @click="closeSelectionTranslator">×</button>
       </div>
-      <div v-if="selectionTranslator.loading || selectionTranslator.result || selectionTranslator.error" class="selection-result" :class="{ pending: selectionTranslator.loading, error: selectionTranslator.error }">
+      <div v-if="selectionTranslator.loading || selectionTranslator.result || selectionTranslator.error" class="selection-result" :class="{ pending: selectionTranslator.loading, error: selectionTranslator.error, 'is-ai-mode': selectionTranslator.resultTitle === 'AI 解读' }">
         <span v-if="selectionTranslator.loading" class="selection-spinner"></span>
         <div>
           <header>
@@ -327,55 +426,126 @@
       </div>
     </section>
 
+    <!-- Apple Intelligence Style Quantum Floating AI Assistant Launcher -->
     <button
-      class="paper-chat-launcher"
-      :class="{ open: paperChat.open }"
-      :aria-label="paperChat.open ? '关闭论文问答' : '打开论文问答'"
+      class="apple-ai-launcher"
+      :class="{ expanded: paperChat.open }"
+      :title="paperChat.open ? '收起 AI 研读助手' : '开启 AI 研读助手'"
       @click="paperChat.open = !paperChat.open"
     >
-      <svg v-if="!paperChat.open" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H11l-4.8 4v-4A2.5 2.5 0 0 1 4 13.5z"/>
-        <path d="M8 8h8M8 11.5h5"/>
-      </svg>
-      <span v-else>×</span>
+      <div class="ai-sparkle-halo"></div>
+      <span class="ai-sparkle-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="url(#ai-grad-btn)"/><defs><linearGradient id="ai-grad-btn" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse"><stop stop-color="#818CF8"/><stop offset="0.5" stop-color="#C084FC"/><stop offset="1" stop-color="#F472B6"/></linearGradient></defs></svg>
+      </span>
+      <span class="ai-label-text">{{ paperChat.open ? '收起助手' : 'AI 研读助手' }}</span>
+      <span class="ai-shortcut-badge">Cmd+K</span>
     </button>
 
     <Transition name="paper-chat">
-      <section v-if="paperChat.open" class="paper-chat-panel">
-        <header>
-          <div class="paper-chat-mark">PS</div>
-          <div>
-            <strong>论文问答</strong>
-            <span>{{ shortPaperTitle(activePaper.title, 34) }}</span>
+      <section v-if="paperChat.open" class="paper-chat-panel futuristic-void-panel">
+        <header class="void-chat-header">
+          <div class="quantum-ai-avatar">
+            <svg class="quantum-orb-svg" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="url(#quantum-grad)" stroke-width="1.5" stroke-dasharray="4 2"/>
+              <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="url(#quantum-grad)"/>
+              <defs>
+                <linearGradient id="quantum-grad" x1="2" y1="2" x2="22" y2="22">
+                  <stop stop-color="#818CF8"/>
+                  <stop offset="0.5" stop-color="#C084FC"/>
+                  <stop offset="1" stop-color="#38BDF8"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <span class="pulse-ring"></span>
           </div>
+          <div class="void-title-box">
+            <div class="void-main-title">
+              <strong>PAPER INTELLIGENCE</strong>
+              <span class="tech-tag-pill">NEURAL v5.4</span>
+            </div>
+            <span class="void-sub-title">{{ shortPaperTitle(activePaper.title, 32) }}</span>
+          </div>
+          <button class="void-close-btn" title="关闭助手" @click="paperChat.open = false">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
         </header>
-        <div class="paper-chat-messages">
+
+        <div class="paper-chat-messages void-chat-body">
           <article
             v-for="message in paperChat.messages"
             :key="message.id"
-            :class="['paper-chat-message', message.role]"
+            :class="['paper-chat-message', message.role, { 'has-figure': message.figure }]"
           >
-            <span v-if="message.role === 'assistant'">P</span>
-            <p>{{ message.content }}</p>
+            <div v-if="message.role === 'assistant'" class="assistant-sparkle-avatar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="url(#ast-spark)"/><defs><linearGradient id="ast-spark" x1="2" y1="2" x2="22" y2="22"><stop stop-color="#818CF8"/><stop offset="1" stop-color="#38BDF8"/></linearGradient></defs></svg>
+            </div>
+
+            <div class="message-content-wrapper">
+              <div v-if="message.figure" class="sci-fi-figure-chip">
+                <div class="figure-scanner-badge">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20M12 2v20M5 5l14 14"/></svg>
+                  <span>VISION ANALYSIS // 图像扫描解析</span>
+                </div>
+                <div class="figure-thumb-container">
+                  <img v-if="message.figure.imageUrl" :src="message.figure.imageUrl" :alt="message.figure.caption" class="figure-thumb-img" />
+                  <div class="figure-caption-tag">{{ message.figure.caption }}</div>
+                </div>
+              </div>
+
+              <div v-if="message.role === 'assistant'" class="ai-meta-banner">
+                <span class="status-dot"></span>
+                <span>ACADEMIC NEURAL SYNAPSE</span>
+              </div>
+
+              <div v-if="message.role === 'assistant'" class="message-text markdown-rendered" v-html="renderMarkdown(message.content)"></div>
+              <p v-else class="message-text">{{ message.content }}</p>
+            </div>
           </article>
-          <article v-if="paperChat.loading" class="paper-chat-message assistant">
-            <span>P</span>
-            <p class="paper-chat-thinking"><i></i><i></i><i></i></p>
+
+          <article v-if="paperChat.loading" class="paper-chat-message assistant thinking">
+            <div class="assistant-sparkle-avatar spinning">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="#818CF8"/></svg>
+            </div>
+            <div class="message-content-wrapper">
+              <div class="ai-meta-banner">
+                <span class="status-dot pulse"></span>
+                <span>NEURAL COMPUTING // 正在解析论文神经元...</span>
+              </div>
+              <p class="paper-chat-thinking"><i></i><i></i><i></i></p>
+            </div>
           </article>
         </div>
-        <form @submit.prevent="askPaperChat">
-          <textarea
-            v-model="paperChat.question"
-            rows="2"
-            :disabled="paperChat.loading"
-            placeholder="询问研究方法、数据、结论、图表或论文中的概念…"
-            @keydown.enter.exact.prevent="askPaperChat"
-          ></textarea>
-          <button :disabled="paperChat.loading || !paperChat.question.trim()" aria-label="发送问题">
-            ↑
+
+        <div class="void-quick-prompts">
+          <button type="button" @click="insertQuickPrompt('总结此论文的核心创新点与贡献')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+            <span>核心创新</span>
+          </button>
+          <button type="button" @click="insertQuickPrompt('详细拆解论文使用的研究方法与实验设计')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            <span>实验方法</span>
+          </button>
+          <button type="button" @click="insertQuickPrompt('指出论文可能存在的局限性与未来方向')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m12 8 4 4-4 4M8 12h8"/></svg>
+            <span>局限突破</span>
+          </button>
+        </div>
+
+        <form class="void-input-form" @submit.prevent="askPaperChat">
+          <div class="cyber-input-wrapper">
+            <textarea
+              v-model="paperChat.question"
+              rows="1"
+              :disabled="paperChat.loading"
+              placeholder="询问研究方法、数据指标、图表解析或核心结论…"
+              @keydown.enter.exact.prevent="askPaperChat"
+            ></textarea>
+          </div>
+          <button class="cyber-send-btn" :disabled="paperChat.loading || !paperChat.question.trim()" aria-label="发送问题">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
           </button>
         </form>
-        <small>支持论文阅读与学术问题，非学术内容不会回答。</small>
+        <div class="void-footer-note">QUANTUM NEURAL ENGINE · GROUNDED ON ACADEMIC CONTEXT</div>
       </section>
     </Transition>
 
@@ -412,7 +582,10 @@
       <div class="pdf-figure-modal" @click.stop>
         <header>
           <strong>{{ figureViewer.caption }}</strong>
-          <button @click="closeFigureViewer">关闭</button>
+          <div class="pdf-figure-modal-actions">
+            <button class="pdf-figure-analyze-modal" @click="analyzeFigure(figureViewer.block); closeFigureViewer()">AI 分析</button>
+            <button @click="closeFigureViewer">关闭</button>
+          </div>
         </header>
         <img v-if="figureViewer.imageUrl" :src="figureViewer.imageUrl" :alt="figureViewer.caption" />
         <canvas v-else ref="figureCanvasRef"></canvas>
@@ -429,6 +602,13 @@ import ReaderReportPanel from "../components/ReaderReportPanel.vue";
 import { useRoute } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { rememberLastReading } from "../utils/readingMemory";
+import MarkdownIt from "markdown-it";
+
+const markdownRenderer = new MarkdownIt({ html: false, linkify: true, breaks: true });
+function renderMarkdown(text) {
+  if (!text) return "";
+  return markdownRenderer.render(String(text).trim());
+}
 
 const libraryStore = useLibraryStore();
 const authStore = useAuthStore();
@@ -441,12 +621,26 @@ const loadError = ref("");
 const parsingMessage = ref("正在进行论文版面解析（完整段落、图表、表格）");
 const parsingProgress = ref(8);
 const totalPages = ref(0);
+const currentTheme = ref(localStorage.getItem("paperpilot_theme") || "dark");
+const isDarkTheme = computed(() => currentTheme.value === "dark");
+
+function applyTheme(theme) {
+  currentTheme.value = theme;
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("paperpilot_theme", theme);
+}
+
+function toggleTheme() {
+  applyTheme(currentTheme.value === "dark" ? "light" : "dark");
+}
+
 const loadedPages = ref(0);
 const currentPage = ref(1);
 const readingProgress = ref(0);
 const autoTranslate = ref(true);
 const assistantCollapsed = ref(false);
 const assistantExpanded = ref(false);
+const railCollapsed = ref(false);
 const assistantTab = ref("chat");
 const contentScale = ref(1);
 const abstractTranslation = ref("");
@@ -456,8 +650,7 @@ const abstractFromPdf = ref("");
 const structuredHasAbstract = ref(false);
 const translationProviders = ref([
   { id: "google", label: "谷歌翻译" },
-  { id: "ai", label: "AI 学术翻译" },
-  { id: "youdao", label: "有道翻译" },
+  { id: "baidu", label: "百度翻译" }
 ]);
 const selectionReady = ref(false);
 const selectedRange = shallowRef(null);
@@ -486,6 +679,23 @@ const selectionTranslator = reactive({
 });
 const annotations = reactive([]);
 const clearedAnnotationSnapshot = ref([]);
+function handleProviderChange() {
+  const provider = abstractProvider.value;
+  abstractTranslation.value = "";
+  translateAbstract(true);
+  pages.forEach(page => {
+    if (Array.isArray(page.blocks)) {
+      page.blocks.forEach(block => {
+        block.translationProvider = provider;
+        block.translation = "";
+        block.translationError = "";
+      });
+      translatePage(page);
+    }
+  });
+  showReaderToast(`已切换至 ${providerLabel(provider)}，正在重新翻译全文`);
+}
+
 const readerToast = ref("");
 const paperChat = reactive({
   open: false,
@@ -574,11 +784,13 @@ function paperInitial(paper) {
 }
 
 const textColors = [
+  { id: "white", label: "白色", value: "#ffffff" },
   { id: "black", label: "黑色", value: "#20242c" },
-  { id: "red", label: "红色", value: "#d92d20" },
-  { id: "blue", label: "蓝色", value: "#1769e0" },
-  { id: "yellow", label: "黄色", value: "#a86b00" },
-  { id: "green", label: "绿色", value: "#16845b" },
+  { id: "red", label: "红色", value: "#ef4444" },
+  { id: "blue", label: "蓝色", value: "#3b82f6" },
+  { id: "yellow", label: "黄色", value: "#eab308" },
+  { id: "green", label: "绿色", value: "#22c55e" },
+  { id: "purple", label: "紫色", value: "#a855f7" },
 ];
 
 const documentOutline = computed(() =>
@@ -1078,6 +1290,64 @@ function addSelectionToChat() {
   nextTick(() => document.querySelector(".paper-chat-panel textarea")?.focus());
 }
 
+function analyzeFigure(block) {
+  if (!block) return;
+  const caption = block.text || (block.kind === "table" ? "表格" : "图像");
+  paperChat.open = true;
+
+  let pageText = "";
+  for (const page of pages) {
+    if (page.blocks && page.blocks.includes(block)) {
+      pageText = page.blocks.map(b => b.text || "").filter(Boolean).join("\n\n");
+      break;
+    }
+  }
+
+  const userMsgId = paperChat.nextId++;
+  paperChat.messages.push({
+    id: userMsgId,
+    role: "user",
+    content: `请结合论文上下文，深度剖析图表【${caption}】的架构体系、数据关联与得出的核心结论。`,
+    figure: {
+      caption,
+      imageUrl: block.imageUrl || ""
+    }
+  });
+
+  paperChat.loading = true;
+  nextTick(() => {
+    const container = document.querySelector(".paper-chat-messages");
+    if (container) container.scrollTop = container.scrollHeight;
+  });
+
+  paperpilotApi.askPaperSelection(workspaceId.value, {
+    question: `请结合上下文分析这幅图表的内容及其得出的结论：\n【${caption}】`,
+    selection: caption,
+    paragraph: pageText || caption
+  }).then(result => {
+    const answer = cleanChatAnswer(result?.answer) || "本次没有返回回答，请重试。";
+    paperChat.messages.push({ id: paperChat.nextId++, role: "assistant", content: answer });
+  }).catch(error => {
+    console.warn("paper chat figure analysis failed", error);
+    paperChat.messages.push({
+      id: paperChat.nextId++,
+      role: "assistant",
+      content: error?.response?.data?.message || "PaperSolver 暂时无法解析该图表，请稍后重试。",
+    });
+  }).finally(() => {
+    paperChat.loading = false;
+    nextTick(() => {
+      const container = document.querySelector(".paper-chat-messages");
+      if (container) container.scrollTop = container.scrollHeight;
+    });
+  });
+}
+
+function insertQuickPrompt(text) {
+  paperChat.question = text;
+  askPaperChat();
+}
+
 async function askPaperChat() {
   const question = paperChat.question.trim();
   if (!question || paperChat.loading) return;
@@ -1108,9 +1378,6 @@ async function askPaperChat() {
 
 function cleanChatAnswer(value) {
   return String(value || "")
-    .replace(/\*\*/g, "")
-    .replace(/^\s*[-*]\s+/gm, "")
-    .replace(/^\s*#{1,6}\s+/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -1148,23 +1415,37 @@ function removeAnnotation(id) {
   closeSelectionTranslator();
 }
 
+function clearCustomFontColors() {
+  const container = document.querySelector(".reflow-document");
+  if (!container) return;
+  const coloredSpans = container.querySelectorAll(".reader-font-color");
+  coloredSpans.forEach(span => {
+    const parent = span.parentNode;
+    while (span.firstChild) {
+      parent.insertBefore(span.firstChild, span);
+    }
+    parent.removeChild(span);
+  });
+}
+
 function clearAllAnnotations() {
+  clearCustomFontColors();
   if (!annotations.length) {
     if (clearedAnnotationSnapshot.value.length) {
       annotations.push(...clearedAnnotationSnapshot.value);
       clearedAnnotationSnapshot.value = [];
       persistAnnotations();
-      showReaderToast("已恢复刚清除的标注");
+      showReaderToast("已恢复刚清除的标注与字体颜色");
       return;
     }
-    showReaderToast("当前没有可清除的标注");
+    showReaderToast("已清除字体颜色与全部标注");
     return;
   }
   clearedAnnotationSnapshot.value = annotations.map(item => ({ ...item }));
   annotations.splice(0, annotations.length);
   persistAnnotations();
   closeSelectionTranslator();
-  showReaderToast("全局内容已清除");
+  showReaderToast("已清除字体颜色与全部标注");
 }
 
 function annotationForBlock(blockId) {
@@ -1269,6 +1550,23 @@ function fitSelectionPopover(focusTextarea = false) {
 function saveAnnotation() {
   const note = selectionTranslator.annotationDraft.trim();
   if (!note || !selectionTranslator.blockId) return;
+
+  const range = selectedRange.value;
+  let coords = { x1: 20, y1: 40, x2: 230, y2: 50, top: 40 };
+  if (range) {
+    const r = range.getBoundingClientRect();
+    const doc = document.querySelector(".reflow-document")?.getBoundingClientRect() || { left: 0, top: 0 };
+    const relativeTop = Math.max(10, r.top - doc.top);
+    const relativeLeft = Math.max(10, r.right - doc.left);
+    coords = {
+      x1: relativeLeft,
+      y1: relativeTop + 8,
+      x2: 230,
+      y2: relativeTop + 16,
+      top: relativeTop,
+    };
+  }
+
   if (selectionTranslator.editingAnnotationId) {
     const existing = annotations.find(item => item.id === selectionTranslator.editingAnnotationId);
     if (existing) existing.note = note;
@@ -1276,15 +1574,18 @@ function saveAnnotation() {
     annotations.push({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       blockId: selectionTranslator.blockId,
+      preview: selectionTranslator.source.slice(0, 40),
       quote: selectionTranslator.source,
       start: selectionTranslator.start,
       end: selectionTranslator.end,
       note,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+      ...coords,
     });
   }
   persistAnnotations();
   closeSelectionTranslator();
+  showReaderToast("已添加 WPS 绿折线引线批注");
 }
 
 function editAnnotation(annotation, event) {
@@ -1308,19 +1609,30 @@ function editAnnotation(annotation, event) {
   nextTick(() => fitSelectionPopover(true));
 }
 
+function isAbstractBlock(block) {
+  if (!block) return false;
+  if (block.kind === 'abstract') return true;
+  const text = String(block.text || "").trim();
+  return /^abstract\b/i.test(text);
+}
+
 async function translateBlock(block, force = false) {
-  if (!autoTranslate.value || block.translating || (!force && block.translation)) return;
+  if (!block || !block.text || block.translating) return;
+  if (isAbstractBlock(block)) return;
+  if (!force && block.translation) return;
+
   block.translating = true;
   block.translationError = "";
   await acquireTranslationSlot();
   try {
+    const provider = block.translationProvider || abstractProvider.value || "google";
     const result = await paperpilotApi.translate({
       text: block.text,
-      provider: block.translationProvider || "google",
+      provider: provider,
       sourceLang: "auto",
       targetLang: "zh-CN",
     }, { timeout: 45000 });
-    block.translation = String(result?.translatedText || "").trim();
+    block.translation = String(result?.translatedText || result?.text || "").trim();
     if (!block.translation) block.translationError = "本段暂时没有返回译文，请更换翻译引擎重试。";
   } catch (error) {
     console.warn("reader paragraph translation failed", block.id, error);
@@ -2028,6 +2340,9 @@ onBeforeUnmount(() => {
 .reader-assistant.collapsed { width: 46px; }
 .reader-body:has(.reader-assistant.collapsed) { grid-template-columns: 46px minmax(0, 1fr) 226px; }
 .reader-body.assistant-wide { grid-template-columns: clamp(440px, 38vw, 580px) minmax(440px, 1fr) 226px; }
+.reader-body:has(.reader-paper-rail.collapsed) { grid-template-columns: 340px minmax(0, 1fr) 52px; }
+.reader-body:has(.reader-assistant.collapsed):has(.reader-paper-rail.collapsed) { grid-template-columns: 46px minmax(0, 1fr) 52px; }
+.reader-body.assistant-wide:has(.reader-paper-rail.collapsed) { grid-template-columns: clamp(440px, 38vw, 580px) minmax(440px, 1fr) 52px; }
 .reader-assistant.expanded { width: auto; }
 
 .assistant-tabs {
@@ -2055,9 +2370,30 @@ onBeforeUnmount(() => {
 
 .assistant-tabs button:hover { color: #334155; background: rgba(255, 255, 255, .66); }
 .assistant-tabs button.active { color: var(--reader-accent); background: rgba(47, 109, 246, .1); }
-.expand-button { margin-left: auto; color: var(--reader-accent) !important; font-size: 18px !important; }
-.collapse-button { margin-left: auto; font-size: 17px !important; }
-.expand-button + .collapse-button { margin-left: 2px; }
+
+/* Left sidebar expand/collapse buttons */
+.assistant-tabs .icon-button {
+  width: 34px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  background: transparent;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.expand-button { margin-left: auto; }
+.expand-button:hover, .collapse-button:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  color: #0f172a !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  transform: translateY(-1px);
+}
+.expand-button:active, .collapse-button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.collapse-button { margin-left: 2px; }
 .reader-assistant.collapsed .assistant-tabs button:not(.collapse-button) { display: none; }
 
 .assistant-scroll {
@@ -2531,46 +2867,48 @@ onBeforeUnmount(() => {
   right: 24px;
   bottom: 88px;
   z-index: 81;
-  width: min(420px, calc(100vw - 32px));
-  height: min(600px, calc(100vh - 120px));
+  width: min(440px, calc(100vw - 32px));
+  height: min(640px, calc(100vh - 120px));
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
-  border: 1px solid rgba(203, 213, 225, .82);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, .96);
-  box-shadow: 0 26px 60px rgba(30, 41, 59, .18);
-  backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 12px 48px rgba(15, 23, 42, 0.12), 0 4px 16px rgba(15, 23, 42, 0.04);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
 }
 .paper-chat-panel > header {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 15px 16px 13px;
-  border-bottom: 1px solid #e8edf5;
-  background:
-    linear-gradient(135deg, rgba(239, 246, 255, .92), rgba(248, 250, 252, .92));
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.6), rgba(255, 255, 255, 0.4));
 }
-.paper-chat-mark { width: 34px; height: 34px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 12px; color: #fff; background: linear-gradient(135deg, #2563eb, #5b5ff0); font: 800 11px/1 Inter, sans-serif; }
-.paper-chat-panel > header > div:last-child { display: grid; gap: 3px; }
-.paper-chat-panel > header strong { color: #172033; font-size: 13px; }
-.paper-chat-panel > header span { max-width: 320px; overflow: hidden; color: #64748b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.paper-chat-messages { overflow-y: auto; padding: 17px 15px; background: linear-gradient(180deg, #fbfcff, #f7f9fc); }
-.paper-chat-message { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 13px; }
-.paper-chat-message > span { width: 25px; height: 25px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 9px; color: #3153a3; background: #e8efff; font-size: 9px; font-weight: 800; }
-.paper-chat-message p { max-width: 84%; margin: 0; padding: 10px 12px; border: 1px solid #eef2f7; border-radius: 13px; color: #273244; background: #fff; font-size: 11px; line-height: 1.68; white-space: pre-wrap; box-shadow: 0 8px 18px rgba(30, 41, 59, .045); }
+.paper-chat-mark { width: 36px; height: 36px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 12px; color: #fff; background: linear-gradient(135deg, #3b82f6, #6366f1); font: 800 13px/1 Inter, sans-serif; box-shadow: 0 4px 12px rgba(59,130,246,0.25); }
+.paper-chat-panel > header > div:last-child { display: grid; gap: 4px; }
+.paper-chat-panel > header strong { color: #0f172a; font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
+.paper-chat-panel > header span { max-width: 320px; overflow: hidden; color: #64748b; font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.paper-chat-messages { overflow-y: auto; padding: 20px 20px; background: transparent; display: flex; flex-direction: column; gap: 16px; }
+.paper-chat-message { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 0; }
+.paper-chat-message > span { width: 28px; height: 28px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 10px; color: #2563eb; background: rgba(59,130,246,0.1); font-size: 11px; font-weight: 800; }
+.paper-chat-message p { max-width: 86%; margin: 0; padding: 12px 16px; border: 1px solid rgba(226, 232, 240, 0.8); border-radius: 16px; border-top-left-radius: 4px; color: #334155; background: rgba(255,255,255,0.7); font-size: 13px; line-height: 1.6; white-space: pre-wrap; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
 .paper-chat-message.user { justify-content: flex-end; }
-.paper-chat-message.user p { color: #fff; border-color: transparent; background: linear-gradient(135deg, #3558d8, #243b75); }
-.paper-chat-thinking { display: flex; gap: 4px; align-items: center; min-height: 18px; }
-.paper-chat-thinking i { width: 5px; height: 5px; border-radius: 50%; background: #7b8798; animation: chat-dot 1s ease-in-out infinite; }
+.paper-chat-message.user p { color: #fff; border-color: transparent; border-radius: 16px; border-top-right-radius: 4px; background: linear-gradient(135deg, #2563eb, #4f46e5); box-shadow: 0 4px 12px rgba(37,99,235,0.2); }
+.paper-chat-thinking { display: flex; gap: 5px; align-items: center; min-height: 20px; }
+.paper-chat-thinking i { width: 6px; height: 6px; border-radius: 50%; background: #94a3b8; animation: chat-dot 1s ease-in-out infinite; }
 .paper-chat-thinking i:nth-child(2) { animation-delay: .15s; }
 .paper-chat-thinking i:nth-child(3) { animation-delay: .3s; }
-.paper-chat-panel form { display: grid; grid-template-columns: minmax(0, 1fr) 38px; align-items: end; gap: 9px; padding: 12px 13px 8px; border-top: 1px solid #e5e9ef; background: #fff; }
-.paper-chat-panel textarea { min-height: 44px; max-height: 110px; resize: none; box-sizing: border-box; padding: 11px 12px; border: 1px solid #cfd7e2; border-radius: 13px; outline: 0; color: #263244; background: #fff; font: 11px/1.45 inherit; }
-.paper-chat-panel textarea:focus { border-color: #2f6df6; box-shadow: 0 0 0 2px rgba(47, 109, 246, .12); }
-.paper-chat-panel form button { width: 38px; height: 38px; border: 0; border-radius: 12px; color: #fff; background: #2563eb; font-size: 18px; cursor: pointer; }
+.paper-chat-panel form { display: grid; grid-template-columns: minmax(0, 1fr) 42px; align-items: end; gap: 12px; margin: 0 16px; padding: 12px; border: 1px solid rgba(226, 232, 240, 0.8); border-radius: 20px; background: rgba(255, 255, 255, 0.6); box-shadow: 0 4px 16px rgba(0,0,0,0.03); }
+.paper-chat-panel textarea { min-height: 42px; max-height: 120px; resize: none; box-sizing: border-box; padding: 12px 14px; border: none; border-radius: 12px; outline: 0; color: #1e293b; background: transparent; font: 13px/1.5 inherit; }
+.paper-chat-panel textarea::placeholder { color: #94a3b8; }
+.paper-chat-panel textarea:focus { background: rgba(255,255,255,0.9); }
+.paper-chat-panel form button { width: 42px; height: 42px; display: grid; place-items: center; border: 0; border-radius: 14px; color: #fff; background: #2563eb; font-size: 20px; cursor: pointer; transition: all 0.2s ease; }
+.paper-chat-panel form button:hover:not(:disabled) { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
 .paper-chat-panel form button:disabled { opacity: .4; cursor: default; }
-.paper-chat-panel > small { padding: 0 14px 12px; color: #8993a2; background: #fff; font-size: 9px; }
+.paper-chat-panel > small { padding: 12px 20px 16px; color: #94a3b8; background: transparent; font-size: 11px; text-align: center; }
 .paper-chat-enter-active,
 .paper-chat-leave-active { transition: opacity 160ms ease, transform 180ms cubic-bezier(.22, 1, .36, 1); transform-origin: bottom right; }
 .paper-chat-enter-from,
@@ -2719,9 +3057,13 @@ onBeforeUnmount(() => {
 .pdf-figure-view:hover { background: #1769e0; color: #fff; }
 .pdf-figure-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: rgba(15, 23, 42, 0.55); }
 .pdf-figure-modal { width: min(90vw, 760px); max-height: 90vh; overflow: auto; padding: 14px; border-radius: 12px; background: #fff; }
-.pdf-figure-modal header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.pdf-figure-modal header strong { color: #1769e0; font-size: 13px; }
-.pdf-figure-modal header button { padding: 4px 10px; border: 0; border-radius: 5px; background: #eef2f6; color: #4a5568; font-size: 12px; cursor: pointer; }
+.pdf-figure-modal header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #f1f5f9; }
+.pdf-figure-modal header strong { color: #0f172a; font-size: 14px; font-weight: 600; max-width: 60%; }
+.pdf-figure-modal-actions { display: flex; gap: 8px; }
+.pdf-figure-analyze-modal { padding: 5px 14px; border: 0; border-radius: 8px; background: #6366f1; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(99,102,241,0.25); }
+.pdf-figure-analyze-modal:hover { background: #4f46e5; transform: translateY(-1px); box-shadow: 0 4px 10px rgba(99,102,241,0.35); }
+.pdf-figure-modal header > button, .pdf-figure-modal-actions > button:last-child { padding: 5px 12px; border: 0; border-radius: 8px; background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+.pdf-figure-modal header > button:hover, .pdf-figure-modal-actions > button:last-child:hover { background: #e2e8f0; color: #0f172a; }
 .pdf-figure-modal canvas { max-width: 100%; height: auto !important; background: #fff; }
 .pdf-figure-modal > img { display: block; max-width: 100%; max-height: calc(90vh - 70px); margin: 0 auto; object-fit: contain; }
 .mineru-table { overflow-x: auto; padding: 14px; border: 1px solid #e2e7ef; background: #fff; }
@@ -2730,6 +3072,8 @@ onBeforeUnmount(() => {
 .mineru-table :deep(td) { padding: 7px 9px; border: 1px solid #cfd6e0; text-align: left; vertical-align: top; }
 .mineru-equation { overflow-x: auto; margin: 18px 0; padding: 14px 18px; border-left: 3px solid #6d5dfc; background: #f7f6ff; color: #25233d; font: 15px/1.7 "Times New Roman", serif; white-space: pre-wrap; }
 .reference-block { margin: 12px 0; color: #4a5362; font: 0.82em/1.75 "Times New Roman", "Songti SC", serif; white-space: pre-wrap; }
+:root[data-theme="dark"] .reference-block { color: #cbd5e1; background: rgba(30, 41, 59, 0.35); border-left: 3px solid rgba(148, 163, 184, 0.4); padding: 10px 14px; border-radius: 0 8px 8px 0; }
+:root[data-theme="dark"] .mineru-equation { background: rgba(30, 41, 59, 0.6); border-left-color: #818cf8; color: #f1f5f9; }
 .assistant-empty { padding: 10px 12px; color: #8a94a4; font-size: 11px; }
 
 .reader-state { min-height: 70vh; display: flex; align-items: center; justify-content: center; gap: 10px; color: #667085; font-size: 13px; }
@@ -2747,65 +3091,125 @@ onBeforeUnmount(() => {
 .reader-paper-rail {
   min-width: 0;
   overflow-y: auto;
-  padding: 14px 10px;
-  background: linear-gradient(180deg, rgba(248, 250, 252, .82), rgba(238, 243, 248, .92));
-  border-left: 1px solid rgba(226, 232, 240, .9);
+  padding: 16px 12px;
+  background: rgba(248, 250, 252, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-left: 1px solid rgba(226, 232, 240, 0.8);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reader-paper-rail.collapsed {
+  padding: 16px 8px;
+  overflow: hidden;
 }
 
 .reader-paper-rail-head {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 2px 14px;
+  color: #334155;
+}
+.rail-head-info {
+  display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  margin: 2px 4px 11px;
-  color: #475569;
+  flex: 1 1 auto;
 }
-.reader-paper-rail-head span { font-size: 12px; font-weight: 800; }
-.reader-paper-rail-head small { color: #8a96a7; font-size: 10px; font-weight: 650; }
+.rail-head-info span { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; }
+.rail-head-info small { color: #94a3b8; font-size: 11px; font-weight: 600; }
+
+.rail-collapse-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  background: rgba(255, 255, 255, 0.8);
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  flex: 0 0 auto;
+}
+.rail-collapse-btn:hover {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+.reader-paper-rail.collapsed .reader-paper-rail-head {
+  justify-content: center;
+  margin-bottom: 16px;
+}
 
 .reader-paper-tab {
   width: 100%;
-  min-height: 58px;
+  min-height: 56px;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
-  margin-bottom: 8px;
-  padding: 8px 9px;
-  border: 1px solid transparent;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.6);
   border-radius: 14px;
   color: #475569;
-  background: rgba(255, 255, 255, .58);
+  background: rgba(255, 255, 255, 0.6);
   text-align: left;
   cursor: pointer;
-  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reader-paper-rail.collapsed .reader-paper-tab {
+  grid-template-columns: 36px;
+  justify-content: center;
+  padding: 6px 0;
+  min-height: 48px;
+  border-radius: 12px;
 }
 .reader-paper-tab:hover {
-  transform: translateY(-1px);
-  border-color: rgba(148, 163, 184, .3);
-  background: rgba(255, 255, 255, .92);
-  box-shadow: 0 12px 22px rgba(30, 41, 59, .07);
+  transform: translateY(-1.5px);
+  border-color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, .95);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, .07);
 }
 .reader-paper-tab.active {
-  border-color: rgba(37, 99, 235, .42);
-  color: #1d4ed8;
-  background: linear-gradient(135deg, rgba(239, 246, 255, .98), rgba(255, 255, 255, .94));
-  box-shadow: 0 12px 24px rgba(37, 99, 235, .09);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #4f46e5;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.12);
+  position: relative;
+}
+.reader-paper-tab.active::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 18%;
+  bottom: 18%;
+  width: 3px;
+  background: #6366f1;
+  border-radius: 4px;
 }
 .reader-paper-tab-mark {
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
   border-radius: 10px;
-  color: #3153a3;
-  background: #e8efff;
-  font-size: 12px;
-  font-weight: 850;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.08);
+  font-size: 13px;
+  font-weight: 700;
+  transition: all 0.2s ease;
 }
 .reader-paper-tab.active .reader-paper-tab-mark {
   color: #fff;
-  background: linear-gradient(135deg, #2563eb, #5b5ff0);
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3);
 }
 .reader-paper-tab-text {
   min-width: 0;
@@ -2865,4 +3269,229 @@ onBeforeUnmount(() => {
   .paper-chat-enter-active,
   .paper-chat-leave-active { transition: none; }
 }
+/* ── DARK MODE ADAPTATIONS FOR READER VIEW ── */
+:root[data-theme="dark"] .reader-workbench {
+  background: #08080c;
+  color: #e2e2e6;
+}
+
+:root[data-theme="dark"] .reader-toolbar {
+  background: rgba(14, 14, 20, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f4f4f6;
+}
+
+:root[data-theme="dark"] .reader-document-title {
+  color: #f4f4f6;
+}
+:root[data-theme="dark"] .reader-document-source {
+  color: #a1a1aa;
+}
+
+:root[data-theme="dark"] .reader-back,
+:root[data-theme="dark"] .reader-zoom-control,
+:root[data-theme="dark"] .reader-pdf-action {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #f4f4f6 !important;
+}
+
+:root[data-theme="dark"] .reader-zoom-control button {
+  color: #f4f4f6;
+}
+
+:root[data-theme="dark"] .reader-status-item strong {
+  color: #60a5fa;
+}
+
+:root[data-theme="dark"] .reader-body {
+  background: #08080c;
+}
+
+:root[data-theme="dark"] .reading-column {
+  background: #0e0e14 !important;
+  color: #e2e2e6 !important;
+  box-shadow: 0 22px 58px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="dark"] .paper-heading {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme="dark"] .paper-heading h1 {
+  color: #f4f4f6;
+}
+
+:root[data-theme="dark"] .source-paragraph {
+  color: #e2e2e6;
+}
+
+:root[data-theme="dark"] .source-heading {
+  color: #60a5fa;
+}
+
+:root[data-theme="dark"] .translated-paragraph {
+  color: #cbd5e1;
+}
+
+:root[data-theme="dark"] .translation-unit {
+  border-left-color: rgba(99, 102, 241, 0.5);
+}
+
+:root[data-theme="dark"] .assistant-tabs button {
+  color: #94a3b8 !important;
+  background: transparent !important;
+}
+
+:root[data-theme="dark"] .assistant-tabs button:hover {
+  color: #f1f5f9 !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+:root[data-theme="dark"] .assistant-tabs button.active {
+  color: #60a5fa !important;
+  background: rgba(59, 130, 246, 0.2) !important;
+  border: 1px solid rgba(96, 165, 250, 0.25) !important;
+}
+
+:root[data-theme="dark"] .assistant-tabs .icon-button {
+  color: #94a3b8 !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+:root[data-theme="dark"] .assistant-tabs .icon-button:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+
+:root[data-theme="dark"] .rail-collapse-btn {
+  background: rgba(30, 41, 59, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #94a3b8 !important;
+}
+
+:root[data-theme="dark"] .rail-collapse-btn:hover {
+  background: rgba(51, 65, 85, 0.8) !important;
+  color: #f8fafc !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+:root[data-theme="dark"] .assistant-scroll h3 {
+  color: #f4f4f6;
+}
+
+:root[data-theme="dark"] .outline-item {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  color: #a1a1aa;
+}
+
+:root[data-theme="dark"] .outline-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #60a5fa;
+}
+
+:root[data-theme="dark"] .reader-theme-toggle-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #a8b3c7;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  width: 28px;
+  height: 28px;
+  transition: all .2s;
+}
+:root[data-theme="dark"] .reader-theme-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+/* Right side literature switcher rail */
+:root[data-theme="dark"] .reader-paper-rail {
+  background: rgba(15, 23, 42, 0.65) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-left-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+:root[data-theme="dark"] .reader-paper-rail-head {
+  color: #94a3b8 !important;
+}
+
+:root[data-theme="dark"] .reader-paper-tab {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  color: #cbd5e1 !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important;
+}
+
+:root[data-theme="dark"] .reader-paper-tab:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+}
+
+:root[data-theme="dark"] .reader-paper-tab.active {
+  background: linear-gradient(145deg, rgba(30, 64, 175, 0.4), rgba(15, 23, 42, 0.6)) !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  color: #93c5fd !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+:root[data-theme="dark"] .reader-paper-tab.active::before {
+  background: #60a5fa !important;
+}
+
+:root[data-theme="dark"] .reader-paper-tab-mark {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05)) !important;
+  color: #60a5fa !important;
+  box-shadow: inset 0 2px 4px rgba(255,255,255,0.05) !important;
+}
+
+:root[data-theme="dark"] .reader-paper-tab.active .reader-paper-tab-mark {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+}
+
+:root[data-theme="dark"] .reader-paper-tab-text strong {
+  color: #f1f5f9 !important;
+}
+:root[data-theme="dark"] .reader-paper-tab-text small {
+  color: #64748b !important;
+}
+
+:root[data-theme="dark"] .icon-button {
+  color: #94a3b8 !important;
+}
+:root[data-theme="dark"] .icon-button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #f8fafc !important;
+}
+
+/* Text selection translator popover and annotation editor */
+:root[data-theme="dark"] .selection-result,
+:root[data-theme="dark"] .selection-annotation-editor {
+  background: rgba(14, 14, 20, 0.96) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #f4f4f6 !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7) !important;
+}
+
+:root[data-theme="dark"] .selection-result p,
+:root[data-theme="dark"] .selection-annotation-editor textarea {
+  color: #e2e2e6 !important;
+  background: #141e2e !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+:root[data-theme="dark"] .selectable-paragraph::selection {
+  background: rgba(59, 130, 246, 0.35) !important;
+  color: #ffffff !important;
+}
 </style>
+
+

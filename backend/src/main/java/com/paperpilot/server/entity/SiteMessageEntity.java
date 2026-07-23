@@ -19,6 +19,9 @@ public class SiteMessageEntity {
     @Column(name = "message_type", length = 32)
     private String messageType = "notice";
 
+    @Column(name = "image_url", columnDefinition = "LONGTEXT")
+    private String imageUrl;
+
     @Column(name = "active_flag", nullable = false)
     private boolean activeFlag;
 
@@ -48,6 +51,8 @@ public class SiteMessageEntity {
     public void setContent(String content) { this.content = content; }
     public String getMessageType() { return messageType; }
     public void setMessageType(String messageType) { this.messageType = messageType; }
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public boolean isActiveFlag() { return activeFlag; }
     public void setActiveFlag(boolean activeFlag) { this.activeFlag = activeFlag; }
     public LocalDateTime getCreatedAt() { return createdAt; }

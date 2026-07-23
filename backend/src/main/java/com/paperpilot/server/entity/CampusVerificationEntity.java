@@ -30,14 +30,14 @@ public class CampusVerificationEntity {
     @Column(name = "school_name", nullable = false, length = 128)
     private String schoolName;
 
-    @Column(name = "student_no", nullable = false, length = 64)
-    private String studentNo;
+    @Column(name = "real_name", nullable = false, length = 64)
+    private String realName;
 
     @Column(name = "student_card_front", columnDefinition = "LONGTEXT")
     private String studentCardFront;
 
-    @Column(name = "student_card_back", columnDefinition = "LONGTEXT")
-    private String studentCardBack;
+    @Column(name = "chsi_screenshot", columnDefinition = "LONGTEXT")
+    private String chsiScreenshot;
 
     @Column(nullable = false, length = 32)
     private String status = "pending";
@@ -70,12 +70,29 @@ public class CampusVerificationEntity {
     public void setEmail(String email) { this.email = email; }
     public String getSchoolName() { return schoolName; }
     public void setSchoolName(String schoolName) { this.schoolName = schoolName; }
-    public String getStudentNo() { return studentNo; }
-    public void setStudentNo(String studentNo) { this.studentNo = studentNo; }
-    public String getStudentCardFront() { return studentCardFront; }
-    public void setStudentCardFront(String studentCardFront) { this.studentCardFront = studentCardFront; }
-    public String getStudentCardBack() { return studentCardBack; }
-    public void setStudentCardBack(String studentCardBack) { this.studentCardBack = studentCardBack; }
+    public String getRealName() {
+        return realName;
+    }
+
+    public void setRealName(String realName) {
+        this.realName = realName;
+    }
+
+    public String getStudentCardFront() {
+        return studentCardFront;
+    }
+
+    public void setStudentCardFront(String studentCardFront) {
+        this.studentCardFront = studentCardFront;
+    }
+
+    public String getChsiScreenshot() {
+        return chsiScreenshot;
+    }
+
+    public void setChsiScreenshot(String chsiScreenshot) {
+        this.chsiScreenshot = chsiScreenshot;
+    }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getAdminNote() { return adminNote; }

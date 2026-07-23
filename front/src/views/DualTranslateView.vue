@@ -3,14 +3,24 @@
     <header class="dual-toolbar">
       <div class="toolbar-title">
         <router-link to="/library" class="back-link">‹</router-link>
-        <strong>左右双栏翻译</strong>
+        <strong>对照翻译</strong>
         <span :title="paper?.title">{{ paper?.title || "当前论文" }}</span>
       </div>
       <nav>
-        <span class="layout-label">左侧原文 · 右侧译文</span>
+        <span class="layout-label" :title="isDualPdfMode ? '开源 PDFMathTranslate (pdf2zh) 模型驱动' : '内置 AI 高保真双栏引擎驱动'">
+          {{ isDualPdfMode ? '开源 pdf2zh 模型渲染' : '左侧原文 · 右侧中文译文' }}
+        </span>
         <router-link :to="{ path: '/reader', query: { mode: 'line', panel: 'analysis' } }">
           逐段翻译 + AI
         </router-link>
+        <button
+          class="dual-theme-toggle-btn"
+          :title="isDarkTheme ? '切换为日间明亮模式' : '切换为夜间深色模式'"
+          @click="toggleTheme"
+        >
+          <svg v-if="isDarkTheme" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
         <button v-if="state === 'FAILURE' || error" @click="startTranslation">重新生成</button>
       </nav>
     </header>
@@ -18,19 +28,45 @@
     <main>
       <section v-if="pagePairs.length" class="spread-reader">
         <header class="spread-head">
-          <span>原文</span>
-          <span>中文译文</span>
+          <span>左侧：英文原文 PDF</span>
+          <span>右侧：中文译文对照</span>
         </header>
         <article v-for="pair in pagePairs" :key="pair.index" class="page-spread">
-          <figure>
-            <canvas :ref="element => setCanvas(pair.left, element)"></canvas>
-            <figcaption>原文 · 第 {{ pair.index }} 页</figcaption>
+          <!-- 左侧：英文原文 PDF Canvas -->
+          <figure class="pdf-canvas-figure">
+            <canvas :ref="element => setCanvas(`left-${pair.index}`, element)"></canvas>
+            <figcaption>英文原文 · 第 {{ pair.index }} 页</figcaption>
           </figure>
-          <figure :class="{ empty: !pair.right }">
-            <canvas v-if="pair.right" :ref="element => setCanvas(pair.right, element)"></canvas>
-            <div v-else class="empty-page">本页暂无对应译文</div>
-            <figcaption>译文 · 第 {{ pair.index }} 页</figcaption>
+
+          <!-- 右侧：中文译文板 (PDF Canvas 或 结构化中文段落) -->
+          <figure v-if="isDualPdfMode" class="pdf-canvas-figure">
+            <canvas :ref="element => setCanvas(`right-${pair.index}`, element)"></canvas>
+            <figcaption>中文译文 · 第 {{ pair.index }} 页</figcaption>
           </figure>
+
+          <div v-else class="translated-text-card-column">
+            <header class="translated-column-head">
+              <span>中文译文 · 第 {{ pair.index }} 页</span>
+            </header>
+            <div class="translated-blocks-wrapper">
+              <template v-if="pair.blocks && pair.blocks.length">
+                <div
+                  v-for="block in pair.blocks"
+                  :key="block.id"
+                  class="translated-block-item"
+                  :class="`kind-${block.kind}`"
+                >
+                  <p class="source-text-muted">{{ block.text }}</p>
+                  <p class="target-translation-text" :class="{ loading: !block.translation }">
+                    {{ block.translation || '正在翻译本段…' }}
+                  </p>
+                </div>
+              </template>
+              <div v-else class="empty-block-note">
+                <p class="target-translation-text">正在读取并翻译本页段落…</p>
+              </div>
+            </div>
+          </div>
         </article>
       </section>
 
@@ -39,7 +75,7 @@
           <span v-if="!error"></span>
           <b v-else>!</b>
         </div>
-        <h1>{{ error ? "双栏翻译暂不可用" : stateTitle }}</h1>
+        <h1>{{ error ? "对照翻译暂不可用" : stateTitle }}</h1>
         <p>{{ error || stateDescription }}</p>
         <div v-if="!error" class="progress-track">
           <i :style="{ width: `${progress}%` }"></i>
@@ -53,6 +89,8 @@
 </template>
 
 <script setup>
+useScrollReveal(".dual-translate-page");
+import { useScrollReveal } from "../composables/useScrollReveal";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { paperpilotApi } from "../services/paperpilotApi";
 import { useLibraryStore } from "../stores/library";
@@ -63,26 +101,150 @@ const progress = ref(3);
 const error = ref("");
 const pagePairs = reactive([]);
 const canvasElements = new Map();
+const pageBlocksMap = reactive({});
+const isDualPdfMode = ref(false);
 let pollTimer;
-let pdfDocument;
+let pdfDocument = null;
+
+const currentTheme = ref(localStorage.getItem("paperpilot_theme") || "dark");
+const isDarkTheme = computed(() => currentTheme.value === "dark");
+
+function applyTheme(theme) {
+  currentTheme.value = theme;
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("paperpilot_theme", theme);
+}
+
+function toggleTheme() {
+  applyTheme(currentTheme.value === "dark" ? "light" : "dark");
+}
 
 const paper = computed(() => libraryStore.activeDocument);
 const workspaceId = computed(() => String(paper.value?.workspaceId || paper.value?.id || ""));
 const stateTitle = computed(() => {
-  if (state.value === "PROGRESS") return "正在生成左右对照译文";
+  if (state.value === "PROGRESS") return "正在生成对照译文";
   if (state.value === "SUCCESS") return "译文已生成，正在排版";
-  return "正在准备双栏翻译";
+  return "正在准备对照翻译";
 });
 const stateDescription = computed(() => {
   if (state.value === "PROGRESS") return "首次生成需要分析页面结构；完成后再次打开会直接读取缓存。";
-  return "正在读取论文并建立原文与译文的页面对应关系。";
+  return "正在读取论文并建立原文与译文的页面对照关系。";
 });
 
 function friendlyError(requestError, fallback) {
   const raw = requestError?.response?.data?.message || requestError?.response?.data?.detail || "";
   return String(raw || fallback)
-    .replaceAll("PDFMathTranslate", "双栏翻译")
+    .replaceAll("PDFMathTranslate", "对照翻译")
     .replaceAll("pdf2zh", "翻译引擎");
+}
+
+function setCanvas(key, element) {
+  if (key && element) {
+    canvasElements.set(key, element);
+  }
+}
+
+async function renderSingleCanvas(doc, pageNum, canvas) {
+  if (!canvas || !doc) return;
+  try {
+    const page = await doc.getPage(pageNum);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const targetWidth = Math.min(820, Math.max(420, (window.innerWidth - 72) / 2));
+    const scale = targetWidth / baseViewport.width;
+    const viewport = page.getViewport({ scale });
+    const outputScale = Math.min(1.5, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(viewport.width * outputScale);
+    canvas.height = Math.floor(viewport.height * outputScale);
+    canvas.style.width = `${viewport.width}px`;
+    canvas.style.height = `${viewport.height}px`;
+    await page.render({
+      canvasContext: canvas.getContext("2d", { alpha: false }),
+      viewport,
+      transform: outputScale === 1 ? null : [outputScale, 0, 0, outputScale, 0, 0],
+    }).promise;
+  } catch (err) {
+    console.warn("render single canvas error", pageNum, err);
+  }
+}
+
+async function translateAllPageBlocks() {
+  pagePairs.forEach(pair => {
+    if (Array.isArray(pair.blocks)) {
+      pair.blocks.forEach(async block => {
+        if (!block.translation && block.text && !['figure', 'table', 'equation'].includes(block.kind)) {
+          try {
+            const res = await paperpilotApi.translate({
+              text: block.text,
+              provider: "google",
+              sourceLang: "auto",
+              targetLang: "zh-CN",
+            });
+            block.translation = String(res?.translatedText || res?.text || "").trim();
+          } catch (e) {
+            console.warn("dual block translate error", e);
+          }
+        }
+      });
+    }
+  });
+}
+
+async function loadNativePdfDualView() {
+  try {
+    state.value = "PROGRESS";
+    progress.value = 30;
+    isDualPdfMode.value = false;
+
+    const paperObj = paper.value || {};
+    const pdfUrl = paperpilotApi.buildPdfProxyUrl(paperObj.pdfUrl || paperObj.paperUrl || "");
+    if (!pdfUrl) throw new Error("缺失论文 PDF 资源");
+
+    const [pdfjs, workerModule] = await Promise.all([
+      import("pdfjs-dist"),
+      import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
+    ]);
+    pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
+    const loadingTask = pdfjs.getDocument(pdfUrl);
+    pdfDocument = await loadingTask.promise;
+
+    // 获取 Mineru 结构化页面段落数据
+    try {
+      const parsed = await paperpilotApi.getParsedDocument(workspaceId.value);
+      if (parsed && Array.isArray(parsed.pages)) {
+        parsed.pages.forEach(p => {
+          pageBlocksMap[p.pageNumber] = p.blocks || [];
+        });
+      }
+    } catch (e) {
+      console.warn("fetch parsed pages for dual view failed", e);
+    }
+
+    pagePairs.splice(0);
+    for (let i = 1; i <= pdfDocument.numPages; i++) {
+      const blocks = pageBlocksMap[i] || [];
+      pagePairs.push({
+        index: i,
+        leftPageNum: i,
+        blocks: blocks,
+      });
+    }
+
+    state.value = "SUCCESS";
+    progress.value = 100;
+    await nextTick();
+
+    // 渲染左侧原版英文 PDF
+    await Promise.all(pagePairs.map(async pair => {
+      const leftCanvas = canvasElements.get(`left-${pair.index}`);
+      if (leftCanvas) await renderSingleCanvas(pdfDocument, pair.leftPageNum, leftCanvas);
+    }));
+
+    // 自动为右侧段落填充中文译文
+    translateAllPageBlocks();
+  } catch (err) {
+    console.warn("native pdf dual view fallback failed", err);
+    error.value = "对照翻译暂不可用，请确保论文已上传 PDF。";
+  }
 }
 
 async function startTranslation() {
@@ -99,7 +261,8 @@ async function startTranslation() {
     await refreshStatus();
     pollTimer = setInterval(refreshStatus, 1200);
   } catch (requestError) {
-    error.value = friendlyError(requestError, "双栏翻译服务暂时不可用，请稍后重试。");
+    console.warn("pdfmath translation server offline, switching to native dual reader", requestError);
+    await loadNativePdfDualView();
   }
 }
 
@@ -120,15 +283,16 @@ async function refreshStatus() {
       await loadTranslatedPdf();
     } else if (state.value === "FAILURE") {
       clearInterval(pollTimer);
-      error.value = "生成失败，请检查翻译服务后重试。";
+      await loadNativePdfDualView();
     }
   } catch (requestError) {
     clearInterval(pollTimer);
-    error.value = friendlyError(requestError, "查询翻译进度失败。");
+    await loadNativePdfDualView();
   }
 }
 
 async function loadTranslatedPdf() {
+  isDualPdfMode.value = true;
   const blob = await paperpilotApi.getPdfMathDualPdf(workspaceId.value);
   const [pdfjs, workerModule] = await Promise.all([
     import("pdfjs-dist"),
@@ -138,34 +302,20 @@ async function loadTranslatedPdf() {
   pdfDocument = await pdfjs.getDocument({ data: await blob.arrayBuffer() }).promise;
   pagePairs.splice(0);
   for (let page = 1, index = 1; page <= pdfDocument.numPages; page += 2, index += 1) {
-    pagePairs.push({ index, left: page, right: page + 1 <= pdfDocument.numPages ? page + 1 : null });
+    pagePairs.push({
+      index,
+      hasRight: page + 1 <= pdfDocument.numPages,
+      leftPageNum: page,
+      rightPageNum: page + 1 <= pdfDocument.numPages ? page + 1 : null,
+    });
   }
   await nextTick();
-  await Promise.all(pagePairs.flatMap(pair => [pair.left, pair.right].filter(Boolean).map(renderPage)));
-}
-
-function setCanvas(pageNumber, element) {
-  if (pageNumber && element) canvasElements.set(pageNumber, element);
-}
-
-async function renderPage(pageNumber) {
-  const canvas = canvasElements.get(pageNumber);
-  if (!canvas || !pdfDocument) return;
-  const page = await pdfDocument.getPage(pageNumber);
-  const baseViewport = page.getViewport({ scale: 1 });
-  const targetWidth = Math.min(820, Math.max(420, (window.innerWidth - 72) / 2));
-  const scale = targetWidth / baseViewport.width;
-  const viewport = page.getViewport({ scale });
-  const outputScale = Math.min(1.5, window.devicePixelRatio || 1);
-  canvas.width = Math.floor(viewport.width * outputScale);
-  canvas.height = Math.floor(viewport.height * outputScale);
-  canvas.style.width = `${viewport.width}px`;
-  canvas.style.height = `${viewport.height}px`;
-  await page.render({
-    canvasContext: canvas.getContext("2d", { alpha: false }),
-    viewport,
-    transform: outputScale === 1 ? null : [outputScale, 0, 0, outputScale, 0, 0],
-  }).promise;
+  await Promise.all(pagePairs.map(async pair => {
+    const leftCanvas = canvasElements.get(`left-${pair.index}`);
+    const rightCanvas = canvasElements.get(`right-${pair.index}`);
+    if (leftCanvas && pair.leftPageNum) await renderSingleCanvas(pdfDocument, pair.leftPageNum, leftCanvas);
+    if (rightCanvas && pair.rightPageNum) await renderSingleCanvas(pdfDocument, pair.rightPageNum, rightCanvas);
+  }));
 }
 
 onMounted(async () => {
@@ -219,4 +369,63 @@ onBeforeUnmount(() => {
   .spread-head { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .state-mark span { animation: none; } .progress-track i { transition: none; } }
+/* ── DARK MODE ADAPTATIONS FOR DUAL TRANSLATE VIEW ── */
+:root[data-theme="dark"] .dual-reader {
+  background: #08080c;
+  color: #e2e2e6;
+}
+
+:root[data-theme="dark"] .dual-toolbar {
+  background: rgba(14, 14, 20, 0.95);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  color: #f4f4f6;
+}
+
+:root[data-theme="dark"] .dual-toolbar strong {
+  color: #f4f4f6;
+}
+
+:root[data-theme="dark"] .toolbar-title > span {
+  color: #a1a1aa;
+}
+
+:root[data-theme="dark"] .back-link {
+  color: #f4f4f6;
+}
+
+:root[data-theme="dark"] .spread-head {
+  background: #08080c;
+}
+
+:root[data-theme="dark"] .spread-head span {
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+}
+
+:root[data-theme="dark"] .page-spread figure {
+  background: #0e0e14;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="dark"] .page-spread canvas {
+  background: #0e0e14;
+}
+
+:root[data-theme="dark"] .page-spread figcaption {
+  border-top-color: rgba(255, 255, 255, 0.08);
+  color: #a1a1aa;
+}
+
+:root[data-theme="dark"] .empty-page {
+  color: #71717a;
+}
+
+:root[data-theme="dark"] .translation-state h1 {
+  color: #f4f4f6;
+}
+
+:root[data-theme="dark"] .translation-state p {
+  color: #a1a1aa;
+}
 </style>
+

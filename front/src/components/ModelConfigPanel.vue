@@ -163,7 +163,7 @@ function usageText(usage) {
 </script>
 
 <style scoped>
-.panel-intro { margin: 5px 0 0; color: #687488; font-size: 12px; }
+.panel-intro { margin: 5px 0 0; color: var(--admin-muted); font-size: 12px; }
 .relay-config-panel { padding: 20px; }
 .relay-config-head { align-items: flex-start; margin-bottom: 14px; }
 .relay-protocol-strip {
@@ -173,39 +173,57 @@ function usageText(usage) {
   gap: 10px;
   margin: 0 0 16px;
   padding: 10px 12px;
-  border: 1px solid #dbe6f4;
+  border: 1px solid var(--admin-border);
   border-radius: 12px;
-  background: linear-gradient(135deg, #f8fbff, #f4f7fb);
+  background: var(--admin-soft);
 }
-.relay-protocol-strip span { color: #64748b; font-size: 11px; font-weight: 700; }
-.relay-protocol-strip strong { color: #143c7d; font-size: 12px; }
+.relay-protocol-strip span { color: var(--admin-muted); font-size: 11px; font-weight: 700; }
+.relay-protocol-strip strong { color: var(--admin-text); font-size: 12px; }
 .relay-protocol-strip small {
   min-width: 0;
-  color: #64748b;
+  color: var(--admin-muted);
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .compact-grid { align-items: start; }
-.field-help { display: block; margin-top: 5px; color: #6e7a8d; font-size: 10px; line-height: 1.45; }
+.field-help { display: block; margin-top: 5px; color: var(--admin-muted); font-size: 10px; line-height: 1.45; }
 .full-row { grid-column: 1 / -1; }
 .test-result { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 9px; font-size: 11px; }
 .test-result.success { color: #087457; background: #e6f7f0; }
+:global(html[data-theme="dark"] .test-result.success) { color: #34d399; background: rgba(52, 211, 153, 0.1); }
 .test-result.error { color: #b33d42; background: #fff0f1; }
-.chat-tester { margin-top: 20px; padding-top: 18px; border-top: 1px solid #e6eaf0; }
+:global(html[data-theme="dark"] .test-result.error) { color: #f87171; background: rgba(248, 113, 113, 0.1); }
+.chat-tester { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--admin-border); }
 .chat-tester-heading, .response-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.chat-tester-heading h4 { margin: 0; color: #172033; font-size: 15px; }
-.chat-tester-heading p { margin: 4px 0 0; color: #687488; font-size: 11px; }
+.chat-tester-heading h4 { margin: 0; color: var(--admin-text); font-size: 15px; }
+.chat-tester-heading p { margin: 4px 0 0; color: var(--admin-muted); font-size: 11px; }
 .live-mark { padding: 4px 8px; border-radius: 99px; color: #087457; background: #e6f7f0; font-size: 10px; font-weight: 700; }
+:global(html[data-theme="dark"] .live-mark) { color: #34d399; background: rgba(52, 211, 153, 0.1); }
 .chat-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; margin-top: 14px; }
 .chat-composer textarea { min-height: 82px; resize: vertical; }
-.chat-response { margin-top: 12px; padding: 13px 14px; border-radius: 10px; color: #26344a; background: #f4f8ff; }
+.chat-response { margin-top: 12px; padding: 13px 14px; border-radius: 10px; color: var(--admin-text); background: var(--admin-soft); border: 1px solid var(--admin-border); }
 .chat-response.error { color: #a5373d; background: #fff0f1; }
-.response-meta span { color: #687488; font-size: 10px; }
+:global(html[data-theme="dark"] .chat-response.error) { color: #f87171; background: rgba(248, 113, 113, 0.1); }
+.response-meta span { color: var(--admin-muted); font-size: 10px; }
 .chat-response p { margin: 9px 0 0; white-space: pre-wrap; line-height: 1.7; font-size: 12px; }
-.chat-hint { margin: 10px 0 0; color: #7a8596; font-size: 10px; }
+.chat-hint { margin: 10px 0 0; color: var(--admin-muted); font-size: 10px; }
 button:disabled { cursor: not-allowed; opacity: .55; }
+
+input, textarea, select {
+  background: var(--admin-panel-solid) !important;
+  border: 1px solid var(--admin-border) !important;
+  color: var(--admin-text) !important;
+  padding: 10px 12px;
+  border-radius: 8px;
+  outline: none;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--admin-border-strong) !important;
+}
 @media (max-width: 720px) {
   .relay-protocol-strip { grid-template-columns: 1fr; }
   .chat-composer { grid-template-columns: 1fr; }

@@ -565,7 +565,7 @@ onUnmounted(() => {
   background: #fff;
   cursor: pointer;
 }
-.chapter-index { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; color: var(--tone); background: color-mix(in srgb, var(--tone) 9%, white); font-size: 11px; font-weight: 800; }
+.chapter-index { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; color: var(--tone); background: rgba(99, 102, 241, 0.08); font-size: 11px; font-weight: 800; }
 .chapter-heading { display: grid; min-width: 0; gap: 2px; }
 .chapter-heading strong { color: #273244; font-size: 12px; }
 .chapter-heading small, .chapter-count { color: #8792a3; font-size: 9px; }
@@ -597,54 +597,216 @@ onUnmounted(() => {
 .expanded-card .point-lead { margin: 10px 18px 0 37px; font-size: 12px; line-height: 1.7; }
 .expanded-card ol { gap: 10px; margin: 12px 18px 0 37px; }
 .expanded-card li { grid-template-columns: 22px minmax(0, 1fr); gap: 9px; }
-.expanded-card li > span { width: 21px; height: 21px; }
-.expanded-card li p { font-size: 11.5px; line-height: 1.7; }
-.report-point > header { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto 26px; align-items: center; gap: 7px; }
-.report-point > header > span,
-.report-point li > span { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: var(--tone); background: color-mix(in srgb, var(--tone) 9%, white); font-size: 9px; font-weight: 800; }
-.report-point header strong { color: #263244; font-size: 11px; }
-.report-point header em { color: #8b96a7; font-size: 9px; font-style: normal; }
-.report-point header button { width: 25px; height: 25px; padding: 0; border: 1px solid #c9d9fb; border-radius: 50%; color: var(--report-accent-dark); background: #f6f9ff; cursor: pointer; }
-.point-lead { margin: 9px 0 0 29px; color: #354258; font-size: 11px; font-weight: 650; line-height: 1.65; }
-.report-point ol { display: grid; gap: 8px; margin: 10px 0 0 29px; padding: 0; list-style: none; }
-.report-point li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; }
-.report-point li p { margin: 0; color: #55647a; font-size: 10.5px; line-height: 1.65; }
-.report-synthesis { padding: 4px 14px 6px; }
-.synthesis-paragraph {
-  margin: 0 0 12px;
-  padding: 0;
-  color: #2c3e50;
-  font-family: "PingFang SC", "Microsoft YaHei", "Songti SC", serif;
-  font-size: 12.5px;
-  font-weight: 500;
-  line-height: 1.95;
-  text-indent: 2em;
-  text-align: justify;
-  letter-spacing: 0.01em;
+.expanded-card.report-note {
+  margin: 0 12px 14px;
+  padding: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
 }
-.synthesis-paragraph:last-of-type { margin-bottom: 10px; }
-.synthesis-add-note {
-  margin-top: 4px;
-  padding: 6px 12px;
-  border: 1px solid #c9d9fb;
-  border-radius: 7px;
-  color: var(--report-accent-dark);
-  background: #f6f9ff;
-  font-size: 11px;
-  cursor: pointer;
-}
-.synthesis-add-note:hover { background: #eef5ff; }
-.report-note { margin: 0 12px 14px; padding: 12px; border: 1px solid #dfe6ef; border-radius: 11px; background: #fff; }
+
 .report-note header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .report-note header div { display: grid; gap: 3px; }
-.report-note strong { font-size: 11px; }
-.report-note small { color: #8792a3; font-size: 9px; }
-.report-note textarea { box-sizing: border-box; width: 100%; margin-top: 10px; padding: 9px; resize: vertical; border: 1px solid #d9e0e9; border-radius: 7px; outline: 0; color: #405068; background: #fbfcfe; font: 10.5px/1.6 inherit; }
-.report-note textarea:focus { border-color: var(--report-accent); box-shadow: 0 0 0 2px rgba(47, 109, 246, .12); }
+.report-note strong { font-size: 12px; font-weight: 700; color: #1e293b; }
+.report-note small { color: #64748b; font-size: 10px; }
+
+.report-note textarea {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 12px;
+  resize: vertical;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  outline: none;
+  color: #1e293b;
+  background: #f8fafc;
+  font: 11.5px/1.6 inherit;
+  transition: all 0.2s ease;
+}
+
+.report-note textarea:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  background: #ffffff;
+}
+
+.report-note header button {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  transition: all 0.2s ease;
+}
+
+.report-note header button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
 .report-toast { position: fixed; bottom: 18px; left: 18px; z-index: 40; padding: 9px 12px; border-radius: 8px; color: #fff; background: #172033; font-size: 10px; }
 .report-toast-enter-active, .report-toast-leave-active { transition: opacity 160ms ease, transform 180ms ease; }
 .report-toast-enter-from, .report-toast-leave-to { opacity: 0; transform: translateY(6px); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: .01ms !important; }
+}
+/* ── DARK MODE ADAPTATIONS FOR READER REPORT PANEL ── */
+:root[data-theme="dark"] .reader-report {
+  color: #cbd5e1;
+}
+
+:root[data-theme="dark"] .review-scope > strong {
+  color: #f4f4f6;
+}
+
+:root[data-theme="dark"] .review-scope p {
+  color: #a1a1aa;
+}
+
+:root[data-theme="dark"] .review-scope span {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+:root[data-theme="dark"] .report-head strong {
+  color: #f4f4f6;
+}
+
+:root[data-theme="dark"] .report-head span {
+  color: #a1a1aa;
+}
+
+:root[data-theme="dark"] .expanded-chapter,
+:root[data-theme="dark"] .report-chapter,
+:root[data-theme="dark"] .report-empty {
+  background: #101827 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #e2e2e6 !important;
+}
+
+:root[data-theme="dark"] .expanded-chapter-head,
+:root[data-theme="dark"] .chapter-toggle {
+  background: #172033 !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root[data-theme="dark"] .expanded-chapter-head strong,
+:root[data-theme="dark"] .chapter-heading strong {
+  color: #f4f4f6 !important;
+}
+
+:root[data-theme="dark"] .expanded-chapter-head small,
+:root[data-theme="dark"] .chapter-heading small,
+:root[data-theme="dark"] .chapter-count {
+  color: #94a3b8 !important;
+}
+
+:root[data-theme="dark"] .report-point {
+  background: #141e2e !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #cbd5e1 !important;
+}
+
+:root[data-theme="dark"] .report-point.expanded-card {
+  background: #101827 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+:root[data-theme="dark"] .point-lead,
+:root[data-theme="dark"] .expanded-card .point-lead {
+  color: #e2e2e6 !important;
+}
+
+:root[data-theme="dark"] .point-details li {
+  color: #cbd5e1 !important;
+}
+
+:global(html[data-theme="dark"] body .chapter-index),
+:global(html[data-theme="dark"] body .expanded-chapter-head > span),
+:global(html[data-theme="dark"] body .report-point > header > span),
+:global(html[data-theme="dark"] body .report-point li > span),
+:global(html[data-theme="dark"] body .expanded-card li > span) {
+  color: #ffffff !important;
+  background: rgba(99, 102, 241, 0.45) !important;
+  border: 1px solid rgba(165, 180, 252, 0.5) !important;
+  font-weight: 800 !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35) !important;
+}
+
+:global(html[data-theme="dark"] body .report-note) {
+  background: rgba(15, 23, 42, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+:global(html[data-theme="dark"] body .report-note strong) {
+  color: #f8fafc !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+:global(html[data-theme="dark"] body .report-note small) {
+  color: #94a3b8 !important;
+  font-size: 10px !important;
+}
+
+:global(html[data-theme="dark"] body .report-note textarea) {
+  background: rgba(30, 41, 59, 0.65) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #f1f5f9 !important;
+  font-size: 11.5px !important;
+  border-radius: 8px !important;
+}
+
+:global(html[data-theme="dark"] body .report-note textarea::placeholder) {
+  color: #64748b !important;
+}
+
+:global(html[data-theme="dark"] body .report-note textarea:focus) {
+  border-color: #818cf8 !important;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2) !important;
+  background: rgba(30, 41, 59, 0.9) !important;
+}
+
+:global(html[data-theme="dark"] body .report-note header button) {
+  background: linear-gradient(135deg, #6366f1, #818cf8) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4) !important;
+}
+
+.report-point ol,
+.report-point li {
+  list-style: none !important;
+  list-style-type: none !important;
+}
+
+:global(html[data-theme="dark"] body .chapter-index),
+:global(html[data-theme="dark"] body .expanded-chapter-head > span),
+:global(html[data-theme="dark"] body .report-point > header > span) {
+  color: #ffffff !important;
+  background: rgba(99, 102, 241, 0.45) !important;
+  border: 1px solid rgba(165, 180, 252, 0.5) !important;
+  font-weight: 800 !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35) !important;
+}
+
+:global(html[data-theme="dark"] body .report-point li > span),
+:global(html[data-theme="dark"] body .expanded-card li > span) {
+  display: inline-block !important;
+  width: 6px !important;
+  height: 6px !important;
+  min-width: 6px !important;
+  margin-top: 7px !important;
+  border-radius: 50% !important;
+  background: #818cf8 !important;
+  box-shadow: 0 0 8px rgba(129, 140, 248, 0.7) !important;
+  border: none !important;
 }
 </style>

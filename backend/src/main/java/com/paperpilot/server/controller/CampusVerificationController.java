@@ -46,7 +46,7 @@ public class CampusVerificationController {
             result.put("id", request.getId());
             result.put("status", request.getStatus());
             result.put("submittedSchoolName", request.getSchoolName());
-            result.put("studentNo", request.getStudentNo());
+            result.put("realName", request.getRealName());
             result.put("adminNote", request.getAdminNote());
             result.put("createdAt", request.getCreatedAt());
             result.put("reviewedAt", request.getReviewedAt());
@@ -58,18 +58,18 @@ public class CampusVerificationController {
     public Map<String, Object> submitCampusVerification(@RequestBody Map<String, Object> body) {
         AppUserEntity user = currentUserService.getOrCreateDefaultUser();
         String schoolName = requiredText(body.get("schoolName"), "请填写学校名称");
-        String studentNo = requiredText(body.get("studentNo"), "请填写学号");
+        String realName = requiredText(body.get("realName"), "请填写真实姓名");
         String front = requiredImage(body.get("studentCardFront"), "请上传学生证正面");
-        String back = requiredImage(body.get("studentCardBack"), "请上传学生证反面");
+        String back = requiredImage(body.get("chsiScreenshot"), "请上传学信网截图");
 
         CampusVerificationEntity request = new CampusVerificationEntity();
         request.setUserId(user.getId());
         request.setUserName(user.getUsername());
         request.setEmail(user.getEmail());
         request.setSchoolName(limit(schoolName, 128, "学校名称过长"));
-        request.setStudentNo(limit(studentNo, 64, "学号过长"));
+        request.setRealName(limit(realName, 64, "姓名过长"));
         request.setStudentCardFront(front);
-        request.setStudentCardBack(back);
+        request.setChsiScreenshot(back);
         request.setStatus("pending");
         request.setAdminNote("");
         CampusVerificationEntity saved = campusVerificationRepository.save(request);

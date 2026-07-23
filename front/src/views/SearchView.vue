@@ -1,5 +1,8 @@
 <template>
   <div class="spatial-page search-spatial">
+    <!-- Ambient Floating Orbs (Same as Homepage) -->
+    <div class="spatial-orb spatial-orb-blue" style="top: 60px; left: -120px; width: 480px; height: 480px; opacity: 0.28;"></div>
+    <div class="spatial-orb spatial-orb-warm" style="top: 480px; right: -100px; width: 420px; height: 420px; opacity: 0.28;"></div>
     <section class="plugin-experience">
       <div class="plugin-page-shell">
 
@@ -9,23 +12,23 @@
             <h1>官网文献捕获流程</h1>
             <p>从搜索源进入官网，插件只在明确论文页安静出现，确认后把题录与 PDF 送回文献库。</p>
           </div>
-          <div class="flow-diagram" aria-label="插件导入流程">
-            <article class="flow-node">
+          <div class="flow-diagram" aria-label="插件导入流程" data-reveal="scale">
+            <article class="flow-node" data-reveal="scale" data-reveal-delay="1">
               <i class="flow-icon icon-source"></i>
               <strong>选择搜索源</strong>
               <span>ScienceDirect / PubMed / arXiv</span>
             </article>
-            <article class="flow-node">
+            <article class="flow-node" data-reveal="scale" data-reveal-delay="2">
               <i class="flow-icon icon-detect"></i>
               <strong>识别论文页</strong>
               <span>DOI、题名、作者、PDF 信号</span>
             </article>
-            <article class="flow-node">
+            <article class="flow-node" data-reveal="scale" data-reveal-delay="3">
               <i class="flow-icon icon-confirm"></i>
               <strong>点击导入</strong>
               <span>低打扰浮层，不再乱弹</span>
             </article>
-            <article class="flow-node">
+            <article class="flow-node" data-reveal="scale" data-reveal-delay="4">
               <i class="flow-icon icon-library"></i>
               <strong>进入文献库</strong>
               <span>题录与 PDF 自动归档</span>
@@ -58,7 +61,7 @@
               v-for="source in sourceLaunchers"
               :key="source.id"
               type="button"
-              class="source-square-card"
+              class="source-square-card" data-reveal="scale"
               :class="source.tone"
               @click="openSourceLauncher(source)"
             >
@@ -431,46 +434,46 @@ const sourceMeta = {
   sciencedirect: {
     desc: "Elsevier 期刊与图书平台",
     region: "Publisher",
-    icon: "https://www.google.com/s2/favicons?domain=sciencedirect.com&sz=64",
+    domain: "sciencedirect.com",
   },
   "semantic-scholar": {
     desc: "AI 驱动的论文索引与引用网络",
     region: "Index",
-    icon: "https://www.google.com/s2/favicons?domain=semanticscholar.org&sz=64",
+    domain: "semanticscholar.org",
   },
   pubmed: {
     desc: "医学与生命科学文献检索",
     region: "Biomedical",
-    icon: "https://www.google.com/s2/favicons?domain=pubmed.ncbi.nlm.nih.gov&sz=64",
+    domain: "pubmed.ncbi.nlm.nih.gov",
   },
   "web-of-science": {
     desc: "引文索引与核心合集检索",
     region: "Citation",
-    icon: "https://www.google.com/s2/favicons?domain=webofscience.com&sz=64",
+    domain: "webofscience.com",
   },
   cnki: {
     desc: "中文期刊、学位与会议文献",
     region: "CN",
-    icon: "https://www.google.com/s2/favicons?domain=cnki.net&sz=64",
+    domain: "cnki.net",
   },
   wanfang: {
     desc: "中文论文、期刊与学位资源",
     region: "CN",
-    icon: "https://www.google.com/s2/favicons?domain=wanfangdata.com.cn&sz=64",
+    domain: "wanfangdata.com.cn",
   },
   "research-rabbit": {
     desc: "论文图谱与相似文献发现",
     region: "Discovery",
-    icon: "https://www.google.com/s2/favicons?domain=researchrabbit.ai&sz=64",
+    domain: "researchrabbit.ai",
   },
   "connected-papers": {
     desc: "基于论文关系的可视化图谱",
     region: "Graph",
-    icon: "https://www.google.com/s2/favicons?domain=connectedpapers.com&sz=64",
+    domain: "connectedpapers.com",
   },
 };
 
-const faviconFor = () => "";
+const faviconFor = (domain) => domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : "";
 
 const sourceLaunchers = [
   ...searchEnginePresets.map((item, index) => ({
@@ -478,7 +481,7 @@ const sourceLaunchers = [
     initial: item.shortName.slice(0, 1).toUpperCase(),
     desc: sourceMeta[item.id]?.desc || "官方学术检索入口",
     region: sourceMeta[item.id]?.region || "Source",
-    icon: "",
+    icon: faviconFor(sourceMeta[item.id]?.domain || `${item.id}.com`),
     tone: ["blue", "violet", "green", "ink", "red", "amber", "cyan", "purple"][index % 8],
   })),
   {
@@ -936,6 +939,259 @@ async function importByUrl() {
 </script>
 
 <style scoped>
+
+/* ==========================================================================
+   COMPREHENSIVE DARK MODE ADAPTATIONS FOR SEARCH VIEW & FAQ
+   ========================================================================== */
+
+:root[data-theme="dark"] .flow-head h1,
+:root[data-theme="dark"] .directory-head h2,
+:root[data-theme="dark"] .plugin-faq-head h2 {
+  color: #f8fafc !important;
+}
+
+:root[data-theme="dark"] .flow-head p,
+:root[data-theme="dark"] .directory-head span {
+  color: #94a3b8 !important;
+}
+
+:root[data-theme="dark"] .flow-node {
+  background: rgba(30, 41, 59, 0.4) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root[data-theme="dark"] .flow-node strong {
+  color: #f8fafc !important;
+}
+
+:root[data-theme="dark"] .flow-node span {
+  color: #94a3b8 !important;
+}
+
+/* Source Square Cards Dark Mode Adaptation */
+:root[data-theme="dark"] .source-square-card {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #f8fafc !important;
+}
+
+:root[data-theme="dark"] .source-square-card strong {
+  color: #f8fafc !important;
+}
+
+:root[data-theme="dark"] .source-square-card span {
+  color: #94a3b8 !important;
+}
+
+:root[data-theme="dark"] .source-square-card small {
+  color: #818cf8 !important;
+}
+
+:root[data-theme="dark"] .source-square-card .source-site-icon {
+  background: rgba(30, 41, 59, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+:root[data-theme="dark"] .source-square-card .source-site-icon b {
+  color: #818cf8 !important;
+}
+
+/* FAQ Dark Mode Fix (Eliminate Stark White Boxes) */
+:root[data-theme="dark"] .plugin-faq-item {
+  background: rgba(30, 41, 59, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #f8fafc !important;
+}
+
+:root[data-theme="dark"] .plugin-faq-item summary {
+  background: transparent !important;
+  color: #f8fafc !important;
+}
+
+:root[data-theme="dark"] .plugin-faq-item p {
+  color: #cbd5e1 !important;
+}
+
+:root[data-theme="dark"] .faq-caret {
+  border-top-color: #94a3b8 !important;
+}
+
+:root[data-theme="dark"] .plugin-badge {
+  background: rgba(99, 102, 241, 0.15) !important;
+  color: #818cf8 !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+
+/* ==========================================================================
+   HOMEPAGE ANIMATIONS & GLASS STYLING FOR SEARCH VIEW
+   ========================================================================== */
+
+/* Ambient Floating Orbs */
+.spatial-orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(70px);
+  animation: spatial-float 12s cubic-bezier(0.22, 1, 0.36, 1) infinite alternate;
+  z-index: 0;
+}
+
+.spatial-orb-blue {
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.spatial-orb-warm {
+  background: rgba(168, 85, 247, 0.16);
+}
+
+@keyframes spatial-float {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(30px, -24px) scale(1.08); }
+}
+
+/* Glass Hero & Cards */
+.capture-flow-hero {
+  position: relative;
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  box-shadow: 0 15px 40px rgba(15, 23, 42, 0.05) !important;
+  backdrop-filter: blur(20px) !important;
+  border-radius: 24px !important;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+:root[data-theme="dark"] .capture-flow-hero {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4) !important;
+}
+
+.source-directory,
+.plugin-faq {
+  position: relative;
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  box-shadow: 0 15px 40px rgba(15, 23, 42, 0.05) !important;
+  backdrop-filter: blur(20px) !important;
+  border-radius: 24px !important;
+  transition: all 0.3s ease;
+}
+
+:root[data-theme="dark"] .source-directory,
+:root[data-theme="dark"] .plugin-faq {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Homepage-Style Flow Icons (Blue, Emerald, Purple, Amber) */
+.flow-icon {
+  position: relative;
+  width: 52px !important;
+  height: 52px !important;
+  display: grid;
+  place-items: center;
+  border-radius: 16px !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.flow-node:hover .flow-icon {
+  transform: translateY(-3px) scale(1.06);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+}
+
+.flow-node:nth-child(1) .flow-icon {
+  background: rgba(37, 99, 235, 0.08) !important;
+  border: 1.5px solid rgba(37, 99, 235, 0.35) !important;
+}
+:root[data-theme="dark"] .flow-node:nth-child(1) .flow-icon {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+}
+
+.flow-node:nth-child(2) .flow-icon {
+  background: rgba(16, 185, 129, 0.08) !important;
+  border: 1.5px solid rgba(16, 185, 129, 0.35) !important;
+}
+:root[data-theme="dark"] .flow-node:nth-child(2) .flow-icon {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+}
+
+.flow-node:nth-child(3) .flow-icon {
+  background: rgba(147, 51, 234, 0.08) !important;
+  border: 1.5px solid rgba(147, 51, 234, 0.35) !important;
+}
+:root[data-theme="dark"] .flow-node:nth-child(3) .flow-icon {
+  background: rgba(168, 85, 247, 0.15) !important;
+  border-color: rgba(168, 85, 247, 0.4) !important;
+}
+
+.flow-node:nth-child(4) .flow-icon {
+  background: rgba(245, 158, 11, 0.08) !important;
+  border: 1.5px solid rgba(245, 158, 11, 0.35) !important;
+}
+:root[data-theme="dark"] .flow-node:nth-child(4) .flow-icon {
+  background: rgba(245, 158, 11, 0.15) !important;
+  border-color: rgba(245, 158, 11, 0.4) !important;
+}
+
+/* Source Square Cards Homepage Style */
+.source-square-card {
+  border-radius: 16px !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+:root[data-theme="dark"] .source-square-card {
+  background: rgba(30, 41, 59, 0.4) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.source-square-card:hover {
+  transform: translateY(-4px) scale(1.03) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  box-shadow: 0 15px 35px rgba(99, 102, 241, 0.15) !important;
+}
+
+.source-square-card .source-site-icon {
+  width: 46px !important;
+  height: 46px !important;
+  border-radius: 14px !important;
+  border: 1.5px solid rgba(99, 102, 241, 0.3) !important;
+  background: rgba(99, 102, 241, 0.08) !important;
+  transition: all 0.25s ease;
+}
+
+:root[data-theme="dark"] .source-square-card .source-site-icon {
+  background: rgba(99, 102, 241, 0.15) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+}
+
+/* Download Buttons Homepage Hover Glow */
+.browser-download-btn {
+  border-radius: 14px !important;
+  border: 1px solid rgba(99, 102, 241, 0.3) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 4px 15px rgba(15, 23, 42, 0.04) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+:root[data-theme="dark"] .browser-download-btn {
+  background: rgba(30, 41, 59, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #f8fafc !important;
+}
+
+.browser-download-btn:hover {
+  transform: translateY(-3px) scale(1.02) !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 10px 25px rgba(99, 102, 241, 0.25) !important;
+}
+
 .search-spatial .spatial-chapter {
   margin: 0;
   padding-left: 0;
@@ -3484,7 +3740,7 @@ async function importByUrl() {
 }
 
 /* ===== Belindoc-style plugin page ===== */
-.plugin-page-shell { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; display:flex; flex-direction:column; gap:64px; }
+.plugin-page-shell { max-width: 100%; margin: 0 auto; padding: 40px 24px 80px; display:flex; flex-direction:column; gap:64px; }
 
 .plugin-hero { display:grid; grid-template-columns: 1.1fr 0.9fr; gap:48px; align-items:center; }
 .plugin-hero-copy h1 { font-size:48px; line-height:1.15; margin:18px 0 16px; letter-spacing:-.01em; }
@@ -3581,7 +3837,7 @@ async function importByUrl() {
 
 /* Academic search desk redesign */
 .plugin-page-shell {
-  max-width: 1380px;
+  max-width: 100%;
   gap: 24px;
   padding: 32px 24px 80px;
 }
@@ -4042,7 +4298,7 @@ async function importByUrl() {
 
 /* Final academic search layout */
 .plugin-page-shell {
-  max-width: 1320px;
+  max-width: 100%;
   gap: 24px;
 }
 

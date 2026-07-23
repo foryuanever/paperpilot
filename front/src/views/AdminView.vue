@@ -1,9 +1,41 @@
 <template>
-  <div class="admin-page spatial-page reveal-ready">
+  <div class="admin-page spatial-page reveal-ready" :class="{ 'admin-sidebar-collapsed': adminSidebarCollapsed }">
     <!-- Ambient glowing backdrops -->
     <div class="spatial-orb spatial-orb-blue" style="width: 450px; height: 450px; top: -100px; right: -50px;"></div>
     <div class="spatial-orb spatial-orb-warm" style="width: 350px; height: 350px; bottom: 10%; left: -100px;"></div>
     <div class="spatial-orb spatial-orb-blue" style="width: 300px; height: 300px; top: 40%; right: 10%; opacity: 0.35;"></div>
+
+    <aside class="admin-side-nav" :class="{ collapsed: adminSidebarCollapsed }" aria-label="管理员后台导航">
+      <div class="admin-side-brand">
+        <div class="admin-side-mark">P</div>
+        <div v-if="!adminSidebarCollapsed" class="admin-side-title">
+          <strong>PaperSolver</strong>
+          <span>Admin Console</span>
+        </div>
+        <button
+          class="admin-side-collapse"
+          type="button"
+          :title="adminSidebarCollapsed ? '展开菜单' : '收起菜单'"
+          @click="adminSidebarCollapsed = !adminSidebarCollapsed"
+        >
+          {{ adminSidebarCollapsed ? "›" : "‹" }}
+        </button>
+      </div>
+      <nav class="admin-side-tabs">
+        <button
+          v-for="tab in adminTabOptions"
+          :key="tab.value"
+          class="admin-side-tab"
+          :class="{ active: activeTab === tab.value }"
+          type="button"
+          :title="tab.label"
+          @click="activeTab = tab.value"
+        >
+          <span class="admin-side-icon">{{ tab.icon }}</span>
+          <span v-if="!adminSidebarCollapsed" class="admin-side-label">{{ tab.label }}</span>
+        </button>
+      </nav>
+    </aside>
 
     <section class="admin-shell" data-reveal>
       <!-- Title & Header -->
@@ -41,9 +73,9 @@
         <div class="admin-stat-card spatial-glass-panel animate-hover-up">
           <div class="stat-icon" v-html="adminIcons.tokens"></div>
           <div class="stat-info">
-            <span class="stat-label">会员权益使用</span>
-            <strong class="stat-value">{{ totalBenefitUsed }} / {{ totalBenefitQuota }} 次</strong>
-            <span class="stat-sub">已开通 {{ membershipUserCount }} 位会员</span>
+            <span class="stat-label">开通会员人数</span>
+            <strong class="stat-value">{{ activeMemberCount }} 位</strong>
+            <span class="stat-sub">当前仍在有效期内的会员</span>
           </div>
         </div>
         <div class="admin-stat-card spatial-glass-panel animate-hover-up">
@@ -56,68 +88,8 @@
         </div>
       </div>
 
-      <!-- Main Layout Panels (Tabbed Layout) -->
+      <!-- Main Layout Panels -->
       <div class="admin-main-layout">
-        <!-- Tabs Capsule -->
-        <div class="admin-tabs-nav">
-          <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'users' }"
-            @click="activeTab = 'users'"
-          >
-            用户目录与授权
-          </button>
-          <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'recharges' }"
-            @click="activeTab = 'recharges'"
-          >
-            充值入账记录
-          </button>
-          <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'teams' }"
-            @click="activeTab = 'teams'"
-          >
-            科研团队管理
-          </button>
-          <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'models' }"
-            @click="activeTab = 'models'"
-          >
-            AI 路由与模型
-          </button>
-          <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'logs' }"
-            @click="activeTab = 'logs'"
-          >
-            系统操作日志
-          </button>
-          <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'forumReports' }"
-            @click="activeTab = 'forumReports'"
-          >
-            论坛举报处理
-          </button>
-          <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'campusVerifications' }"
-            @click="activeTab = 'campusVerifications'"
-          >
-            校园认证审核
-          </button>
-          <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'messages' }"
-            @click="activeTab = 'messages'"
-          >
-            站内消息发布
-          </button>
-        </div>
-
         <!-- Tab Content: Users -->
         <div v-if="activeTab === 'users'" class="tab-pane users-pane">
           <div class="pane-header-row">
@@ -573,24 +545,36 @@
                   <option value="failed">失败</option>
                 </select>
               </label>
+              <label>
+                <span>开始日期</span>
+                <input v-model="aiUsageFilters.startDate" type="date" @change="resetAiUsagePageAndLoad" />
+              </label>
+              <label>
+                <span>结束日期</span>
+                <input v-model="aiUsageFilters.endDate" type="date" @change="resetAiUsagePageAndLoad" />
+              </label>
               <button class="spatial-btn spatial-btn-ghost compact-btn" @click="resetAiUsagePageAndLoad">检索</button>
             </div>
 
             <div class="ledger-summary">
               <article>
-                <span>当前页输入</span>
+                <span>筛选调用</span>
+                <strong>{{ formatNumber(aiUsageSummary.matchedCalls || aiUsageTotal) }}</strong>
+              </article>
+              <article>
+                <span>输入 Token</span>
                 <strong>{{ formatNumber(aiUsageSummary.inputTokens) }}</strong>
               </article>
               <article>
-                <span>当前页输出</span>
+                <span>输出 Token</span>
                 <strong>{{ formatNumber(aiUsageSummary.outputTokens) }}</strong>
               </article>
               <article>
                 <span>失败调用</span>
                 <strong>{{ formatNumber(aiUsageSummary.failed) }}</strong>
               </article>
-              <article>
-                <span>估算成本</span>
+              <article class="cost-card">
+                <span>筛选总花费</span>
                 <strong>¥{{ formatMoney(aiUsageSummary.cost) }}</strong>
               </article>
             </div>
@@ -1187,6 +1171,17 @@ const authStore = useAuthStore();
 const dialogStore = useDialogStore();
 const workspaceStore = useWorkspaceStore();
 const activeTab = ref("users");
+const adminSidebarCollapsed = ref(false);
+const adminTabOptions = [
+  { value: "users", label: "用户目录与授权", icon: "用" },
+  { value: "recharges", label: "充值入账记录", icon: "充" },
+  { value: "teams", label: "科研团队管理", icon: "组" },
+  { value: "models", label: "AI 路由与模型", icon: "模" },
+  { value: "logs", label: "系统操作日志", icon: "志" },
+  { value: "forumReports", label: "论坛举报处理", icon: "报" },
+  { value: "campusVerifications", label: "校园认证审核", icon: "校" },
+  { value: "messages", label: "站内消息发布", icon: "信" }
+];
 
 // Search and filters
 const searchQuery = ref("");
@@ -1301,9 +1296,9 @@ const expandedPoolMessages = ref(new Set());
 const aiUsageRows = ref([]);
 const aiUsageTotal = ref(0);
 const aiUsageTotalPages = ref(1);
-const aiUsageSummary = ref({ inputTokens: 0, outputTokens: 0, totalTokens: 0, failed: 0, cost: 0 });
+const aiUsageSummary = ref({ inputTokens: 0, outputTokens: 0, totalTokens: 0, failed: 0, matchedCalls: 0, cost: 0 });
 const aiUsageLoading = ref(false);
-const aiUsageFilters = ref({ keyword: "", scene: "", model: "", status: "" });
+const aiUsageFilters = ref({ keyword: "", scene: "", model: "", status: "", startDate: "", endDate: "" });
 const modelScene = ref("paper_review");
 const modelSceneOptions = [
   {
@@ -1349,6 +1344,7 @@ const globalStats = ref({
   studentCount: 0,
   tutorCount: 0,
   adminCount: 0,
+  activeMemberCount: 0,
   totalPapers: 0,
   totalTokensUsed: 0,
   totalTokensLimit: 10000000,
@@ -1419,6 +1415,7 @@ function keepPageInRange(pageRef, countRef) {
 }
 
 const membershipUserCount = computed(() => systemUsers.value.filter(user => (user.membershipPlan || "free") !== "free").length);
+const activeMemberCount = computed(() => Number(globalStats.value.activeMemberCount) || membershipUserCount.value);
 const totalReviewQuota = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.reviewQuota) || 0), 0));
 const totalReviewUsed = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.reviewUsed) || 0), 0));
 const totalPptQuota = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.pptQuota) || 0), 0));
@@ -1778,11 +1775,13 @@ async function loadAiUsageCalls() {
       scene: aiUsageFilters.value.scene || undefined,
       model: aiUsageFilters.value.model || undefined,
       status: aiUsageFilters.value.status || undefined,
+      startDate: aiUsageFilters.value.startDate || undefined,
+      endDate: aiUsageFilters.value.endDate || undefined,
     });
     aiUsageRows.value = data.rows || [];
     aiUsageTotal.value = Number(data.total) || 0;
     aiUsageTotalPages.value = Number(data.totalPages) || getPageCount(aiUsageTotal.value, aiUsagePageSize.value);
-    aiUsageSummary.value = { inputTokens: 0, outputTokens: 0, totalTokens: 0, failed: 0, cost: 0, ...(data.summary || {}) };
+    aiUsageSummary.value = { inputTokens: 0, outputTokens: 0, totalTokens: 0, failed: 0, matchedCalls: 0, cost: 0, ...(data.summary || {}) };
   } catch (error) {
     dialogStore.alert(error.response?.data?.message || "AI 调用明细加载失败");
   } finally {
@@ -2429,13 +2428,189 @@ function truncateText(value, length = 100) {
 
 <style scoped>
 .admin-page {
-  padding: 108px 48px 48px;
+  padding: 96px 36px 48px 292px;
   position: relative;
   min-height: 100vh;
+  transition: padding-left 0.25s ease;
+}
+
+.admin-page.admin-sidebar-collapsed {
+  padding-left: 116px;
+}
+
+.admin-side-nav {
+  position: fixed;
+  top: 88px;
+  left: 24px;
+  bottom: 28px;
+  z-index: 30;
+  width: 236px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 251, 255, 0.86)),
+    rgba(255, 255, 255, 0.88);
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(22px);
+  transition: width 0.25s ease, border-radius 0.25s ease, background 0.25s ease;
+}
+
+.admin-side-nav.collapsed {
+  width: 68px;
+  border-radius: 22px;
+}
+
+.admin-side-brand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 74px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.admin-side-mark {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: #fff;
+  font-weight: 800;
+  background: linear-gradient(135deg, #0f3f91, #2563eb 55%, #4f46e5);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.24);
+}
+
+.admin-side-title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.admin-side-title strong {
+  color: #0f172a;
+  font-size: 0.98rem;
+}
+
+.admin-side-title span {
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-side-collapse {
+  position: absolute;
+  right: 10px;
+  top: 18px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.86);
+  color: #475569;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-side-collapse:hover {
+  color: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.12);
+}
+
+.admin-side-nav.collapsed .admin-side-brand {
+  justify-content: center;
+  padding-inline: 14px;
+}
+
+.admin-side-nav.collapsed .admin-side-collapse {
+  right: -10px;
+  background: #fff;
+}
+
+.admin-side-tabs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 12px;
+  overflow-y: auto;
+}
+
+.admin-side-tab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  width: 100%;
+  border: 0;
+  border-radius: 15px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  font-weight: 700;
+  text-align: left;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-side-tab:hover {
+  color: #0f172a;
+  background: rgba(37, 99, 235, 0.06);
+  transform: translateX(2px);
+}
+
+.admin-side-tab.active {
+  color: #1d4ed8;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.13), rgba(79, 70, 229, 0.08));
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+}
+
+.admin-side-icon {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: rgba(226, 232, 240, 0.75);
+  color: inherit;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.admin-side-tab.active .admin-side-icon {
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+}
+
+.admin-side-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-side-nav.collapsed .admin-side-tab {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.admin-side-nav.collapsed .admin-side-icon {
+  width: 34px;
+  height: 34px;
 }
 
 .admin-shell {
-  max-width: 1200px;
+  max-width: min(1560px, 100%);
   margin: 0 auto;
 }
 
@@ -3394,7 +3569,51 @@ function truncateText(value, length = 100) {
   }
 
   .admin-page {
-    padding: 96px 14px 36px;
+    padding: 168px 14px 36px;
+  }
+
+  .admin-page.admin-sidebar-collapsed {
+    padding-left: 14px;
+  }
+
+  .admin-side-nav,
+  .admin-side-nav.collapsed {
+    top: 82px;
+    left: 14px;
+    right: 14px;
+    bottom: auto;
+    width: auto;
+    height: 68px;
+    border-radius: 20px;
+  }
+
+  .admin-side-brand {
+    display: none;
+  }
+
+  .admin-side-tabs {
+    flex-direction: row;
+    padding: 10px;
+    overflow-x: auto;
+  }
+
+  .admin-side-tab,
+  .admin-side-nav.collapsed .admin-side-tab {
+    flex: 0 0 auto;
+    width: auto;
+    justify-content: flex-start;
+    min-height: 46px;
+    padding: 0 12px;
+  }
+
+  .admin-side-nav.collapsed .admin-side-icon,
+  .admin-side-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .admin-side-label {
+    display: inline;
   }
 
   .admin-header {
@@ -3422,6 +3641,52 @@ function truncateText(value, length = 100) {
   .team-detail-summary {
     grid-template-columns: 1fr;
   }
+}
+
+:global(html[data-theme="dark"]) .admin-page {
+  background: #070b14;
+}
+
+:global(html[data-theme="dark"]) .admin-side-nav {
+  border-color: rgba(148, 163, 184, 0.16);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.9)),
+    rgba(15, 23, 42, 0.9);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.32);
+}
+
+:global(html[data-theme="dark"]) .admin-side-brand {
+  border-bottom-color: rgba(148, 163, 184, 0.14);
+}
+
+:global(html[data-theme="dark"]) .admin-side-title strong,
+:global(html[data-theme="dark"]) .admin-side-tab:hover {
+  color: #f8fafc;
+}
+
+:global(html[data-theme="dark"]) .admin-side-title span,
+:global(html[data-theme="dark"]) .admin-side-tab {
+  color: #94a3b8;
+}
+
+:global(html[data-theme="dark"]) .admin-side-collapse {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.92);
+  color: #cbd5e1;
+}
+
+:global(html[data-theme="dark"]) .admin-side-icon {
+  background: rgba(30, 41, 59, 0.92);
+}
+
+:global(html[data-theme="dark"]) .admin-side-tab:hover {
+  background: rgba(96, 165, 250, 0.1);
+}
+
+:global(html[data-theme="dark"]) .admin-side-tab.active {
+  color: #93c5fd;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(79, 70, 229, 0.16));
+  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.18);
 }
 
 .action-btn {
@@ -4418,7 +4683,7 @@ function truncateText(value, length = 100) {
 
 .ledger-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-top: 14px;
 }
@@ -4443,6 +4708,10 @@ function truncateText(value, length = 100) {
   color: #0f172a;
   font-size: 1.08rem;
   font-variant-numeric: tabular-nums;
+}
+
+.ledger-summary .cost-card {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(16, 185, 129, 0.08));
 }
 
 .ledger-table-wrap {

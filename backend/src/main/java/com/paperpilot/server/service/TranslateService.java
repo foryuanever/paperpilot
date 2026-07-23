@@ -442,7 +442,59 @@ public class TranslateService {
         if (!StringUtils.hasText(baiduAppId) || !StringUtils.hasText(baiduSecret)) {
             throw new IllegalStateException("未配置百度翻译 AppId / Secret");
         }
-        throw new IllegalStateException("百度翻译签名暂未启用，请改用谷歌或有道");
+        
+        String salt = String.valueOf(System.currentTimeMillis());
+        String signStr = baiduAppId + text + salt + baiduSecret;
+        java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+        byte[] array = md.digest(signStr.getBytes(StandardCharsets.UTF_8));
+        StringBuilder sb = new StringBuilder();
+        for (byte b : array) {
+            sb.append(Integer.toHexString((b & 0xFF) | 0x100), 1, 3);
+        }
+        String sign = sb.toString();
+
+        String body = "q=" + URLEncoder.encode(text, StandardCharsets.UTF_8)
+            + "&from=" + URLEncoder.encode(mapBaiduLang(sourceLang), StandardCharsets.UTF_8)
+            + "&to=" + URLEncoder.encode(mapBaiduLang(targetLang), StandardCharsets.UTF_8)
+            + "&appid=" + URLEncoder.encode(baiduAppId, StandardCharsets.UTF_8)
+            + "&salt=" + URLEncoder.encode(salt, StandardCharsets.UTF_8)
+            + "&sign=" + URLEncoder.encode(sign, StandardCharsets.UTF_8);
+
+        HttpRequest request = HttpRequest.newBuilder(URI.create("https://fanyi-api.baidu.com/api/trans/vip/translate"))
+            .timeout(Duration.ofSeconds(20))
+            .header("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build();
+            
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 400) {
+            throw new IllegalStateException("HTTP " + response.statusCode());
+        }
+        
+        JsonNode root = objectMapper.readTree(response.body());
+        if (root.has("error_code") && !"52000".equals(root.get("error_code").asText())) {
+            throw new IllegalStateException("百度返回错误码 " + root.get("error_code").asText());
+        }
+        
+        JsonNode transResult = root.get("trans_result");
+        if (transResult == null || !transResult.isArray()) {
+            throw new IllegalStateException("百度返回格式异常");
+        }
+        
+        StringBuilder builder = new StringBuilder();
+        for (JsonNode line : transResult) {
+            if (line.has("dst")) {
+                if (!builder.isEmpty()) {
+                    builder.append("\n");
+                }
+                builder.append(line.get("dst").asText(""));
+            }
+        }
+        
+        if (builder.isEmpty()) {
+            throw new IllegalStateException("未获取到百度译文");
+        }
+        return builder.toString();
     }
 
     private String translateWithMicrosoft(String text, String sourceLang, String targetLang) throws Exception {
@@ -475,6 +527,19 @@ public class TranslateService {
             throw new IllegalStateException("微软翻译结果为空");
         }
         return translations.get(0).path("text").asText("");
+    }
+
+    private String mapBaiduLang(String lang) {
+        if ("auto".equalsIgnoreCase(lang)) return "auto";
+        if ("zh-CN".equalsIgnoreCase(lang) || "zh".equalsIgnoreCase(lang)) return "zh";
+        if ("zh-TW".equalsIgnoreCase(lang)) return "cht";
+        if ("en".equalsIgnoreCase(lang)) return "en";
+        if ("ja".equalsIgnoreCase(lang)) return "jp";
+        if ("ko".equalsIgnoreCase(lang)) return "kor";
+        if ("fr".equalsIgnoreCase(lang)) return "fra";
+        if ("es".equalsIgnoreCase(lang)) return "spa";
+        if ("ru".equalsIgnoreCase(lang)) return "ru";
+        return "auto";
     }
 
     private String mapYoudaoLangType(String sourceLang, String targetLang) {

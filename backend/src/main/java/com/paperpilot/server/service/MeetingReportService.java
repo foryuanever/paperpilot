@@ -345,61 +345,47 @@ public class MeetingReportService {
         if (question.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写与当前论文有关的问题");
         }
-        if (selection.length() > 4000 || paragraph.length() > 8000 || question.length() > 800) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "选中内容或问题过长，请缩小范围后重试");
+        if (selection.length() > 16000 || paragraph.length() > 18000 || question.length() > 1000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "选中内容过长，已超过单次解读上限，请分两次选择");
         }
         String paperContext = extractPaperText(paper);
-        if (paperContext.length() > 30000) paperContext = paperContext.substring(0, 30000);
+        String focusedContext = focusedSelectionContext(paperContext, paragraph, selection, question);
         String systemPrompt = """
-            你是 PaperSolver 学术阅读助手，当前主要服务于用户正在阅读的论文。
-            允许回答三类内容：
-            第一，正常礼貌问候，例如“你好”“你是谁”，应友好简短回应并提示可以询问学术问题。
-            第二，与当前论文的内容、方法、数据、实验、结论、图表和术语有关的问题。
-            第三，其他明确的学术研究问题，例如研究方法、论文写作、统计分析、学术概念和相关领域知识。
-            对生活、娱乐、购物、情感、游戏、八卦等非学术问题，必须只回答：“抱歉，我只能协助论文阅读和学术相关问题。”
-            不得编造当前论文中没有的信息。问题涉及当前论文时优先以提供的论文原文为依据。
-            回答必须使用纯文本，不得使用星号、短横线项目符号、井号标题、Markdown 表格或其他 Markdown 标记。
-            如需分点，只能使用“1.”“2.”“3.”格式。回答清晰具体，控制在 500 字以内。
+            你是 PaperSolver 资深学术 AI 专家，为用户提供专业、透彻、极具学术洞察力的论文问答与图表/段落解读。
+
+            回答指导原则：
+            1. 【专业与深度】：结合论文原文上下文、方法论与实验数据进行精准剖析。分析图表时，请深入阐述图表的架构设计、数据流向、对比指标及得出的核心结论，禁止空洞泛谈或假大空套话。
+            2. 【优雅排版】：使用标准的 Markdown 格式输出（如适当使用粗体 **重点**、标题 ###、有序/无序列表 - 或代码块），使排版层级分明、极具学术美感。
+            3. 【自然表达】：切勿使用固定机械的三段式套话或死板模板，根据提问内容灵活流畅地撰写高质量解答。
+            4. 【范围约束】：如遇到与学术研究无关的生活娱乐八卦，礼貌说明只能解答学术及论文相关问题。
             """;
         String userPrompt = """
             论文题目：%s
 
-            论文正文与元数据：
+            论文相关上下文：
             %s
 
-            用户当前选中内容（可能为空）：
+            用户当前选中/图表内容：
             %s
 
-            选中内容所在段落（可能为空）：
+            选区/图表所在段落/上下文：
             %s
 
             用户问题：%s
             """.formatted(
                 paper.getTitle(),
-                paperContext,
-                selection.isBlank() ? "无" : selection,
-                paragraph.isBlank() ? "无" : paragraph,
+                focusedContext,
+                selection.isBlank() ? "无" : compactSelectionText(selection, 6500),
+                paragraph.isBlank() ? "无" : compactSelectionText(paragraph, 4200),
                 question
             );
         try {
-            AiChatService.ChatResult result = aiChatService.chatJsonWithModelFallbackUnmetered(
+            AiChatService.ChatResult result = aiChatService.chatJsonWithModelFallback(
                 systemPrompt,
                 userPrompt,
-                1000,
+                1200,
                 MEETING_MODEL_FALLBACKS
             );
-            if (result.totalTokens() > 0) {
-                aiUsageService.recordAndCharge(
-                    userId,
-                    result.modelName(),
-                    "qa",
-                    "论文选区提问",
-                    paper.getTitle(),
-                    result.promptTokens(),
-                    result.completionTokens(),
-                    result.totalTokens()
-                );
-            }
             return Map.of(
                 "answer", cleanAcademicAnswer(result.content()),
                 "modelName", result.modelName()
@@ -410,6 +396,80 @@ public class MeetingReportService {
                 "PaperSolver 暂时无法回答：" + readableError(error)
             );
         }
+    }
+
+    private String focusedSelectionContext(String paperText, String paragraph, String selection, String question) {
+        String metadata = compactAcademicText(paperText, 2500);
+        StringBuilder localBuilder = new StringBuilder();
+
+        // 1. Check if figure/table key exists in selection/question (e.g. Fig 1, Figure 1, Table 2)
+        String combined = (selection + " " + question + " " + paragraph).toLowerCase(Locale.ROOT);
+        java.util.regex.Matcher figureMatcher = java.util.regex.Pattern.compile("(fig(?:ure)?\\.?\\s*\\d+|table\\s*\\d+)").matcher(combined);
+        if (figureMatcher.find()) {
+            String figKey = figureMatcher.group(1).replaceAll("\\s+", ""); // e.g. "fig.1" or "figure1" or "table1"
+            String num = figKey.replaceAll("\\D+", ""); // e.g. "1"
+            if (StringUtils.hasText(num) && StringUtils.hasText(paperText)) {
+                String[] patterns = { "fig. " + num, "fig." + num, "figure " + num, "figure. " + num, "table " + num, "table. " + num, "fig " + num };
+                for (String pat : patterns) {
+                    String match = contextAround(paperText, pat, 2000, 2000);
+                    if (StringUtils.hasText(match)) {
+                        localBuilder.append("\n\n--- 论文中关于 ").append(pat.toUpperCase(Locale.ROOT)).append(" 的讨论正文 ---\n").append(match);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 2. Search context for selection or paragraph
+        if (StringUtils.hasText(selection) && StringUtils.hasText(paperText)) {
+            String match = contextAround(paperText, selection, 1500, 1500);
+            if (StringUtils.hasText(match)) {
+                localBuilder.append("\n\n--- 选中内容正文上下文 ---\n").append(match);
+            }
+        }
+
+        if (StringUtils.hasText(paragraph)) {
+            localBuilder.append("\n\n--- 所在段落/页面上下文 ---\n").append(compactSelectionText(paragraph, 3500));
+        }
+
+        if (localBuilder.length() == 0) {
+            // Fallback: provide larger chunk of paper text
+            return compactSelectionText(paperText, 6500);
+        }
+
+        return metadata + localBuilder.toString();
+    }
+
+    private String contextAround(String text, String needle, int before, int after) {
+        String source = Optional.ofNullable(text).orElse("");
+        String target = Optional.ofNullable(needle).orElse("");
+        if (!StringUtils.hasText(source) || !StringUtils.hasText(target)) return "";
+        String normalizedTarget = target.replaceAll("\\s+", " ").trim();
+        if (normalizedTarget.length() > 60) normalizedTarget = normalizedTarget.substring(0, 60);
+        String normalizedSource = source.replaceAll("\\s+", " ");
+        int index = normalizedSource.toLowerCase(Locale.ROOT).indexOf(normalizedTarget.toLowerCase(Locale.ROOT));
+        if (index < 0) return "";
+        int start = Math.max(0, index - before);
+        int end = Math.min(normalizedSource.length(), index + normalizedTarget.length() + after);
+        return normalizedSource.substring(start, end);
+    }
+
+    private String compactSelectionText(String text, int maxLength) {
+        String value = Optional.ofNullable(text).orElse("")
+            .replaceAll("[ \\t]+", " ")
+            .replaceAll("\\R{3,}", "\n\n")
+            .trim();
+        if (value.length() <= maxLength) return value;
+        int head = Math.max(600, maxLength / 3);
+        int tail = Math.max(600, maxLength / 3);
+        int middle = Math.max(300, maxLength - head - tail - 80);
+        int middleStart = Math.max(head, value.length() / 2 - middle / 2);
+        int middleEnd = Math.min(value.length() - tail, middleStart + middle);
+        return value.substring(0, head).trim()
+            + "\n...[中间选区已压缩，保留代表片段]...\n"
+            + value.substring(middleStart, middleEnd).trim()
+            + "\n...[后续选区]...\n"
+            + value.substring(value.length() - tail).trim();
     }
 
     public Map<String, Object> fuseMeetingReport(Map<String, Object> body) {
@@ -512,11 +572,7 @@ public class MeetingReportService {
 
     private String cleanAcademicAnswer(String value) {
         return Optional.ofNullable(value).orElse("")
-            .replace("**", "")
-            .replaceAll("(?m)^\\s*[-*]\\s+", "")
-            .replaceAll("(?m)^\\s*#{1,6}\\s+", "")
-            .replaceAll("(?m)^\\s*\\|.*\\|\\s*$", "")
-            .replaceAll("\\n{3,}", "\n\n")
+            .replaceAll("\\R{3,}", "\n\n")
             .trim();
     }
 

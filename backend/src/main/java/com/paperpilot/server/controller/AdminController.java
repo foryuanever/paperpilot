@@ -13,6 +13,7 @@ import com.paperpilot.server.entity.ForumPostEntity;
 import com.paperpilot.server.entity.ForumPostReportEntity;
 import com.paperpilot.server.entity.TutorialArticleEntity;
 import com.paperpilot.server.entity.CampusVerificationEntity;
+import com.paperpilot.server.entity.PromotionEntity;
 import com.paperpilot.server.repository.AppUserRepository;
 import com.paperpilot.server.repository.AiUsageRecordRepository;
 import com.paperpilot.server.repository.RechargeRecordRepository;
@@ -28,6 +29,7 @@ import com.paperpilot.server.repository.ForumPostReportRepository;
 import com.paperpilot.server.repository.CheckinRepository;
 import com.paperpilot.server.repository.TutorialArticleRepository;
 import com.paperpilot.server.repository.CampusVerificationRepository;
+import com.paperpilot.server.repository.PromotionRepository;
 import com.paperpilot.server.service.AuthService;
 import com.paperpilot.server.service.BillingService;
 import com.paperpilot.server.service.MembershipService;
@@ -65,6 +67,7 @@ public class AdminController {
     private final NotificationService notificationService;
     private final TutorialArticleRepository tutorialArticleRepository;
     private final CampusVerificationRepository campusVerificationRepository;
+    private final PromotionRepository promotionRepository;
 
     public AdminController(
         AppUserRepository appUserRepository,
@@ -85,7 +88,8 @@ public class AdminController {
         CheckinRepository checkinRepository,
         NotificationService notificationService,
         TutorialArticleRepository tutorialArticleRepository,
-        CampusVerificationRepository campusVerificationRepository
+        CampusVerificationRepository campusVerificationRepository,
+        PromotionRepository promotionRepository
     ) {
         this.appUserRepository = appUserRepository;
         this.aiUsageRecordRepository = aiUsageRecordRepository;
@@ -106,6 +110,7 @@ public class AdminController {
         this.notificationService = notificationService;
         this.tutorialArticleRepository = tutorialArticleRepository;
         this.campusVerificationRepository = campusVerificationRepository;
+        this.promotionRepository = promotionRepository;
     }
 
     // --- Dynamic Global Statistics ---
@@ -118,6 +123,14 @@ public class AdminController {
         long studentCount = allUsers.stream().filter(u -> "学生".equals(u.getRole())).count();
         long tutorCount = allUsers.stream().filter(u -> "导师".equals(u.getRole())).count();
         long adminCount = allUsers.stream().filter(u -> "管理员".equals(u.getRole())).count();
+        LocalDateTime now = LocalDateTime.now();
+        long activeMemberCount = allUsers.stream()
+            .filter(user -> {
+                String plan = user.getMembershipPlan() == null ? "free" : user.getMembershipPlan();
+                return !"free".equalsIgnoreCase(plan)
+                    && (user.getMembershipExpiresAt() == null || user.getMembershipExpiresAt().isAfter(now));
+            })
+            .count();
 
         long totalPapers = paperRepository.count();
 
@@ -130,8 +143,11 @@ public class AdminController {
 
         double usagePercentage = totalTokensLimit > 0 ? ((double) totalTokensUsed / totalTokensLimit) * 100 : 0.0;
         List<RechargeRecordEntity> rechargeRecords = rechargeRecordRepository.findAll();
-        double totalRechargeAmount = rechargeRecords.stream()
-            .mapToDouble(record -> record.getAmount() != null ? record.getAmount() : 0.0)
+        List<PaymentOrderEntity> paidOrders = paymentOrderRepository.findAll().stream()
+            .filter(o -> "paid".equals(o.getStatus()))
+            .toList();
+        double totalRechargeAmount = paidOrders.stream()
+            .mapToDouble(record -> record.getActualPayAmount() != null ? record.getActualPayAmount() : record.getAmount())
             .sum();
         double totalBalanceAmount = allUsers.stream()
             .mapToDouble(user -> user.getBalanceAmount() != null ? user.getBalanceAmount() : 0.0)
@@ -163,6 +179,7 @@ public class AdminController {
         stats.put("studentCount", studentCount);
         stats.put("tutorCount", tutorCount);
         stats.put("adminCount", adminCount);
+        stats.put("activeMemberCount", activeMemberCount);
         stats.put("totalPapers", totalPapers);
         stats.put("totalTokensUsed", totalTokensUsed);
         stats.put("totalTokensLimit", totalTokensLimit);
@@ -170,7 +187,7 @@ public class AdminController {
         stats.put("totalRechargeAmount", totalRechargeAmount);
         stats.put("totalBalanceAmount", totalBalanceAmount);
         stats.put("totalRechargeTokens", totalRechargeTokens);
-        stats.put("rechargeCount", rechargeRecords.size());
+        stats.put("rechargeCount", paidOrders.size());
         stats.put("averageLatencyMs", Math.round(averageLatencyMs));
         stats.put("successRate", successRate);
         stats.put("engineStats", engineStats);
@@ -273,20 +290,21 @@ public class AdminController {
             row.put("tokens", record.getTotalTokens());
             row.put("promptTokens", record.getPromptTokens());
             row.put("completionTokens", record.getCompletionTokens());
-            double unitPrice = record.getUnitPrice() != null && record.getUnitPrice() > 0 ? record.getUnitPrice() : billingService.unitPrice();
-            double multiplier = record.getBillingMultiplier() != null && record.getBillingMultiplier() > 0 ? record.getBillingMultiplier() : billingService.multiplier();
+            double multiplier = record.getBillingMultiplier() != null && record.getBillingMultiplier() > 1.0D ? record.getBillingMultiplier() : billingService.multiplier();
+            double savedUnitPrice = record.getUnitPrice() != null && record.getUnitPrice() > 0 ? record.getUnitPrice() : billingService.unitPrice();
+            double unitPrice = billingService.normalizeInputUnitPrice(savedUnitPrice, multiplier);
             double savedChargeAmount = record.getChargeAmount() != null && record.getChargeAmount() > 0
                 ? record.getChargeAmount()
                 : 0.0D;
-            double calculatedChargeAmount = billingService.calculateCharge(
-                record.getAction(),
-                record.getTotalTokens() == null ? 0L : record.getTotalTokens()
-            );
-            double chargeAmount = billingService.isPptAgentAction(record.getAction())
-                ? calculatedChargeAmount
-                : (savedChargeAmount > 0 ? savedChargeAmount : calculatedChargeAmount);
+            double billableTokens = (record.getPromptTokens() == null ? 0L : record.getPromptTokens())
+                + (record.getCompletionTokens() == null ? 0L : record.getCompletionTokens()) * Math.max(1.0D, multiplier);
+            double effectiveChargeAmount = unitPrice > 0 && billableTokens > 0
+                ? Math.round((unitPrice * billableTokens / 1000.0D) * 1_000_000D) / 1_000_000D
+                : 0.0D;
+            double chargeAmount = effectiveChargeAmount > 0 ? effectiveChargeAmount : savedChargeAmount;
             row.put("chargeAmount", chargeAmount);
             row.put("unitPrice", unitPrice);
+            row.put("outputUnitPrice", billingService.outputUnitPrice(unitPrice, multiplier));
             row.put("billingMultiplier", multiplier);
             return row;
         }).toList());
@@ -552,9 +570,51 @@ public class AdminController {
         message.setTitle(title);
         message.setContent(content);
         message.setMessageType(normalizeSiteMessageType(body.get("messageType")));
+
+        String imageUrl = body.get("imageUrl");
+        if (imageUrl != null && !imageUrl.isBlank()) {
+            message.setImageUrl(imageUrl);
+        }
+
         message.setActiveFlag(true);
         SiteMessageEntity saved = siteMessageRepository.save(message);
         authService.logAction("发布全站消息: " + title, "info", getClientIp(request));
+        return saved;
+    }
+
+    // --- Promotions ---
+
+    @GetMapping("/promotions")
+    public List<PromotionEntity> getPromotions() {
+        return promotionRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    @PostMapping("/promotions/{id}/audit")
+    public PromotionEntity auditPromotion(
+        @PathVariable("id") Long id,
+        @RequestBody Map<String, String> body,
+        HttpServletRequest request
+    ) {
+        String action = body.getOrDefault("action", "").trim(); // "approve" or "reject"
+        String note = body.getOrDefault("adminNote", "").trim();
+
+        PromotionEntity promotion = promotionRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "推广记录未找到"));
+
+        if ("approve".equalsIgnoreCase(action)) {
+            promotion.setStatus("APPROVED");
+        } else if ("reject".equalsIgnoreCase(action)) {
+            promotion.setStatus("REJECTED");
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无效的审核操作");
+        }
+
+        if (!note.isBlank()) {
+            promotion.setAdminNote(note);
+        }
+
+        PromotionEntity saved = promotionRepository.save(promotion);
+        authService.logAction("审核推广(" + saved.getStatus() + "): " + saved.getId(), "info", getClientIp(request));
         return saved;
     }
 
@@ -775,9 +835,9 @@ public class AdminController {
         row.put("userName", verification.getUserName());
         row.put("email", verification.getEmail());
         row.put("schoolName", verification.getSchoolName());
-        row.put("studentNo", verification.getStudentNo());
+        row.put("realName", verification.getRealName());
         row.put("studentCardFront", verification.getStudentCardFront());
-        row.put("studentCardBack", verification.getStudentCardBack());
+        row.put("chsiScreenshot", verification.getChsiScreenshot());
         row.put("status", verification.getStatus());
         row.put("statusLabel", campusVerificationStatusLabel(verification.getStatus()));
         row.put("adminNote", verification.getAdminNote());

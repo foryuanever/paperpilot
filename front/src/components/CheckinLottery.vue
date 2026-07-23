@@ -541,4 +541,53 @@ function updateClock() {
     padding: 28px 22px;
   }
 }
+
+/* ── DARK MODE ADAPTATIONS FOR CHECKIN LOTTERY ── */
+:root[data-theme="dark"] .checkin-lottery-modal {
+  background:
+    radial-gradient(circle at 18% 8%, rgba(34, 197, 94, .16), transparent 34%),
+    radial-gradient(circle at 92% 14%, rgba(37, 99, 235, .16), transparent 34%),
+    #121a28 !important;
+  border-color: rgba(226, 235, 255, 0.14) !important;
+  color: #eef4ff !important;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.6) !important;
+}
+
+:root[data-theme="dark"] .checkin-modal-close {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #a8b3c7 !important;
+}
+:root[data-theme="dark"] .checkin-modal-close:hover {
+  background: rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+}
+
+:root[data-theme="dark"] .lottery-copy h3 {
+  color: #f4f4f6 !important;
+}
+
+:root[data-theme="dark"] .lottery-copy p {
+  color: #a8b3c7 !important;
+}
+
+:root[data-theme="dark"] .lottery-result {
+  background: rgba(37, 99, 235, 0.18) !important;
+  color: #93c5fd !important;
+  border: 1px solid rgba(59, 130, 246, 0.28) !important;
+}
+
+:root[data-theme="dark"] .lottery-result strong {
+  color: #60a5fa !important;
+}
+
+:root[data-theme="dark"] .lottery-streak {
+  background: rgba(16, 185, 129, 0.18) !important;
+  color: #6ee7b7 !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+}
+
+:root[data-theme="dark"] .lottery-streak strong {
+  color: #34d399 !important;
+}
+
 </style>

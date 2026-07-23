@@ -220,6 +220,169 @@ public class ModelConfigService {
     }
 
     @Transactional
+    public Map<String, Object> assignPoolRoute(Long id, String scene, boolean enabled) {
+        currentUserService.requireAdmin();
+        ModelConfigEntity source = modelConfigRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "模型池路由不存在"));
+        if (!StringUtils.hasText(source.getApiKey()) || !StringUtils.hasText(source.getModelName())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该模型缺少 API Key 或模型名称，请先在中转站配置里保存后再加入模块池");
+        }
+        String targetScene = normalizeScene(scene);
+        List<ModelConfigEntity> sameSceneRoutes = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(targetScene);
+        List<ModelConfigEntity> matched = sameSceneRoutes.stream()
+            .filter(entity -> sameRoute(entity, source))
+            .toList();
+        if (!enabled) {
+            for (ModelConfigEntity entity : matched) {
+                modelConfigRepository.delete(entity);
+            }
+            return Map.of(
+                "success", true,
+                "scene", targetScene,
+                "enabled", false,
+                "message", "已从该模块轮询池移除"
+            );
+        }
+        ModelConfigEntity target = matched.stream().findFirst().orElse(null);
+        if (target == null) {
+            target = new ModelConfigEntity();
+            target.setUserId(source.getUserId());
+            target.setProviderName(source.getProviderName());
+            target.setBaseUrl(source.getBaseUrl());
+            target.setApiKey(source.getApiKey());
+            target.setApiKeyMasked(source.getApiKeyMasked());
+            target.setModelName(source.getModelName());
+            target.setApiFormat(normalizeFormat(source.getApiFormat()));
+            target.setAuthType(normalizeAuthType(source.getAuthType(), source.getApiFormat()));
+            target.setFullUrl(source.isFullUrl());
+            target.setModelsUrl(source.getModelsUrl());
+            target.setCustomUserAgent(source.getCustomUserAgent());
+            target.setScene(targetScene);
+            target.setActive(false);
+            target = modelConfigRepository.save(target);
+        }
+        Map<String, Object> row = poolRow(target, "unknown", "已加入该模块轮询池，下一轮检测会更新延迟和可用状态", null);
+        row.put("success", true);
+        row.put("enabled", true);
+        return row;
+    }
+
+    @Transactional
+    public Map<String, Object> assignPoolModelRoute(Long id, String modelName, String scene, boolean enabled) {
+        currentUserService.requireAdmin();
+        ModelConfigEntity source = modelConfigRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "中转站配置不存在"));
+        String resolvedModel = Objects.toString(modelName, "").trim();
+        if (!StringUtils.hasText(source.getApiKey())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该中转站没有保存 API Key，无法加入模块池");
+        }
+        if (!StringUtils.hasText(resolvedModel)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "模型 ID 不能为空");
+        }
+        String targetScene = normalizeScene(scene);
+        List<ModelConfigEntity> sameSceneRoutes = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(targetScene);
+        List<ModelConfigEntity> matched = sameSceneRoutes.stream()
+            .filter(entity -> sameRoute(entity, source, resolvedModel))
+            .toList();
+        if (!enabled) {
+            for (ModelConfigEntity entity : matched) {
+                modelConfigRepository.delete(entity);
+            }
+            return Map.of(
+                "success", true,
+                "scene", targetScene,
+                "modelName", resolvedModel,
+                "enabled", false,
+                "message", "已从该模块轮询池移除"
+            );
+        }
+        ModelConfigEntity target = matched.stream().findFirst().orElse(null);
+        if (target == null) {
+            target = copyRoute(source, targetScene, resolvedModel);
+            target = modelConfigRepository.save(target);
+        }
+        Map<String, Object> row = poolRow(target, "unknown", "已加入该模块轮询池，下一轮检测会更新延迟和可用状态", null);
+        row.put("success", true);
+        row.put("enabled", true);
+        return row;
+    }
+
+    public Map<String, Object> fetchModelsForRoute(Long id) {
+        currentUserService.requireAdmin();
+        ModelConfigEntity source = modelConfigRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "中转站配置不存在"));
+        if (!StringUtils.hasText(source.getApiKey())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该中转站没有保存 API Key，无法读取模型列表");
+        }
+        try {
+            List<AiChatService.ModelInfo> models = aiChatService.fetchModels(
+                source.getBaseUrl(),
+                source.getApiKey(),
+                normalizeFormat(source.getApiFormat()),
+                normalizeAuthType(source.getAuthType(), source.getApiFormat()),
+                source.isFullUrl(),
+                source.getModelsUrl(),
+                source.getCustomUserAgent()
+            );
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", true);
+            result.put("message", "已获取 " + models.size() + " 个模型");
+            result.put("count", models.size());
+            result.put("sourceRouteId", source.getId());
+            result.put("providerName", Objects.toString(source.getProviderName(), ""));
+            result.put("baseUrl", Objects.toString(source.getBaseUrl(), ""));
+            result.put("models", models);
+            return result;
+        } catch (Exception exception) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", false);
+            result.put("message", readableMessage(exception));
+            result.put("count", 0);
+            result.put("sourceRouteId", source.getId());
+            result.put("models", List.of());
+            return result;
+        }
+    }
+
+    public Map<String, Object> testPoolModel(Long id, String modelName) {
+        currentUserService.requireAdmin();
+        ModelConfigEntity source = modelConfigRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "中转站配置不存在"));
+        String resolvedModel = Objects.toString(modelName, "").trim();
+        if (!StringUtils.hasText(source.getApiKey())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该中转站没有保存 API Key，无法测速");
+        }
+        if (!StringUtils.hasText(resolvedModel)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "模型 ID 不能为空");
+        }
+        ModelConfigEntity probe = copyRoute(source, normalizeScene(source.getScene()), resolvedModel);
+        return checkPoolEntity(probe);
+    }
+
+    @Transactional
+    public Map<String, Object> deleteRelay(Long id) {
+        currentUserService.requireAdmin();
+        ModelConfigEntity source = modelConfigRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "中转站配置不存在"));
+        String provider = normalizeText(source.getProviderName());
+        String baseUrl = normalizeText(source.getBaseUrl());
+        List<ModelConfigEntity> matches = modelConfigRepository.findAllByOrderByActiveDescUpdatedAtDesc().stream()
+            .filter(entity -> Objects.equals(normalizeText(entity.getProviderName()), provider))
+            .filter(entity -> Objects.equals(normalizeText(entity.getBaseUrl()), baseUrl))
+            .toList();
+        for (ModelConfigEntity entity : matches) {
+            modelConfigRepository.delete(entity);
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("removed", matches.size());
+        result.put("providerName", Objects.toString(source.getProviderName(), ""));
+        result.put("baseUrl", Objects.toString(source.getBaseUrl(), ""));
+        result.put("message", "已删除该中转站及其在各模块中的模型池记录");
+        return result;
+    }
+
+    @Transactional
     public Map<String, Object> cleanupPool(String scene) {
         currentUserService.requireAdmin();
         String normalizedScene = normalizeScene(scene);
@@ -239,6 +402,17 @@ public class ModelConfigService {
         result.put("removedIds", removedIds);
         result.put("reasons", reasons);
         result.put("pool", getPool(normalizedScene));
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> deleteModelRoute(Long id) {
+        currentUserService.requireAdmin();
+        ModelConfigEntity entity = modelConfigRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Model config not found"));
+        modelConfigRepository.delete(entity);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
         return result;
     }
 
@@ -357,6 +531,40 @@ public class ModelConfigService {
             String.valueOf(row.get("apiFormat")).toLowerCase(),
             String.valueOf(row.get("authType")).toLowerCase()
         );
+    }
+
+    private boolean sameRoute(ModelConfigEntity a, ModelConfigEntity b) {
+        return sameRoute(a, b, b.getModelName());
+    }
+
+    private boolean sameRoute(ModelConfigEntity a, ModelConfigEntity b, String modelName) {
+        return Objects.equals(normalizeText(a.getProviderName()), normalizeText(b.getProviderName()))
+            && Objects.equals(normalizeText(a.getBaseUrl()), normalizeText(b.getBaseUrl()))
+            && Objects.equals(normalizeText(a.getModelName()), normalizeText(modelName))
+            && Objects.equals(normalizeFormat(a.getApiFormat()), normalizeFormat(b.getApiFormat()))
+            && Objects.equals(normalizeAuthType(a.getAuthType(), a.getApiFormat()), normalizeAuthType(b.getAuthType(), b.getApiFormat()));
+    }
+
+    private ModelConfigEntity copyRoute(ModelConfigEntity source, String scene, String modelName) {
+        ModelConfigEntity target = new ModelConfigEntity();
+        target.setUserId(source.getUserId());
+        target.setProviderName(source.getProviderName());
+        target.setBaseUrl(source.getBaseUrl());
+        target.setApiKey(source.getApiKey());
+        target.setApiKeyMasked(source.getApiKeyMasked());
+        target.setModelName(modelName);
+        target.setApiFormat(normalizeFormat(source.getApiFormat()));
+        target.setAuthType(normalizeAuthType(source.getAuthType(), source.getApiFormat()));
+        target.setFullUrl(source.isFullUrl());
+        target.setModelsUrl(source.getModelsUrl());
+        target.setCustomUserAgent(source.getCustomUserAgent());
+        target.setScene(normalizeScene(scene));
+        target.setActive(false);
+        return target;
+    }
+
+    private String normalizeText(String value) {
+        return Objects.toString(value, "").trim().toLowerCase();
     }
 
     private String cleanupReason(ModelConfigEntity entity, Set<String> seenRoutes) {

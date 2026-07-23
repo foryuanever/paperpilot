@@ -20,6 +20,15 @@
       </nav>
 
       <div class="spatial-nav-actions">
+        <button
+          class="icon-button theme-toggle-btn"
+          :title="isDarkTheme ? '切换为日间明亮模式' : '切换为夜间深色模式'"
+          @click="toggleTheme"
+        >
+          <svg v-if="isDarkTheme" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+
         <label class="global-search-bar">
           <span class="search-icon" v-html="chromeIcons.search"></span>
           <input type="search" placeholder="搜索论文、作者、DOI" />
@@ -49,7 +58,7 @@
           <div v-if="uiStore.layout.showProfileMenu" class="popover-panel profile-panel app-popover">
             <div class="profile-popover-header">
               <img v-if="authStore.profile.avatarUrl" :src="authStore.profile.avatarUrl" class="profile-popover-avatar-img" />
-              <div v-else class="profile-popover-avatar" :style="{ backgroundColor: getAvatarColor(currentUserMember.role) }">
+              <div v-else class="profile-popover-avatar" :style="{ background: getAvatarColor(currentUserMember.role) }">
                 {{ userInitial }}
               </div>
               <div class="profile-popover-meta">
@@ -355,8 +364,18 @@ const latestForumSignature = ref("");
 const announcementCenterOpen = ref(false);
 const activeAnnouncementTab = ref("forum");
 
-document.documentElement.removeAttribute("data-theme");
-localStorage.removeItem("papersolver-theme");
+const currentTheme = ref(localStorage.getItem("paperpilot_theme") || "dark");
+const isDarkTheme = computed(() => currentTheme.value === "dark");
+
+function applyTheme(theme) {
+  currentTheme.value = theme;
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("paperpilot_theme", theme);
+}
+
+function toggleTheme() {
+  applyTheme(currentTheme.value === "dark" ? "light" : "dark");
+}
 
 async function refreshMessageUnread() {
   if (!authStore.session.isAuthenticated) {
@@ -471,10 +490,10 @@ function formatActiveTime(seconds) {
 }
 
 function getAvatarColor(role) {
-  if (role === "导师") return "#0066ff";
-  if (role === "管理员") return "#8b5cf6";
-  if (role === "特权用户") return "#ec4899";
-  return "#10b981";
+  if (role === "导师") return "linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)";
+  if (role === "管理员") return "linear-gradient(135deg, #f43f5e 0%, #fb923c 100%)";
+  if (role === "特权用户") return "linear-gradient(135deg, #d946ef 0%, #8b5cf6 100%)";
+  return "linear-gradient(135deg, #176ce4, #643bd4)";
 }
 
 function getRoleClass(role) {
@@ -741,6 +760,7 @@ function handleUserAvatarClick(event) {
 }
 
 onMounted(() => {
+  applyTheme(currentTheme.value);
   window.addEventListener("mousemove", resetActivityTimer);
   window.addEventListener("keydown", resetActivityTimer);
   window.addEventListener("click", resetActivityTimer);
@@ -1008,13 +1028,53 @@ async function submitPasswordChange() {
   pointer-events: none;
 }
 
-.spatial-nav-actions {
-  min-width: 0;
-  flex-wrap: nowrap;
-  justify-self: end;
-  overflow: visible;
-  gap: 8px;
+.theme-toggle-btn {
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .1);
+  color: #a1a1aa;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  width: 34px;
+  height: 34px;
+  transition: all .2s;
 }
+.theme-toggle-btn:hover {
+  background: rgba(255, 255, 255, .15);
+  color: #fff;
+}
+
+/* ── Dark Mode Adaptations for Global Topbar ── */
+:root[data-theme="dark"] .spatial-nav-brand strong { color: #f4f4f6; }
+:root[data-theme="dark"] .spatial-nav-link { color: #a1a1aa; }
+:root[data-theme="dark"] .spatial-nav-link:hover,
+:root[data-theme="dark"] .spatial-nav-link.active { color: #60a5fa; }
+:root[data-theme="dark"] .spatial-nav-link.active::after { background: #60a5fa; }
+:root[data-theme="dark"] .global-search-bar {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #a1a1aa;
+}
+:root[data-theme="dark"] .global-search-bar input { color: #f4f4f6; }
+:root[data-theme="dark"] .icon-button {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #a1a1aa;
+}
+:root[data-theme="dark"] .icon-button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f4f4f6;
+}
+:root[data-theme="dark"] .app-profile-button {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f4f4f6;
+}
+:root[data-theme="dark"] .app-profile-button .profile-name { color: #f4f4f6; }
+:root[data-theme="dark"] .nav-forum-alert { border-color: #08080c; }
+
 
 .global-search-bar {
   width: clamp(160px, 13vw, 220px);
@@ -1950,4 +2010,276 @@ async function submitPasswordChange() {
 :root[data-theme="dark"] .profile-avatar-status-dot {
   border-color: var(--bg-card);
 }
+
+
+/* ════════════════════════════════════════════════════════════
+   NAVBAR NOTIFICATION POPOVER DUAL-THEME OVERRIDES
+   ════════════════════════════════════════════════════════════ */
+
+:root[data-theme="dark"] .notification-popover.app-popover {
+  background: #111827 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6) !important;
+  color: #f1f5f9 !important;
+}
+
+:root[data-theme="dark"] .notification-popover .popover-header {
+  background: #111827 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+:root[data-theme="dark"] .notification-popover .popover-title {
+  color: #f1f5f9 !important;
+}
+
+:root[data-theme="dark"] .notification-popover .auth-link {
+  color: #818cf8 !important;
+}
+
+:root[data-theme="dark"] .notification-item {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+:root[data-theme="dark"] .notification-item:hover {
+  background: rgba(99, 102, 241, 0.1) !important;
+}
+
+:root[data-theme="dark"] .notification-item strong {
+  color: #f1f5f9 !important;
+}
+
+:root[data-theme="dark"] .notification-item span {
+  color: #94a3b8 !important;
+}
+
+:root[data-theme="dark"] .notification-popover .popover-empty {
+  color: #94a3b8 !important;
+}
+
+
+
+/* ════════════════════════════════════════════════════════════
+   SYSTEM ANNOUNCEMENT MODAL CENTER DUAL-THEME OVERRIDES
+   ════════════════════════════════════════════════════════════ */
+
+.announcement-dialog {
+  border-radius: 24px !important;
+  transition: all 0.25s ease !important;
+}
+
+:root[data-theme="dark"] .announcement-dialog {
+  background: #111827 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65) !important;
+  color: #f1f5f9 !important;
+}
+
+:root[data-theme="light"] .announcement-dialog {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.12) !important;
+  color: #0f172a !important;
+}
+
+/* Header & Intro */
+:root[data-theme="dark"] .announcement-hero h2 {
+  color: #f1f5f9 !important;
+}
+:root[data-theme="light"] .announcement-hero h2 {
+  color: #0f172a !important;
+}
+
+:root[data-theme="dark"] .announcement-hero p {
+  color: #94a3b8 !important;
+}
+:root[data-theme="light"] .announcement-hero p {
+  color: #64748b !important;
+}
+
+:root[data-theme="dark"] .announcement-intro strong {
+  color: #f1f5f9 !important;
+}
+:root[data-theme="light"] .announcement-intro strong {
+  color: #0f172a !important;
+}
+
+:root[data-theme="dark"] .announcement-intro span {
+  color: #94a3b8 !important;
+}
+:root[data-theme="light"] .announcement-intro span {
+  color: #64748b !important;
+}
+
+/* Tabs */
+.announcement-tabs {
+  padding: 6px !important;
+  border-radius: 999px !important;
+}
+:root[data-theme="dark"] .announcement-tabs {
+  background: rgba(0, 0, 0, 0.35) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+:root[data-theme="light"] .announcement-tabs {
+  background: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.announcement-tabs button {
+  border-radius: 999px !important;
+  font-size: 13.5px !important;
+  font-weight: 850 !important;
+}
+:root[data-theme="dark"] .announcement-tabs button {
+  color: #94a3b8 !important;
+}
+:root[data-theme="light"] .announcement-tabs button {
+  color: #64748b !important;
+}
+
+.announcement-tabs button.active {
+  background: linear-gradient(135deg, #6366f1, #a855f7) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
+}
+
+/* Announcement Cards */
+.announcement-card {
+  padding: 14px 16px !important;
+  border-radius: 16px !important;
+  transition: all 0.2s ease !important;
+}
+
+:root[data-theme="dark"] .announcement-card {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #f1f5f9 !important;
+}
+:root[data-theme="dark"] .announcement-card:hover {
+  background: rgba(99, 102, 241, 0.08) !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+:root[data-theme="light"] .announcement-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
+}
+:root[data-theme="light"] .announcement-card:hover {
+  background: #f8fafc !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+.announcement-card-mark {
+  border-radius: 12px !important;
+}
+:root[data-theme="dark"] .announcement-card-mark {
+  background: rgba(99, 102, 241, 0.15) !important;
+  color: #818cf8 !important;
+  border: 1px solid rgba(99, 102, 241, 0.3) !important;
+}
+:root[data-theme="light"] .announcement-card-mark {
+  background: rgba(99, 102, 241, 0.08) !important;
+  color: #4f46e5 !important;
+  border: 1px solid rgba(99, 102, 241, 0.2) !important;
+}
+
+.announcement-card strong {
+  font-size: 14px !important;
+  font-weight: 850 !important;
+}
+:root[data-theme="dark"] .announcement-card strong {
+  color: #f1f5f9 !important;
+}
+:root[data-theme="light"] .announcement-card strong {
+  color: #0f172a !important;
+}
+
+.announcement-card small,
+.announcement-card time {
+  font-size: 12px !important;
+}
+:root[data-theme="dark"] .announcement-card small,
+:root[data-theme="dark"] .announcement-card time {
+  color: #94a3b8 !important;
+}
+:root[data-theme="light"] .announcement-card small,
+:root[data-theme="light"] .announcement-card time {
+  color: #64748b !important;
+}
+
+/* Footer Action Buttons */
+.announcement-dialog > footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  padding: 16px 22px !important;
+}
+:root[data-theme="light"] .announcement-dialog > footer {
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+.announcement-dialog > footer button {
+  height: 38px !important;
+  padding: 0 24px !important;
+  border-radius: 999px !important;
+  font-size: 13px !important;
+  font-weight: 850 !important;
+}
+:root[data-theme="dark"] .announcement-dialog > footer button {
+  background: linear-gradient(135deg, #6366f1, #a855f7) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
+  border: none !important;
+}
+:root[data-theme="light"] .announcement-dialog > footer button {
+  background: #0f172a !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+
+
+
+/* ════════════════════════════════════════════════════════════
+   SYSTEM ANNOUNCEMENT MODAL TABS LIGHT MODE TEXT & SVG COLOR FIX
+   ════════════════════════════════════════════════════════════ */
+
+.announcement-tabs button.active,
+:root[data-theme="light"] .announcement-tabs button.active,
+:root[data-theme="dark"] .announcement-tabs button.active {
+  background: linear-gradient(135deg, #6366f1, #a855f7) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
+}
+
+.announcement-tabs button.active span,
+.announcement-tabs button.active svg,
+.announcement-tabs button.active path,
+.announcement-tabs button.active b,
+:root[data-theme="light"] .announcement-tabs button.active span,
+:root[data-theme="light"] .announcement-tabs button.active svg,
+:root[data-theme="light"] .announcement-tabs button.active path,
+:root[data-theme="light"] .announcement-tabs button.active b {
+  color: #ffffff !important;
+  fill: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+.announcement-tabs button.active b {
+  background: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}
+
+:root[data-theme="light"] .announcement-tabs {
+  background: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+:root[data-theme="light"] .announcement-tabs button:not(.active) {
+  color: #475569 !important;
+}
+
+:root[data-theme="light"] .announcement-tabs button:not(.active) svg,
+:root[data-theme="light"] .announcement-tabs button:not(.active) path {
+  color: #64748b !important;
+  stroke: #64748b !important;
+}
+
 </style>
