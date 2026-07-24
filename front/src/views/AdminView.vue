@@ -165,7 +165,7 @@
                     </span>
                   </td>
                   <td>
-                    <code style="font-family: monospace; font-size: 0.9rem; background: var(--spatial-accent-soft); padding: 4px 8px; border-radius: 6px; color: var(--spatial-accent); font-weight: 600;">
+                    <code class="user-password-code">
                       {{ user.password }}
                     </code>
                   </td>
@@ -3344,7 +3344,7 @@ function formatTokenCount(num) {
 }
 
 .admin-table td {
-  padding: 8px 16px;
+  padding: 12px 16px;
   text-align: left;
   border-bottom: 1px solid var(--spatial-line);
   white-space: nowrap;
@@ -3362,7 +3362,7 @@ function formatTokenCount(num) {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   border-bottom: 2px solid var(--spatial-line);
-  padding: 10px 16px;
+  padding: 14px 16px;
 }
 
 .admin-table tr {
@@ -3428,18 +3428,18 @@ function formatTokenCount(num) {
 .membership-plan-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 900;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
   border: 1px solid transparent;
 }
 
 .membership-plan-pill.plan-free {
-  color: #64748b;
-  background: #f1f5f9;
-  border-color: #e2e8f0;
+  color: var(--spatial-silver);
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.15);
 }
 
 .membership-plan-pill.plan-light {
@@ -3470,6 +3470,18 @@ function formatTokenCount(num) {
   color: #9333ea;
   background: #f5edff;
   border-color: #dfc7ff;
+}
+
+.user-password-code {
+  font-family: monospace;
+  font-size: 0.8rem;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: var(--spatial-silver);
+  font-weight: 600;
+  display: inline-block;
 }
 
 /* Refined Membership Column Styles */
