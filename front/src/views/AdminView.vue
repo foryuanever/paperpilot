@@ -1,21 +1,16 @@
 <template>
-  <div class="admin-page spatial-page reveal-ready" :class="{ 'admin-sidebar-collapsed': adminSidebarCollapsed }">
+  <div class="admin-page spatial-page reveal-ready">
 
-    <aside class="admin-side-nav" :class="{ collapsed: adminSidebarCollapsed }" aria-label="管理员后台导航">
-      <div class="admin-side-brand">
-        <div class="admin-side-mark">P</div>
-        <div v-if="!adminSidebarCollapsed" class="admin-side-title">
-          <strong>PaperSolver</strong>
-          <span>Admin Console</span>
-        </div>
-        <button
-          class="admin-side-collapse"
-          type="button"
-          :title="adminSidebarCollapsed ? '展开菜单' : '收起菜单'"
-          @click="adminSidebarCollapsed = !adminSidebarCollapsed"
-        >
-          {{ adminSidebarCollapsed ? "›" : "‹" }}
-        </button>
+    <aside
+      class="admin-side-nav"
+      :style="{ left: sidebarLeft + 'px', top: sidebarTop + 'px', bottom: 'auto' }"
+      @mousedown="handleMouseDown"
+      aria-label="管理员后台导航"
+    >
+      <!-- Drag handle -->
+      <div class="sidebar-drag-handle">
+        <span></span>
+        <span></span>
       </div>
       <nav class="admin-side-tabs">
         <button
@@ -1042,7 +1037,51 @@ const authStore = useAuthStore();
 const dialogStore = useDialogStore();
 const workspaceStore = useWorkspaceStore();
 const activeTab = ref("users");
-const adminSidebarCollapsed = ref(false);
+
+// Sidebar Dragging State & Methods
+const isDragging = ref(false);
+const startX = ref(0);
+const startY = ref(0);
+const sidebarLeft = ref(Number(localStorage.getItem('admin_sidebar_left') || 24));
+const sidebarTop = ref(Number(localStorage.getItem('admin_sidebar_top') || 88));
+
+function handleMouseDown(e) {
+  if (e.target.closest('button') || e.target.closest('a') || e.target.closest('input') || e.target.closest('select')) {
+    return;
+  }
+  isDragging.value = true;
+  startX.value = e.clientX - sidebarLeft.value;
+  startY.value = e.clientY - sidebarTop.value;
+  
+  document.addEventListener('mousemove', handleMouseMove);
+  document.addEventListener('mouseup', handleMouseUp);
+}
+
+function handleMouseMove(e) {
+  if (!isDragging.value) return;
+  sidebarLeft.value = e.clientX - startX.value;
+  sidebarTop.value = e.clientY - startY.value;
+  
+  const minLeft = 10;
+  const maxLeft = window.innerWidth - 60;
+  const minTop = 10;
+  const maxTop = window.innerHeight - 100;
+  
+  if (sidebarLeft.value < minLeft) sidebarLeft.value = minLeft;
+  if (sidebarLeft.value > maxLeft) sidebarLeft.value = maxLeft;
+  if (sidebarTop.value < minTop) sidebarTop.value = minTop;
+  if (sidebarTop.value > maxTop) sidebarTop.value = maxTop;
+}
+
+function handleMouseUp() {
+  if (isDragging.value) {
+    isDragging.value = false;
+    localStorage.setItem('admin_sidebar_left', sidebarLeft.value);
+    localStorage.setItem('admin_sidebar_top', sidebarTop.value);
+  }
+  document.removeEventListener('mousemove', handleMouseMove);
+  document.removeEventListener('mouseup', handleMouseUp);
+}
 const adminTabOptions = [
   { value: "users", label: "用户目录与授权", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
   { value: "recharges", label: "充值入账记录", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>` },
@@ -2262,102 +2301,47 @@ function truncateText(value, length = 100) {
 
 .admin-side-nav {
   position: fixed;
-  top: 88px;
-  left: 24px;
-  bottom: 28px;
   z-index: 30;
   width: 236px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid var(--spatial-line);
   border-radius: 24px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 251, 255, 0.86)),
-    rgba(255, 255, 255, 0.88);
-  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.12);
+  background: var(--spatial-glass);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.12);
   backdrop-filter: blur(22px);
-  transition: width 0.25s ease, border-radius 0.25s ease, background 0.25s ease;
+  user-select: none;
+  transition: width 0.25s ease, border-radius 0.25s ease, background 0.25s ease, border-color 0.25s ease;
 }
 
-.admin-side-nav.collapsed {
-  width: 68px;
-  border-radius: 22px;
-}
-
-.admin-side-brand {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 74px;
-  padding: 16px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-}
-
-.admin-side-mark {
-  flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
-  color: #fff;
-  font-weight: 800;
-  background: linear-gradient(135deg, #0f3f91, #2563eb 55%, #4f46e5);
-  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.24);
-}
-
-.admin-side-title {
-  min-width: 0;
+.sidebar-drag-handle {
+  height: 20px;
   display: flex;
   flex-direction: column;
-  line-height: 1.1;
-}
-
-.admin-side-title strong {
-  color: #0f172a;
-  font-size: 0.98rem;
-}
-
-.admin-side-title span {
-  margin-top: 5px;
-  color: #64748b;
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.admin-side-collapse {
-  position: absolute;
-  right: 10px;
-  top: 18px;
-  width: 28px;
-  height: 28px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.86);
-  color: #475569;
-  font-size: 1.35rem;
-  line-height: 1;
-  cursor: pointer;
-  transition: transform 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.admin-side-collapse:hover {
-  color: #1d4ed8;
-  transform: translateY(-1px);
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.12);
-}
-
-.admin-side-nav.collapsed .admin-side-brand {
   justify-content: center;
-  padding-inline: 14px;
+  align-items: center;
+  gap: 3px;
+  cursor: grab;
+  padding-top: 14px;
+  padding-bottom: 4px;
+  width: 100%;
 }
 
-.admin-side-nav.collapsed .admin-side-collapse {
-  right: -10px;
-  background: #fff;
+.sidebar-drag-handle span {
+  width: 32px;
+  height: 3px;
+  background: var(--spatial-line);
+  border-radius: 99px;
+  transition: background 0.2s ease;
+}
+
+.admin-side-nav:hover .sidebar-drag-handle span {
+  background: var(--spatial-silver);
+}
+
+.sidebar-drag-handle:active {
+  cursor: grabbing;
 }
 
 .admin-side-tabs {
@@ -2378,7 +2362,7 @@ function truncateText(value, length = 100) {
   border: 0;
   border-radius: 15px;
   background: transparent;
-  color: #64748b;
+  color: var(--spatial-gray);
   cursor: pointer;
   font-weight: 700;
   text-align: left;
@@ -2386,15 +2370,14 @@ function truncateText(value, length = 100) {
 }
 
 .admin-side-tab:hover {
-  color: #0f172a;
-  background: rgba(37, 99, 235, 0.06);
+  color: var(--spatial-graphite);
+  background: var(--spatial-accent-soft);
   transform: translateX(2px);
 }
 
 .admin-side-tab.active {
-  color: #1d4ed8;
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.13), rgba(79, 70, 229, 0.08));
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+  color: var(--spatial-accent);
+  background: var(--spatial-accent-soft);
 }
 
 .admin-side-icon {
@@ -2404,7 +2387,7 @@ function truncateText(value, length = 100) {
   display: grid;
   place-items: center;
   border-radius: 11px;
-  background: rgba(226, 232, 240, 0.75);
+  background: var(--spatial-warm-2);
   color: inherit;
   font-size: 0.85rem;
   font-weight: 800;
@@ -3470,35 +3453,9 @@ function truncateText(value, length = 100) {
 }
 
 :global(html[data-theme="dark"]) .admin-side-nav {
-  border-color: rgba(148, 163, 184, 0.16);
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.9)),
-    rgba(15, 23, 42, 0.9);
-  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.32);
-}
-
-:global(html[data-theme="dark"]) .admin-side-brand {
-  border-bottom-color: rgba(148, 163, 184, 0.14);
-}
-
-:global(html[data-theme="dark"]) .admin-side-title strong,
-:global(html[data-theme="dark"]) .admin-side-tab:hover {
-  color: #f8fafc;
-}
-
-:global(html[data-theme="dark"]) .admin-side-title span,
-:global(html[data-theme="dark"]) .admin-side-tab {
-  color: #94a3b8;
-}
-
-:global(html[data-theme="dark"]) .admin-side-collapse {
-  border-color: rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.92);
-  color: #cbd5e1;
-}
-
-:global(html[data-theme="dark"]) .admin-side-icon {
-  background: rgba(30, 41, 59, 0.92);
+  border-color: var(--spatial-line);
+  background: var(--spatial-glass);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.35);
 }
 
 :global(html[data-theme="dark"]) .admin-side-tab:hover {
