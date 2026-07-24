@@ -1,36 +1,6 @@
 <template>
   <div class="admin-page spatial-page reveal-ready" :class="{ 'admin-sidebar-collapsed': adminSidebarCollapsed }">
 
-    <aside
-      class="admin-side-nav"
-      :class="{ collapsed: adminSidebarCollapsed }"
-      aria-label="管理员后台导航"
-    >
-      <!-- Floating collapse button -->
-      <button
-        class="admin-side-toggle"
-        type="button"
-        :title="adminSidebarCollapsed ? '展开菜单' : '收起菜单'"
-        @click="adminSidebarCollapsed = !adminSidebarCollapsed"
-      >
-        {{ adminSidebarCollapsed ? "›" : "‹" }}
-      </button>
-      <nav class="admin-side-tabs">
-        <button
-          v-for="tab in adminTabOptions"
-          :key="tab.value"
-          class="admin-side-tab"
-          :class="{ active: activeTab === tab.value }"
-          type="button"
-          :title="tab.label"
-          @click="activeTab = tab.value"
-        >
-          <span class="admin-side-icon" v-html="tab.icon"></span>
-          <span v-if="!adminSidebarCollapsed" class="admin-side-label">{{ tab.label }}</span>
-        </button>
-      </nav>
-    </aside>
-
     <section class="admin-shell" data-reveal>
       <!-- Title & Header -->
       <header class="admin-header">
@@ -84,6 +54,36 @@
 
       <!-- Main Layout Panels -->
       <div class="admin-main-layout">
+        <!-- Sidebar Navigation -->
+        <aside
+          class="admin-side-nav"
+          :class="{ collapsed: adminSidebarCollapsed }"
+          aria-label="管理员导航"
+        >
+          <!-- Floating collapse button -->
+          <button
+            class="admin-side-toggle"
+            type="button"
+            :title="adminSidebarCollapsed ? '展开菜单' : '收起菜单'"
+            @click="adminSidebarCollapsed = !adminSidebarCollapsed"
+          >
+            {{ adminSidebarCollapsed ? "›" : "‹" }}
+          </button>
+          <nav class="admin-side-tabs">
+            <button
+              v-for="tab in adminTabOptions"
+              :key="tab.value"
+              class="admin-side-tab"
+              :class="{ active: activeTab === tab.value }"
+              type="button"
+              :title="tab.label"
+              @click="activeTab = tab.value"
+            >
+              <span class="admin-side-icon" v-html="tab.icon"></span>
+              <span v-if="!adminSidebarCollapsed" class="admin-side-label">{{ tab.label }}</span>
+            </button>
+          </nav>
+        </aside>
         <!-- Tab Content: Users -->
         <div v-if="activeTab === 'users'" class="tab-pane users-pane">
           <div class="pane-header-row">
@@ -2570,23 +2570,25 @@ function truncateText(value, length = 100) {
 
 <style scoped>
 .admin-page {
-  padding: 96px 36px 48px 292px;
+  padding: 96px 36px 48px 36px;
   position: relative;
   min-height: 100vh;
-  transition: padding-left 0.25s ease;
 }
 
-.admin-page.admin-sidebar-collapsed {
-  padding-left: 116px;
+.admin-main-layout {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 28px;
+  align-items: start;
+  margin-top: 32px;
 }
 
 .admin-side-nav {
-  position: fixed;
-  top: 88px;
-  left: 24px;
-  bottom: 28px;
+  position: sticky;
+  top: 24px;
   z-index: 30;
   width: 236px;
+  height: calc(100vh - 120px);
   display: flex;
   flex-direction: column;
   overflow: visible;
