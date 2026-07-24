@@ -169,12 +169,12 @@
                       {{ user.password }}
                     </code>
                   </td>
-                  <td>
+                  <td style="min-width: 100px;">
                     <span class="membership-plan-pill" :class="membershipPlanClass(user.membershipPlan)">
                       {{ membershipPlanName(user.membershipPlan) }}
                     </span>
                   </td>
-                  <td>
+                  <td style="min-width: 115px;">
                     <div class="membership-cycle-cell">
                       <strong>{{ membershipCycleName(user.membershipCycle) }}</strong>
                       <small>{{ user.membershipExpiresAt ? `至 ${formatDate(user.membershipExpiresAt)}` : '未开通' }}</small>
@@ -185,6 +185,7 @@
                       <span class="usage-badge review-tag">综述 <strong>{{ user.reviewUsed || 0 }}</strong>/{{ user.reviewQuota || 0 }}</span>
                       <span class="usage-badge ppt-tag">PPT <strong>{{ user.pptUsed || 0 }}</strong>/{{ user.pptQuota || 0 }}</span>
                       <span class="usage-badge chat-tag">对话 <strong>{{ user.chatUsed || 0 }}</strong>/{{ user.chatQuota || 0 }}</span>
+                      <span class="usage-badge token-tag">Token <strong>{{ formatTokenCount(user.tokenUsed) }}</strong>/{{ formatTokenCount(user.tokenLimit) }}</span>
                     </div>
                   </td>
                   <td>{{ user.createdTime }}</td>
@@ -2575,6 +2576,18 @@ function truncateText(value, length = 100) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   return text.length > length ? `${text.slice(0, length)}...` : text;
 }
+
+function formatTokenCount(num) {
+  if (!num && num !== 0) return "0";
+  const n = Number(num);
+  if (n >= 1000000) {
+    return (n / 1000000).toFixed(1) + "M";
+  }
+  if (n >= 1000) {
+    return (n / 1000).toFixed(0) + "K";
+  }
+  return n.toString();
+}
 </script>
 
 
@@ -3460,58 +3473,73 @@ function truncateText(value, length = 100) {
   border-color: #dfc7ff;
 }
 
-.membership-cycle-cell,
-.membership-usage-cell {
-  display: grid;
-  gap: 4px;
+/* Refined Membership Column Styles */
+.membership-cycle-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.3;
 }
 
-.membership-cycle-cell strong,
-.membership-usage-cell span {
-  color: #1e293b;
+.membership-cycle-cell strong {
+  color: var(--spatial-graphite);
   font-size: 0.84rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .membership-cycle-cell small {
-  color: #94a3b8;
+  color: var(--spatial-silver);
   font-size: 0.72rem;
 }
 
 .membership-usage-cell {
-  grid-template-columns: repeat(3, max-content);
-  column-gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
-.membership-usage-cell span {
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: #f8fafc;
-  color: #475569;
-}
-
-.quota-edit-btn {
+.usage-badge {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-width: 82px;
-  min-height: 34px;
-  padding: 0 13px;
-  border: 1px solid rgba(37, 99, 235, 0.22);
-  border-radius: 999px;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  color: #ffffff;
-  font-size: 0.82rem;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-weight: 600;
+  min-width: 104px;
 }
 
-.quota-edit-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.22);
+.usage-badge.review-tag {
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  color: #3b82f6;
 }
+
+.usage-badge.ppt-tag {
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+}
+
+.usage-badge.chat-tag {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.usage-badge.token-tag {
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(249, 115, 22, 0.15);
+  color: #f97316;
+}
+
+/* Ensure strong inside badge stands out with high contrast */
+.usage-badge strong {
+  color: var(--spatial-graphite);
+  font-weight: 800;
+  margin-left: 2px;
+}
+
 
 .admin-pagination {
   display: flex;
