@@ -533,6 +533,38 @@
             </div>
 
           </div>
+
+          <section class="module-route-table spatial-glass-panel">
+            <div class="module-route-head">
+              <h4>业务模块模型路由</h4>
+              <span>{{ flatScenePoolRows.length }} 条模型连接</span>
+            </div>
+            <div class="module-route-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>业务号池</th>
+                    <th>所属中转站</th>
+                    <th>模型标识</th>
+                    <th>延迟测速</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in flatScenePoolRows.slice(0, 8)" :key="`${row.scene}-${row.id}-${row.modelName}`">
+                    <td>{{ row.sceneLabel }}</td>
+                    <td>{{ row.providerName }}</td>
+                    <td><code>{{ row.modelName }}</code></td>
+                    <td><strong :class="{ error: row.status !== 'available' }">{{ row.status === "available" ? `${row.latencyMs || 0}ms` : "故障" }}</strong></td>
+                    <td><span class="status-tag" :class="row.status">{{ row.status === "available" ? "可用" : "不可用" }}</span></td>
+                  </tr>
+                  <tr v-if="flatScenePoolRows.length === 0">
+                    <td colspan="5" class="empty-row">暂无号池模型，请先在上方模型卡片中勾选业务号池。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
 
         <!-- Tab Content: AI Usage Calls -->
@@ -663,72 +695,95 @@
             <button class="spatial-btn spatial-btn-ghost compact-btn" @click="fetchAllData">刷新</button>
           </div>
 
-          <section class="forum-report-list spatial-glass-panel">
-            <article
-              v-for="report in paginatedForumReports"
-              :key="report.id"
-              class="forum-report-row"
-              :class="[`status-${report.status}`, { banned: report.postBanned }]"
-            >
-              <header>
-                <div>
-                  <span>举报 #{{ report.id }} · {{ formatDateTime(report.createdAt) }}</span>
-                  <strong>
-                    <a :href="'/forum/post/' + String(report.postId).replace('post-', '')" target="_blank" class="report-post-link" title="在独立标签页中打开原帖">
-                      {{ report.postTitle }}
-                    </a>
-                  </strong>
-                  <small>{{ report.postType || "论坛帖子" }} · 作者 {{ report.author || "—" }} · 举报人 {{ report.reporterName || "—" }}</small>
-                </div>
-                <b>{{ forumReportStatusLabel(report.status) }}</b>
-              </header>
-              <p>{{ report.detail }}</p>
-              <em v-if="report.adminNote">处理备注：{{ report.adminNote }}</em>
-              <div class="forum-report-actions">
-                <button
-                  class="spatial-btn spatial-btn-ghost compact-btn"
-                  @click="openForumReportDetail(report)"
-                >
-                  查看详情
-                </button>
-                <button
-                  class="spatial-btn spatial-btn-ghost compact-btn"
-                  :disabled="report.status !== 'open'"
-                  @click="openForumReportModal(report, 'processed', false)"
-                >
-                  标记已处理
-                </button>
-                <button
-                  class="spatial-btn spatial-btn-ghost compact-btn danger-lite"
-                  :disabled="report.postBanned"
-                  @click="openForumReportModal(report, 'processed', true)"
-                >
-                  处理并封禁
-                </button>
-                <button
-                  class="spatial-btn spatial-btn-ghost compact-btn"
-                  :disabled="report.status !== 'open'"
-                  @click="openForumReportModal(report, 'rejected', false)"
-                >
-                  不采纳
-                </button>
-              </div>
-            </article>
-            <div v-if="!forumReports.length" class="payment-empty">暂无帖子举报。</div>
-            <div v-else class="admin-pagination compact-pagination">
-              <span>{{ paginationText(forumReports.length, forumReportPage, forumReportPageSize) }}</span>
-              <div>
-                <select v-model.number="forumReportPageSize" class="pagination-size-select">
-                  <option :value="6">6 条/页</option>
-                  <option :value="10">10 条/页</option>
-                  <option :value="16">16 条/页</option>
-                </select>
-                <button :disabled="forumReportPage <= 1" @click="forumReportPage -= 1">上一页</button>
-                <strong>{{ forumReportPage }} / {{ forumReportPageCount }}</strong>
-                <button :disabled="forumReportPage >= forumReportPageCount" @click="forumReportPage += 1">下一页</button>
-              </div>
+          <div class="table-container spatial-glass-panel" style="margin-top: 16px;">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th style="white-space: nowrap;">时间</th>
+                  <th style="min-width: 160px;">原帖</th>
+                  <th style="white-space: nowrap;">作者</th>
+                  <th style="white-space: nowrap;">举报人</th>
+                  <th style="min-width: 180px;">举报说明</th>
+                  <th style="white-space: nowrap;">状态</th>
+                  <th style="text-align: right; min-width: 260px; padding-right: 18px;">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="report in paginatedForumReports" :key="report.id" :class="[`status-${report.status}`, { banned: report.postBanned }]">
+                  <td class="ledger-time" style="white-space: nowrap;">{{ formatDateTime(report.createdAt) }}</td>
+                  <td>
+                    <strong>
+                      <a :href="'/forum/post/' + String(report.postId).replace('post-', '')" target="_blank" class="report-post-link" title="在独立标签页中打开原帖">
+                        {{ report.postTitle }}
+                      </a>
+                    </strong>
+                    <small style="display: block; font-size: 0.72rem; color: var(--spatial-silver); margin-top: 2px;">类型: {{ report.postType || "论坛帖子" }}</small>
+                  </td>
+                  <td>
+                    <span>{{ report.author || "—" }}</span>
+                  </td>
+                  <td>
+                    <span>{{ report.reporterName || "—" }}</span>
+                  </td>
+                  <td>
+                    <div class="report-detail-text" :title="report.detail" style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ report.detail }}</div>
+                    <small v-if="report.adminNote" style="display: block; font-size: 0.72rem; color: var(--spatial-silver); margin-top: 2px; font-style: italic;">处理备注: {{ report.adminNote }}</small>
+                  </td>
+                  <td>
+                    <span class="forum-report-status-badge" :class="report.status">{{ forumReportStatusLabel(report.status) }}</span>
+                  </td>
+                  <td style="text-align: right; padding-right: 18px;">
+                    <div class="forum-report-actions" style="justify-content: flex-end; display: flex; gap: 8px;">
+                      <button
+                        class="spatial-btn spatial-btn-ghost compact-btn"
+                        @click="openForumReportDetail(report)"
+                      >
+                        详情
+                      </button>
+                      <button
+                        class="spatial-btn spatial-btn-ghost compact-btn"
+                        :disabled="report.status !== 'open'"
+                        @click="openForumReportModal(report, 'processed', false)"
+                      >
+                        已处理
+                      </button>
+                      <button
+                        class="spatial-btn spatial-btn-ghost compact-btn danger-lite"
+                        :disabled="report.postBanned"
+                        @click="openForumReportModal(report, 'processed', true)"
+                      >
+                        封禁
+                      </button>
+                      <button
+                        class="spatial-btn spatial-btn-ghost compact-btn"
+                        :disabled="report.status !== 'open'"
+                        @click="openForumReportModal(report, 'rejected', false)"
+                      >
+                        不采纳
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="!forumReports.length">
+                  <td colspan="7" class="payment-empty" style="text-align: center; padding: 32px;">暂无帖子举报记录。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div v-if="forumReports.length" class="admin-pagination compact-pagination" style="margin-top: 16px;">
+            <span>{{ paginationText(forumReports.length, forumReportPage, forumReportPageSize) }}</span>
+            <div>
+              <select v-model.number="forumReportPageSize" class="pagination-size-select">
+                <option :value="6">6 条/页</option>
+                <option :value="10">10 条/页</option>
+                <option :value="16">16 条/页</option>
+              </select>
+              <button :disabled="forumReportPage <= 1" @click="forumReportPage -= 1">上一页</button>
+              <strong>{{ forumReportPage }} / {{ forumReportPageCount }}</strong>
+              <button :disabled="forumReportPage >= forumReportPageCount" @click="forumReportPage += 1">下一页</button>
             </div>
-          </section>
+          </div>
         </div>
 
         <!-- Tab Content: Campus Verification -->
@@ -1233,7 +1288,7 @@ import AdminAiUsagePanel from "../components/AdminAiUsagePanel.vue";
 const authStore = useAuthStore();
 const dialogStore = useDialogStore();
 const workspaceStore = useWorkspaceStore();
-const activeTab = ref("users");
+const activeTab = ref("models");
 const adminSidebarCollapsed = ref(false);
 const showStatsPanel = ref(false);
 
@@ -1535,6 +1590,19 @@ const filteredAdminTopics = computed(() => {
       ...(topic.tags || []),
       ...(topic.themeClusters || []),
     ].some(value => String(value || "").toLowerCase().includes(query));
+  });
+});
+
+const flatScenePoolRows = computed(() => {
+  return modelSceneOptions.flatMap((scene) => {
+    const rows = allScenesPoolData.value[scene.value] || [];
+    return rows
+      .filter((route) => !route.template)
+      .map((route) => ({
+        ...route,
+        scene: scene.value,
+        sceneLabel: scene.label,
+      }));
   });
 });
 
@@ -3133,100 +3201,46 @@ function formatTokenCount(num) {
   font-size: .88rem;
 }
 
-.forum-report-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
-  gap: 16px;
-  padding: 18px;
-  border-radius: 16px;
+/* Forum Reports table styles matching AI 调用记录 style */
+.forum-report-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 99px;
+  white-space: nowrap;
 }
 
-.forum-report-row {
-  display: grid;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid rgba(15, 23, 42, .08);
-  border-radius: 14px;
-  background: #ffffff;
+.forum-report-status-badge.open {
+  color: #ea580c;
+  background: rgba(234, 88, 12, 0.06);
+  border: 1px solid rgba(234, 88, 12, 0.15);
 }
 
-.forum-report-row.status-open {
-  background: linear-gradient(135deg, #fff7ed, #fff);
-  border-color: rgba(251, 146, 60, .28);
+.forum-report-status-badge.processed {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.06);
+  border: 1px solid rgba(22, 163, 74, 0.15);
 }
 
-.forum-report-row.status-processed {
-  background: linear-gradient(135deg, #f0fdf4, #fff);
-  border-color: rgba(34, 197, 94, .22);
+.forum-report-status-badge.rejected {
+  color: var(--spatial-gray);
+  background: rgba(148, 163, 184, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.15);
 }
 
-.forum-report-row.status-rejected {
-  background: linear-gradient(135deg, #f8fafc, #fff);
+.admin-table tr.status-open td {
+  background-color: rgba(234, 88, 12, 0.015);
 }
 
-.forum-report-row.banned {
-  border-color: rgba(220, 38, 38, .28);
+.admin-table tr.status-processed td {
+  background-color: rgba(22, 163, 74, 0.01);
 }
 
-.forum-report-row header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.forum-report-row header span,
-.forum-report-row small,
-.forum-report-row em {
-  display: block;
-  color: #64748b;
-  font-size: .76rem;
-  line-height: 1.5;
-  font-style: normal;
-}
-
-.forum-report-row strong {
-  display: block;
-  margin: 4px 0;
-  color: #0f172a;
-  font-size: .98rem;
-  line-height: 1.35;
-}
-
-.forum-report-row header b {
-  flex: 0 0 auto;
-  padding: 5px 10px;
-  border-radius: 999px;
-  color: #c2410c;
-  background: #ffedd5;
-  font-size: .75rem;
-}
-
-.forum-report-row.status-processed header b {
-  color: #15803d;
-  background: #dcfce7;
-}
-
-.forum-report-row.status-rejected header b {
-  color: #475569;
-  background: #e2e8f0;
-}
-
-.forum-report-row p {
-  margin: 0;
-  padding: 12px 14px;
-  border-radius: 12px;
-  color: #334155;
-  background: rgba(255, 255, 255, .72);
-  font-size: .86rem;
-  line-height: 1.65;
-}
-
-.forum-report-actions {
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 10px;
+.admin-table tr.banned td {
+  border-left: 3px solid rgba(239, 68, 68, 0.5);
 }
 
 /* Link Styling */
@@ -3243,58 +3257,30 @@ function formatTokenCount(num) {
 }
 
 /* Dark theme adaptation for Forum Reports */
-:global(html[data-theme="dark"]) .forum-report-row {
-  background: var(--spatial-surface-2);
-  border-color: var(--spatial-line);
+:global(html[data-theme="dark"]) .forum-report-status-badge.open {
+  color: #fb923c;
+  background: rgba(251, 146, 60, 0.12);
+  border-color: rgba(251, 146, 60, 0.2);
 }
 
-:global(html[data-theme="dark"]) .forum-report-row.status-open {
-  background: linear-gradient(135deg, rgba(251, 146, 60, 0.08), rgba(30, 41, 59, 0.2));
-  border-color: rgba(251, 146, 60, 0.3);
+:global(html[data-theme="dark"]) .forum-report-status-badge.processed {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.2);
 }
 
-:global(html[data-theme="dark"]) .forum-report-row.status-processed {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(30, 41, 59, 0.2));
-  border-color: rgba(34, 197, 94, 0.3);
-}
-
-:global(html[data-theme="dark"]) .forum-report-row.status-rejected {
-  background: linear-gradient(135deg, rgba(148, 163, 184, 0.08), rgba(30, 41, 59, 0.2));
+:global(html[data-theme="dark"]) .forum-report-status-badge.rejected {
+  color: var(--spatial-silver);
+  background: rgba(148, 163, 184, 0.12);
   border-color: rgba(148, 163, 184, 0.2);
 }
 
-:global(html[data-theme="dark"]) .forum-report-row.banned {
-  border-color: rgba(239, 68, 68, 0.4);
+:global(html[data-theme="dark"]) .admin-table tr.status-open td {
+  background-color: rgba(251, 146, 60, 0.03);
 }
 
-:global(html[data-theme="dark"]) .forum-report-row strong {
-  color: var(--spatial-graphite);
-}
-
-:global(html[data-theme="dark"]) .forum-report-row header span,
-:global(html[data-theme="dark"]) .forum-report-row small,
-:global(html[data-theme="dark"]) .forum-report-row em {
-  color: var(--spatial-silver);
-}
-
-:global(html[data-theme="dark"]) .forum-report-row p {
-  color: var(--spatial-silver);
-  background: rgba(15, 23, 42, 0.3);
-}
-
-:global(html[data-theme="dark"]) .forum-report-row header b {
-  color: #fb923c;
-  background: rgba(251, 146, 60, 0.15);
-}
-
-:global(html[data-theme="dark"]) .forum-report-row.status-processed header b {
-  color: #4ade80;
-  background: rgba(74, 222, 128, 0.15);
-}
-
-:global(html[data-theme="dark"]) .forum-report-row.status-rejected header b {
-  color: var(--spatial-silver);
-  background: rgba(148, 163, 184, 0.15);
+:global(html[data-theme="dark"]) .admin-table tr.status-processed td {
+  background-color: rgba(74, 222, 128, 0.02);
 }
 
 .campus-review-list {
@@ -6674,5 +6660,391 @@ function formatTokenCount(num) {
 .slide-fade-leave-to {
   transform: translateY(-8px);
   opacity: 0;
+}
+
+/* Admin AI model routing screen, layout and structural properties */
+.admin-page {
+  min-height: 100vh;
+  padding: 28px 48px 48px;
+}
+
+.admin-page::before {
+  display: none;
+}
+
+.admin-shell {
+  max-width: 1500px;
+}
+
+.admin-header {
+  margin-bottom: 28px;
+}
+
+.admin-eyebrow {
+  letter-spacing: 0.14em;
+}
+
+.admin-header h2 {
+  font-size: 2rem;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+}
+
+.admin-stats-grid {
+  gap: 24px;
+}
+
+.admin-stat-card,
+.admin-side-nav,
+.providers-column,
+.config-card-panel,
+.models-grid-panel,
+.module-route-table,
+.pools-quick-access {
+  border-radius: 12px !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.admin-stat-card {
+  min-height: 128px;
+}
+
+.stat-icon {
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.stat-label,
+.stat-sub,
+.models-pane-header .pane-description,
+.quick-access-title,
+.form-group-item label,
+.provider-url,
+.model-badge-provider,
+.assign-label-tag,
+.scene-checkbox-label,
+.count-tag {
+  color: #8c98aa !important;
+}
+
+.stat-value,
+.models-pane-header h3,
+.column-header strong,
+.provider-name,
+.model-name-id,
+.scene-checkbox-label.checked,
+.module-route-head h4,
+.scene-pool-section .section-title strong {
+  color: #dfe7f3 !important;
+}
+
+.admin-side-nav {
+  padding: 14px;
+}
+
+.admin-side-tab {
+  min-height: 44px;
+  border-radius: 8px !important;
+  color: #94a3b8 !important;
+}
+
+.admin-side-tab.active {
+  background: #668bdd !important;
+  color: #edf4ff !important;
+}
+
+.admin-side-toggle {
+  background: #101722 !important;
+  border: 1px solid #1d293a !important;
+  color: #94a3b8 !important;
+}
+
+.models-pane-header {
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.models-pane-header h3 {
+  font-size: 1.35rem;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+}
+
+.models-pane-header .pane-description {
+  max-width: 860px;
+  margin-top: 12px;
+  line-height: 1.7;
+}
+
+.models-pane-header .spatial-btn-accent,
+.save-config-btn,
+.models-grid-panel .spatial-btn-accent {
+  border: 1px solid #668bdd !important;
+  background: #668bdd !important;
+  color: #edf4ff !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.pools-quick-access {
+  display: none;
+}
+
+.models-two-col-layout {
+  grid-template-columns: minmax(280px, 0.92fr) minmax(520px, 1.6fr);
+  gap: 22px;
+}
+
+.providers-column,
+.config-card-panel,
+.models-grid-panel {
+  padding: 20px;
+}
+
+.providers-column {
+  min-height: 470px;
+}
+
+.providers-column .column-header,
+.config-card-panel .column-header,
+.models-grid-panel .column-header {
+  border-bottom-color: #1d293a;
+}
+
+.add-provider-btn {
+  background: #111d2e !important;
+  border: 1px solid #294062 !important;
+  color: #75a7ff !important;
+  border-radius: 8px !important;
+}
+
+.provider-item-card,
+.model-dashboard-card {
+  background: #131b29 !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.provider-item-card.active {
+  background: #172236 !important;
+  border-color: #668bdd !important;
+  box-shadow: inset 0 0 0 1px rgba(102, 139, 221, 0.24) !important;
+}
+
+.provider-item-card:hover,
+.model-dashboard-card:hover {
+  transform: none;
+  border-color: #334664 !important;
+  background: #162235 !important;
+}
+
+.spatial-input,
+.form-group-item input {
+  background: #111927 !important;
+  border: 1px solid #26364d !important;
+  border-radius: 8px !important;
+  color: #dfe7f3 !important;
+  box-shadow: none !important;
+}
+
+.spatial-input:focus,
+.form-group-item input:focus {
+  border-color: #668bdd !important;
+  box-shadow: 0 0 0 3px rgba(102, 139, 221, 0.14) !important;
+}
+
+.model-dashboard-card {
+  gap: 14px;
+}
+
+.model-badge-provider {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  color: #6ea1ff !important;
+}
+
+.model-speed-pill-new {
+  background: #132032 !important;
+  border: 1px solid #294062 !important;
+  border-radius: 999px !important;
+  color: #75a7ff !important;
+}
+
+.model-speed-pill-new.success,
+.latency-text,
+.module-route-table strong {
+  color: #45e083 !important;
+}
+
+.model-speed-pill-new.error,
+.latency-text.error,
+.module-route-table strong.error {
+  color: #ff6b6b !important;
+}
+
+.scene-assignments-grid {
+  border-top-color: #1d293a;
+}
+
+.scene-checkbox-label input[type="checkbox"] {
+  border-color: #475569;
+  background: #0d1420;
+}
+
+.scene-checkbox-label input[type="checkbox"]:checked {
+  background: #668bdd;
+  border-color: #668bdd;
+}
+
+.module-route-table {
+  margin-top: 22px;
+  padding: 20px;
+}
+
+.module-route-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.module-route-head h4 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.module-route-head span {
+  color: #8c98aa;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.module-route-table-wrap {
+  overflow: auto;
+  border: 1px solid #273449;
+  border-radius: 8px;
+}
+
+.module-route-table table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.module-route-table th,
+.module-route-table td {
+  padding: 13px 14px;
+  border-bottom: 1px solid #273449;
+  color: #cbd5e1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.module-route-table th {
+  background: #172236;
+  color: #9daabe;
+  font-size: 0.82rem;
+}
+
+.module-route-table code,
+.scene-pool-table code,
+.model-code-id {
+  background: transparent !important;
+  color: #dbe4f0 !important;
+  font-weight: 800;
+}
+
+.admin-modal-overlay {
+  background: rgba(2, 6, 12, 0.64) !important;
+  backdrop-filter: blur(10px);
+}
+
+.all-pools-modal-card {
+  max-width: 820px;
+  background: #101722 !important;
+  border: 1px solid #22314a !important;
+  border-radius: 16px !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.36) !important;
+}
+
+.all-pools-modal-card .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #273449;
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+}
+
+.all-pools-modal-card h5 {
+  color: #e5edf8 !important;
+  margin: 0;
+}
+
+.all-pools-modal-card .modal-close {
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: #94a3b8 !important;
+  font-size: 1.6rem !important;
+  line-height: 1 !important;
+}
+
+.all-pools-container {
+  max-height: 72vh;
+}
+
+.scene-pool-section .bullet-dot {
+  background: #6ea1ff;
+}
+
+.scene-pool-section .section-title strong {
+  color: #6ea1ff !important;
+}
+
+.table-wrapper {
+  border: 1px solid #273449;
+  background: #101722;
+  border-radius: 8px;
+}
+
+.scene-pool-table {
+  min-width: 620px;
+}
+
+.scene-pool-table th,
+.scene-pool-table td {
+  border-bottom-color: #273449;
+  color: #cbd5e1;
+}
+
+.scene-pool-table th {
+  background: #172236;
+  color: #9daabe;
+}
+
+.scene-pool-table td {
+  background: #101722;
+  color: #cbd5e1;
+}
+
+.status-tag.available {
+  background: transparent;
+  color: #45e083;
+}
+
+@media (max-width: 990px) {
+  .admin-page {
+    padding: 24px 18px 32px;
+  }
 }
 </style>
