@@ -6205,8 +6205,16 @@ function formatTokenCount(num) {
 }
 
 .model-badge-provider {
-  font-size: 0.75rem;
-  color: var(--spatial-silver);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  align-self: flex-start;
+  margin-top: 2px;
 }
 
 .model-speed-row {
@@ -6218,15 +6226,16 @@ function formatTokenCount(num) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 10px;
+  padding: 4px 12px;
   font-size: 0.72rem;
   font-weight: 700;
   border-radius: 99px;
-  border: 1px solid var(--spatial-line);
-  background: var(--spatial-surface);
-  color: var(--spatial-gray);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.05);
+  color: var(--spatial-silver);
   cursor: pointer;
   transition: all 0.2s ease;
+  min-height: 24px;
 }
 
 .model-speed-pill-new.testing {
@@ -6237,14 +6246,14 @@ function formatTokenCount(num) {
 
 .model-speed-pill-new.success {
   color: #10b981;
-  background: rgba(16, 185, 129, 0.08);
-  border-color: rgba(16, 185, 129, 0.15);
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 .model-speed-pill-new.error {
   color: #ef4444;
-  background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .model-speed-error-msg {
@@ -6261,29 +6270,30 @@ function formatTokenCount(num) {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: 1px dashed var(--spatial-line);
-  padding-top: 10px;
+  border-top: 1px solid var(--spatial-line);
+  padding-top: 12px;
+  margin-top: 4px;
 }
 
 .assign-label-tag {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  color: var(--spatial-silver);
-  text-transform: uppercase;
+  color: var(--spatial-gray);
+  margin-bottom: 6px;
 }
 
 .checkbox-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px 10px;
+  gap: 8px 10px;
 }
 
 .scene-checkbox-label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.75rem;
-  color: var(--spatial-gray);
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--spatial-silver);
   cursor: pointer;
   user-select: none;
 }
@@ -6296,6 +6306,44 @@ function formatTokenCount(num) {
 .scene-checkbox-label.disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Custom Checkbox Design matching screenshot */
+.scene-checkbox-label input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 2px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.scene-checkbox-label input[type="checkbox"]:checked {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.scene-checkbox-label input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  width: 4px;
+  height: 8px;
+  border: 2px solid #ffffff;
+  border-left: 0;
+  border-top: 0;
+  transform: rotate(45deg);
+  top: 1px;
+  left: 4px;
 }
 
 /* Pool Quick Access Styles */
