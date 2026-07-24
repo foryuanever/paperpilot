@@ -355,7 +355,7 @@
           </div>
         </div>
 
-        <!-- Tab Content: Models (Redesigned 3-Column Layout) -->
+        <!-- Tab Content: Models (Redesigned 2-Column Layout) -->
         <div v-if="activeTab === 'models'" class="tab-pane models-redesign-pane">
           
           <!-- Header Area -->
@@ -369,8 +369,26 @@
             </button>
           </div>
 
-          <!-- 3-Column Dashboard Layout -->
-          <div class="models-three-col-layout">
+          <!-- Pool Quick Access Badges -->
+          <div class="pools-quick-access spatial-glass-panel">
+            <span class="quick-access-title">业务号池状态：</span>
+            <div class="quick-access-badges">
+              <button
+                v-for="scene in modelSceneOptions"
+                :key="scene.value"
+                class="pool-quick-badge"
+                @click="openAllScenesPoolModal"
+                title="点击查看号池状态详情"
+              >
+                <span class="badge-dot"></span>
+                <strong>{{ scene.label }}号池</strong>
+                <span class="badge-count">{{ getPoolCount(scene.value) }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 2-Column Dashboard Layout -->
+          <div class="models-two-col-layout">
             
             <!-- Column 1: 中转站服务商 -->
             <div class="providers-column spatial-glass-panel">
@@ -405,112 +423,111 @@
               </div>
             </div>
 
-            <!-- Column 2: 连接配置 -->
-            <div class="config-column spatial-glass-panel">
-              <div v-if="!activeRelay" class="empty-state">
-                请先选择或添加中转站
-              </div>
-              <div v-else class="provider-config-form">
-                <header class="column-header">
-                  <strong>{{ activeRelay.providerName }} - 连接配置</strong>
-                </header>
-                
-                <div class="form-body">
-                  <div class="form-group">
-                    <label>Base URL 接口地址</label>
-                    <input v-model="activeRelay.baseUrl" placeholder="https://api..." class="spatial-input" />
+            <!-- Column 2: Stack of Config and Models -->
+            <div class="models-right-stack">
+              <!-- Connect Configuration -->
+              <div class="config-card-panel spatial-glass-panel">
+                <div v-if="!activeRelay" class="empty-state" style="padding: 24px;">
+                  请先选择或添加左侧中转站
+                </div>
+                <div v-else class="provider-config-form">
+                  <header class="column-header">
+                    <strong>{{ activeRelay.providerName }} - 连接配置</strong>
+                  </header>
+                  
+                  <div class="form-body-horizontal">
+                    <div class="form-group-item">
+                      <label>Base URL 接口地址</label>
+                      <input v-model="activeRelay.baseUrl" placeholder="https://api..." class="spatial-input" />
+                    </div>
+                    <div class="form-group-item">
+                      <label>Key / 凭证密钥</label>
+                      <input v-model="activeRelay.apiKey" type="password" placeholder="填写新密钥进行覆盖更新" class="spatial-input" />
+                    </div>
+                    <button class="spatial-btn spatial-btn-accent save-config-btn" :disabled="updatingRelay" @click="saveRelayConfig">
+                      {{ updatingRelay ? "保存中..." : "保存配置" }}
+                    </button>
                   </div>
-                  <div class="form-group">
-                    <label>Key / 凭证密钥</label>
-                    <input v-model="activeRelay.apiKey" type="password" placeholder="填写新密钥进行覆盖更新" class="spatial-input" />
-                  </div>
-                  <button class="spatial-btn spatial-btn-accent save-config-btn" :disabled="updatingRelay" @click="saveRelayConfig">
-                    {{ updatingRelay ? "保存中..." : "保存配置" }}
-                  </button>
                 </div>
               </div>
-            </div>
 
-            <!-- Column 3: 包含模型 -->
-            <div class="models-column spatial-glass-panel">
-              <div v-if="!activeRelay" class="empty-state">
-                请先选择中转站
-              </div>
-              <div v-else-if="loadingModels" class="loading-state">
-                <span class="loading-spinner"></span> 正在读取可用模型...
-              </div>
-              <div v-else-if="relayModels.length === 0" class="empty-state">
-                未读取到模型列表，请确认 Key 是否配置正确且网络通畅。
-              </div>
-              <div v-else class="models-section">
-                <header class="column-header">
-                  <strong>包含模型 ({{ relayModels.length }})</strong>
-                </header>
-                
-                <div class="models-list-container">
-                  <article v-for="model in relayModels" :key="model.id" class="model-dashboard-card">
-                    <div class="model-card-top-row">
-                      <div class="model-avatar-circle">
-                        {{ model.id?.slice(0, 2).toUpperCase() }}
-                      </div>
-                      <div class="model-info-block">
+              <!-- Models List Grid -->
+              <div v-if="activeRelay" class="models-grid-panel spatial-glass-panel">
+                <div v-if="loadingModels" class="loading-state" style="padding: 40px 0;">
+                  <span class="loading-spinner"></span> 正在读取可用模型...
+                </div>
+                <div v-else-if="relayModels.length === 0" class="empty-state" style="padding: 40px 0;">
+                  未读取到模型列表，请确认 Key 是否配置正确且网络通畅。
+                </div>
+                <div v-else class="models-section">
+                  <header class="column-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <strong>包含模型 ({{ relayModels.length }})</strong>
+                    <button class="spatial-btn spatial-btn-accent compact-btn" @click="testAllModelsSpeed">
+                      一键测速
+                    </button>
+                  </header>
+                  
+                  <div class="models-cards-grid">
+                    <article v-for="model in relayModels" :key="model.id" class="model-dashboard-card">
+                      <div class="model-card-header">
                         <strong class="model-name-id">{{ model.id }}</strong>
                         <span class="model-badge-provider">{{ activeRelay.providerName }}</span>
                       </div>
-                      <!-- Speed test button or latency value -->
-                      <button
-                        class="model-speed-pill"
-                        :class="{
-                          testing: modelTestResults[model.id]?.testing,
-                          success: modelTestResults[model.id] && !modelTestResults[model.id].testing && modelTestResults[model.id].success,
-                          error: modelTestResults[model.id] && !modelTestResults[model.id].testing && !modelTestResults[model.id].success
-                        }"
-                        :disabled="modelTestResults[model.id]?.testing"
-                        @click="testModelSpeed(model)"
-                      >
-                        <span v-if="modelTestResults[model.id]?.testing">测速中...</span>
-                        <span v-else-if="modelTestResults[model.id] && !modelTestResults[model.id].testing && modelTestResults[model.id].success">
-                          {{ modelTestResults[model.id].latencyMs }}ms
-                        </span>
-                        <span v-else-if="modelTestResults[model.id] && !modelTestResults[model.id].testing && !modelTestResults[model.id].success">
-                          失败
-                        </span>
-                        <span v-else>开始测速</span>
-                      </button>
-                    </div>
-
-                    <!-- Speed error display -->
-                    <div
-                      v-if="modelTestResults[model.id] && !modelTestResults[model.id].success && modelTestResults[model.id].message"
-                      class="model-speed-error-msg"
-                    >
-                      {{ modelTestResults[model.id].message }}
-                    </div>
-
-                    <!-- Scene Assignments Grid (2 columns checklist) -->
-                    <div class="scene-assignments-grid">
-                      <span class="assign-label-tag">分配业务号池</span>
-                      <div class="checkbox-columns">
-                        <label
-                          v-for="scene in modelSceneOptions"
-                          :key="scene.value"
-                          class="scene-checkbox-label"
+                      
+                      <div class="model-speed-row">
+                        <button
+                          class="model-speed-pill-new"
                           :class="{
-                            checked: assignedScenesMap[`${activeRelay.providerName.toLowerCase()}|${activeRelay.baseUrl.toLowerCase()}|${model.id}`]?.[scene.value],
-                            disabled: modelActionStates[`${model.id}|${scene.value}`]
+                            testing: modelTestResults[model.id]?.testing,
+                            success: modelTestResults[model.id] && !modelTestResults[model.id].testing && modelTestResults[model.id].success,
+                            error: modelTestResults[model.id] && !modelTestResults[model.id].testing && !modelTestResults[model.id].success
                           }"
+                          :disabled="modelTestResults[model.id]?.testing"
+                          @click="testModelSpeed(model)"
                         >
-                          <input
-                            type="checkbox"
-                            :checked="assignedScenesMap[`${activeRelay.providerName.toLowerCase()}|${activeRelay.baseUrl.toLowerCase()}|${model.id}`]?.[scene.value]"
-                            :disabled="modelActionStates[`${model.id}|${scene.value}`]"
-                            @change="toggleModelScene(model, scene.value, assignedScenesMap[`${activeRelay.providerName.toLowerCase()}|${activeRelay.baseUrl.toLowerCase()}|${model.id}`]?.[scene.value])"
-                          />
-                          <span>{{ scene.label }}</span>
-                        </label>
+                          <span v-if="modelTestResults[model.id]?.testing">测速中...</span>
+                          <span v-else-if="modelTestResults[model.id] && !modelTestResults[model.id].testing && modelTestResults[model.id].success">
+                            {{ modelTestResults[model.id].latencyMs }}ms
+                          </span>
+                          <span v-else-if="modelTestResults[model.id] && !modelTestResults[model.id].testing && !modelTestResults[model.id].success">
+                            失败
+                          </span>
+                          <span v-else>点击测速</span>
+                        </button>
                       </div>
-                    </div>
-                  </article>
+
+                      <!-- Speed error message -->
+                      <div
+                        v-if="modelTestResults[model.id] && !modelTestResults[model.id].success && modelTestResults[model.id].message"
+                        class="model-speed-error-msg"
+                      >
+                        {{ modelTestResults[model.id].message }}
+                      </div>
+
+                      <div class="scene-assignments-grid">
+                        <span class="assign-label-tag">分配业务号池</span>
+                        <div class="checkbox-columns">
+                          <label
+                            v-for="scene in modelSceneOptions"
+                            :key="scene.value"
+                            class="scene-checkbox-label"
+                            :class="{
+                              checked: assignedScenesMap[`${activeRelay.providerName.toLowerCase()}|${activeRelay.baseUrl.toLowerCase()}|${model.id}`]?.[scene.value],
+                              disabled: modelActionStates[`${model.id}|${scene.value}`]
+                            }"
+                          >
+                            <input
+                              type="checkbox"
+                              :checked="assignedScenesMap[`${activeRelay.providerName.toLowerCase()}|${activeRelay.baseUrl.toLowerCase()}|${model.id}`]?.[scene.value]"
+                              :disabled="modelActionStates[`${model.id}|${scene.value}`]"
+                              @change="toggleModelScene(model, scene.value, assignedScenesMap[`${activeRelay.providerName.toLowerCase()}|${activeRelay.baseUrl.toLowerCase()}|${model.id}`]?.[scene.value])"
+                            />
+                            <span>{{ scene.label }}</span>
+                          </label>
+                        </div>
+                      </div>
+                    </article>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1873,9 +1890,11 @@ async function loadRelays() {
 async function loadAllScenePools() {
   const scenes = ["paper_review", "paper_qa", "topic_research", "meeting_deck", "forum_moderation"];
   const newMap = {};
+  const newPoolData = {};
   for (const scene of scenes) {
     try {
       const pool = await paperpilotApi.getModelPool(scene);
+      newPoolData[scene] = pool;
       for (const item of pool) {
         if (item.template) continue;
         const routeKey = `${item.providerName.toLowerCase()}|${item.baseUrl.toLowerCase()}`;
@@ -1887,9 +1906,11 @@ async function loadAllScenePools() {
       }
     } catch (e) {
       console.error(`Failed to load pool for ${scene}:`, e);
+      newPoolData[scene] = [];
     }
   }
   assignedScenesMap.value = newMap;
+  allScenesPoolData.value = newPoolData;
 }
 
 async function loadRelayModels(relay) {
@@ -2075,6 +2096,16 @@ async function openAllScenesPoolModal() {
   }
   allScenesPoolData.value = data;
   loadingAllScenesPool.value = false;
+}
+
+function getPoolCount(scene) {
+  return allScenesPoolData.value[scene]?.length || 0;
+}
+
+async function testAllModelsSpeed() {
+  if (!relayModels.value.length) return;
+  // Run all model speed tests in parallel
+  relayModels.value.forEach(model => testModelSpeed(model));
 }
 
 async function saveRelayConfig() {
@@ -5957,38 +5988,52 @@ function formatTokenCount(num) {
   margin: 4px 0 0 0;
 }
 
-.models-three-col-layout {
+.models-two-col-layout {
   display: grid;
-  grid-template-columns: 260px 340px 1fr;
+  grid-template-columns: 280px 1fr;
   gap: 20px;
   align-items: start;
 }
 
-@media (max-width: 1200px) {
-  .models-three-col-layout {
-    grid-template-columns: 240px 300px 1fr;
-  }
-}
-
 @media (max-width: 990px) {
-  .models-three-col-layout {
+  .models-two-col-layout {
     grid-template-columns: 1fr;
   }
 }
 
+.models-right-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .providers-column,
-.config-column,
-.models-column {
+.config-card-panel,
+.models-grid-panel {
   padding: 20px;
   border-radius: 20px;
+}
+
+.providers-column {
   min-height: 480px;
   display: flex;
   flex-direction: column;
 }
 
+.config-card-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.models-grid-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 380px;
+}
+
 .providers-column .column-header,
-.config-column .column-header,
-.models-column .column-header {
+.config-card-panel .column-header,
+.models-grid-panel .column-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -6090,164 +6135,230 @@ function formatTokenCount(num) {
   background: rgba(255, 59, 48, 0.08);
 }
 
-.provider-config-form .form-body {
+.form-body-horizontal {
   display: flex;
-  flex-direction: column;
+  align-items: flex-end;
   gap: 16px;
-}
-
-.save-config-btn {
-  margin-top: 8px;
   width: 100%;
 }
 
-.models-column {
-  flex: 1;
+@media (max-width: 768px) {
+  .form-body-horizontal {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
-.models-list-container {
+.form-group-item {
+  flex: 1;
   display: flex;
   flex-direction: column;
+  gap: 6px;
+}
+
+.form-group-item label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--spatial-silver);
+}
+
+.save-config-btn {
+  min-height: 40px;
+  padding: 0 20px;
+  flex-shrink: 0;
+}
+
+.models-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
-  max-height: 600px;
-  overflow-y: auto;
-  padding-right: 4px;
+  margin-top: 16px;
 }
 
 .model-dashboard-card {
   padding: 16px;
-  border-radius: 16px;
+  border-radius: 12px;
   border: 1px solid var(--spatial-line);
   background: var(--spatial-surface-2);
   display: flex;
   flex-direction: column;
   gap: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.model-card-top-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.model-dashboard-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(10, 10, 12, 0.05);
 }
 
-.model-avatar-circle {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--spatial-accent-soft);
-  color: var(--spatial-accent);
-  font-weight: 800;
-  font-size: 0.8rem;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-}
-
-.model-info-block {
+.model-card-header {
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  flex: 1;
+  gap: 4px;
 }
 
 .model-name-id {
-  font-size: 0.88rem;
+  font-size: 0.95rem;
+  font-weight: 700;
   color: var(--spatial-graphite);
   word-break: break-all;
 }
 
 .model-badge-provider {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--spatial-silver);
-  margin-top: 1px;
 }
 
-.model-speed-pill {
-  background: var(--spatial-warm-2);
-  border: 1px solid var(--spatial-line);
-  color: var(--spatial-graphite);
+.model-speed-row {
+  display: flex;
+  align-items: center;
+}
+
+.model-speed-pill-new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 99px;
+  border: 1px solid var(--spatial-line);
+  background: var(--spatial-surface);
+  color: var(--spatial-gray);
   cursor: pointer;
   transition: all 0.2s ease;
-  flex-shrink: 0;
 }
 
-.model-speed-pill:hover:not(:disabled) {
-  background: var(--spatial-accent-soft);
-  border-color: var(--spatial-accent-line);
-  color: var(--spatial-accent);
+.model-speed-pill-new.testing {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.15);
 }
 
-.model-speed-pill.testing {
-  color: var(--spatial-silver);
-  cursor: not-allowed;
+.model-speed-pill-new.success {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.15);
 }
 
-.model-speed-pill.success {
-  color: #34c759;
-  background: rgba(52, 199, 89, 0.12);
-  border-color: rgba(52, 199, 89, 0.2);
-}
-
-.model-speed-pill.error {
-  color: #ff3b30;
-  background: rgba(255, 59, 48, 0.12);
-  border-color: rgba(255, 59, 48, 0.2);
+.model-speed-pill-new.error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.15);
 }
 
 .model-speed-error-msg {
-  background: rgba(255, 59, 48, 0.06);
-  border: 1px solid rgba(255, 59, 48, 0.12);
-  color: #ff3b30;
-  padding: 6px 10px;
-  border-radius: 8px;
   font-size: 0.7rem;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.04);
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.1);
   word-break: break-all;
 }
 
 .scene-assignments-grid {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  border-top: 1px solid var(--spatial-line);
+  gap: 8px;
+  border-top: 1px dashed var(--spatial-line);
   padding-top: 10px;
 }
 
 .assign-label-tag {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--spatial-silver);
   text-transform: uppercase;
-  letter-spacing: 0.02em;
 }
 
 .checkbox-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px 16px;
-  margin-top: 6px;
+  gap: 6px 10px;
 }
 
 .scene-checkbox-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: var(--spatial-gray);
   cursor: pointer;
+  user-select: none;
 }
 
 .scene-checkbox-label.checked {
-  color: var(--spatial-accent);
+  color: var(--spatial-graphite);
   font-weight: 600;
 }
 
 .scene-checkbox-label.disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Pool Quick Access Styles */
+.pools-quick-access {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.quick-access-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--spatial-silver);
+  white-space: nowrap;
+}
+
+.quick-access-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pool-quick-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--spatial-line);
+  background: var(--spatial-surface);
+  color: var(--spatial-gray);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pool-quick-badge:hover {
+  border-color: var(--spatial-accent);
+  color: var(--spatial-graphite);
+  transform: translateY(-1px);
+}
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.pool-quick-badge strong {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.badge-count {
+  font-size: 0.72rem;
+  background: var(--spatial-line);
+  color: var(--spatial-graphite);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 700;
 }
 
 /* All Scene Pools Modal Styles */
