@@ -832,23 +832,28 @@ function closeMindMapModal() {
 }
 
 async function loadMindMapReport() {
+  // Render abstract mind map instantly so the user has immediate access
+  mindMapState.report = null;
+  mindMapState.error = "";
+  mindMapState.loading = false;
+  renderMindMap();
+  
   if (!workspaceId.value) {
-    mindMapState.report = null;
-    mindMapState.error = "";
-    renderMindMap();
     return;
   }
+  
+  // Asynchronously load the full meeting report details in the background
   mindMapState.loading = true;
-  mindMapState.error = "";
   try {
     const data = await paperpilotApi.getMeetingReport(workspaceId.value);
-    mindMapState.report = data || null;
-  } catch {
-    mindMapState.report = null;
-    mindMapState.error = "暂未读取到 AI 精读报告，已使用当前论文摘要生成基础导图。";
+    if (data && data.generated) {
+      mindMapState.report = data;
+      renderMindMap();
+    }
+  } catch (err) {
+    console.warn("Failed to fetch full meeting report for mind map:", err);
   } finally {
     mindMapState.loading = false;
-    renderMindMap();
   }
 }
 const figureCanvasRef = ref(null);
@@ -1129,25 +1134,30 @@ function mindMapText(value, max = 80) {
 async function renderMindMap() {
   if (!mindMapModal.open) return;
   await nextTick();
-  const { Markmap } = await loadMindMapRuntime();
-  if (!mindMapModal.open) return;
-  const svg = mindMapSvg.value;
-  if (!svg) return;
-  const { root } = mindMapTransformer.transform(mindMapMarkdown.value);
-  
-  if (isDarkTheme.value) {
-    mindMapOptions.color = ["#818cf8", "#34d399", "#c084fc", "#fb923c", "#38bdf8", "#f472b6"];
-  } else {
-    mindMapOptions.color = ["#2f6df6", "#14a38b", "#8b5cf6", "#f97316", "#0ea5e9", "#e11d48"];
+  try {
+    const { Markmap } = await loadMindMapRuntime();
+    if (!mindMapModal.open) return;
+    const svg = mindMapSvg.value;
+    if (!svg) return;
+    const { root } = mindMapTransformer.transform(mindMapMarkdown.value);
+    
+    if (isDarkTheme.value) {
+      mindMapOptions.color = ["#818cf8", "#34d399", "#c084fc", "#fb923c", "#38bdf8", "#f472b6"];
+    } else {
+      mindMapOptions.color = ["#2f6df6", "#14a38b", "#8b5cf6", "#f97316", "#0ea5e9", "#e11d48"];
+    }
+    
+    if (mindMapInstance.value) {
+      mindMapInstance.value.setOptions(mindMapOptions);
+      await mindMapInstance.value.setData(root);
+    } else {
+      mindMapInstance.value = Markmap.create(svg, mindMapOptions, root);
+    }
+    requestAnimationFrame(() => focusMindMapReadable());
+  } catch (err) {
+    console.error("Failed to render mind map:", err);
+    mindMapState.error = "渲染思维导图失败，请刷新页面重试。(" + (err.message || String(err)) + ")";
   }
-  
-  if (mindMapInstance.value) {
-    mindMapInstance.value.setOptions(mindMapOptions);
-    await mindMapInstance.value.setData(root);
-  } else {
-    mindMapInstance.value = Markmap.create(svg, mindMapOptions, root);
-  }
-  requestAnimationFrame(() => focusMindMapReadable());
 }
 
 function destroyMindMap() {
