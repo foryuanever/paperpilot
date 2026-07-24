@@ -11,10 +11,22 @@
         <div class="header-right" style="display: flex; align-items: center; gap: 12px;">
           <!-- Compact stats summary when cards are collapsed -->
           <div v-if="!showStatsPanel" class="compact-stats-bar">
-            <span class="compact-stat-item">👤 用户: <strong>{{ globalStats.totalUsers || 0 }}</strong></span>
-            <span class="compact-stat-item">📚 文献: <strong>{{ globalStats.totalPapers || 0 }}</strong></span>
-            <span class="compact-stat-item">💎 会员: <strong>{{ activeMemberCount || 0 }}</strong></span>
-            <span class="compact-stat-item">💰 订单: <strong>¥{{ formatMoney(globalStats.totalRechargeAmount) }}</strong></span>
+            <span class="compact-stat-item">
+              <span class="compact-icon" v-html="adminIcons.users"></span>
+              用户: <strong>{{ globalStats.totalUsers || 0 }}</strong>
+            </span>
+            <span class="compact-stat-item">
+              <span class="compact-icon" v-html="adminIcons.papers"></span>
+              文献: <strong>{{ globalStats.totalPapers || 0 }}</strong>
+            </span>
+            <span class="compact-stat-item">
+              <span class="compact-icon" v-html="adminIcons.tokens"></span>
+              会员: <strong>{{ activeMemberCount || 0 }}</strong>
+            </span>
+            <span class="compact-stat-item">
+              <span class="compact-icon" v-html="adminIcons.status"></span>
+              订单: <strong>¥{{ formatMoney(globalStats.totalRechargeAmount) }}</strong>
+            </span>
           </div>
           <button class="spatial-btn spatial-btn-ghost compact-btn toggle-stats-btn" @click="showStatsPanel = !showStatsPanel">
             {{ showStatsPanel ? "隐藏数据卡" : "查看数据卡" }}
@@ -2583,7 +2595,7 @@ function truncateText(value, length = 100) {
 
 <style scoped>
 .admin-page {
-  padding: 96px 36px 48px 36px;
+  padding: 32px 36px 48px 36px;
   position: relative;
   min-height: 100vh;
 }
@@ -6303,6 +6315,17 @@ function truncateText(value, length = 100) {
 .compact-stat-item {
   display: flex;
   align-items: center;
+}
+
+.compact-icon {
+  margin-right: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.compact-icon :deep(svg) {
+  width: 14px !important;
+  height: 14px !important;
 }
 
 .compact-stat-item strong {
