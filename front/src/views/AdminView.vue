@@ -2118,18 +2118,31 @@ function getRoleClass(role) {
 }
 
 function membershipPlanName(plan) {
-  return {
+  const mapping = {
     free: "未开通",
+    lite: "轻享月卡",
     light: "轻享月卡",
+    plus: "研读会员",
     study: "研读会员",
+    pro: "课题会员",
     lab: "课题会员",
+    max: "导师车队会员",
     team: "导师车队会员",
     team_plus: "团队 Plus 会员",
-  }[plan || "free"] || "未开通";
+    team_pro: "团队 Pro 会员",
+  };
+  return mapping[plan] || mapping["free"];
 }
 
 function membershipPlanClass(plan) {
-  return `plan-${plan || "free"}`;
+  const normalized = plan || "free";
+  if (normalized === "lite" || normalized === "light") return "plan-light";
+  if (normalized === "plus" || normalized === "study") return "plan-study";
+  if (normalized === "pro" || normalized === "lab") return "plan-lab";
+  if (normalized === "max" || normalized === "team") return "plan-team";
+  if (normalized === "team_plus") return "plan-team_plus";
+  if (normalized === "team_pro") return "plan-team_plus";
+  return `plan-${normalized}`;
 }
 
 function membershipCycleName(cycle) {
@@ -3475,13 +3488,19 @@ function formatTokenCount(num) {
 .user-password-code {
   font-family: monospace;
   font-size: 0.8rem;
-  background: rgba(148, 163, 184, 0.08);
-  border: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(249, 115, 22, 0.06);
+  border: 1px solid rgba(249, 115, 22, 0.15);
   padding: 3px 8px;
   border-radius: 6px;
-  color: var(--spatial-silver);
+  color: #d97706;
   font-weight: 600;
   display: inline-block;
+}
+
+:global(html[data-theme="dark"]) .user-password-code {
+  background: rgba(251, 146, 60, 0.1);
+  border-color: rgba(251, 146, 60, 0.2);
+  color: #fb923c;
 }
 
 /* Refined Membership Column Styles */
