@@ -2507,11 +2507,14 @@ function truncateText(value, length = 100) {
 
 .admin-side-nav {
   position: fixed;
+  top: 88px;
+  left: 24px;
+  bottom: 28px;
   z-index: 30;
   width: 236px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--spatial-line);
   border-radius: 24px;
   background: var(--spatial-glass);
@@ -2521,33 +2524,9 @@ function truncateText(value, length = 100) {
   transition: width 0.25s ease, border-radius 0.25s ease, background 0.25s ease, border-color 0.25s ease;
 }
 
-.sidebar-drag-handle {
-  height: 20px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 3px;
-  cursor: grab;
-  padding-top: 14px;
-  padding-bottom: 4px;
-  width: 100%;
-}
-
-.sidebar-drag-handle span {
-  width: 32px;
-  height: 3px;
-  background: var(--spatial-line);
-  border-radius: 99px;
-  transition: background 0.2s ease;
-}
-
-.admin-side-nav:hover .sidebar-drag-handle span {
-  background: var(--spatial-silver);
-}
-
-.sidebar-drag-handle:active {
-  cursor: grabbing;
+.admin-side-nav.collapsed {
+  width: 68px;
+  border-radius: 22px;
 }
 
 .admin-side-tabs {
