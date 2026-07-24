@@ -673,7 +673,11 @@
               <header>
                 <div>
                   <span>举报 #{{ report.id }} · {{ formatDateTime(report.createdAt) }}</span>
-                  <strong>{{ report.postTitle }}</strong>
+                  <strong>
+                    <a :href="'/forum/post/' + String(report.postId).replace('post-', '')" target="_blank" class="report-post-link" title="在独立标签页中打开原帖">
+                      {{ report.postTitle }}
+                    </a>
+                  </strong>
                   <small>{{ report.postType || "论坛帖子" }} · 作者 {{ report.author || "—" }} · 举报人 {{ report.reporterName || "—" }}</small>
                 </div>
                 <b>{{ forumReportStatusLabel(report.status) }}</b>
@@ -1017,7 +1021,12 @@
       <div v-if="showForumReportDetailModal" class="admin-modal-overlay" @click="showForumReportDetailModal = false">
         <div class="admin-modal-card forum-report-detail-card spatial-glass-panel" @click.stop>
           <h4>举报详情</h4>
-          <p class="form-hint" style="margin-top: 8px;">{{ selectedForumReportDetail?.postTitle }} · 举报 #{{ selectedForumReportDetail?.id }}</p>
+          <p class="form-hint" style="margin-top: 8px;">
+            <a :href="'/forum/post/' + String(selectedForumReportDetail?.postId).replace('post-', '')" target="_blank" class="report-post-link" style="font-weight: 700; color: var(--spatial-accent);" title="在独立标签页中打开原帖">
+              {{ selectedForumReportDetail?.postTitle }}
+            </a>
+            · 举报 #{{ selectedForumReportDetail?.id }}
+          </p>
           <div class="forum-report-detail-grid">
             <article>
               <span>举报人说明</span>
@@ -3126,7 +3135,8 @@ function formatTokenCount(num) {
 
 .forum-report-list {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+  gap: 16px;
   padding: 18px;
   border-radius: 16px;
 }
@@ -3217,6 +3227,74 @@ function formatTokenCount(num) {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+/* Link Styling */
+.report-post-link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.report-post-link:hover {
+  color: var(--spatial-accent) !important;
+  text-decoration: underline;
+}
+
+/* Dark theme adaptation for Forum Reports */
+:global(html[data-theme="dark"]) .forum-report-row {
+  background: var(--spatial-surface-2);
+  border-color: var(--spatial-line);
+}
+
+:global(html[data-theme="dark"]) .forum-report-row.status-open {
+  background: linear-gradient(135deg, rgba(251, 146, 60, 0.08), rgba(30, 41, 59, 0.2));
+  border-color: rgba(251, 146, 60, 0.3);
+}
+
+:global(html[data-theme="dark"]) .forum-report-row.status-processed {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(30, 41, 59, 0.2));
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+:global(html[data-theme="dark"]) .forum-report-row.status-rejected {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.08), rgba(30, 41, 59, 0.2));
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+:global(html[data-theme="dark"]) .forum-report-row.banned {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+:global(html[data-theme="dark"]) .forum-report-row strong {
+  color: var(--spatial-graphite);
+}
+
+:global(html[data-theme="dark"]) .forum-report-row header span,
+:global(html[data-theme="dark"]) .forum-report-row small,
+:global(html[data-theme="dark"]) .forum-report-row em {
+  color: var(--spatial-silver);
+}
+
+:global(html[data-theme="dark"]) .forum-report-row p {
+  color: var(--spatial-silver);
+  background: rgba(15, 23, 42, 0.3);
+}
+
+:global(html[data-theme="dark"]) .forum-report-row header b {
+  color: #fb923c;
+  background: rgba(251, 146, 60, 0.15);
+}
+
+:global(html[data-theme="dark"]) .forum-report-row.status-processed header b {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.15);
+}
+
+:global(html[data-theme="dark"]) .forum-report-row.status-rejected header b {
+  color: var(--spatial-silver);
+  background: rgba(148, 163, 184, 0.15);
 }
 
 .campus-review-list {
@@ -4640,6 +4718,20 @@ function formatTokenCount(num) {
   color: #243044;
   line-height: 1.8;
   white-space: pre-wrap;
+}
+
+/* Dark theme adaptation for detail modal grid */
+:global(html[data-theme="dark"]) .forum-report-detail-grid article {
+  background: rgba(15, 23, 42, 0.4);
+  border-color: rgba(148, 163, 184, 0.15);
+}
+
+:global(html[data-theme="dark"]) .forum-report-detail-grid span {
+  color: #60a5fa;
+}
+
+:global(html[data-theme="dark"]) .forum-report-detail-grid p {
+  color: var(--spatial-silver);
 }
 
 .site-message-admin-grid {
