@@ -346,136 +346,146 @@
           </div>
         </div>
 
-        <!-- Tab Content: Models (Redesigned) -->
+        <!-- Tab Content: Models (Redesigned 3-Column Layout) -->
         <div v-if="activeTab === 'models'" class="tab-pane models-redesign-pane">
-          <!-- Top Row: Core Module Pools Entrance -->
-          <div class="scene-pools-entrance-panel spatial-glass-panel">
-            <header class="entrance-header">
-              <span class="eyebrow">MODULE ROUTING HEALTH POOLS</span>
-              <h4>全站核心场景号池运维</h4>
-              <p>点击下方各模块场景，可实时查看及维护其对应的可用模型轮询队列。</p>
-            </header>
-            <div class="scene-buttons-grid">
-              <button
-                v-for="scene in modelSceneOptions"
-                :key="scene.value"
-                class="scene-pool-btn spatial-glass-panel animate-hover-up"
-                type="button"
-                @click="openScenePoolModal(scene.value)"
-              >
-                <div class="scene-btn-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                </div>
-                <div class="scene-btn-info">
-                  <strong>{{ scene.label }}号池</strong>
-                  <span>{{ scene.hint }}</span>
-                </div>
-              </button>
+          
+          <!-- Header Area -->
+          <div class="models-pane-header">
+            <div>
+              <h3>AI 中转模型配置中心</h3>
+              <p class="pane-description">集中管理 API 中转服务商连接参数。可对接下属各模型进行实时测速并勾选分配至对应业务场景。</p>
             </div>
+            <button class="spatial-btn spatial-btn-accent" @click="openAllScenesPoolModal">
+              全站各模块号池一览
+            </button>
           </div>
 
-          <!-- Main Dashboard: Two columns -->
-          <div class="models-dashboard-layout">
-            <!-- Left Column: Relays / Transfer Stations -->
-            <div class="dashboard-left-col spatial-glass-panel">
-              <header class="col-header">
-                <h5>中转分发站</h5>
-                <button class="spatial-btn spatial-btn-accent compact-btn" @click="showAddRelayModal = true">
+          <!-- 3-Column Dashboard Layout -->
+          <div class="models-three-col-layout">
+            
+            <!-- Column 1: 中转站服务商 -->
+            <div class="providers-column spatial-glass-panel">
+              <header class="column-header">
+                <strong>中转站服务商</strong>
+                <button class="add-provider-btn" @click="showAddRelayModal = true">
                   + 添加中转站
                 </button>
               </header>
-
               <div v-if="loadingRelays" class="loading-state">
                 <span class="loading-spinner"></span> 加载中...
               </div>
               <div v-else-if="relays.length === 0" class="empty-state">
-                暂无配置的中转站
+                暂无服务商
               </div>
-              <div v-else class="relays-list">
+              <div v-else class="providers-list">
                 <div
                   v-for="relay in relays"
                   :key="relay.id"
-                  class="relay-item-card animate-hover-up"
+                  class="provider-item-card"
                   :class="{ active: activeRelay?.id === relay.id }"
                   @click="activeRelay = relay"
                 >
-                  <div class="relay-card-main">
-                    <strong>{{ relay.providerName }}</strong>
-                    <span class="relay-url">{{ relay.baseUrl }}</span>
+                  <div class="provider-card-info">
+                    <span class="provider-name">{{ relay.providerName }}</span>
+                    <span class="provider-url">{{ relay.baseUrl }}</span>
                   </div>
-                  <button class="relay-delete-btn" type="button" @click.stop="deleteRelay(relay)" title="删除此中转站">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                  <button class="provider-delete-btn" type="button" @click.stop="deleteRelay(relay)" title="删除">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 13px; height: 13px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                   </button>
                 </div>
               </div>
             </div>
 
-            <!-- Right Column: Supported Models Grid -->
-            <div class="dashboard-right-col spatial-glass-panel">
+            <!-- Column 2: 连接配置 -->
+            <div class="config-column spatial-glass-panel">
               <div v-if="!activeRelay" class="empty-state">
-                请先选择或添加一个中转站
+                请先选择或添加中转站
+              </div>
+              <div v-else class="provider-config-form">
+                <header class="column-header">
+                  <strong>{{ activeRelay.providerName }} - 连接配置</strong>
+                </header>
+                
+                <div class="form-body">
+                  <div class="form-group">
+                    <label>Base URL 接口地址</label>
+                    <input v-model="activeRelay.baseUrl" placeholder="https://api..." class="spatial-input" />
+                  </div>
+                  <div class="form-group">
+                    <label>Key / 凭证密钥</label>
+                    <input v-model="activeRelay.apiKey" type="password" placeholder="填写新密钥进行覆盖更新" class="spatial-input" />
+                  </div>
+                  <button class="spatial-btn spatial-btn-accent save-config-btn" :disabled="updatingRelay" @click="saveRelayConfig">
+                    {{ updatingRelay ? "保存中..." : "保存配置" }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Column 3: 包含模型 -->
+            <div class="models-column spatial-glass-panel">
+              <div v-if="!activeRelay" class="empty-state">
+                请先选择中转站
               </div>
               <div v-else-if="loadingModels" class="loading-state">
-                <span class="loading-spinner"></span> 正在拉取该中转站支持的所有模型...
+                <span class="loading-spinner"></span> 正在读取可用模型...
               </div>
               <div v-else-if="relayModels.length === 0" class="empty-state">
-                该中转站下未拉取到模型列表，请确保 API Key 配置正确且能正常连通。
+                未读取到模型列表，请确认 Key 是否配置正确且网络通畅。
               </div>
-              <div v-else class="active-relay-models-view">
-                <header class="relay-models-header">
-                  <div>
-                    <h5>{{ activeRelay.providerName }} 支持的模型</h5>
-                    <p class="subtitle">共 {{ relayModels.length }} 个可用模型 · 数据来自 API 直连读取</p>
-                  </div>
+              <div v-else class="models-section">
+                <header class="column-header">
+                  <strong>包含模型 ({{ relayModels.length }})</strong>
                 </header>
-
-                <div class="models-cards-grid">
-                  <article v-for="model in relayModels" :key="model.id" class="model-item-card spatial-glass-panel">
-                    <div class="model-card-head">
-                      <div class="model-avatar">
-                        {{ model.ownedBy?.slice(0, 2).toUpperCase() || 'AI' }}
+                
+                <div class="models-list-container">
+                  <article v-for="model in relayModels" :key="model.id" class="model-dashboard-card">
+                    <div class="model-card-top-row">
+                      <div class="model-avatar-circle">
+                        {{ model.id?.slice(0, 2).toUpperCase() }}
                       </div>
-                      <div class="model-name-wrapper">
-                        <strong class="model-id-label">{{ model.id }}</strong>
-                        <span class="model-owner-tag">{{ model.ownedBy || '未知供应商' }}</span>
+                      <div class="model-info-block">
+                        <strong class="model-name-id">{{ model.id }}</strong>
+                        <span class="model-badge-provider">{{ activeRelay.providerName }}</span>
                       </div>
-                    </div>
-
-                    <!-- Speed test & Error message display -->
-                    <div class="model-card-metrics">
+                      <!-- Speed test button or latency value -->
                       <button
-                        class="speed-test-btn"
-                        :class="{ testing: modelTestResults[model.id]?.testing }"
+                        class="model-speed-pill"
+                        :class="{
+                          testing: modelTestResults[model.id]?.testing,
+                          success: modelTestResults[model.id] && !modelTestResults[model.id].testing && modelTestResults[model.id].success,
+                          error: modelTestResults[model.id] && !modelTestResults[model.id].testing && !modelTestResults[model.id].success
+                        }"
                         :disabled="modelTestResults[model.id]?.testing"
                         @click="testModelSpeed(model)"
                       >
-                        {{ modelTestResults[model.id]?.testing ? '测速中...' : '开始测速' }}
+                        <span v-if="modelTestResults[model.id]?.testing">测速中...</span>
+                        <span v-else-if="modelTestResults[model.id] && !modelTestResults[model.id].testing && modelTestResults[model.id].success">
+                          {{ modelTestResults[model.id].latencyMs }}ms
+                        </span>
+                        <span v-else-if="modelTestResults[model.id] && !modelTestResults[model.id].testing && !modelTestResults[model.id].success">
+                          失败
+                        </span>
+                        <span v-else>开始测速</span>
                       </button>
-                      <span
-                        v-if="modelTestResults[model.id] && !modelTestResults[model.id].testing"
-                        class="latency-badge"
-                        :class="{ error: !modelTestResults[model.id].success }"
-                      >
-                        {{ modelTestResults[model.id].success ? `${modelTestResults[model.id].latencyMs}ms` : '失败' }}
-                      </span>
                     </div>
 
-                    <!-- Speed test error detail box -->
+                    <!-- Speed error display -->
                     <div
                       v-if="modelTestResults[model.id] && !modelTestResults[model.id].success && modelTestResults[model.id].message"
-                      class="speed-error-banner"
+                      class="model-speed-error-msg"
                     >
                       {{ modelTestResults[model.id].message }}
                     </div>
 
-                    <!-- Target Scenes Checkboxes -->
-                    <div class="model-scenes-assign">
-                      <span class="assign-label">加入号池</span>
-                      <div class="scene-checkboxes-list">
+                    <!-- Scene Assignments Grid (2 columns checklist) -->
+                    <div class="scene-assignments-grid">
+                      <span class="assign-label-tag">分配业务号池</span>
+                      <div class="checkbox-columns">
                         <label
                           v-for="scene in modelSceneOptions"
                           :key="scene.value"
-                          class="scene-checkbox-item"
+                          class="scene-checkbox-label"
                           :class="{
                             checked: assignedScenesMap[`${activeRelay.providerName.toLowerCase()}|${activeRelay.baseUrl.toLowerCase()}|${model.id}`]?.[scene.value],
                             disabled: modelActionStates[`${model.id}|${scene.value}`]
@@ -495,6 +505,7 @@
                 </div>
               </div>
             </div>
+
           </div>
         </div>
 
@@ -1110,6 +1121,66 @@
         </div>
       </div>
     </Transition>
+
+    <!-- All Scene Pools Overview Modal -->
+    <Transition name="fade">
+      <div v-if="showAllScenesPoolModal" class="admin-modal-overlay" @click="showAllScenesPoolModal = false">
+        <div class="admin-modal-card all-pools-modal-card spatial-glass-panel" @click.stop>
+          <header class="modal-header">
+            <h5>全站各模块号池一览</h5>
+            <button class="modal-close" @click="showAllScenesPoolModal = false">×</button>
+          </header>
+          <div class="modal-body">
+            <div class="all-pools-container">
+              
+              <div v-for="scene in modelSceneOptions" :key="scene.value" class="scene-pool-section">
+                <header class="section-title">
+                  <span class="bullet-dot"></span>
+                  <strong>{{ scene.label }} 号池</strong>
+                  <span class="count-tag">已接管 {{ allScenesPoolData[scene.value]?.length || 0 }} 个模型</span>
+                </header>
+                
+                <div class="table-wrapper">
+                  <table class="scene-pool-table">
+                    <thead>
+                      <tr>
+                        <th>所属中转站</th>
+                        <th>模型标识</th>
+                        <th>延迟测速</th>
+                        <th>状态</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-if="!allScenesPoolData[scene.value] || allScenesPoolData[scene.value].length === 0">
+                        <td colspan="4" class="empty-row">暂未添加模型到该号池</td>
+                      </tr>
+                      <tr v-else-if="loadingAllScenesPool" class="empty-row">
+                        <td colspan="4"><span class="loading-spinner"></span> 加载数据中...</td>
+                      </tr>
+                      <tr v-else v-for="route in allScenesPoolData[scene.value]" :key="route.id">
+                        <td>{{ route.providerName }}</td>
+                        <td><code class="model-code-id">{{ route.modelName }}</code></td>
+                        <td>
+                          <span class="latency-text" :class="{ error: route.status !== 'available' }">
+                            {{ route.status === 'available' ? `${route.latencyMs}ms` : '故障' }}
+                          </span>
+                        </td>
+                        <td>
+                          <span class="status-tag" :class="route.status">
+                            {{ route.status === 'available' ? '可用' : '不可用' }}
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -1130,50 +1201,13 @@ const workspaceStore = useWorkspaceStore();
 const activeTab = ref("users");
 const adminSidebarCollapsed = ref(false);
 
-// Sidebar Dragging State & Methods
-const isDragging = ref(false);
-const startX = ref(0);
-const startY = ref(0);
-const sidebarLeft = ref(Number(localStorage.getItem('admin_sidebar_left') || 24));
-const sidebarTop = ref(Number(localStorage.getItem('admin_sidebar_top') || 88));
+// Model Config Redesign (3-Column Layout) States
+const showAllScenesPoolModal = ref(false);
+const allScenesPoolData = ref({});
+const loadingAllScenesPool = ref(false);
+const updatingRelay = ref(false);
 
-function handleMouseDown(e) {
-  if (e.target.closest('button') || e.target.closest('a') || e.target.closest('input') || e.target.closest('select')) {
-    return;
-  }
-  isDragging.value = true;
-  startX.value = e.clientX - sidebarLeft.value;
-  startY.value = e.clientY - sidebarTop.value;
-  
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('mouseup', handleMouseUp);
-}
 
-function handleMouseMove(e) {
-  if (!isDragging.value) return;
-  sidebarLeft.value = e.clientX - startX.value;
-  sidebarTop.value = e.clientY - startY.value;
-  
-  const minLeft = 10;
-  const maxLeft = window.innerWidth - 60;
-  const minTop = 10;
-  const maxTop = window.innerHeight - 100;
-  
-  if (sidebarLeft.value < minLeft) sidebarLeft.value = minLeft;
-  if (sidebarLeft.value > maxLeft) sidebarLeft.value = maxLeft;
-  if (sidebarTop.value < minTop) sidebarTop.value = minTop;
-  if (sidebarTop.value > maxTop) sidebarTop.value = maxTop;
-}
-
-function handleMouseUp() {
-  if (isDragging.value) {
-    isDragging.value = false;
-    localStorage.setItem('admin_sidebar_left', sidebarLeft.value);
-    localStorage.setItem('admin_sidebar_top', sidebarTop.value);
-  }
-  document.removeEventListener('mousemove', handleMouseMove);
-  document.removeEventListener('mouseup', handleMouseUp);
-}
 const adminTabOptions = [
   { value: "users", label: "用户目录与授权", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
   { value: "recharges", label: "充值入账记录", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>` },
@@ -2015,6 +2049,47 @@ watch(activeRelay, (newVal) => {
     relayModels.value = [];
   }
 });
+
+async function openAllScenesPoolModal() {
+  showAllScenesPoolModal.value = true;
+  loadingAllScenesPool.value = true;
+  const scenes = ["paper_review", "paper_qa", "topic_research", "meeting_deck", "forum_moderation"];
+  const data = {};
+  for (const scene of scenes) {
+    try {
+      data[scene] = await paperpilotApi.getModelPool(scene);
+    } catch (e) {
+      console.error(`Failed to load pool for ${scene}:`, e);
+      data[scene] = [];
+    }
+  }
+  allScenesPoolData.value = data;
+  loadingAllScenesPool.value = false;
+}
+
+async function saveRelayConfig() {
+  if (!activeRelay.value) return;
+  updatingRelay.value = true;
+  try {
+    const payload = {
+      providerName: activeRelay.value.providerName,
+      baseUrl: activeRelay.value.baseUrl,
+      apiKey: activeRelay.value.apiKey || "",
+      modelName: activeRelay.value.modelName || "gpt-4o",
+      scene: "general",
+      apiFormat: activeRelay.value.apiFormat || "openai_chat",
+      authType: activeRelay.value.authType || "bearer",
+      fullUrl: activeRelay.value.fullUrl || false
+    };
+    await paperpilotApi.saveModelConfig(payload);
+    dialogStore.alert("中转站配置保存成功！");
+    await loadRelays();
+  } catch (e) {
+    dialogStore.alert("保存失败: " + (e.response?.data?.message || e.message));
+  } finally {
+    updatingRelay.value = false;
+  }
+}
 
 function countUsersByRole(role) {
   return systemUsers.value.filter(u => u.role === role).length;
@@ -5758,9 +5833,441 @@ function truncateText(value, length = 100) {
   color: var(--spatial-gray);
 }
 
+
+/* --- Redesigned 3-Column Models Dashboard & Pools Overview CSS --- */
+.models-pane-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.models-pane-header h3 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--spatial-graphite);
+  margin: 0;
+}
+
+.models-pane-header .pane-description {
+  font-size: 0.9rem;
+  color: var(--spatial-silver);
+  margin: 4px 0 0 0;
+}
+
+.models-three-col-layout {
+  display: grid;
+  grid-template-columns: 260px 340px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .models-three-col-layout {
+    grid-template-columns: 240px 300px 1fr;
+  }
+}
+
 @media (max-width: 990px) {
-  .models-dashboard-layout {
+  .models-three-col-layout {
     grid-template-columns: 1fr;
   }
+}
+
+.providers-column,
+.config-column,
+.models-column {
+  padding: 20px;
+  border-radius: 20px;
+  min-height: 480px;
+  display: flex;
+  flex-direction: column;
+}
+
+.providers-column .column-header,
+.config-column .column-header,
+.models-column .column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--spatial-line);
+  padding-bottom: 12px;
+}
+
+.column-header strong {
+  font-size: 0.95rem;
+  color: var(--spatial-graphite);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.add-provider-btn {
+  background: var(--spatial-accent-soft);
+  border: 1px solid var(--spatial-accent-line);
+  color: var(--spatial-accent);
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-provider-btn:hover {
+  background: var(--spatial-accent);
+  color: #fff;
+}
+
+.providers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 450px;
+  overflow-y: auto;
+}
+
+.provider-item-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--spatial-line);
+  background: var(--spatial-surface-2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.provider-item-card:hover {
+  border-color: var(--spatial-accent-line);
+  background: var(--spatial-accent-soft);
+}
+
+.provider-item-card.active {
+  border-color: var(--spatial-accent);
+  background: var(--spatial-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--spatial-accent-line);
+}
+
+.provider-card-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.provider-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--spatial-graphite);
+}
+
+.provider-url {
+  font-size: 0.7rem;
+  color: var(--spatial-silver);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.provider-delete-btn {
+  background: transparent;
+  border: 0;
+  color: var(--spatial-silver);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  transition: all 0.2s ease;
+}
+
+.provider-delete-btn:hover {
+  color: #ff3b30;
+  background: rgba(255, 59, 48, 0.08);
+}
+
+.provider-config-form .form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.save-config-btn {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.models-column {
+  flex: 1;
+}
+
+.models-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 600px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.model-dashboard-card {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--spatial-line);
+  background: var(--spatial-surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.model-card-top-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.model-avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--spatial-accent-soft);
+  color: var(--spatial-accent);
+  font-weight: 800;
+  font-size: 0.8rem;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.model-info-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.model-name-id {
+  font-size: 0.88rem;
+  color: var(--spatial-graphite);
+  word-break: break-all;
+}
+
+.model-badge-provider {
+  font-size: 0.7rem;
+  color: var(--spatial-silver);
+  margin-top: 1px;
+}
+
+.model-speed-pill {
+  background: var(--spatial-warm-2);
+  border: 1px solid var(--spatial-line);
+  color: var(--spatial-graphite);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.model-speed-pill:hover:not(:disabled) {
+  background: var(--spatial-accent-soft);
+  border-color: var(--spatial-accent-line);
+  color: var(--spatial-accent);
+}
+
+.model-speed-pill.testing {
+  color: var(--spatial-silver);
+  cursor: not-allowed;
+}
+
+.model-speed-pill.success {
+  color: #34c759;
+  background: rgba(52, 199, 89, 0.12);
+  border-color: rgba(52, 199, 89, 0.2);
+}
+
+.model-speed-pill.error {
+  color: #ff3b30;
+  background: rgba(255, 59, 48, 0.12);
+  border-color: rgba(255, 59, 48, 0.2);
+}
+
+.model-speed-error-msg {
+  background: rgba(255, 59, 48, 0.06);
+  border: 1px solid rgba(255, 59, 48, 0.12);
+  color: #ff3b30;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  word-break: break-all;
+}
+
+.scene-assignments-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--spatial-line);
+  padding-top: 10px;
+}
+
+.assign-label-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--spatial-silver);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.checkbox-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  margin-top: 6px;
+}
+
+.scene-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--spatial-gray);
+  cursor: pointer;
+}
+
+.scene-checkbox-label.checked {
+  color: var(--spatial-accent);
+  font-weight: 600;
+}
+
+.scene-checkbox-label.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* All Scene Pools Modal Styles */
+.all-pools-modal-card {
+  max-width: 800px;
+  width: 95%;
+}
+
+.all-pools-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.scene-pool-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scene-pool-section .section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scene-pool-section .bullet-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--spatial-accent);
+}
+
+.scene-pool-section .section-title strong {
+  font-size: 0.95rem;
+  color: var(--spatial-graphite);
+}
+
+.scene-pool-section .count-tag {
+  font-size: 0.75rem;
+  color: var(--spatial-silver);
+}
+
+.table-wrapper {
+  border-radius: 12px;
+  border: 1px solid var(--spatial-line);
+  overflow: hidden;
+  background: var(--spatial-surface-2);
+}
+
+.scene-pool-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.scene-pool-table th,
+.scene-pool-table td {
+  padding: 10px 14px;
+  font-size: 0.8rem;
+}
+
+.scene-pool-table th {
+  background: var(--spatial-warm-2);
+  color: var(--spatial-silver);
+  font-weight: 700;
+  border-bottom: 1px solid var(--spatial-line);
+}
+
+.scene-pool-table td {
+  color: var(--spatial-graphite);
+  border-bottom: 1px solid var(--spatial-line);
+}
+
+.scene-pool-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.empty-row {
+  text-align: center;
+  color: var(--spatial-silver);
+  padding: 20px 0 !important;
+}
+
+.model-code-id {
+  font-family: monospace;
+  background: var(--spatial-warm-2);
+  color: var(--spatial-gray);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.latency-text {
+  color: #34c759;
+  font-weight: 700;
+}
+
+.latency-text.error {
+  color: #ff3b30;
+}
+
+.status-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.status-tag.available {
+  background: rgba(52, 199, 89, 0.1);
+  color: #34c759;
+}
+
+.status-tag.failed,
+.status-tag.timeout,
+.status-tag.auth_error {
+  background: rgba(255, 59, 48, 0.1);
+  color: #ff3b30;
 }
 </style>
