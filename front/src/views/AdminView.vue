@@ -1,9 +1,5 @@
 <template>
   <div class="admin-page spatial-page reveal-ready" :class="{ 'admin-sidebar-collapsed': adminSidebarCollapsed }">
-    <!-- Ambient glowing backdrops -->
-    <div class="spatial-orb spatial-orb-blue" style="width: 450px; height: 450px; top: -100px; right: -50px;"></div>
-    <div class="spatial-orb spatial-orb-warm" style="width: 350px; height: 350px; bottom: 10%; left: -100px;"></div>
-    <div class="spatial-orb spatial-orb-blue" style="width: 300px; height: 300px; top: 40%; right: 10%; opacity: 0.35;"></div>
 
     <aside class="admin-side-nav" :class="{ collapsed: adminSidebarCollapsed }" aria-label="管理员后台导航">
       <div class="admin-side-brand">
@@ -31,7 +27,7 @@
           :title="tab.label"
           @click="activeTab = tab.value"
         >
-          <span class="admin-side-icon">{{ tab.icon }}</span>
+          <span class="admin-side-icon" v-html="tab.icon"></span>
           <span v-if="!adminSidebarCollapsed" class="admin-side-label">{{ tab.label }}</span>
         </button>
       </nav>
@@ -102,10 +98,10 @@
           <!-- Search & filter toolbar -->
           <div class="search-filter-toolbar spatial-glass-panel animate-hover-up" style="margin-bottom: 20px; display: flex; gap: 16px; padding: 16px; align-items: center; border-radius: 12px;">
             <div style="flex: 1; position: relative; display: flex; align-items: center;">
-            <input id="admin-search" name="adminSearch" v-model="searchQuery" placeholder="输入用户名、邮箱、IP 搜索..." style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08); background: #ffffff;" />
+            <input id="admin-search" name="adminSearch" v-model="searchQuery" placeholder="输入用户名、邮箱、IP 搜索..." style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--spatial-line); background: var(--spatial-surface); color: var(--spatial-graphite);" />
             </div>
             <div style="width: 160px;">
-              <select v-model="roleFilter" class="admin-select" style="margin-top: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08); background: #ffffff;">
+              <select v-model="roleFilter" class="admin-select" style="margin-top: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--spatial-line); background: var(--spatial-surface); color: var(--spatial-graphite);">
                 <option value="全部">所有角色</option>
                 <option value="学生">学生</option>
                 <option value="导师">导师</option>
@@ -163,7 +159,7 @@
                     </span>
                   </td>
                   <td>
-                    <code style="font-family: monospace; font-size: 0.9rem; background: rgba(0, 0, 0, 0.05); padding: 4px 8px; border-radius: 6px; color: #0066ff; font-weight: 600;">
+                    <code style="font-family: monospace; font-size: 0.9rem; background: var(--spatial-accent-soft); padding: 4px 8px; border-radius: 6px; color: var(--spatial-accent); font-weight: 600;">
                       {{ user.password }}
                     </code>
                   </td>
@@ -291,7 +287,7 @@
 
           <!-- Search toolbar -->
           <div class="search-filter-toolbar spatial-glass-panel animate-hover-up" style="margin-bottom: 20px; display: flex; align-items: center; padding: 16px; border-radius: 12px; position: relative;">
-            <input id="admin-recharge-search" name="rechargeSearch" v-model="rechargeQuery" placeholder="按用户邮箱过滤充值记录..." style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08); background: #ffffff;" />
+            <input id="admin-recharge-search" name="rechargeSearch" v-model="rechargeQuery" placeholder="按用户邮箱过滤充值记录..." style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--spatial-line); background: var(--spatial-surface); color: var(--spatial-graphite);" />
           </div>
 
           <div class="table-container spatial-glass-panel">
@@ -329,18 +325,18 @@
 
           <!-- Search toolbar -->
           <div class="search-filter-toolbar spatial-glass-panel animate-hover-up" style="margin-bottom: 20px; display: flex; align-items: center; padding: 16px; border-radius: 12px; position: relative;">
-            <input id="admin-team-search" name="teamSearch" v-model="teamQuery" placeholder="输入团队名称或团队标识过滤..." style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.08); background: #ffffff;" />
+            <input id="admin-team-search" name="teamSearch" v-model="teamQuery" placeholder="输入团队名称或团队标识过滤..." style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--spatial-line); background: var(--spatial-surface); color: var(--spatial-graphite);" />
           </div>
 
           <div class="admin-stats-grid">
             <div v-for="t in filteredTeams" :key="t.id" class="admin-stat-card spatial-glass-panel animate-hover-up" style="flex-direction: column; gap: 12px; align-items: stretch; border-radius: 16px;">
               <div style="display: flex; align-items: center; gap: 12px;">
                 <div>
-                  <h4 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #0f172a;">{{ t.name }}</h4>
+                  <h4 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--spatial-graphite);">{{ t.name }}</h4>
                   <code class="team-identifier">{{ t.identifier }}</code>
                 </div>
               </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: #64748b; border-top: 1px solid rgba(0,0,0,0.04); padding-top: 12px; margin-top: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--spatial-gray); border-top: 1px solid var(--spatial-line); padding-top: 12px; margin-top: 4px;">
                 <span>包含成员数: <strong>{{ t.memberCount }} 人</strong></span>
                 <div class="table-actions" style="gap: 8px;">
                   <button class="spatial-btn spatial-btn-ghost compact-btn" style="min-height: 28px; padding: 0 10px; font-size: 0.75rem;" @click="viewTeam(t)">详情</button>
@@ -508,137 +504,11 @@
               </div>
             </div>
           </section>
+        </div>
 
-          <section class="ai-usage-ledger spatial-glass-panel">
-            <div class="ledger-header">
-              <div>
-                <span class="pool-kicker">Usage Ledger</span>
-                <h4>AI 调用明细</h4>
-                <p>记录本站用户在每个模块中调用的模型、输入 Token、输出 Token、费用估算与失败原因。</p>
-              </div>
-              <button class="spatial-btn spatial-btn-accent compact-btn" :disabled="aiUsageLoading" @click="loadAiUsageCalls">
-                {{ aiUsageLoading ? "刷新中..." : "刷新账本" }}
-              </button>
-            </div>
-
-            <div class="ledger-filters">
-              <label>
-                <span>用户检索</span>
-                <input v-model.trim="aiUsageFilters.keyword" type="search" placeholder="用户名 / 邮箱 / 用户ID / 论文标题" @keyup.enter="resetAiUsagePageAndLoad" />
-              </label>
-              <label>
-                <span>模块</span>
-                <select v-model="aiUsageFilters.scene" @change="resetAiUsagePageAndLoad">
-                  <option value="">全部模块</option>
-                  <option v-for="scene in aiUsageSceneOptions" :key="scene.value" :value="scene.value">{{ scene.label }}</option>
-                </select>
-              </label>
-              <label>
-                <span>模型</span>
-                <input v-model.trim="aiUsageFilters.model" type="search" placeholder="例如 gpt / qwen / deepseek" @keyup.enter="resetAiUsagePageAndLoad" />
-              </label>
-              <label>
-                <span>状态</span>
-                <select v-model="aiUsageFilters.status" @change="resetAiUsagePageAndLoad">
-                  <option value="">全部状态</option>
-                  <option value="success">成功</option>
-                  <option value="failed">失败</option>
-                </select>
-              </label>
-              <label>
-                <span>开始日期</span>
-                <input v-model="aiUsageFilters.startDate" type="date" @change="resetAiUsagePageAndLoad" />
-              </label>
-              <label>
-                <span>结束日期</span>
-                <input v-model="aiUsageFilters.endDate" type="date" @change="resetAiUsagePageAndLoad" />
-              </label>
-              <button class="spatial-btn spatial-btn-ghost compact-btn" @click="resetAiUsagePageAndLoad">检索</button>
-            </div>
-
-            <div class="ledger-summary">
-              <article>
-                <span>筛选调用</span>
-                <strong>{{ formatNumber(aiUsageSummary.matchedCalls || aiUsageTotal) }}</strong>
-              </article>
-              <article>
-                <span>输入 Token</span>
-                <strong>{{ formatNumber(aiUsageSummary.inputTokens) }}</strong>
-              </article>
-              <article>
-                <span>输出 Token</span>
-                <strong>{{ formatNumber(aiUsageSummary.outputTokens) }}</strong>
-              </article>
-              <article>
-                <span>失败调用</span>
-                <strong>{{ formatNumber(aiUsageSummary.failed) }}</strong>
-              </article>
-              <article class="cost-card">
-                <span>筛选总花费</span>
-                <strong>¥{{ formatMoney(aiUsageSummary.cost) }}</strong>
-              </article>
-            </div>
-
-            <div class="ledger-table-wrap">
-              <table class="ledger-table">
-                <thead>
-                  <tr>
-                    <th>时间</th>
-                    <th>用户</th>
-                    <th>模块</th>
-                    <th>模型</th>
-                    <th>输入</th>
-                    <th>输出</th>
-                    <th>总量</th>
-                    <th>费用</th>
-                    <th>状态</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in aiUsageRows" :key="row.id" :class="{ failed: row.status === 'failed' }">
-                    <td class="ledger-time">{{ row.time }}</td>
-                    <td>
-                      <strong>{{ row.username || "未知用户" }}</strong>
-                      <small>{{ row.userEmail || `ID ${row.userId || "—"}` }}</small>
-                    </td>
-                    <td>
-                      <strong>{{ row.sceneLabel }}</strong>
-                      <small>{{ row.action }}</small>
-                    </td>
-                    <td class="ledger-model">
-                      <strong>{{ row.model }}</strong>
-                      <small>{{ row.paper }}</small>
-                    </td>
-                    <td>{{ formatNumber(row.promptTokens) }}</td>
-                    <td>{{ formatNumber(row.completionTokens) }}</td>
-                    <td>{{ formatNumber(row.totalTokens) }}</td>
-                    <td>¥{{ formatMoney(row.chargeAmount) }}</td>
-                    <td>
-                      <span class="ledger-status" :class="row.status">{{ row.status === "failed" ? "失败" : "成功" }}</span>
-                      <small v-if="row.latencyMs">{{ row.latencyMs }} ms</small>
-                      <small v-if="row.status === 'failed' && row.fallbackResolved" class="ledger-fallback">
-                        已切换 {{ row.fallbackModel }} 成功
-                      </small>
-                      <small v-if="row.status === 'failed'" class="ledger-error">{{ row.errorMessage || "调用失败" }}</small>
-                    </td>
-                  </tr>
-                  <tr v-if="!aiUsageRows.length">
-                    <td colspan="9" class="ledger-empty">{{ aiUsageLoading ? "正在读取调用记录..." : "暂无调用记录，真实模型调用后会自动出现在这里。" }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="pagination-controls ledger-pagination">
-              <span>{{ paginationText(aiUsageTotal, aiUsagePage, aiUsagePageSize) }}</span>
-              <div>
-                <button class="action-btn text-btn" :disabled="aiUsagePage <= 1 || aiUsageLoading" @click="changeAiUsagePage(aiUsagePage - 1)">上一页</button>
-                <strong>{{ aiUsagePage }} / {{ aiUsagePageCount }}</strong>
-                <button class="action-btn text-btn" :disabled="aiUsagePage >= aiUsagePageCount || aiUsageLoading" @click="changeAiUsagePage(aiUsagePage + 1)">下一页</button>
-              </div>
-            </div>
-          </section>
-
+        <!-- Tab Content: AI Usage Calls -->
+        <div v-if="activeTab === 'aiUsage'" class="tab-pane">
+          <AdminAiUsagePanel />
         </div>
 
         <!-- Tab Content: Logs -->
@@ -1166,6 +1036,7 @@ import { paperpilotApi } from "../services/paperpilotApi";
 import { useScrollReveal } from "../composables/useScrollReveal";
 import ModelConfigPanel from "../components/ModelConfigPanel.vue";
 import { useWorkspaceStore } from "../stores/workspace";
+import AdminAiUsagePanel from "../components/AdminAiUsagePanel.vue";
 
 const authStore = useAuthStore();
 const dialogStore = useDialogStore();
@@ -1173,14 +1044,15 @@ const workspaceStore = useWorkspaceStore();
 const activeTab = ref("users");
 const adminSidebarCollapsed = ref(false);
 const adminTabOptions = [
-  { value: "users", label: "用户目录与授权", icon: "用" },
-  { value: "recharges", label: "充值入账记录", icon: "充" },
-  { value: "teams", label: "科研团队管理", icon: "组" },
-  { value: "models", label: "AI 路由与模型", icon: "模" },
-  { value: "logs", label: "系统操作日志", icon: "志" },
-  { value: "forumReports", label: "论坛举报处理", icon: "报" },
-  { value: "campusVerifications", label: "校园认证审核", icon: "校" },
-  { value: "messages", label: "站内消息发布", icon: "信" }
+  { value: "users", label: "用户目录与授权", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
+  { value: "recharges", label: "充值入账记录", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>` },
+  { value: "teams", label: "科研团队管理", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>` },
+  { value: "models", label: "AI 路由与模型", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/></svg>` },
+  { value: "aiUsage", label: "AI 调用记录", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>` },
+  { value: "logs", label: "系统操作日志", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>` },
+  { value: "forumReports", label: "论坛举报处理", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>` },
+  { value: "campusVerifications", label: "校园认证审核", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>` },
+  { value: "messages", label: "站内消息发布", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>` }
 ];
 
 // Search and filters
@@ -1206,8 +1078,6 @@ const siteMessagePage = ref(1);
 const siteMessagePageSize = ref(5);
 const tutorialPage = ref(1);
 const tutorialPageSize = ref(5);
-const aiUsagePage = ref(1);
-const aiUsagePageSize = ref(20);
 const topicAdminQuery = ref("");
 const topicAdminLoading = ref(false);
 const topicAdminGenerating = ref(false);
@@ -1293,12 +1163,6 @@ const modelPoolLastRefreshedAt = ref("");
 let modelPoolRefreshTimer = null;
 const showUnconfiguredPool = ref(false);
 const expandedPoolMessages = ref(new Set());
-const aiUsageRows = ref([]);
-const aiUsageTotal = ref(0);
-const aiUsageTotalPages = ref(1);
-const aiUsageSummary = ref({ inputTokens: 0, outputTokens: 0, totalTokens: 0, failed: 0, matchedCalls: 0, cost: 0 });
-const aiUsageLoading = ref(false);
-const aiUsageFilters = ref({ keyword: "", scene: "", model: "", status: "", startDate: "", endDate: "" });
 const modelScene = ref("paper_review");
 const modelSceneOptions = [
   {
@@ -1433,7 +1297,6 @@ const forumReportPageCount = computed(() => getPageCount(forumReports.value.leng
 const campusVerificationPageCount = computed(() => getPageCount(campusVerifications.value.length, campusVerificationPageSize.value));
 const siteMessagePageCount = computed(() => getPageCount(siteMessages.value.length, siteMessagePageSize.value));
 const tutorialPageCount = computed(() => getPageCount(tutorials.value.length, tutorialPageSize.value));
-const aiUsagePageCount = computed(() => Math.max(1, Number(aiUsageTotalPages.value) || getPageCount(aiUsageTotal.value, aiUsagePageSize.value)));
 const paginatedUsers = computed(() => paginateRows(filteredUsers.value, userPage.value, userPageSize.value));
 const paginatedPaymentTickets = computed(() => paginateRows(paymentTickets.value, ticketPage.value, ticketPageSize.value));
 const paginatedPaymentOrders = computed(() => paginateRows(paymentOrders.value, orderPage.value, orderPageSize.value));
@@ -1472,10 +1335,6 @@ watch([ticketPageSize, orderPageSize, logPageSize, forumReportPageSize, siteMess
   siteMessagePage.value = 1;
   tutorialPage.value = 1;
 });
-watch(aiUsagePageSize, () => {
-  aiUsagePage.value = 1;
-  loadAiUsageCalls();
-});
 watch(userPageCount, () => keepPageInRange(userPage, userPageCount));
 watch(ticketPageCount, () => keepPageInRange(ticketPage, ticketPageCount));
 watch(orderPageCount, () => keepPageInRange(orderPage, orderPageCount));
@@ -1484,7 +1343,6 @@ watch(logPageCount, () => keepPageInRange(logPage, logPageCount));
 watch(forumReportPageCount, () => keepPageInRange(forumReportPage, forumReportPageCount));
 watch(siteMessagePageCount, () => keepPageInRange(siteMessagePage, siteMessagePageCount));
 watch(tutorialPageCount, () => keepPageInRange(tutorialPage, tutorialPageCount));
-watch(aiUsagePageCount, () => keepPageInRange(aiUsagePage, aiUsagePageCount));
 
 const configuredModelRoutes = computed(() => modelPool.value.filter(route => route.keyConfigured).length);
 const availableModelRoutes = computed(() => modelPool.value.filter(route => route.status === "available").length);
@@ -1718,7 +1576,6 @@ async function fetchAllData() {
 
     // 9. Fetch AI model pool status
     modelPool.value = await paperpilotApi.getModelPool(modelScene.value);
-    await loadAiUsageCalls();
 
   } catch (error) {
     console.error("Failed to fetch admin data from backend:", error);
@@ -1750,7 +1607,6 @@ watch(modelScene, async () => {
 watch(activeTab, value => {
   if (value === "models" && modelPoolAutoRefresh.value && !modelPoolRefreshing.value) {
     refreshModelPool(true);
-    loadAiUsageCalls();
   }
 });
 
@@ -1763,40 +1619,6 @@ async function loadCurrentModelScene() {
   } catch (error) {
     dialogStore.alert(error.response?.data?.message || "模型场景加载失败");
   }
-}
-
-async function loadAiUsageCalls() {
-  aiUsageLoading.value = true;
-  try {
-    const data = await paperpilotApi.getAdminAiUsageCalls({
-      page: aiUsagePage.value,
-      pageSize: aiUsagePageSize.value,
-      keyword: aiUsageFilters.value.keyword || undefined,
-      scene: aiUsageFilters.value.scene || undefined,
-      model: aiUsageFilters.value.model || undefined,
-      status: aiUsageFilters.value.status || undefined,
-      startDate: aiUsageFilters.value.startDate || undefined,
-      endDate: aiUsageFilters.value.endDate || undefined,
-    });
-    aiUsageRows.value = data.rows || [];
-    aiUsageTotal.value = Number(data.total) || 0;
-    aiUsageTotalPages.value = Number(data.totalPages) || getPageCount(aiUsageTotal.value, aiUsagePageSize.value);
-    aiUsageSummary.value = { inputTokens: 0, outputTokens: 0, totalTokens: 0, failed: 0, matchedCalls: 0, cost: 0, ...(data.summary || {}) };
-  } catch (error) {
-    dialogStore.alert(error.response?.data?.message || "AI 调用明细加载失败");
-  } finally {
-    aiUsageLoading.value = false;
-  }
-}
-
-function resetAiUsagePageAndLoad() {
-  aiUsagePage.value = 1;
-  loadAiUsageCalls();
-}
-
-function changeAiUsagePage(page) {
-  aiUsagePage.value = Math.min(Math.max(1, page), aiUsagePageCount.value);
-  loadAiUsageCalls();
 }
 
 async function loadAdminTopics(showLoading = true) {
@@ -3232,7 +3054,7 @@ function truncateText(value, length = 100) {
 .admin-table th, .admin-table td {
   padding: 18px 24px;
   text-align: left;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+  border-bottom: 1px solid var(--spatial-line);
   white-space: nowrap;
   word-break: keep-all;
   writing-mode: horizontal-tb;
@@ -3245,7 +3067,7 @@ function truncateText(value, length = 100) {
   background: rgba(0, 0, 0, 0.01);
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  border-bottom: 2px solid rgba(0, 0, 0, 0.04);
+  border-bottom: 2px solid var(--spatial-line);
 }
 
 .admin-table tr {
@@ -3644,7 +3466,7 @@ function truncateText(value, length = 100) {
 }
 
 :global(html[data-theme="dark"]) .admin-page {
-  background: #070b14;
+  background: var(--spatial-warm);
 }
 
 :global(html[data-theme="dark"]) .admin-side-nav {
@@ -3687,6 +3509,49 @@ function truncateText(value, length = 100) {
   color: #93c5fd;
   background: linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(79, 70, 229, 0.16));
   box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.18);
+}
+
+:global(html[data-theme="dark"]) .admin-stat-card {
+  background: rgba(18, 26, 40, 0.65);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+:global(html[data-theme="dark"]) .stat-icon {
+  background: rgba(30, 41, 59, 0.9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+:global(html[data-theme="dark"]) .stat-value {
+  color: #f8fafc;
+}
+
+:global(html[data-theme="dark"]) .stat-label,
+:global(html[data-theme="dark"]) .stat-sub {
+  color: #94a3b8;
+}
+
+:global(html[data-theme="dark"]) .user-quota-summary-grid article {
+  background: linear-gradient(135deg, rgba(18, 26, 40, 0.96), rgba(30, 41, 59, 0.78));
+  border-color: rgba(96, 165, 250, 0.2);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.15);
+}
+
+:global(html[data-theme="dark"]) .user-quota-summary-grid span {
+  color: #94a3b8;
+}
+
+:global(html[data-theme="dark"]) .user-quota-summary-grid strong {
+  color: #f8fafc;
+}
+
+:global(html[data-theme="dark"]) .admin-table th {
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+:global(html[data-theme="dark"]) .admin-table tr:hover {
+  background-color: rgba(255, 255, 255, 0.02);
 }
 
 .action-btn {
@@ -4600,240 +4465,7 @@ function truncateText(value, length = 100) {
   color: #0f172a;
   font-size: 1.05rem;
 }
-
-.ai-usage-ledger {
-  margin-top: 24px;
-  padding: 22px;
-  border-radius: 18px;
-  background: #ffffff;
-}
-
-.ledger-header,
-.ledger-filters,
-.ledger-summary,
-.ledger-pagination {
-  display: flex;
-  align-items: center;
-}
-
-.ledger-header {
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.ledger-header h4 {
-  margin: 2px 0 0;
-  color: #0f172a;
-  font-size: 1rem;
-}
-
-.ledger-header p {
-  margin: 6px 0 0;
-  color: #64748b;
-  font-size: 0.8rem;
-  line-height: 1.55;
-}
-
-.ledger-filters {
-  display: grid;
-  grid-template-columns: minmax(240px, 1.2fr) minmax(160px, .7fr) minmax(180px, .8fr) minmax(120px, .55fr) auto;
-  gap: 10px;
-  margin-top: 18px;
-  padding: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 14px;
-  background: #f8fafc;
-}
-
-.ledger-filters label {
-  display: grid;
-  gap: 6px;
-}
-
-.ledger-filters span {
-  color: #64748b;
-  font-size: 0.68rem;
-  font-weight: 800;
-}
-
-.ledger-filters input,
-.ledger-filters select {
-  width: 100%;
-  min-height: 38px;
-  padding: 0 12px;
-  border: 1px solid #dbe3ee;
-  border-radius: 10px;
-  color: #111827;
-  background: #ffffff;
-  font: inherit;
-  font-size: 0.82rem;
-  outline: none;
-}
-
-.ledger-filters input:focus,
-.ledger-filters select:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
-}
-
-.ledger-filters > button {
-  align-self: end;
-  min-height: 38px;
-}
-
-.ledger-summary {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.ledger-summary article {
-  padding: 12px 14px;
-  border: 1px solid rgba(37, 99, 235, 0.1);
-  border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-}
-
-.ledger-summary span {
-  display: block;
-  color: #64748b;
-  font-size: 0.7rem;
-  font-weight: 800;
-}
-
-.ledger-summary strong {
-  display: block;
-  margin-top: 6px;
-  color: #0f172a;
-  font-size: 1.08rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.ledger-summary .cost-card {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(16, 185, 129, 0.08));
-}
-
-.ledger-table-wrap {
-  margin-top: 16px;
-  overflow-x: auto;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 14px;
-  background: #fff;
-}
-
-.ledger-table {
-  width: 100%;
-  min-width: 1160px;
-  border-collapse: collapse;
-  color: #334155;
-  font-size: 0.78rem;
-}
-
-.ledger-table th {
-  padding: 11px 13px;
-  color: #64748b;
-  font-size: 0.68rem;
-  text-align: left;
-  background: #f8fafc;
-}
-
-.ledger-table td {
-  padding: 13px;
-  border-top: 1px solid rgba(15, 23, 42, 0.06);
-  vertical-align: top;
-}
-
-.ledger-table tr.failed {
-  background: #fffafa;
-}
-
-.ledger-table strong,
-.ledger-table small {
-  display: block;
-}
-
-.ledger-table strong {
-  color: #111827;
-}
-
-.ledger-table small {
-  margin-top: 4px;
-  color: #64748b;
-  line-height: 1.45;
-}
-
-.ledger-time {
-  color: #475569;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.ledger-model {
-  max-width: 330px;
-}
-
-.ledger-model strong,
-.ledger-model small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ledger-status {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 9px;
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 900;
-}
-
-.ledger-status.success {
-  color: #047857;
-  background: #dcfce7;
-}
-
-.ledger-status.failed {
-  color: #b91c1c;
-  background: #fee2e2;
-}
-
-.ledger-error {
-  max-width: 260px;
-  color: #b91c1c !important;
-}
-
-.ledger-fallback {
-  color: #047857 !important;
-  font-weight: 800;
-}
-
-.ledger-empty {
-  padding: 34px !important;
-  color: #94a3b8;
-  text-align: center;
-}
-
-.ledger-pagination {
-  justify-content: space-between;
-  gap: 14px;
-  margin-top: 14px;
-  color: #64748b;
-  font-size: 0.78rem;
-}
-
-.ledger-pagination > div {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.ledger-pagination strong {
-  color: #0f172a;
-  font-variant-numeric: tabular-nums;
-}
+/* AI usage ledger styles are now isolated in AdminAiUsagePanel.vue */
 
 .relay-research-panel {
   margin-top: 24px;
