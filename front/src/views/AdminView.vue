@@ -8,7 +8,17 @@
           <span class="admin-eyebrow">ADMINISTRATOR CORE</span>
           <h2>系统全局统计与管理</h2>
         </div>
-        <div class="header-right">
+        <div class="header-right" style="display: flex; align-items: center; gap: 12px;">
+          <!-- Compact stats summary when cards are collapsed -->
+          <div v-if="!showStatsPanel" class="compact-stats-bar">
+            <span class="compact-stat-item">👤 用户: <strong>{{ globalStats.totalUsers || 0 }}</strong></span>
+            <span class="compact-stat-item">📚 文献: <strong>{{ globalStats.totalPapers || 0 }}</strong></span>
+            <span class="compact-stat-item">💎 会员: <strong>{{ activeMemberCount || 0 }}</strong></span>
+            <span class="compact-stat-item">💰 订单: <strong>¥{{ formatMoney(globalStats.totalRechargeAmount) }}</strong></span>
+          </div>
+          <button class="spatial-btn spatial-btn-ghost compact-btn toggle-stats-btn" @click="showStatsPanel = !showStatsPanel">
+            {{ showStatsPanel ? "隐藏数据卡" : "查看数据卡" }}
+          </button>
           <div class="admin-badge">
             <span class="badge-dot"></span>
             管理员控制台
@@ -17,40 +27,42 @@
       </header>
 
       <!-- Global Stats Cards -->
-      <div class="admin-stats-grid">
-        <div class="admin-stat-card spatial-glass-panel animate-hover-up">
-          <div class="stat-icon" v-html="adminIcons.users"></div>
-          <div class="stat-info">
-            <span class="stat-label">全局注册用户</span>
-            <strong class="stat-value">{{ globalStats.totalUsers }} 位</strong>
-            <span class="stat-sub">学生 {{ globalStats.studentCount }} / 导师 {{ globalStats.tutorCount }} / 管理员 {{ globalStats.adminCount }}</span>
+      <Transition name="slide-fade">
+        <div v-if="showStatsPanel" class="admin-stats-grid">
+          <div class="admin-stat-card spatial-glass-panel animate-hover-up">
+            <div class="stat-icon" v-html="adminIcons.users"></div>
+            <div class="stat-info">
+              <span class="stat-label">全局注册用户</span>
+              <strong class="stat-value">{{ globalStats.totalUsers }} 位</strong>
+              <span class="stat-sub">学生 {{ globalStats.studentCount }} / 导师 {{ globalStats.tutorCount }} / 管理员 {{ globalStats.adminCount }}</span>
+            </div>
+          </div>
+          <div class="admin-stat-card spatial-glass-panel animate-hover-up">
+            <div class="stat-icon" v-html="adminIcons.papers"></div>
+            <div class="stat-info">
+              <span class="stat-label">平台文献总量</span>
+              <strong class="stat-value">{{ globalStats.totalPapers }} 篇</strong>
+              <span class="stat-sub">PDF 文献库沉淀数</span>
+            </div>
+          </div>
+          <div class="admin-stat-card spatial-glass-panel animate-hover-up">
+            <div class="stat-icon" v-html="adminIcons.tokens"></div>
+            <div class="stat-info">
+              <span class="stat-label">开通会员人数</span>
+              <strong class="stat-value">{{ activeMemberCount }} 位</strong>
+              <span class="stat-sub">当前仍在有效期内的会员</span>
+            </div>
+          </div>
+          <div class="admin-stat-card spatial-glass-panel animate-hover-up">
+            <div class="stat-icon" v-html="adminIcons.status"></div>
+            <div class="stat-info">
+              <span class="stat-label">会员订单总计</span>
+              <strong class="stat-value">¥{{ formatMoney(globalStats.totalRechargeAmount) }}</strong>
+              <span class="stat-sub">累计 {{ globalStats.rechargeCount || 0 }} 笔 · 用于套餐开通与续费</span>
+            </div>
           </div>
         </div>
-        <div class="admin-stat-card spatial-glass-panel animate-hover-up">
-          <div class="stat-icon" v-html="adminIcons.papers"></div>
-          <div class="stat-info">
-            <span class="stat-label">平台文献总量</span>
-            <strong class="stat-value">{{ globalStats.totalPapers }} 篇</strong>
-            <span class="stat-sub">PDF 文献库沉淀数</span>
-          </div>
-        </div>
-        <div class="admin-stat-card spatial-glass-panel animate-hover-up">
-          <div class="stat-icon" v-html="adminIcons.tokens"></div>
-          <div class="stat-info">
-            <span class="stat-label">开通会员人数</span>
-            <strong class="stat-value">{{ activeMemberCount }} 位</strong>
-            <span class="stat-sub">当前仍在有效期内的会员</span>
-          </div>
-        </div>
-        <div class="admin-stat-card spatial-glass-panel animate-hover-up">
-          <div class="stat-icon" v-html="adminIcons.status"></div>
-          <div class="stat-info">
-            <span class="stat-label">会员订单总计</span>
-            <strong class="stat-value">¥{{ formatMoney(globalStats.totalRechargeAmount) }}</strong>
-            <span class="stat-sub">累计 {{ globalStats.rechargeCount || 0 }} 笔 · 用于套餐开通与续费</span>
-          </div>
-        </div>
-      </div>
+      </Transition>
 
       <!-- Main Layout Panels -->
       <div class="admin-main-layout">
@@ -1200,6 +1212,7 @@ const dialogStore = useDialogStore();
 const workspaceStore = useWorkspaceStore();
 const activeTab = ref("users");
 const adminSidebarCollapsed = ref(false);
+const showStatsPanel = ref(false);
 
 // Model Config Redesign (3-Column Layout) States
 const showAllScenesPoolModal = ref(false);
@@ -6271,5 +6284,48 @@ function truncateText(value, length = 100) {
 .status-tag.auth_error {
   background: rgba(255, 59, 48, 0.1);
   color: #ff3b30;
+}
+
+/* --- Collapsible Stats Bar Styles --- */
+.compact-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--spatial-warm-2);
+  border: 1px solid var(--spatial-line);
+  padding: 6px 14px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  color: var(--spatial-gray);
+  backdrop-filter: blur(8px);
+}
+
+.compact-stat-item {
+  display: flex;
+  align-items: center;
+}
+
+.compact-stat-item strong {
+  color: var(--spatial-graphite);
+  margin-left: 4px;
+}
+
+.toggle-stats-btn {
+  font-size: 0.78rem !important;
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+/* Slide-Fade transition */
+.slide-fade-enter-active {
+  transition: all 0.3s ease-out;
+}
+.slide-fade-leave-active {
+  transition: all 0.25s cubic-bezier(1, 0.5, 0.8, 1);
+}
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  transform: translateY(-8px);
+  opacity: 0;
 }
 </style>
