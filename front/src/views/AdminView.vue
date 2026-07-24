@@ -1,17 +1,20 @@
 <template>
-  <div class="admin-page spatial-page reveal-ready">
+  <div class="admin-page spatial-page reveal-ready" :class="{ 'admin-sidebar-collapsed': adminSidebarCollapsed }">
 
     <aside
       class="admin-side-nav"
-      :style="{ left: sidebarLeft + 'px', top: sidebarTop + 'px', bottom: 'auto' }"
-      @mousedown="handleMouseDown"
+      :class="{ collapsed: adminSidebarCollapsed }"
       aria-label="管理员后台导航"
     >
-      <!-- Drag handle -->
-      <div class="sidebar-drag-handle">
-        <span></span>
-        <span></span>
-      </div>
+      <!-- Floating collapse button -->
+      <button
+        class="admin-side-toggle"
+        type="button"
+        :title="adminSidebarCollapsed ? '展开菜单' : '收起菜单'"
+        @click="adminSidebarCollapsed = !adminSidebarCollapsed"
+      >
+        {{ adminSidebarCollapsed ? "›" : "‹" }}
+      </button>
       <nav class="admin-side-tabs">
         <button
           v-for="tab in adminTabOptions"
@@ -343,162 +346,156 @@
           </div>
         </div>
 
-        <!-- Tab Content: Models -->
-        <div v-if="activeTab === 'models'" class="tab-pane models-pane">
-          <div class="pane-header-row model-route-heading">
-            <div>
-              <h3>AI 模型路由</h3>
-              <p class="pane-description">{{ modelSceneDescription }}</p>
-            </div>
-            <span class="admin-route-badge">{{ modelSceneLabel }}</span>
-          </div>
-
-          <div class="model-scene-switch spatial-glass-panel">
-            <button
-              v-for="scene in modelSceneOptions"
-              :key="scene.value"
-              class="scene-switch-btn"
-              :class="{ active: modelScene === scene.value }"
-              type="button"
-              @click="modelScene = scene.value"
-            >
-              <strong>{{ scene.label }}</strong>
-              <span>{{ scene.hint }}</span>
-            </button>
-          </div>
-
-          <ModelConfigPanel
-            :config-preview="workspaceStore.configPreview"
-            :model-config="workspaceStore.modelConfig"
-            :saving="workspaceStore.syncState.savingModel"
-            :testing="workspaceStore.syncState.testingModel"
-            :fetching-models="workspaceStore.syncState.fetchingModels"
-            :model-options="workspaceStore.syncState.modelOptions"
-            :test-result="workspaceStore.syncState.modelTest"
-            :save-result="workspaceStore.syncState.modelSaveResult"
-            :chat-testing="workspaceStore.syncState.chatTesting"
-            :chat-reply="workspaceStore.syncState.chatReply"
-            @apply-preset="workspaceStore.applyPreset"
-            @import-opencode="workspaceStore.importOpenCodeModels"
-            @copy-config="copyModelConfig"
-            @save-model="saveCurrentSceneModelConfig"
-            @test-model="workspaceStore.testModelConfig"
-            @fetch-models="workspaceStore.fetchModelList"
-            @chat-test="workspaceStore.testModelChat"
-            @update:model-config="updateModelConfig"
-          />
-
-          <section class="model-pool-panel spatial-glass-panel">
-            <div class="model-pool-header">
-              <div>
-                <span class="pool-kicker">Route Health Pool</span>
-                <h4>实时中转模型池</h4>
-                <p>{{ modelPoolDescription }} 系统每 10 秒检测一次，按主路由、可用状态和延迟自动排序。</p>
-              </div>
-              <div class="model-pool-actions">
-                <span class="pool-summary">
-                  {{ availableModelRoutes }} 可用 / {{ configuredModelRoutes }} 已配置 / {{ unconfiguredModelRoutes }} 待配置
-                </span>
-                <span class="pool-refresh-chip" :class="{ active: modelPoolAutoRefresh }">
-                  {{ modelPoolRefreshing ? "正在检测" : `10 秒自动刷新${modelPoolLastRefreshedAt ? " · " + formatTime(modelPoolLastRefreshedAt) : ""}` }}
-                </span>
-                <button class="spatial-btn spatial-btn-ghost compact-btn" @click="modelPoolAutoRefresh = !modelPoolAutoRefresh">
-                  {{ modelPoolAutoRefresh ? "暂停轮询" : "恢复轮询" }}
-                </button>
-                <button class="spatial-btn spatial-btn-ghost compact-btn" @click="showUnconfiguredPool = !showUnconfiguredPool">
-                  {{ showUnconfiguredPool ? "隐藏待配置" : "查看待配置" }}
-                </button>
-                <button class="spatial-btn spatial-btn-ghost compact-btn" :disabled="modelPoolSeeding" @click="seedModelPool">
-                  {{ modelPoolSeeding ? "导入中..." : "导入推荐池" }}
-                </button>
-                <button class="spatial-btn spatial-btn-ghost compact-btn" :disabled="modelPoolCleaning" @click="cleanupModelPool">
-                  {{ modelPoolCleaning ? "清理中..." : "清理不可用" }}
-                </button>
-                <button class="spatial-btn spatial-btn-accent compact-btn" :disabled="modelPoolRefreshing" @click="refreshModelPool">
-                  {{ modelPoolRefreshing ? "检测中..." : "实时刷新" }}
-                </button>
-              </div>
-            </div>
-
-            <div class="model-pool-list route-health-grid">
-              <article
-                v-for="(route, index) in visibleModelPool"
-                :key="route.id"
-                class="model-pool-card"
-                :class="[`status-${route.status}`, { 'message-expanded': isPoolMessageExpanded(route) }]"
+        <!-- Tab Content: Models (Redesigned) -->
+        <div v-if="activeTab === 'models'" class="tab-pane models-redesign-pane">
+          <!-- Top Row: Core Module Pools Entrance -->
+          <div class="scene-pools-entrance-panel spatial-glass-panel">
+            <header class="entrance-header">
+              <span class="eyebrow">MODULE ROUTING HEALTH POOLS</span>
+              <h4>全站核心场景号池运维</h4>
+              <p>点击下方各模块场景，可实时查看及维护其对应的可用模型轮询队列。</p>
+            </header>
+            <div class="scene-buttons-grid">
+              <button
+                v-for="scene in modelSceneOptions"
+                :key="scene.value"
+                class="scene-pool-btn spatial-glass-panel animate-hover-up"
+                type="button"
+                @click="openScenePoolModal(scene.value)"
               >
-                <header class="pool-card-top">
-                  <div class="pool-rank-wrap">
-                    <span class="pool-rank">#{{ index + 1 }}</span>
-                    <span class="pool-state-dot"></span>
+                <div class="scene-btn-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                </div>
+                <div class="scene-btn-info">
+                  <strong>{{ scene.label }}号池</strong>
+                  <span>{{ scene.hint }}</span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Main Dashboard: Two columns -->
+          <div class="models-dashboard-layout">
+            <!-- Left Column: Relays / Transfer Stations -->
+            <div class="dashboard-left-col spatial-glass-panel">
+              <header class="col-header">
+                <h5>中转分发站</h5>
+                <button class="spatial-btn spatial-btn-accent compact-btn" @click="showAddRelayModal = true">
+                  + 添加中转站
+                </button>
+              </header>
+
+              <div v-if="loadingRelays" class="loading-state">
+                <span class="loading-spinner"></span> 加载中...
+              </div>
+              <div v-else-if="relays.length === 0" class="empty-state">
+                暂无配置的中转站
+              </div>
+              <div v-else class="relays-list">
+                <div
+                  v-for="relay in relays"
+                  :key="relay.id"
+                  class="relay-item-card animate-hover-up"
+                  :class="{ active: activeRelay?.id === relay.id }"
+                  @click="activeRelay = relay"
+                >
+                  <div class="relay-card-main">
+                    <strong>{{ relay.providerName }}</strong>
+                    <span class="relay-url">{{ relay.baseUrl }}</span>
                   </div>
-                  <span class="pool-chip" :class="`chip-${route.status}`">{{ poolStatusLabel(route.status) }}</span>
-                </header>
-                <div class="pool-card-body">
-                  <div class="pool-title-line">
-                    <strong>{{ route.providerName }}</strong>
-                    <span v-if="route.active" class="pool-chip primary">主路由</span>
-                    <span v-if="route.template" class="pool-chip">候选</span>
-                    <span v-if="route.duplicateCount > 1" class="pool-chip">重复 {{ route.duplicateCount }}</span>
-                  </div>
-                  <p>{{ route.modelName || "待填写模型" }}</p>
-                  <small>{{ route.baseUrl }}</small>
-                </div>
-                <div class="pool-health-metrics">
-                  <span>
-                    <small>延迟</small>
-                    <strong>{{ routeLatencyLabel(route) }}</strong>
-                  </span>
-                  <span>
-                    <small>Key</small>
-                    <strong>{{ route.keyConfigured ? "已配置" : "未配置" }}</strong>
-                  </span>
-                  <span>
-                    <small>优先级</small>
-                    <strong>{{ routePriorityLabel(route, index) }}</strong>
-                  </span>
-                </div>
-                <div class="pool-message-wrap">
-                  <p class="pool-message" :class="{ expanded: isPoolMessageExpanded(route) }">{{ route.message }}</p>
-                  <button
-                    v-if="isLongPoolMessage(route.message)"
-                    type="button"
-                    class="pool-message-toggle"
-                    @click="togglePoolMessage(route)"
-                  >
-                    {{ isPoolMessageExpanded(route) ? "收起" : "详情" }}
+                  <button class="relay-delete-btn" type="button" @click.stop="deleteRelay(relay)" title="删除此中转站">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                   </button>
                 </div>
-                <div class="pool-card-footer">
-                  <button
-                    v-if="route.keyUrl"
-                    class="action-btn text-btn"
-                    @click="openKeyConsole(route)"
-                  >
-                    打开官网
-                  </button>
-                  <button
-                    v-if="!route.keyConfigured || route.template || route.status === 'unconfigured'"
-                    class="action-btn text-btn"
-                    @click="configurePoolRoute(route)"
-                  >
-                    配置 Key
-                  </button>
-                  <button
-                    v-if="!route.template && !route.active"
-                    class="action-btn text-btn"
-                    :disabled="!route.keyConfigured || route.status === 'unconfigured'"
-                    @click="activateModelRoute(route)"
-                  >
-                    提为主路由
-                  </button>
-                </div>
-              </article>
-              <div v-if="!visibleModelPool.length" class="pool-empty">
-                暂无模型池数据。点击“导入推荐池”添加 Groq、Cerebras、Hugging Face、Cloudflare 等候选路由。
               </div>
             </div>
-          </section>
+
+            <!-- Right Column: Supported Models Grid -->
+            <div class="dashboard-right-col spatial-glass-panel">
+              <div v-if="!activeRelay" class="empty-state">
+                请先选择或添加一个中转站
+              </div>
+              <div v-else-if="loadingModels" class="loading-state">
+                <span class="loading-spinner"></span> 正在拉取该中转站支持的所有模型...
+              </div>
+              <div v-else-if="relayModels.length === 0" class="empty-state">
+                该中转站下未拉取到模型列表，请确保 API Key 配置正确且能正常连通。
+              </div>
+              <div v-else class="active-relay-models-view">
+                <header class="relay-models-header">
+                  <div>
+                    <h5>{{ activeRelay.providerName }} 支持的模型</h5>
+                    <p class="subtitle">共 {{ relayModels.length }} 个可用模型 · 数据来自 API 直连读取</p>
+                  </div>
+                </header>
+
+                <div class="models-cards-grid">
+                  <article v-for="model in relayModels" :key="model.id" class="model-item-card spatial-glass-panel">
+                    <div class="model-card-head">
+                      <div class="model-avatar">
+                        {{ model.ownedBy?.slice(0, 2).toUpperCase() || 'AI' }}
+                      </div>
+                      <div class="model-name-wrapper">
+                        <strong class="model-id-label">{{ model.id }}</strong>
+                        <span class="model-owner-tag">{{ model.ownedBy || '未知供应商' }}</span>
+                      </div>
+                    </div>
+
+                    <!-- Speed test & Error message display -->
+                    <div class="model-card-metrics">
+                      <button
+                        class="speed-test-btn"
+                        :class="{ testing: modelTestResults[model.id]?.testing }"
+                        :disabled="modelTestResults[model.id]?.testing"
+                        @click="testModelSpeed(model)"
+                      >
+                        {{ modelTestResults[model.id]?.testing ? '测速中...' : '开始测速' }}
+                      </button>
+                      <span
+                        v-if="modelTestResults[model.id] && !modelTestResults[model.id].testing"
+                        class="latency-badge"
+                        :class="{ error: !modelTestResults[model.id].success }"
+                      >
+                        {{ modelTestResults[model.id].success ? `${modelTestResults[model.id].latencyMs}ms` : '失败' }}
+                      </span>
+                    </div>
+
+                    <!-- Speed test error detail box -->
+                    <div
+                      v-if="modelTestResults[model.id] && !modelTestResults[model.id].success && modelTestResults[model.id].message"
+                      class="speed-error-banner"
+                    >
+                      {{ modelTestResults[model.id].message }}
+                    </div>
+
+                    <!-- Target Scenes Checkboxes -->
+                    <div class="model-scenes-assign">
+                      <span class="assign-label">加入号池</span>
+                      <div class="scene-checkboxes-list">
+                        <label
+                          v-for="scene in modelSceneOptions"
+                          :key="scene.value"
+                          class="scene-checkbox-item"
+                          :class="{
+                            checked: assignedScenesMap[`${activeRelay.providerName.toLowerCase()}|${activeRelay.baseUrl.toLowerCase()}|${model.id}`]?.[scene.value],
+                            disabled: modelActionStates[`${model.id}|${scene.value}`]
+                          }"
+                        >
+                          <input
+                            type="checkbox"
+                            :checked="assignedScenesMap[`${activeRelay.providerName.toLowerCase()}|${activeRelay.baseUrl.toLowerCase()}|${model.id}`]?.[scene.value]"
+                            :disabled="modelActionStates[`${model.id}|${scene.value}`]"
+                            @change="toggleModelScene(model, scene.value, assignedScenesMap[`${activeRelay.providerName.toLowerCase()}|${activeRelay.baseUrl.toLowerCase()}|${model.id}`]?.[scene.value])"
+                          />
+                          <span>{{ scene.label }}</span>
+                        </label>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Tab Content: AI Usage Calls -->
@@ -1019,6 +1016,100 @@
         </div>
       </div>
     </Transition>
+
+    <!-- Add Relay Modal -->
+    <Transition name="fade">
+      <div v-if="showAddRelayModal" class="admin-modal-overlay" @click="showAddRelayModal = false">
+        <div class="admin-modal-card spatial-glass-panel" @click.stop>
+          <header class="modal-header">
+            <h5>添加中转配置站</h5>
+            <button class="modal-close" @click="showAddRelayModal = false">×</button>
+          </header>
+          <div class="modal-body">
+            <div class="form-group">
+              <label>中转商户名称</label>
+              <input v-model="newRelay.providerName" placeholder="例如: QiHang, Anthropic, SiliconFlow" class="spatial-input" />
+            </div>
+            <div class="form-group">
+              <label>接口代理地址 (Base URL)</label>
+              <input v-model="newRelay.baseUrl" placeholder="例如: https://api.qihang.ai/v1" class="spatial-input" />
+            </div>
+            <div class="form-group">
+              <label>API Key / 凭证密钥</label>
+              <input v-model="newRelay.apiKey" type="password" placeholder="密钥敏感信息不会泄露，可为空代表使用默认" class="spatial-input" />
+            </div>
+            <div class="form-group">
+              <label>默认主控模型</label>
+              <input v-model="newRelay.modelName" placeholder="例如: gpt-4o, claude-3-5-sonnet" class="spatial-input" />
+            </div>
+          </div>
+          <footer class="modal-footer">
+            <button class="spatial-btn spatial-btn-ghost" @click="showAddRelayModal = false">取消</button>
+            <button class="spatial-btn spatial-btn-accent" :disabled="submittingNewRelay" @click="submitNewRelay">
+              {{ submittingNewRelay ? "保存中..." : "确认添加" }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Scene Pool Modal -->
+    <Transition name="fade">
+      <div v-if="activePoolScene" class="admin-modal-overlay" @click="activePoolScene = null">
+        <div class="admin-modal-card scene-pool-modal-card spatial-glass-panel" @click.stop>
+          <header class="modal-header">
+            <div>
+              <h5>{{ modelSceneOptions.find(s => s.value === activePoolScene)?.label || activePoolScene }} 号池状态</h5>
+              <p class="subtitle">当前在用负载均衡轮询队列</p>
+            </div>
+            <button class="modal-close" @click="activePoolScene = null">×</button>
+          </header>
+          <div class="modal-body">
+            <div class="pool-modal-actions">
+              <button class="spatial-btn spatial-btn-ghost compact-btn" :disabled="loadingScenePool" @click="refreshScenePool">
+                {{ loadingScenePool ? "测速检测中..." : "一键测试并刷新" }}
+              </button>
+              <button class="spatial-btn spatial-btn-ghost compact-btn" :disabled="loadingScenePool" @click="cleanupScenePool">
+                清理不可用节点
+              </button>
+            </div>
+
+            <div v-if="loadingScenePool" class="loading-state">
+              <span class="loading-spinner"></span> 数据更新中...
+            </div>
+            <div v-else-if="scenePoolData.length === 0" class="empty-state">
+              号池为空，请在右侧模型列表中勾选对应模型加入
+            </div>
+            <div v-else class="pool-nodes-list">
+              <div
+                v-for="route in scenePoolData"
+                :key="route.id"
+                class="pool-node-item"
+                :class="route.status"
+              >
+                <div class="node-main-info">
+                  <div class="node-title">
+                    <strong>{{ route.providerName }}</strong>
+                    <span class="model-badge">{{ route.modelName }}</span>
+                    <span v-if="route.active" class="node-badge active-tag">主路由</span>
+                  </div>
+                  <span class="node-url">{{ route.baseUrl }}</span>
+                  <span v-if="route.message" class="node-message">{{ route.message }}</span>
+                </div>
+                <div class="node-metrics">
+                  <span class="node-latency" :class="{ error: route.status !== 'available' }">
+                    {{ route.status === 'available' ? `${route.latencyMs}ms` : '故障' }}
+                  </span>
+                  <button v-if="!route.active" class="node-remove-btn" type="button" @click="removeScenePoolRoute(route.id)" title="从号池移除">
+                    ×
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -1037,6 +1128,7 @@ const authStore = useAuthStore();
 const dialogStore = useDialogStore();
 const workspaceStore = useWorkspaceStore();
 const activeTab = ref("users");
+const adminSidebarCollapsed = ref(false);
 
 // Sidebar Dragging State & Methods
 const isDragging = ref(false);
@@ -1193,15 +1285,31 @@ const tutorials = ref([]);
 const forumReports = ref([]);
 const campusVerifications = ref([]);
 const adminTopics = ref([]);
-const modelPool = ref([]);
-const modelPoolRefreshing = ref(false);
-const modelPoolSeeding = ref(false);
-const modelPoolCleaning = ref(false);
-const modelPoolAutoRefresh = ref(true);
-const modelPoolLastRefreshedAt = ref("");
-let modelPoolRefreshTimer = null;
-const showUnconfiguredPool = ref(false);
-const expandedPoolMessages = ref(new Set());
+// Model Config Redesign States
+const relays = ref([]);
+const loadingRelays = ref(false);
+const activeRelay = ref(null);
+
+const relayModels = ref([]);
+const loadingModels = ref(false);
+
+const modelTestResults = ref({}); // key: modelId, value: { testing: boolean, latencyMs: number, success: boolean, message: string }
+const modelActionStates = ref({}); // key: modelId + '|' + scene, value: boolean
+const assignedScenesMap = ref({}); // key: providerName|baseUrl|modelName, value: { [scene]: boolean }
+
+const showAddRelayModal = ref(false);
+const submittingNewRelay = ref(false);
+const newRelay = ref({
+  providerName: "",
+  baseUrl: "",
+  apiKey: "",
+  modelName: "gpt-4o",
+});
+
+const activePoolScene = ref(null);
+const scenePoolData = ref([]);
+const loadingScenePool = ref(false);
+
 const modelScene = ref("paper_review");
 const modelSceneOptions = [
   {
@@ -1613,8 +1721,9 @@ async function fetchAllData() {
     // 8. Fetch campus verification requests
     campusVerifications.value = await paperpilotApi.getAdminCampusVerifications();
 
-    // 9. Fetch AI model pool status
-    modelPool.value = await paperpilotApi.getModelPool(modelScene.value);
+    // 9. Initialize Model Configuration Center
+    await loadRelays();
+    await loadAllScenePools();
 
   } catch (error) {
     console.error("Failed to fetch admin data from backend:", error);
@@ -1625,40 +1734,14 @@ async function fetchAllData() {
 
 onMounted(() => {
   fetchAllData();
-  modelPoolRefreshTimer = window.setInterval(() => {
-    if (activeTab.value === "models" && modelPoolAutoRefresh.value && !modelPoolRefreshing.value) {
-      refreshModelPool(true);
-    }
-  }, 10000);
 });
 
-onBeforeUnmount(() => {
-  if (modelPoolRefreshTimer) {
-    window.clearInterval(modelPoolRefreshTimer);
-    modelPoolRefreshTimer = null;
+watch(activeTab, async (value) => {
+  if (value === "models") {
+    await loadRelays();
+    await loadAllScenePools();
   }
 });
-
-watch(modelScene, async () => {
-  await loadCurrentModelScene();
-});
-
-watch(activeTab, value => {
-  if (value === "models" && modelPoolAutoRefresh.value && !modelPoolRefreshing.value) {
-    refreshModelPool(true);
-  }
-});
-
-async function loadCurrentModelScene() {
-  try {
-    expandedPoolMessages.value = new Set();
-    await workspaceStore.hydrateFromBackend(modelScene.value);
-    modelPool.value = await paperpilotApi.getModelPool(modelScene.value);
-    if (activeTab.value === "models") refreshModelPool(true);
-  } catch (error) {
-    dialogStore.alert(error.response?.data?.message || "模型场景加载失败");
-  }
-}
 
 async function loadAdminTopics(showLoading = true) {
   if (showLoading) topicAdminLoading.value = true;
@@ -1717,98 +1800,221 @@ function shortText(value, max = 80) {
   return text.length > max ? `${text.slice(0, max)}...` : text;
 }
 
-async function copyModelConfig() {
+// --- Model Config Center Redesign Methods ---
+async function loadRelays() {
+  loadingRelays.value = true;
   try {
-    await navigator.clipboard.writeText(workspaceStore.configPreview);
-  } catch (error) {
-    dialogStore.alert("复制配置失败");
-  }
-}
-
-function updateModelConfig(nextConfig) {
-  Object.assign(workspaceStore.modelConfig, nextConfig, { scene: modelScene.value });
-  workspaceStore.clearModelFeedback();
-}
-
-async function saveCurrentSceneModelConfig() {
-  workspaceStore.modelConfig.scene = modelScene.value;
-  const result = await workspaceStore.saveModelConfig();
-  modelPool.value = await paperpilotApi.getModelPool(modelScene.value);
-  return result;
-}
-
-function configurePoolRoute(route) {
-  Object.assign(workspaceStore.modelConfig, {
-    providerName: route.providerName || "自定义中转站",
-    baseUrl: route.baseUrl || "",
-    apiKey: "",
-    modelName: route.modelName === "待填写" ? "" : route.modelName || "",
-    apiFormat: modelScene.value === "meeting_deck" ? "openai_responses" : route.apiFormat === "gemini" ? "openai_chat" : route.apiFormat || "openai_chat",
-    authType: route.authType || "bearer",
-    fullUrl: Boolean(route.fullUrl),
-    modelsUrl: route.modelsUrl || "",
-    customUserAgent: route.customUserAgent || "",
-    scene: modelScene.value,
-  });
-  workspaceStore.clearModelFeedback();
-  requestAnimationFrame(() => {
-    document.querySelector(".models-pane .reader-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-}
-
-function openKeyConsole(route) {
-  if (!route?.keyUrl) return;
-  window.open(route.keyUrl, "_blank", "noopener,noreferrer");
-}
-
-async function refreshModelPool(silent = false) {
-  modelPoolRefreshing.value = true;
-  try {
-    modelPool.value = await paperpilotApi.refreshModelPool(modelScene.value);
-    modelPoolLastRefreshedAt.value = new Date().toISOString();
-  } catch (error) {
-    if (!silent) dialogStore.alert(error.response?.data?.message || "模型池刷新失败");
+    const pool = await paperpilotApi.getModelPool("general");
+    const uniqueRelays = [];
+    const seen = new Set();
+    for (const item of pool) {
+      if (item.template) continue;
+      const key = `${item.providerName.toLowerCase()}|${item.baseUrl.toLowerCase()}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueRelays.push(item);
+      }
+    }
+    relays.value = uniqueRelays;
+    if (uniqueRelays.length > 0 && !activeRelay.value) {
+      activeRelay.value = uniqueRelays[0];
+    }
+  } catch (e) {
+    console.error("Failed to load relays:", e);
   } finally {
-    modelPoolRefreshing.value = false;
+    loadingRelays.value = false;
   }
 }
 
-async function seedModelPool() {
-  modelPoolSeeding.value = true;
+async function loadAllScenePools() {
+  const scenes = ["paper_review", "paper_qa", "topic_research", "meeting_deck", "forum_moderation"];
+  const newMap = {};
+  for (const scene of scenes) {
+    try {
+      const pool = await paperpilotApi.getModelPool(scene);
+      for (const item of pool) {
+        if (item.template) continue;
+        const routeKey = `${item.providerName.toLowerCase()}|${item.baseUrl.toLowerCase()}`;
+        const modelKey = `${routeKey}|${item.modelName}`;
+        if (!newMap[modelKey]) {
+          newMap[modelKey] = {};
+        }
+        newMap[modelKey][scene] = true;
+      }
+    } catch (e) {
+      console.error(`Failed to load pool for ${scene}:`, e);
+    }
+  }
+  assignedScenesMap.value = newMap;
+}
+
+async function loadRelayModels(relay) {
+  if (!relay) {
+    relayModels.value = [];
+    return;
+  }
+  loadingModels.value = true;
+  relayModels.value = [];
+  modelTestResults.value = {};
   try {
-    modelPool.value = await paperpilotApi.seedModelPool(modelScene.value);
-  } catch (error) {
-    dialogStore.alert(error.response?.data?.message || "推荐模型池导入失败");
+    const res = await paperpilotApi.fetchRelayRouteModels(relay.id);
+    if (res && res.models) {
+      relayModels.value = res.models;
+    }
+  } catch (e) {
+    console.error("Failed to load relay models:", e);
   } finally {
-    modelPoolSeeding.value = false;
+    loadingModels.value = false;
   }
 }
 
-async function cleanupModelPool() {
-  modelPoolCleaning.value = true;
+async function testModelSpeed(model) {
+  if (!activeRelay.value) return;
+  modelTestResults.value[model.id] = { testing: true, latencyMs: null, success: false, message: "" };
   try {
-    const result = await paperpilotApi.cleanupModelPool(modelScene.value);
-    modelPool.value = result.pool || await paperpilotApi.getModelPool(modelScene.value);
-    const reasons = Object.entries(result.reasons || {})
-      .map(([reason, count]) => `${reason} ${count} 条`)
-      .join("，");
-    dialogStore.alert(`已清理 ${result.removed || 0} 条不可用路由${reasons ? "：" + reasons : ""}`);
-  } catch (error) {
-    dialogStore.alert(error.response?.data?.message || "模型池清理失败");
+    const res = await paperpilotApi.testRelayRouteModel(activeRelay.value.id, model.id);
+    modelTestResults.value[model.id] = {
+      testing: false,
+      latencyMs: res.latencyMs || 0,
+      success: res.status === "available" || res.success,
+      message: res.message || ""
+    };
+  } catch (e) {
+    modelTestResults.value[model.id] = {
+      testing: false,
+      latencyMs: null,
+      success: false,
+      message: e.response?.data?.message || e.message
+    };
+  }
+}
+
+async function toggleModelScene(model, scene, currentEnabled) {
+  if (!activeRelay.value) return;
+  const stateKey = `${model.id}|${scene}`;
+  modelActionStates.value[stateKey] = true;
+  const newEnabled = !currentEnabled;
+  try {
+    await paperpilotApi.assignRelayModelToScene(activeRelay.value.id, model.id, scene, newEnabled);
+    
+    const routeKey = `${activeRelay.value.providerName.toLowerCase()}|${activeRelay.value.baseUrl.toLowerCase()}`;
+    const modelKey = `${routeKey}|${model.id}`;
+    if (!assignedScenesMap.value[modelKey]) {
+      assignedScenesMap.value[modelKey] = {};
+    }
+    assignedScenesMap.value[modelKey][scene] = newEnabled;
+  } catch (e) {
+    dialogStore.alert("更新号池失败: " + (e.response?.data?.message || e.message));
   } finally {
-    modelPoolCleaning.value = false;
+    modelActionStates.value[stateKey] = false;
   }
 }
 
-async function activateModelRoute(route) {
+async function deleteRelay(relay) {
+  if (!confirm(`确定删除中转站 "${relay.providerName}" 吗？此操作将清除其在所有模块的模型池记录。`)) {
+    return;
+  }
   try {
-    await paperpilotApi.activateModelPoolRoute(route.id, modelScene.value);
-    modelPool.value = await paperpilotApi.getModelPool(modelScene.value);
-    await workspaceStore.hydrateFromBackend(modelScene.value);
-  } catch (error) {
-    dialogStore.alert(error.response?.data?.message || "主路由切换失败");
+    await paperpilotApi.deleteRelayRoute(relay.id);
+    if (activeRelay.value?.id === relay.id) {
+      activeRelay.value = null;
+    }
+    await loadRelays();
+    await loadAllScenePools();
+  } catch (e) {
+    dialogStore.alert("删除失败: " + (e.response?.data?.message || e.message));
   }
 }
+
+async function submitNewRelay() {
+  if (!newRelay.value.providerName || !newRelay.value.baseUrl || !newRelay.value.modelName) {
+    dialogStore.alert("请填写完整信息（名称、接口地址、默认模型）");
+    return;
+  }
+  submittingNewRelay.value = true;
+  try {
+    const payload = {
+      providerName: newRelay.value.providerName,
+      baseUrl: newRelay.value.baseUrl,
+      apiKey: newRelay.value.apiKey || "",
+      modelName: newRelay.value.modelName,
+      scene: "general",
+      apiFormat: "openai_chat",
+      authType: "bearer",
+      fullUrl: false
+    };
+    await paperpilotApi.saveModelConfig(payload);
+    showAddRelayModal.value = false;
+    newRelay.value = { providerName: "", baseUrl: "", apiKey: "", modelName: "gpt-4o" };
+    await loadRelays();
+  } catch (e) {
+    dialogStore.alert("保存失败: " + (e.response?.data?.message || e.message));
+  } finally {
+    submittingNewRelay.value = false;
+  }
+}
+
+async function openScenePoolModal(sceneValue) {
+  activePoolScene.value = sceneValue;
+  await loadScenePoolData();
+}
+
+async function loadScenePoolData() {
+  if (!activePoolScene.value) return;
+  loadingScenePool.value = true;
+  try {
+    scenePoolData.value = await paperpilotApi.getModelPool(activePoolScene.value);
+  } catch (e) {
+    console.error("Failed to load scene pool:", e);
+  } finally {
+    loadingScenePool.value = false;
+  }
+}
+
+async function refreshScenePool() {
+  if (!activePoolScene.value) return;
+  loadingScenePool.value = true;
+  try {
+    scenePoolData.value = await paperpilotApi.refreshModelPool(activePoolScene.value);
+  } catch (e) {
+    console.error("Failed to refresh scene pool:", e);
+  } finally {
+    loadingScenePool.value = false;
+  }
+}
+
+async function cleanupScenePool() {
+  if (!activePoolScene.value) return;
+  loadingScenePool.value = true;
+  try {
+    await paperpilotApi.cleanupModelPool(activePoolScene.value);
+    await loadScenePoolData();
+    await loadAllScenePools();
+  } catch (e) {
+    console.error("Failed to cleanup scene pool:", e);
+  } finally {
+    loadingScenePool.value = false;
+  }
+}
+
+async function removeScenePoolRoute(routeId) {
+  if (!confirm("确定将该节点移出此场景的可用列表吗？")) return;
+  try {
+    await paperpilotApi.assignModelPoolRoute(routeId, activePoolScene.value, false);
+    await loadScenePoolData();
+    await loadAllScenePools();
+  } catch (e) {
+    dialogStore.alert("移出失败: " + (e.response?.data?.message || e.message));
+  }
+}
+
+watch(activeRelay, (newVal) => {
+  if (newVal) {
+    loadRelayModels(newVal);
+  } else {
+    relayModels.value = [];
+  }
+});
 
 function countUsersByRole(role) {
   return systemUsers.value.filter(u => u.role === role).length;
@@ -5040,6 +5246,541 @@ function truncateText(value, length = 100) {
   }
 
   .pool-health-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Redesigned Models Dashboard Styles --- */
+.models-redesign-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.scene-pools-entrance-panel {
+  padding: 24px;
+  border-radius: 20px;
+}
+
+.scene-pools-entrance-panel .entrance-header {
+  margin-bottom: 20px;
+}
+
+.scene-pools-entrance-panel .entrance-header h4 {
+  font-size: 1.25rem;
+  margin: 6px 0;
+  color: var(--spatial-graphite);
+}
+
+.scene-pools-entrance-panel .entrance-header p {
+  color: var(--spatial-silver);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.scene-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.scene-pool-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--spatial-line);
+  background: var(--spatial-surface-2);
+  border-radius: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.scene-pool-btn:hover {
+  transform: translateY(-2px);
+  border-color: var(--spatial-accent-line);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.08);
+}
+
+.scene-btn-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--spatial-accent-soft);
+  color: var(--spatial-accent);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.scene-btn-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.scene-btn-info strong {
+  font-size: 0.9rem;
+  color: var(--spatial-graphite);
+}
+
+.scene-btn-info span {
+  font-size: 0.72rem;
+  color: var(--spatial-silver);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.models-dashboard-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.dashboard-left-col {
+  padding: 20px;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.col-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.col-header h5 {
+  font-size: 1rem;
+  margin: 0;
+  color: var(--spatial-graphite);
+}
+
+.relays-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.relay-item-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--spatial-line);
+  background: var(--spatial-surface-2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.relay-item-card:hover {
+  border-color: var(--spatial-accent-line);
+  background: var(--spatial-accent-soft);
+}
+
+.relay-item-card.active {
+  border-color: var(--spatial-accent);
+  background: var(--spatial-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--spatial-accent-line);
+}
+
+.relay-card-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.relay-card-main strong {
+  font-size: 0.88rem;
+  color: var(--spatial-graphite);
+}
+
+.relay-url {
+  font-size: 0.72rem;
+  color: var(--spatial-silver);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.relay-delete-btn {
+  background: transparent;
+  border: 0;
+  color: var(--spatial-silver);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  transition: all 0.2s ease;
+}
+
+.relay-delete-btn:hover {
+  color: #ff3b30;
+  background: rgba(255, 59, 48, 0.1);
+}
+
+.dashboard-right-col {
+  padding: 24px;
+  border-radius: 20px;
+  min-height: 400px;
+}
+
+.relay-models-header {
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--spatial-line);
+  padding-bottom: 16px;
+}
+
+.relay-models-header h5 {
+  font-size: 1.1rem;
+  margin: 0;
+  color: var(--spatial-graphite);
+}
+
+.relay-models-header .subtitle {
+  font-size: 0.8rem;
+  color: var(--spatial-silver);
+  margin: 4px 0 0 0;
+}
+
+.models-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.model-item-card {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--spatial-line);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--spatial-surface-2);
+}
+
+.model-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.model-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--spatial-accent-soft);
+  color: var(--spatial-accent);
+  font-weight: 800;
+  font-size: 0.85rem;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.model-name-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.model-id-label {
+  font-size: 0.9rem;
+  color: var(--spatial-graphite);
+  word-break: break-all;
+}
+
+.model-owner-tag {
+  font-size: 0.72rem;
+  color: var(--spatial-silver);
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+.model-card-metrics {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--spatial-line);
+  border-bottom: 1px solid var(--spatial-line);
+  padding: 10px 0;
+}
+
+.speed-test-btn {
+  background: var(--spatial-warm-2);
+  border: 1px solid var(--spatial-line);
+  color: var(--spatial-graphite);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.speed-test-btn:hover:not(:disabled) {
+  background: var(--spatial-accent-soft);
+  border-color: var(--spatial-accent-line);
+  color: var(--spatial-accent);
+}
+
+.speed-test-btn.testing {
+  color: var(--spatial-silver);
+  cursor: not-allowed;
+}
+
+.latency-badge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #34c759;
+  background: rgba(52, 199, 89, 0.12);
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.latency-badge.error {
+  color: #ff3b30;
+  background: rgba(255, 59, 48, 0.12);
+}
+
+.speed-error-banner {
+  background: rgba(255, 59, 48, 0.08);
+  border: 1px solid rgba(255, 59, 48, 0.15);
+  color: #ff3b30;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  word-break: break-all;
+  max-height: 60px;
+  overflow-y: auto;
+}
+
+.model-scenes-assign {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assign-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--spatial-silver);
+  text-transform: uppercase;
+}
+
+.scene-checkboxes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scene-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--spatial-gray);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background 0.2s ease;
+}
+
+.scene-checkbox-item:hover {
+  background: var(--spatial-warm-2);
+}
+
+.scene-checkbox-item.checked {
+  color: var(--spatial-accent);
+  font-weight: 600;
+}
+
+.scene-checkbox-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.scene-checkbox-item input {
+  cursor: pointer;
+}
+
+/* Modals layout customization */
+.scene-pool-modal-card {
+  max-width: 580px;
+  width: 90%;
+}
+
+.pool-modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--spatial-line);
+  padding-bottom: 14px;
+}
+
+.pool-nodes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.pool-node-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--spatial-line);
+  background: var(--spatial-surface-2);
+  transition: all 0.2s ease;
+}
+
+.pool-node-item.available {
+  border-left: 4px solid #34c759;
+}
+
+.pool-node-item.failed,
+.pool-node-item.auth_error,
+.pool-node-item.timeout {
+  border-left: 4px solid #ff3b30;
+}
+
+.node-main-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.node-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.node-title strong {
+  font-size: 0.88rem;
+  color: var(--spatial-graphite);
+}
+
+.model-badge {
+  font-size: 0.72rem;
+  background: var(--spatial-warm-2);
+  color: var(--spatial-silver);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.node-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.node-badge.active-tag {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--spatial-accent);
+}
+
+.node-url {
+  font-size: 0.72rem;
+  color: var(--spatial-silver);
+  word-break: break-all;
+}
+
+.node-message {
+  font-size: 0.7rem;
+  color: #ff3b30;
+  margin-top: 2px;
+}
+
+.node-metrics {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.node-latency {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #34c759;
+}
+
+.node-latency.error {
+  color: #ff3b30;
+}
+
+.node-remove-btn {
+  background: transparent;
+  border: 0;
+  color: var(--spatial-silver);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  transition: color 0.2s ease;
+}
+
+.node-remove-btn:hover {
+  color: #ff3b30;
+}
+
+/* Sidebar Toggle Overlay */
+.admin-side-toggle {
+  position: absolute;
+  right: -10px;
+  top: 24px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--spatial-line);
+  background: var(--spatial-surface);
+  color: var(--spatial-graphite);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 40;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.admin-side-toggle:hover {
+  background: var(--spatial-warm-2);
+}
+
+/* Form Styles for Modal */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.form-group label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--spatial-gray);
+}
+
+@media (max-width: 990px) {
+  .models-dashboard-layout {
     grid-template-columns: 1fr;
   }
 }
