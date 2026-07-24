@@ -131,22 +131,6 @@
               </select>
             </div>
           </div>
-
-          <div class="user-quota-summary-grid">
-            <article>
-              <span>已开通会员</span>
-              <strong>{{ membershipUserCount }} 位</strong>
-            </article>
-            <article>
-              <span>论文综述权益</span>
-              <strong>{{ totalReviewUsed }} / {{ totalReviewQuota }}</strong>
-            </article>
-            <article>
-              <span>PPT 与对话权益</span>
-              <strong>{{ totalPptUsed + totalChatUsed }} / {{ totalPptQuota + totalChatQuota }}</strong>
-            </article>
-          </div>
-
           <div class="table-container spatial-glass-panel">
             <table class="admin-table">
               <thead>
@@ -198,17 +182,17 @@
                   </td>
                   <td>
                     <div class="membership-usage-cell">
-                      <span>综述 {{ user.reviewUsed || 0 }}/{{ user.reviewQuota || 0 }}</span>
-                      <span>PPT {{ user.pptUsed || 0 }}/{{ user.pptQuota || 0 }}</span>
-                      <span>对话 {{ user.chatUsed || 0 }}/{{ user.chatQuota || 0 }}</span>
+                      <span class="usage-badge review-tag">综述 <strong>{{ user.reviewUsed || 0 }}</strong>/{{ user.reviewQuota || 0 }}</span>
+                      <span class="usage-badge ppt-tag">PPT <strong>{{ user.pptUsed || 0 }}</strong>/{{ user.pptQuota || 0 }}</span>
+                      <span class="usage-badge chat-tag">对话 <strong>{{ user.chatUsed || 0 }}</strong>/{{ user.chatQuota || 0 }}</span>
                     </div>
                   </td>
                   <td>{{ user.createdTime }}</td>
                   <td style="text-align: right;">
                     <div class="table-actions">
-                      <button class="quota-edit-btn" @click="editUserMembership(user)">分配会员</button>
-                      <button class="action-btn text-btn" @click="toggleUserRole(user)">切角色</button>
-                      <button class="action-btn text-danger-btn" @click="deleteUser(user)">移除</button>
+                      <button class="spatial-btn spatial-btn-accent compact-btn" style="min-height: 28px; padding: 0 10px; font-size: 0.75rem;" @click="editUserMembership(user)">分配会员</button>
+                      <button class="spatial-btn spatial-btn-ghost compact-btn" style="min-height: 28px; padding: 0 10px; font-size: 0.75rem;" @click="toggleUserRole(user)">切角色</button>
+                      <button class="spatial-btn spatial-btn-ghost compact-btn" style="min-height: 28px; padding: 0 10px; font-size: 0.75rem; border-color: rgba(239,68,68,0.2); color: #ef4444; background: rgba(239,68,68,0.02);" @click="deleteUser(user)">移除</button>
                     </div>
                   </td>
                 </tr>
@@ -217,18 +201,19 @@
                 </tr>
               </tbody>
             </table>
-            <div v-if="filteredUsers.length" class="admin-pagination">
-              <span>{{ paginationText(filteredUsers.length, userPage, userPageSize) }}</span>
-              <div>
-                <select v-model.number="userPageSize" class="pagination-size-select">
-                  <option :value="8">8 条/页</option>
-                  <option :value="12">12 条/页</option>
-                  <option :value="20">20 条/页</option>
-                </select>
-                <button :disabled="userPage <= 1" @click="userPage -= 1">上一页</button>
-                <strong>{{ userPage }} / {{ userPageCount }}</strong>
-                <button :disabled="userPage >= userPageCount" @click="userPage += 1">下一页</button>
-              </div>
+          </div>
+          <!-- Pagination placed OUTSIDE table container -->
+          <div v-if="filteredUsers.length" class="admin-pagination spatial-glass-panel" style="margin-top: 16px; border-top: none; border-radius: 16px;">
+            <span>{{ paginationText(filteredUsers.length, userPage, userPageSize) }}</span>
+            <div>
+              <select v-model.number="userPageSize" class="pagination-size-select">
+                <option :value="8">8 条/页</option>
+                <option :value="12">12 条/页</option>
+                <option :value="20">20 条/页</option>
+              </select>
+              <button :disabled="userPage <= 1" @click="userPage -= 1">上一页</button>
+              <strong>{{ userPage }} / {{ userPageCount }}</strong>
+              <button :disabled="userPage >= userPageCount" @click="userPage += 1">下一页</button>
             </div>
           </div>
         </div>
@@ -3025,6 +3010,31 @@ function truncateText(value, length = 100) {
   font-size: .75rem;
 }
 
+/* Quota badges styling */
+.membership-usage-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.usage-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--spatial-line);
+  background: var(--spatial-surface-2);
+  color: var(--spatial-gray);
+  min-width: 96px;
+}
+
+.usage-badge strong {
+  color: var(--spatial-graphite);
+  font-weight: 700;
+}
+
 .payment-ticket-admin.status-processed header b {
   background: #dcfce7;
   color: #15803d;
@@ -3321,23 +3331,26 @@ function truncateText(value, length = 100) {
   table-layout: auto;
 }
 
-.admin-table th, .admin-table td {
-  padding: 18px 24px;
+.admin-table td {
+  padding: 12px 18px;
   text-align: left;
   border-bottom: 1px solid var(--spatial-line);
   white-space: nowrap;
   word-break: keep-all;
   writing-mode: horizontal-tb;
+  font-size: 0.84rem;
+  color: var(--spatial-graphite);
 }
 
 .admin-table th {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--spatial-silver);
   background: rgba(0, 0, 0, 0.01);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
   border-bottom: 2px solid var(--spatial-line);
+  padding: 14px 18px;
 }
 
 .admin-table tr {
@@ -3554,15 +3567,17 @@ function truncateText(value, length = 100) {
 }
 
 .user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   color: #ffffff;
-  font-weight: 600;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .role-badge {
