@@ -329,17 +329,20 @@ const navItems = computed(() => {
 
 const isLanding = computed(() => route.path === "/" || route.path === "/register");
 const isReader = computed(() => route.path.startsWith("/reader"));
+const isAdmin = computed(() => route.path === "/admin");
 const showNav = computed(() => !isLanding.value && !isReader.value);
 
 const rootClass = computed(() => {
   if (isReader.value) return "app-reader-root";
   if (isLanding.value) return "app-landing-root";
+  if (isAdmin.value) return "app-admin-root";
   return "spatial-app spatial-page";
 });
 
 const mainClass = computed(() => {
   if (isReader.value) return "app-reader-main";
   if (isLanding.value) return "app-landing-main";
+  if (isAdmin.value) return "app-admin-main";
   return "spatial-main";
 });
 
