@@ -76,7 +76,7 @@
             <tr>
               <th>时间</th>
               <th>用户</th>
-              <th>模块</th>
+              <th class="ledger-module-col">模块</th>
               <th>模型</th>
               <th>输入</th>
               <th>输出</th>
@@ -92,7 +92,7 @@
                 <strong>{{ row.username || "未知用户" }}</strong>
                 <small>{{ row.userEmail || `ID ${row.userId || "—"}` }}</small>
               </td>
-              <td>
+              <td class="ledger-module-col">
                 <strong>{{ row.sceneLabel }}</strong>
                 <small>{{ row.action }}</small>
               </td>
@@ -440,6 +440,16 @@ onMounted(() => {
   color: var(--spatial-graphite);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+.ledger-module-col {
+  white-space: nowrap;
+  min-width: 90px;
+}
+
+.ledger-module-col strong,
+.ledger-module-col small {
+  white-space: nowrap !important;
 }
 
 .ledger-model {
