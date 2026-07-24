@@ -185,7 +185,6 @@
                       <span class="usage-badge review-tag">综述 <strong>{{ user.reviewUsed || 0 }}</strong>/{{ user.reviewQuota || 0 }}</span>
                       <span class="usage-badge ppt-tag">PPT <strong>{{ user.pptUsed || 0 }}</strong>/{{ user.pptQuota || 0 }}</span>
                       <span class="usage-badge chat-tag">对话 <strong>{{ user.chatUsed || 0 }}</strong>/{{ user.chatQuota || 0 }}</span>
-                      <span class="usage-badge token-tag">Token <strong>{{ formatTokenCount(user.tokenUsed) }}</strong>/{{ formatTokenCount(user.tokenLimit) }}</span>
                     </div>
                   </td>
                   <td>{{ user.createdTime }}</td>
@@ -3345,7 +3344,7 @@ function formatTokenCount(num) {
 }
 
 .admin-table td {
-  padding: 12px 18px;
+  padding: 8px 16px;
   text-align: left;
   border-bottom: 1px solid var(--spatial-line);
   white-space: nowrap;
@@ -3363,7 +3362,7 @@ function formatTokenCount(num) {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   border-bottom: 2px solid var(--spatial-line);
-  padding: 14px 18px;
+  padding: 10px 16px;
 }
 
 .admin-table tr {
@@ -3494,19 +3493,19 @@ function formatTokenCount(num) {
 
 .membership-usage-cell {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 
 .usage-badge {
   display: inline-flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   font-size: 0.72rem;
-  padding: 4px 10px;
-  border-radius: 8px;
+  padding: 3px 8px;
+  border-radius: 6px;
   font-weight: 600;
-  min-width: 104px;
 }
 
 .usage-badge.review-tag {
