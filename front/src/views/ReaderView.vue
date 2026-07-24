@@ -34,6 +34,7 @@
             <span v-else-if="abstractProvider === 'baidu'" class="provider-logo provider-logo-baidu">
               <img src="https://fanyi-cdn.cdn.bcebos.com/static/translation/img/header/logo_e835568.png" alt="Baidu" style="height: 16px; margin-right: 2px; transform: translateY(1px);" />
             </span>
+            <span v-else class="provider-logo provider-logo-text">{{ providerShortLabel(abstractProvider) }}</span>
 
             <svg class="dropdown-chevron" viewBox="0 0 24 24" width="12" height="12"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
           </div>
@@ -42,8 +43,14 @@
             class="reader-provider-select native-overlay"
             @change="handleProviderChange"
           >
-            <option value="google">谷歌翻译 (Google)</option>
-            <option value="baidu">百度翻译 (Baidu)</option>
+            <option
+              v-for="provider in translationProviders"
+              :key="provider.id"
+              :value="provider.id"
+              :disabled="provider.configured === false"
+            >
+              {{ provider.label }}{{ provider.configured === false ? "（需配置）" : "" }}
+            </option>
           </select>
         </div>
         <button
@@ -96,12 +103,13 @@
       </div>
     </header>
 
-    <div class="reader-body" :class="{ 'assistant-wide': assistantExpanded }">
-      <aside class="reader-assistant" :class="{ collapsed: assistantCollapsed, expanded: assistantExpanded }">
+    <div class="reader-body" :class="{ 'assistant-wide': assistantExpanded && assistantTab === 'chat' }">
+      <aside class="reader-assistant" :class="{ collapsed: assistantCollapsed, expanded: assistantExpanded && assistantTab === 'chat' }">
         <div class="assistant-tabs">
           <button :class="{ active: assistantTab === 'chat' }" @click="assistantTab = 'chat'">内容详解</button>
           <button :class="{ active: assistantTab === 'outline' }" @click="assistantTab = 'outline'">目录</button>
           <button :class="{ active: assistantTab === 'figures' }" @click="assistantTab = 'figures'">图表</button>
+          <button :class="{ active: mindMapModal.open }" @click="openMindMapModal">思维导图</button>
           <button
             v-if="assistantTab === 'chat' && !assistantCollapsed"
             class="expand-button icon-button"
@@ -138,7 +146,7 @@
             </section>
           </div>
 
-          <div v-else class="assistant-scroll">
+          <div v-else-if="assistantTab === 'figures'" class="assistant-scroll">
             <section>
               <h3>论文图表</h3>
               <button
@@ -176,7 +184,21 @@
             <header class="paper-heading">
               <span class="paper-source">{{ paperSourceLabel || "Academic paper" }}</span>
               <h1>{{ activePaper.title }}</h1>
-              <p>{{ activePaper.authors }}</p>
+              <p class="paper-authors-line">
+                <template v-for="part in authorDisplaySegments(activePaper.authors)" :key="part.key">
+                  <sup v-if="part.sup" class="author-affiliation-sup">{{ part.text }}</sup>
+                  <span v-else-if="part.orcid" class="author-orcid-badge">iD</span>
+                  <span v-else :class="{ 'author-name-text': part.name }">{{ part.text }}</span>
+                </template>
+              </p>
+              <div v-if="autoTranslate" class="paper-meta-translation">
+                <p v-if="paperMetaTranslation.title || paperMetaTranslation.loading" class="paper-title-translation">
+                  {{ paperMetaTranslation.title || "标题翻译中…" }}
+                </p>
+                <p v-if="paperMetaTranslation.authors || paperMetaTranslation.loadingAuthors" class="paper-author-translation">
+                  {{ paperMetaTranslation.authors || "作者翻译中…" }}
+                </p>
+              </div>
               <div v-if="hasAbstract && !structuredHasAbstract" class="paper-abstract">
                 <strong>Abstract</strong>
                 <p class="source-paragraph selectable-paragraph" data-block-id="abstract">
@@ -230,9 +252,17 @@
                 <p v-else class="source-paragraph selectable-paragraph" :data-block-id="block.id">
                   <template v-for="segment in annotationSegments(block.id, block.text)" :key="segment.key">
                     <span v-if="segment.annotated" class="annotation-highlight" :title="segment.note" @click="editAnnotation(segment.annotation, $event)">
-                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
+                      <template v-for="fragment in inlineCitationSegments(segment.text)" :key="fragment.key">
+                        <sup v-if="fragment.citation" class="paper-citation-sup">{{ fragment.text }}</sup>
+                        <template v-else>{{ fragment.text }}</template>
+                      </template><button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
                     </span>
-                    <template v-else>{{ segment.text }}</template>
+                    <template v-else>
+                      <template v-for="fragment in inlineCitationSegments(segment.text)" :key="fragment.key">
+                        <sup v-if="fragment.citation" class="paper-citation-sup">{{ fragment.text }}</sup>
+                        <template v-else>{{ fragment.text }}</template>
+                      </template>
+                    </template>
                   </template>
                 </p>
                 <div v-if="autoTranslate && !['figure', 'table', 'equation', 'references', 'abstract'].includes(block.kind) && !isAbstractBlock(block)" class="translation-unit">
@@ -591,11 +621,46 @@
         <canvas v-else ref="figureCanvasRef"></canvas>
       </div>
     </div>
+
+    <div v-if="mindMapModal.open" class="mind-map-overlay" @click="closeMindMapModal">
+      <section class="mind-map-modal" @click.stop>
+        <header>
+          <div>
+            <strong>论文思维导图</strong>
+            <span>{{ shortPaperTitle(activePaper.title, 42) }}</span>
+          </div>
+          <div class="mind-map-modal-actions">
+            <button class="btn-export" :disabled="mindMapState.loading" @click="exportMindMapSvg">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; display: inline-block; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              导出 SVG
+            </button>
+            <button class="btn-export" :disabled="mindMapState.loading" @click="exportMindMapPng">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; display: inline-block; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              导出 PNG
+            </button>
+            <button class="btn-close" @click="closeMindMapModal">关闭</button>
+          </div>
+        </header>
+        <div class="mind-map-canvas">
+          <div class="mind-map-zoom-controls" aria-label="思维导图缩放">
+            <button title="放大" @click="zoomMindMap(1.25)">＋</button>
+            <button title="缩小" @click="zoomMindMap(0.8)">－</button>
+            <button title="适应窗口" @click="fitMindMap()">适应</button>
+          </div>
+          <svg ref="mindMapSvg" class="mind-map-svg" aria-label="论文思维导图"></svg>
+          <div v-if="mindMapState.loading" class="mind-map-status">
+            <span class="mind-map-spinner"></span>
+            正在生成思维导图
+          </div>
+          <div v-else-if="mindMapState.error" class="mind-map-status error">{{ mindMapState.error }}</div>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import { paperpilotApi } from "../services/paperpilotApi";
 import { useLibraryStore } from "../stores/library";
 import ReaderReportPanel from "../components/ReaderReportPanel.vue";
@@ -648,9 +713,20 @@ const abstractTranslating = ref(false);
 const abstractProvider = ref("google");
 const abstractFromPdf = ref("");
 const structuredHasAbstract = ref(false);
+const paperMetaTranslation = reactive({
+  title: "",
+  authors: "",
+  loading: false,
+  loadingAuthors: false,
+  provider: "",
+  paperId: "",
+});
 const translationProviders = ref([
-  { id: "google", label: "谷歌翻译" },
-  { id: "baidu", label: "百度翻译" }
+  { id: "google", label: "谷歌翻译", configured: true },
+  { id: "baidu", label: "百度翻译", configured: true },
+  { id: "youdao", label: "有道翻译", configured: true },
+  { id: "microsoft", label: "微软翻译", configured: false },
+  { id: "tencent", label: "腾讯翻译", configured: false }
 ]);
 const selectionReady = ref(false);
 const selectedRange = shallowRef(null);
@@ -682,6 +758,7 @@ const clearedAnnotationSnapshot = ref([]);
 function handleProviderChange() {
   const provider = abstractProvider.value;
   abstractTranslation.value = "";
+  translatePaperMetadata(true);
   translateAbstract(true);
   pages.forEach(page => {
     if (Array.isArray(page.blocks)) {
@@ -714,6 +791,66 @@ const tourSteps = [
 ];
 const readerTour = reactive({ open: false, index: 0, rect: null });
 const figureViewer = reactive({ open: false, pageNumber: 0, caption: "", imageUrl: "" });
+const mindMapModal = reactive({ open: false });
+const mindMapState = reactive({ loading: false, error: "", report: null });
+const mindMapSvg = ref(null);
+const mindMapInstance = shallowRef(null);
+let mindMapRuntimePromise = null;
+let mindMapTransformer = null;
+let mindMapOptions = null;
+
+function loadMindMapRuntime() {
+  if (!mindMapRuntimePromise) {
+    mindMapRuntimePromise = Promise.all([
+      import("markmap-lib"),
+      import("markmap-view"),
+    ]).then(([markmapLib, markmapView]) => {
+      mindMapTransformer = new markmapLib.Transformer();
+      mindMapOptions = markmapView.deriveOptions({
+        color: ["#2f6df6", "#14a38b", "#8b5cf6", "#f97316", "#0ea5e9", "#e11d48"],
+        colorFreezeLevel: 2,
+        duration: 240,
+        fitRatio: 0.92,
+        maxInitialScale: 1.8,
+        maxWidth: 460,
+        paddingX: 18,
+      });
+      return { Markmap: markmapView.Markmap };
+    });
+  }
+  return mindMapRuntimePromise;
+}
+
+function openMindMapModal() {
+  mindMapModal.open = true;
+  loadMindMapReport();
+}
+
+function closeMindMapModal() {
+  mindMapModal.open = false;
+  destroyMindMap();
+}
+
+async function loadMindMapReport() {
+  if (!workspaceId.value) {
+    mindMapState.report = null;
+    mindMapState.error = "";
+    renderMindMap();
+    return;
+  }
+  mindMapState.loading = true;
+  mindMapState.error = "";
+  try {
+    const data = await paperpilotApi.getMeetingReport(workspaceId.value);
+    mindMapState.report = data || null;
+  } catch {
+    mindMapState.report = null;
+    mindMapState.error = "暂未读取到 AI 精读报告，已使用当前论文摘要生成基础导图。";
+  } finally {
+    mindMapState.loading = false;
+    renderMindMap();
+  }
+}
 const figureCanvasRef = ref(null);
 let pdfDocument = null;
 let pdfObjectUrl = "";
@@ -777,6 +914,57 @@ function shortPaperTitle(title, max = 32) {
   return value.length > max ? `${value.slice(0, max)}…` : value;
 }
 
+function authorDisplaySegments(authors) {
+  const value = String(authors || "").replace(/\s+/g, " ").trim();
+  if (!value) return [];
+  const parts = [];
+  let cursor = 0;
+  const pattern = /(\biD\b|\bORCID\b|\s+\^?[a-z](?![A-Z])(?:\s*,\s*\^?[a-z](?![A-Z]))*|\s+\^?\d+(?:\s*,\s*\^?\d+)*|\*|†|‡|§)/g;
+  let match;
+  while ((match = pattern.exec(value)) !== null) {
+    const token = match[0];
+    const start = match.index;
+    if (start > cursor) {
+      pushAuthorNameParts(parts, value.slice(cursor, start));
+    }
+    if (/^(iD|ORCID)$/i.test(token)) {
+      parts.push({ key: `orcid-${start}`, text: "iD", orcid: true });
+    } else if (isAuthorSupToken(token, value, start)) {
+      parts.push({ key: `sup-${start}`, text: token.replace(/\s+/g, ""), sup: true });
+    } else {
+      pushAuthorNameParts(parts, token);
+    }
+    cursor = pattern.lastIndex;
+  }
+  if (cursor < value.length) {
+    pushAuthorNameParts(parts, value.slice(cursor));
+  }
+  return parts.map((part, index) => ({ ...part, key: `${part.key}-${index}` }));
+}
+
+function pushAuthorNameParts(parts, text) {
+  const value = String(text || "");
+  if (!value) return;
+  const split = value.split(/([,;，；]\s*)/);
+  split.forEach((item, index) => {
+    if (!item) return;
+    parts.push({
+      key: `author-${parts.length}-${index}`,
+      text: item,
+      name: /[A-Za-z\u4e00-\u9fa5]/.test(item),
+    });
+  });
+}
+
+function isAuthorSupToken(token, value, start) {
+  if (/^[*†‡§]$/.test(token)) return true;
+  if (token.startsWith("^")) return true;
+  const previous = value.slice(Math.max(0, start - 2), start);
+  const next = value.slice(start + token.length, start + token.length + 2);
+  if (/^\d/.test(token)) return /[A-Za-z\u4e00-\u9fa5),，]\s*$/.test(previous);
+  return /[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s*$/.test(value.slice(0, start)) || /^[,，\s*†‡§]/.test(next);
+}
+
 function paperInitial(paper) {
   const title = String(paper?.title || "").trim();
   const first = title.match(/[A-Za-z0-9\u4e00-\u9fa5]/)?.[0] || "P";
@@ -810,8 +998,328 @@ const documentFigures = computed(() =>
   ),
 );
 
+const mindMapMarkdown = computed(() => {
+  const title = mindMapText(activePaper.value?.title || "当前论文", 80);
+  const lines = [`# ${title}`];
+  const sections = normalizeMindMapSections(mindMapState.report?.sections || {});
+  const nodes = buildMindMapNodes(sections);
+  nodes.forEach(node => {
+    if (!node.items.length) return;
+    lines.push(`## ${mindMapText(node.title, 36)}`);
+    node.items.slice(0, 5).forEach(item => {
+      lines.push(`### ${mindMapText(item.title, 42)}`);
+      item.details.slice(0, 3).forEach(detail => {
+        lines.push(`#### ${mindMapText(detail, 168)}`);
+      });
+    });
+  });
+  if (lines.length === 1) {
+    const abstract = mindMapText(abstractText.value, 220);
+    lines.push(
+      "## 核心内容",
+      `### ${abstract || "等待 AI 精读报告生成后展示论文内容导图"}`,
+      "## 阅读线索",
+      "### 研究背景",
+      "### 研究方法",
+      "### 实验结果",
+      "### 结论启发",
+    );
+  }
+  return lines.join("\n");
+});
+
+const mindMapLabels = [
+  "研究背景", "研究问题", "研究方法与数据", "实验与结论", "创新点与启示", "局限性",
+  "论文定位", "发表信息", "发布信息", "汇报价值", "核心要点", "主要贡献", "关键问题", "本文思想",
+  "关键贡献", "整体框架", "关键模块", "实现流程", "主要发现", "对比结果", "实验结论", "研究结论",
+  "现有不足", "未来展望", "数据来源", "数据设置", "评测指标",
+];
+
+function normalizeMindMapSections(sections = {}) {
+  return Object.fromEntries(Object.entries(sections).map(([key, value]) => [key, formatMindMapParagraphs(value)]));
+}
+
+function formatMindMapParagraphs(value = "") {
+  const labelPattern = mindMapLabels.join("|");
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/发布信息/g, "发表信息")
+    .replace(new RegExp(`\\s*((?:${labelPattern})\\s*[：:])\\s*`, "g"), "\n\n$1\n")
+    .replace(/([。；;])\s*((?:\d+[.、]|[（(]\d+[）)]))/g, "$1\n$2")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function buildMindMapNodes(sections = {}) {
+  const groups = [
+    { title: "一、研究背景", entries: [["关键问题", "background", /背景|现状|问题|挑战|缺口|需求/], ["研究动机", "overview", /动机|目标|问题|挑战|需求/]] },
+    { title: "二、研究问题", entries: [["核心问题", "synthesis", /研究问题|问题|目标|挑战/], ["主要贡献", "overview", /贡献|创新|提出|解决/]] },
+    { title: "三、研究思路", entries: [["构建研究框架", "method", /框架|模型|架构|流程|模块/], ["选择研究方法", "method", /方法|策略|算法|训练|优化|实现/]] },
+    { title: "四、数据与实验", entries: [["分析数据", "datasets", /数据|样本|指标|评测|设置/], ["验证结果", "results", /实验|结果|对比|提升|性能|发现/]] },
+    { title: "五、结论启发", entries: [["得出结论", "conclusion", /结论|优势|价值|证明|表明/], ["创新点与局限", "synthesis", /创新|启示|局限|不足|未来/]] },
+  ];
+  return groups.map(group => ({
+    title: group.title,
+    items: group.entries.map(([title, key, hint]) => buildMindMapItem(title, sections, key, hint)).filter(Boolean),
+  }));
+}
+
+function buildMindMapItem(title, sections, key, hint) {
+  const lines = collectMindMapLines(sections[key], hint);
+  const fallbackKeys = {
+    background: ["overview", "synthesis"],
+    overview: ["synthesis", "background"],
+    method: ["synthesis"],
+    datasets: ["method", "results"],
+    results: ["synthesis", "conclusion"],
+    conclusion: ["synthesis", "results"],
+    synthesis: ["overview", "background", "method", "results", "conclusion"],
+  }[key] || [];
+  const details = lines.length
+    ? lines
+    : fallbackKeys.flatMap(nextKey => collectMindMapLines(sections[nextKey], hint)).slice(0, 3);
+  const looseDetails = details.length ? details : collectMindMapLines(sections[key], null).slice(0, 3);
+  if (!looseDetails.length) return null;
+  return { title, details: dedupeMindMapLines(looseDetails).slice(0, 4) };
+}
+
+function collectMindMapLines(raw, hint) {
+  return String(raw || "")
+    .split(/\n+|(?<=[。！？；])\s*/)
+    .map(cleanMindMapLine)
+    .filter(line => isMindMapLine(line) && (!hint || hint.test(line)))
+    .slice(0, 6);
+}
+
+function cleanMindMapLine(line) {
+  return String(line || "")
+    .replace(/\\[rnt]/g, " ")
+    .replace(/^[\-•·○◦▪▫\d.、\s]+/, "")
+    .replace(/[{}"“”]+/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function isMindMapLine(line) {
+  const value = cleanMindMapLine(line);
+  if (value.length <= 6) return false;
+  if (value.length > 180) return true;
+  if (mindMapLabels.some(label => value === label || value === `${label}：` || value === `${label}:`)) return false;
+  return !/等待 AI|第\s*\d+\s*页|暂无|HTTP\s*5/.test(value);
+}
+
+function dedupeMindMapLines(lines) {
+  const seen = new Set();
+  return lines.filter(line => {
+    const key = line.replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, "").toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function mindMapText(value, max = 80) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/[\\`*_{}[\]()#+\-.!|>]/g, "\\$&")
+    .trim()
+    .slice(0, max);
+}
+
+async function renderMindMap() {
+  if (!mindMapModal.open) return;
+  await nextTick();
+  const { Markmap } = await loadMindMapRuntime();
+  if (!mindMapModal.open) return;
+  const svg = mindMapSvg.value;
+  if (!svg) return;
+  const { root } = mindMapTransformer.transform(mindMapMarkdown.value);
+  
+  if (isDarkTheme.value) {
+    mindMapOptions.color = ["#818cf8", "#34d399", "#c084fc", "#fb923c", "#38bdf8", "#f472b6"];
+  } else {
+    mindMapOptions.color = ["#2f6df6", "#14a38b", "#8b5cf6", "#f97316", "#0ea5e9", "#e11d48"];
+  }
+  
+  if (mindMapInstance.value) {
+    mindMapInstance.value.setOptions(mindMapOptions);
+    await mindMapInstance.value.setData(root);
+  } else {
+    mindMapInstance.value = Markmap.create(svg, mindMapOptions, root);
+  }
+  requestAnimationFrame(() => focusMindMapReadable());
+}
+
+function destroyMindMap() {
+  mindMapInstance.value?.destroy();
+  mindMapInstance.value = null;
+}
+
+function zoomMindMap(scale) {
+  return mindMapInstance.value?.rescale(scale);
+}
+
+function fitMindMap(maxScale = 1.35) {
+  return mindMapInstance.value?.fit(maxScale);
+}
+
+async function focusMindMapReadable() {
+  await fitMindMap(1.2);
+  await zoomMindMap(2.2);
+}
+
+function mindMapExportName(ext) {
+  const title = String(activePaper.value?.title || "论文思维导图")
+    .replace(/[\\/:*?"<>|]/g, "")
+    .replace(/\s+/g, "-")
+    .slice(0, 48) || "论文思维导图";
+  return `${title}-思维导图.${ext}`;
+}
+
+function serializeMindMapSvg() {
+  const svg = mindMapSvg.value;
+  if (!svg) return "";
+  const rect = svg.getBoundingClientRect();
+  const clone = svg.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.setAttribute("width", String(Math.max(1, Math.round(rect.width || 980))));
+  clone.setAttribute("height", String(Math.max(1, Math.round(rect.height || 620))));
+  const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+  
+  const textColor = isDarkTheme.value ? "#cbd5e1" : "#172033";
+  const circleFill = isDarkTheme.value ? "#090d16" : "#ffffff";
+  const linkOpacity = isDarkTheme.value ? ".58" : ".72";
+  
+  style.textContent = `
+    .markmap-node text { font: 650 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: ${textColor}; }
+    .markmap-node circle { stroke-width: 1.5px; fill: ${circleFill}; }
+    .markmap-link { stroke-opacity: ${linkOpacity}; }
+  `;
+  clone.insertBefore(style, clone.firstChild);
+  
+  // Prepend a background rect so the SVG has a solid theme color background
+  const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  bgRect.setAttribute("width", "100%");
+  bgRect.setAttribute("height", "100%");
+  bgRect.setAttribute("fill", isDarkTheme.value ? "#090d16" : "#ffffff");
+  clone.insertBefore(bgRect, clone.firstChild);
+  
+  return new XMLSerializer().serializeToString(clone);
+}
+
+function downloadMindMapBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function exportMindMapSvg() {
+  await fitMindMap();
+  const source = serializeMindMapSvg();
+  if (!source) return;
+  downloadMindMapBlob(new Blob([source], { type: "image/svg+xml;charset=utf-8" }), mindMapExportName("svg"));
+}
+
+async function exportMindMapPng() {
+  await fitMindMap();
+  const source = serializeMindMapSvg();
+  if (!source) return;
+  const svg = mindMapSvg.value;
+  const rect = svg.getBoundingClientRect();
+  const width = Math.max(1, Math.round(rect.width || 980));
+  const height = Math.max(1, Math.round(rect.height || 620));
+  const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const image = new Image();
+  image.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = width * 2;
+    canvas.height = height * 2;
+    const context = canvas.getContext("2d");
+    context.fillStyle = isDarkTheme.value ? "#090d16" : "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+    canvas.toBlob((pngBlob) => {
+      if (pngBlob) downloadMindMapBlob(pngBlob, mindMapExportName("png"));
+    }, "image/png");
+  };
+  image.onerror = () => URL.revokeObjectURL(url);
+  image.src = url;
+}
+
+watch(mindMapMarkdown, () => {
+  renderMindMap();
+});
+
+watch(isDarkTheme, () => {
+  if (mindMapModal.open) {
+    renderMindMap();
+  }
+});
+
 function normalizeText(text) {
   return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function inlineCitationSegments(text) {
+  const value = String(text || "");
+  if (!value) return [];
+  const patterns = [
+    /\[(?:\d{1,3}\s*(?:[-–,]\s*\d{1,3})*)\]/g,
+    /(?<!\d)(?<=[,.;，。；、])\s*\d{1,3}(?:\s*[,，]\s*\d{1,3})*(?=(?:\s|[,.;:，。；：、)\]]|$))/g,
+    /(?<=[A-Za-z\u4e00-\u9fa5)\]])\d{1,3}(?=(?:[,.;:，。；：、)\]]|\s|$))/g,
+  ];
+  const ranges = [];
+  patterns.forEach((pattern) => {
+    let match;
+    while ((match = pattern.exec(value)) !== null) {
+      const raw = match[0];
+      const leading = raw.match(/^\s*/)?.[0]?.length || 0;
+      const start = match.index + leading;
+      const end = match.index + raw.length;
+      const token = value.slice(start, end);
+      if (!token.trim()) continue;
+      if (isDecimalNumberCitationFalsePositive(value, start)) continue;
+      if (ranges.some(range => start < range.end && end > range.start)) continue;
+      ranges.push({ start, end });
+    }
+  });
+  if (!ranges.length) return [{ key: "plain-0", text: value, citation: false }];
+  ranges.sort((a, b) => a.start - b.start);
+  const parts = [];
+  let cursor = 0;
+  ranges.forEach((range, index) => {
+    if (range.start > cursor) {
+      parts.push({ key: `text-${index}-${cursor}`, text: value.slice(cursor, range.start), citation: false });
+    }
+    parts.push({ key: `cite-${index}-${range.start}`, text: value.slice(range.start, range.end), citation: true });
+    cursor = range.end;
+  });
+  if (cursor < value.length) {
+    parts.push({ key: `text-tail-${cursor}`, text: value.slice(cursor), citation: false });
+  }
+  return parts;
+}
+
+function isDecimalNumberCitationFalsePositive(value, start) {
+  const before = value.slice(Math.max(0, start - 2), start);
+  return /\d[.,]$/.test(before);
+}
+
+function translationTextWithoutCitations(text) {
+  return inlineCitationSegments(text)
+    .filter(part => !part.citation)
+    .map(part => part.text)
+    .join("")
+    .replace(/\s+([,.;:，。；：])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function groupTextItems(items, viewport, pageNumber) {
@@ -1097,8 +1605,18 @@ function providerLabel(providerId) {
   return translationProviders.value.find(provider => provider.id === providerId)?.label || providerId || "翻译引擎";
 }
 
+function providerShortLabel(providerId) {
+  const label = providerLabel(providerId);
+  if (providerId === "microsoft") return "微软翻译";
+  if (providerId === "tencent") return "腾讯翻译";
+  if (providerId === "youdao") return "有道翻译";
+  if (providerId === "deepl") return "DeepL";
+  if (providerId === "ai") return "AI 翻译";
+  return label;
+}
+
 function cycleAndRetranslate(block) {
-  const ids = translationProviders.value.map(provider => provider.id);
+  const ids = translationProviders.value.filter(provider => provider.configured !== false).map(provider => provider.id);
   const current = block.translationProvider || ids[0];
   const nextIndex = (ids.indexOf(current) + 1) % ids.length;
   block.translationProvider = ids[nextIndex];
@@ -1213,7 +1731,7 @@ async function translateSelection() {
   try {
     const result = await paperpilotApi.translate({
       text,
-      provider: "google",
+      provider: abstractProvider.value || "google",
       sourceLang: "auto",
       targetLang: "zh-CN",
     }, { timeout: 45000 });
@@ -1620,6 +2138,8 @@ async function translateBlock(block, force = false) {
   if (!block || !block.text || block.translating) return;
   if (isAbstractBlock(block)) return;
   if (!force && block.translation) return;
+  const textForTranslation = translationTextWithoutCitations(block.text);
+  if (!textForTranslation) return;
 
   block.translating = true;
   block.translationError = "";
@@ -1627,7 +2147,7 @@ async function translateBlock(block, force = false) {
   try {
     const provider = block.translationProvider || abstractProvider.value || "google";
     const result = await paperpilotApi.translate({
-      text: block.text,
+      text: textForTranslation,
       provider: provider,
       sourceLang: "auto",
       targetLang: "zh-CN",
@@ -1692,6 +2212,60 @@ async function translateAbstract(force = false) {
     abstractTranslation.value = "";
   } finally {
     abstractTranslating.value = false;
+  }
+}
+
+async function translatePaperMetadata(force = false) {
+  const paperId = String(activePaper.value?.id || workspaceId.value || "");
+  const provider = abstractProvider.value || "google";
+  if (
+    !force
+    && paperMetaTranslation.paperId === paperId
+    && paperMetaTranslation.provider === provider
+    && (paperMetaTranslation.title || paperMetaTranslation.authors)
+  ) {
+    return;
+  }
+  paperMetaTranslation.paperId = paperId;
+  paperMetaTranslation.provider = provider;
+  paperMetaTranslation.title = "";
+  paperMetaTranslation.authors = "";
+
+  const title = String(activePaper.value?.title || "").trim();
+  const authors = String(activePaper.value?.authors || "").trim();
+  if (title) {
+    paperMetaTranslation.loading = true;
+    try {
+      const result = await paperpilotApi.translate({
+        text: title,
+        provider,
+        sourceLang: "auto",
+        targetLang: "zh-CN",
+      }, { timeout: 45000 });
+      paperMetaTranslation.title = String(result?.translatedText || "").trim();
+    } catch (error) {
+      console.warn("paper title translation failed", error);
+      paperMetaTranslation.title = "";
+    } finally {
+      paperMetaTranslation.loading = false;
+    }
+  }
+  if (authors) {
+    paperMetaTranslation.loadingAuthors = true;
+    try {
+      const result = await paperpilotApi.translate({
+        text: authors,
+        provider,
+        sourceLang: "auto",
+        targetLang: "zh-CN",
+      }, { timeout: 45000 });
+      paperMetaTranslation.authors = String(result?.translatedText || "").trim();
+    } catch (error) {
+      console.warn("paper author translation failed", error);
+      paperMetaTranslation.authors = "";
+    } finally {
+      paperMetaTranslation.loadingAuthors = false;
+    }
   }
 }
 
@@ -1840,6 +2414,7 @@ async function loadStructuredDocument() {
 function toggleTranslation() {
   autoTranslate.value = !autoTranslate.value;
   if (autoTranslate.value) {
+    translatePaperMetadata();
     translateAbstract();
     pages
       .filter(page => Math.abs(page.pageNumber - currentPage.value) <= 1)
@@ -1855,12 +2430,17 @@ function toggleAssistantCollapse() {
 async function loadTranslationProviders() {
   try {
     const providers = await paperpilotApi.getTranslationProviders();
-    const available = (Array.isArray(providers) ? providers : [])
-      .filter(provider => String(provider.configured) === "true")
-      .map(provider => ({ id: provider.id, label: provider.label }));
-    if (available.length) translationProviders.value = available;
-    if (!available.some(provider => provider.id === abstractProvider.value)) {
-      abstractProvider.value = available[0]?.id || "google";
+    const normalized = (Array.isArray(providers) ? providers : [])
+      .filter(provider => provider?.id && provider?.label)
+      .map(provider => ({
+        id: provider.id,
+        label: provider.label,
+        configured: String(provider.configured) === "true"
+      }));
+    if (normalized.length) translationProviders.value = normalized;
+    const selectable = translationProviders.value.filter(provider => provider.configured !== false);
+    if (!selectable.some(provider => provider.id === abstractProvider.value)) {
+      abstractProvider.value = selectable[0]?.id || "google";
     }
   } catch {
     // 保留内置翻译引擎选项。
@@ -2033,6 +2613,7 @@ async function switchReaderPaper(id) {
   resetReaderDocumentState();
   loadAnnotations();
   await nextTick();
+  if (autoTranslate.value) translatePaperMetadata(true);
   loadStructuredDocument();
 }
 
@@ -2075,6 +2656,7 @@ onMounted(async () => {
     assistantExpanded.value = true;
   }
   await loadTranslationProviders();
+  if (autoTranslate.value) translatePaperMetadata();
   loadAnnotations();
   loadStructuredDocument();
   window.addEventListener("resize", updateTourRect);
@@ -2084,6 +2666,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   destroyed = true;
   clearTimeout(readerToastTimer);
+  destroyMindMap();
   if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl);
   mineruAssetUrls.forEach(url => URL.revokeObjectURL(url));
   window.removeEventListener("resize", updateTourRect);
@@ -2475,6 +3058,35 @@ onBeforeUnmount(() => {
 .paper-source { color: #1769e0; font-size: 12px; }
 .paper-heading h1 { max-width: 900px; margin: 10px 0 12px; font: 700 1.75em/1.35 "Times New Roman", "Songti SC", serif; }
 .paper-heading p { margin: 0; color: #667085; font-size: 0.82em; }
+.paper-authors-line {
+  max-width: 980px;
+  color: #2f7fa9 !important;
+  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-size: clamp(15px, 1.18vw, 19px) !important;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.author-name-text { color: #2f7fa9; }
+.author-affiliation-sup {
+  margin-inline: 2px;
+  color: #2f7fa9;
+  font-size: 0.48em;
+  font-weight: 650;
+  line-height: 0;
+  vertical-align: super;
+}
+.author-orcid-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 0.9em;
+  height: 0.9em;
+  margin: 0 0.08em;
+  border-radius: 999px;
+  color: #ffffff;
+  background: #95c93d;
+  font: 700 0.48em/1 Arial, sans-serif;
+  vertical-align: super;
+}
 
 .paper-abstract {
   margin-top: 24px;
@@ -2987,6 +3599,13 @@ onBeforeUnmount(() => {
     border-radius: 18px;
   }
   .selection-command-bar > button { height: 34px; padding-inline: 12px; font-size: 12px; }
+  .mind-map-overlay { padding: 8px; }
+  .mind-map-modal { width: 100%; height: 96vh; }
+  .mind-map-modal header { align-items: flex-start; flex-direction: column; }
+  .mind-map-modal header span { max-width: calc(100vw - 40px); }
+  .mind-map-modal-actions { flex-wrap: wrap; width: 100%; }
+  .mind-map-modal-actions button { flex: 1 1 auto; }
+  .mind-map-zoom-controls { left: 12px; right: auto; }
 }
 
 @media (max-width: 560px) {
@@ -3066,13 +3685,51 @@ onBeforeUnmount(() => {
 .pdf-figure-modal header > button:hover, .pdf-figure-modal-actions > button:last-child:hover { background: #e2e8f0; color: #0f172a; }
 .pdf-figure-modal canvas { max-width: 100%; height: auto !important; background: #fff; }
 .pdf-figure-modal > img { display: block; max-width: 100%; max-height: calc(90vh - 70px); margin: 0 auto; object-fit: contain; }
+.mind-map-overlay { position: fixed; inset: 0; z-index: 82; display: grid; place-items: center; padding: 18px; background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.mind-map-modal { width: min(98vw, 1480px); height: min(94vh, 980px); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border: 1px solid rgba(23, 32, 51, 0.08); border-radius: 16px; background: #ffffff; box-shadow: 0 24px 64px -16px rgba(15, 23, 42, 0.22); }
+.mind-map-modal header { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 72px; padding: 14px 24px; border-bottom: 1px solid #edf1f6; }
+.mind-map-modal header div { display: grid; min-width: 0; gap: 3px; }
+.mind-map-modal header strong { color: #172033; font-size: 18px; font-weight: 800; }
+.mind-map-modal header span { overflow: hidden; max-width: 680px; color: #7b8798; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.mind-map-modal-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
+.mind-map-modal-actions button { height: 36px; padding: 0 16px; border-radius: 99px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+.mind-map-modal-actions button.btn-export { border: 1px solid #dce5ef; color: #475569; background: #ffffff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+.mind-map-modal-actions button.btn-export:hover { border-color: #94a3b8; color: #0f172a; background: #f8fafc; transform: translateY(-1.5px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
+.mind-map-modal-actions button.btn-export:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+.mind-map-modal-actions button.btn-close { border: 0; color: #ffffff; background: linear-gradient(135deg, #4f46e5, #6366f1); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25); }
+.mind-map-modal-actions button.btn-close:hover { background: linear-gradient(135deg, #4338ca, #4f46e5); transform: translateY(-1.5px); box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35); }
+.mind-map-modal-actions button.btn-close:active { transform: translateY(0); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25); }
+.mind-map-modal-actions button:disabled { opacity: .48; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+.mind-map-canvas { position: relative; min-height: 0; overflow: hidden; background: linear-gradient(180deg, #f8fafc, #f1f5f9); }
+.mind-map-svg { display: block; width: 100%; height: 100%; min-height: 0; cursor: grab; }
+.mind-map-svg:active { cursor: grabbing; }
+.mind-map-svg :deep(.markmap-node text) { font: 650 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #172033; }
+.mind-map-svg :deep(.markmap-node circle) { r: 5; stroke-width: 2px; fill: #ffffff; }
+.mind-map-svg :deep(.markmap-link) { stroke-width: 2px; stroke-opacity: 0.72; }
+.mind-map-zoom-controls { position: absolute; bottom: 24px; right: 24px; z-index: 10; display: flex; gap: 6px; padding: 6px; border: 1px solid rgba(23, 32, 51, 0.08); border-radius: 99px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08); }
+.mind-map-zoom-controls button { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; color: #475569; background: transparent; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
+.mind-map-zoom-controls button:hover { background: rgba(15, 23, 42, 0.06); color: #0f172a; transform: scale(1.08); }
+.mind-map-status { position: absolute; left: 50%; top: 24px; transform: translateX(-50%); padding: 10px 20px; border: 1px solid rgba(99, 102, 241, 0.15); border-radius: 99px; color: #4f46e5; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-size: 13px; font-weight: 650; box-shadow: 0 10px 30px rgba(99, 102, 241, 0.12); pointer-events: none; display: flex; align-items: center; gap: 8px; }
+.mind-map-status.error { color: #9f1239; border-color: #fecdd3; background: rgba(255, 241, 242, 0.95); box-shadow: 0 10px 30px rgba(225, 29, 72, 0.12); }
+.mind-map-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(99, 102, 241, 0.2); border-top-color: #6366f1; border-radius: 50%; animation: mind-map-spin 0.6s linear infinite; }
+@keyframes mind-map-spin { to { transform: rotate(360deg); } }
 .mineru-table { overflow-x: auto; padding: 14px; border: 1px solid #e2e7ef; background: #fff; }
 .mineru-table :deep(table) { width: 100%; border-collapse: collapse; font: 12px/1.55 "Times New Roman", serif; }
 .mineru-table :deep(th),
 .mineru-table :deep(td) { padding: 7px 9px; border: 1px solid #cfd6e0; text-align: left; vertical-align: top; }
+.paper-meta-translation { margin: 12px 0 6px; padding-left: 12px; border-left: 2px solid #9fb5d8; }
+.paper-heading .paper-meta-translation p { margin: 4px 0; color: #26364d !important; font-family: "Songti SC", "Noto Serif SC", serif; line-height: 1.74; }
+.paper-heading .paper-title-translation { font-size: clamp(24px, 1.72vw, 30px) !important; font-weight: 850; color: #172842 !important; }
+.paper-heading .paper-author-translation { font-size: 15.5px !important; color: #31445f !important; }
+.paper-citation-sup { margin-inline: 1px; color: #2563eb; font-size: 0.68em; font-weight: 650; line-height: 0; vertical-align: super; }
 .mineru-equation { overflow-x: auto; margin: 18px 0; padding: 14px 18px; border-left: 3px solid #6d5dfc; background: #f7f6ff; color: #25233d; font: 15px/1.7 "Times New Roman", serif; white-space: pre-wrap; }
 .reference-block { margin: 12px 0; color: #4a5362; font: 0.82em/1.75 "Times New Roman", "Songti SC", serif; white-space: pre-wrap; }
 :root[data-theme="dark"] .reference-block { color: #cbd5e1; background: rgba(30, 41, 59, 0.35); border-left: 3px solid rgba(148, 163, 184, 0.4); padding: 10px 14px; border-radius: 0 8px 8px 0; }
+:root[data-theme="dark"] .paper-meta-translation { border-left-color: #607da8; }
+:root[data-theme="dark"] .paper-heading .paper-meta-translation p { color: #f1f6ff !important; }
+:root[data-theme="dark"] .paper-heading .paper-title-translation { color: #ffffff !important; }
+:root[data-theme="dark"] .paper-heading .paper-author-translation { color: #e9f1fb !important; }
+:root[data-theme="dark"] .paper-citation-sup { color: #93c5fd; }
 :root[data-theme="dark"] .mineru-equation { background: rgba(30, 41, 59, 0.6); border-left-color: #818cf8; color: #f1f5f9; }
 .assistant-empty { padding: 10px 12px; color: #8a94a4; font-size: 11px; }
 
@@ -3322,6 +3979,12 @@ onBeforeUnmount(() => {
   color: #f4f4f6;
 }
 
+:root[data-theme="dark"] .paper-authors-line,
+:root[data-theme="dark"] .author-name-text,
+:root[data-theme="dark"] .author-affiliation-sup {
+  color: #7dc4ec !important;
+}
+
 :root[data-theme="dark"] .source-paragraph {
   color: #e2e2e6;
 }
@@ -3388,6 +4051,94 @@ onBeforeUnmount(() => {
 :root[data-theme="dark"] .outline-item:hover {
   background: rgba(255, 255, 255, 0.05);
   color: #60a5fa;
+}
+
+:root[data-theme="dark"] .mind-map-modal {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #0e0e14;
+  box-shadow: 0 24px 64px -16px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme="dark"] .mind-map-modal header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background: #14141d;
+}
+
+:root[data-theme="dark"] .mind-map-modal header strong {
+  color: #f4f4f6;
+}
+
+:root[data-theme="dark"] .mind-map-modal header span {
+  color: #94a3b8;
+}
+
+:root[data-theme="dark"] .mind-map-modal-actions button.btn-export {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+:root[data-theme="dark"] .mind-map-modal-actions button.btn-export:hover {
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme="dark"] .mind-map-modal-actions button.btn-close {
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+:root[data-theme="dark"] .mind-map-modal-actions button.btn-close:hover {
+  background: linear-gradient(135deg, #818cf8, #93c5fd);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.5);
+}
+
+:root[data-theme="dark"] .mind-map-canvas {
+  color: #e2e8f0;
+  background: #090d16;
+}
+
+:root[data-theme="dark"] .mind-map-svg :deep(.markmap-node text) {
+  fill: #cbd5e1;
+}
+
+:root[data-theme="dark"] .mind-map-svg :deep(.markmap-node circle) {
+  fill: #090d16 !important;
+}
+
+:root[data-theme="dark"] .mind-map-svg :deep(.markmap-link) {
+  stroke-opacity: 0.58;
+}
+
+:root[data-theme="dark"] .mind-map-zoom-controls {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(14, 14, 20, 0.85);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme="dark"] .mind-map-zoom-controls button {
+  color: #cbd5e1;
+}
+
+:root[data-theme="dark"] .mind-map-zoom-controls button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .mind-map-status {
+  color: #818cf8;
+  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(14, 14, 20, 0.9);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme="dark"] .mind-map-status.error {
+  color: #fecdd3;
+  border-color: rgba(251, 113, 133, 0.36);
+  background: rgba(127, 29, 29, 0.72);
 }
 
 :root[data-theme="dark"] .reader-theme-toggle-btn {
@@ -3493,5 +4244,3 @@ onBeforeUnmount(() => {
   color: #ffffff !important;
 }
 </style>
-
-
