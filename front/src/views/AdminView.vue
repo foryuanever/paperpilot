@@ -6746,10 +6746,20 @@ function formatTokenCount(num) {
 .admin-side-tab {
   min-height: 44px;
   border-radius: 8px !important;
+}
+
+/* Collapsed active tab style - remove parent background to fix protrusion/ears bug */
+.admin-side-nav.collapsed .admin-side-tab,
+.admin-side-nav.collapsed .admin-side-tab.active {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+:global(html[data-theme="dark"]) .admin-side-tab {
   color: #94a3b8 !important;
 }
 
-.admin-side-tab.active {
+:global(html[data-theme="dark"]) .admin-side-tab.active {
   background: #668bdd !important;
   color: #edf4ff !important;
 }
