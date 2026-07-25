@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -36,6 +37,7 @@ public class MineruParseService {
 
     private final PaperRepository paperRepository;
     private final CurrentUserService currentUserService;
+    private final BackendJobService backendJobService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(12))
@@ -54,17 +56,22 @@ public class MineruParseService {
     public MineruParseService(
         PaperRepository paperRepository,
         CurrentUserService currentUserService,
+        BackendJobService backendJobService,
         ObjectMapper objectMapper
     ) {
         this.paperRepository = paperRepository;
         this.currentUserService = currentUserService;
+        this.backendJobService = backendJobService;
         this.objectMapper = objectMapper;
     }
 
     public Map<String, Object> start(String workspaceId, boolean force) {
         PaperEntity paper = requirePaper(workspaceId);
+        Long userId = currentUserService.getOrCreateDefaultUserId();
         if (!force && findContentList(workspaceId).isPresent()) {
-            return statusPayload(workspaceId, new TaskState("SUCCESS", "结构化解析已就绪", ""));
+            TaskState ready = new TaskState("SUCCESS", "结构化解析已就绪", "");
+            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, ready.state(), 100, ready.message(), ready.detail());
+            return statusPayload(workspaceId, ready);
         }
         TaskState existing = tasks.get(workspaceId);
         if (!force && existing != null && "RUNNING".equals(existing.state())) {
@@ -73,20 +80,30 @@ public class MineruParseService {
 
         TaskState running = new TaskState("RUNNING", "正在识别完整段落、阅读顺序与图表", "");
         tasks.put(workspaceId, running);
+        backendJobService.upsert("MINERU_PARSE", userId, workspaceId, running.state(), 20, running.message(), running.detail());
         CompletableFuture.runAsync(() -> parseInBackground(workspaceId, paper));
         return statusPayload(workspaceId, running);
     }
 
     public Map<String, Object> status(String workspaceId) {
         PaperEntity paper = requirePaper(workspaceId);
+        Long userId = currentUserService.getOrCreateDefaultUserId();
         Optional<Path> contentList = findContentList(workspaceId);
         if (contentList.isPresent()) {
-            return statusPayload(workspaceId, new TaskState("SUCCESS", "结构化解析已完成", ""));
+            TaskState ready = new TaskState("SUCCESS", "结构化解析已完成", "");
+            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, ready.state(), 100, ready.message(), ready.detail());
+            return statusPayload(workspaceId, ready);
         }
         TaskState state = tasks.get(workspaceId);
         if (state == null) {
+            state = backendJobService.find("MINERU_PARSE", userId, workspaceId)
+                .map(job -> new TaskState(job.getStatus(), job.getMessage(), job.getDetail()))
+                .orElse(null);
+        }
+        if (state == null) {
             state = new TaskState("RUNNING", "正在识别完整段落、阅读顺序与图表", "");
             tasks.put(workspaceId, state);
+            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, state.state(), 20, state.message(), state.detail());
             CompletableFuture.runAsync(() -> parseInBackground(workspaceId, paper));
         }
         return statusPayload(workspaceId, state);
@@ -121,7 +138,12 @@ public class MineruParseService {
                 if (isPublicationNoise(text)) continue;
                 String imageUrl = imageUrl(workspaceId, contentList, string(item.get("img_path")));
                 String html = "table".equals(kind) ? sanitizeTableHtml(string(item.get("table_body"))) : "";
+                if (isDecorativeFigure(kind, text, item)) continue;
 
+                if ("paragraph".equals(kind) && isEquationNumberArtifact(text)) {
+                    appendEquationNumber(pageBlocks.computeIfAbsent(pageNumber, ignored -> new ArrayList<>()), text);
+                    continue;
+                }
                 if (text.isBlank() && imageUrl.isBlank() && html.isBlank()) continue;
                 if ("figure".equals(kind)) figures++;
                 if ("table".equals(kind)) tables++;
@@ -133,6 +155,7 @@ public class MineruParseService {
                 block.put("text", text);
                 block.put("imageUrl", imageUrl);
                 block.put("html", html);
+                block.put("equationNumber", "");
                 block.put("textLevel", integer(item.get("text_level"), 0));
                 block.put("bbox", item.getOrDefault("bbox", List.of()));
                 block.put("translation", "");
@@ -186,11 +209,14 @@ public class MineruParseService {
 
     private void parseInBackground(String workspaceId, PaperEntity paper) {
         Path workspaceOutput = outputRoot.resolve(workspaceId);
+        Long userId = paper.getUserId();
         try {
+            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "RUNNING", 35, "正在准备 MinerU 解析环境", "");
             Files.createDirectories(inputRoot);
             Files.createDirectories(workspaceOutput);
             Path input = materializePdf(paper);
             Path log = workspaceOutput.resolve("mineru.log");
+            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "RUNNING", 55, "MinerU 正在解析论文版面", "");
             ProcessBuilder builder = new ProcessBuilder(
                 mineruBinary,
                 "-p", input.toAbsolutePath().toString(),
@@ -207,11 +233,14 @@ public class MineruParseService {
             if (exitCode != 0 || findContentList(workspaceId).isEmpty()) {
                 String detail = tail(log, 1800);
                 tasks.put(workspaceId, new TaskState("FAILURE", "论文结构化解析失败", detail));
+                backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "FAILURE", 100, "论文结构化解析失败", detail);
                 return;
             }
             tasks.put(workspaceId, new TaskState("SUCCESS", "段落、图表与阅读顺序解析完成", ""));
+            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "SUCCESS", 100, "段落、图表与阅读顺序解析完成", "");
         } catch (Exception error) {
             tasks.put(workspaceId, new TaskState("FAILURE", "论文结构化解析失败", error.getMessage()));
+            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "FAILURE", 100, "论文结构化解析失败", error.getMessage());
         }
     }
 
@@ -294,6 +323,15 @@ public class MineruParseService {
     private String itemText(Map<String, Object> item, String kind) {
         String direct = string(item.get("text"));
         if (!direct.isBlank()) return normalizeText(direct);
+        if ("equation".equals(kind)) {
+            return joinText(
+                item.get("latex"),
+                item.get("text_format"),
+                item.get("formula"),
+                item.get("equation"),
+                item.get("content")
+            );
+        }
         if ("figure".equals(kind)) {
             return joinText(item.get("image_caption"), item.get("image_footnote"));
         }
@@ -301,6 +339,34 @@ public class MineruParseService {
             return joinText(item.get("table_caption"), item.get("table_footnote"));
         }
         return normalizeText(joinText(item.get("list_items"), item.get("content")));
+    }
+
+    private boolean isEquationNumberArtifact(String text) {
+        String normalized = normalizeText(text)
+            .replaceAll("\\s+", "")
+            .replace("（", "(")
+            .replace("）", ")")
+            .replace("þ", "Þ");
+        return normalized.matches("^[ð(]\\d{1,3}[Þ)]$");
+    }
+
+    private void appendEquationNumber(List<Map<String, Object>> blocks, String text) {
+        if (blocks.isEmpty()) return;
+        String number = extractEquationNumber(text);
+        if (number.isBlank()) return;
+        for (int i = blocks.size() - 1; i >= 0; i--) {
+            Map<String, Object> block = blocks.get(i);
+            if (!"equation".equals(block.get("kind"))) continue;
+            block.put("equationNumber", "(" + number + ")");
+            return;
+        }
+    }
+
+    private String extractEquationNumber(String text) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+            .compile("(\\d{1,3})")
+            .matcher(normalizeText(text));
+        return matcher.find() ? matcher.group(1) : "";
     }
 
     private String joinText(Object... values) {
@@ -372,28 +438,62 @@ public class MineruParseService {
     }
 
     private boolean isPublicationNoise(String text) {
-        String normalized = normalizeText(text).toLowerCase();
+        String normalized = normalizeText(text).toLowerCase(Locale.ROOT);
         return normalized.startsWith("©")
+            || normalized.equals("crossmark")
+            || normalized.contains("check for updates")
             || normalized.contains("published by elsevier")
             || normalized.startsWith("peer-review under responsibility")
             || normalized.matches("^www\\..+/(locate|journal)/.*");
     }
 
+    private boolean isDecorativeFigure(String kind, String text, Map<String, Object> item) {
+        if (!"figure".equals(kind)) return false;
+        String normalized = normalizeText(text).toLowerCase(Locale.ROOT);
+        if (normalized.contains("check for updates")
+            || normalized.contains("crossmark")
+            || normalized.contains("publisher logo")
+            || normalized.contains("journal logo")
+            || normalized.contains("sciencedirect")
+            || normalized.contains("elsevier")
+            || normalized.contains("creative commons")
+            || normalized.contains("open access")) {
+            return true;
+        }
+
+        double left = bboxNumber(item.get("bbox"), 0);
+        double top = bboxNumber(item.get("bbox"), 1);
+        double right = bboxNumber(item.get("bbox"), 2);
+        double bottom = bboxNumber(item.get("bbox"), 3);
+        double width = Math.max(0, right - left);
+        double height = Math.max(0, bottom - top);
+        if (width <= 0 || height <= 0) return false;
+
+        boolean hasCaption = !normalized.isBlank();
+        boolean tinyIcon = width <= 90 && height <= 90;
+        boolean smallUncaptionedAsset = !hasCaption && width * height <= 12_000 && Math.max(width, height) <= 160;
+        boolean firstPageTopRightLogo = integer(item.get("page_idx"), 0) == 0
+            && !hasCaption
+            && left >= 300
+            && top <= 260
+            && width <= 220
+            && height <= 180;
+        return tinyIcon || smallUncaptionedAsset || firstPageTopRightLogo;
+    }
+
+    private double bboxNumber(Object bbox, int index) {
+        if (!(bbox instanceof List<?> values) || values.size() <= index) return 0;
+        Object value = values.get(index);
+        if (value instanceof Number number) return number.doubleValue();
+        try {
+            return Double.parseDouble(string(value));
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+    }
+
     private void trimFirstPageMetadata(Map<Integer, List<Map<String, Object>>> pageBlocks) {
-        List<Map<String, Object>> firstPage = pageBlocks.get(1);
-        if (firstPage == null || firstPage.isEmpty()) return;
-        int abstractIndex = -1;
-        for (int i = 0; i < firstPage.size(); i++) {
-            Map<String, Object> block = firstPage.get(i);
-            if ("heading".equals(block.get("kind"))
-                && "abstract".equalsIgnoreCase(string(block.get("text")).trim())) {
-                abstractIndex = i;
-                break;
-            }
-        }
-        if (abstractIndex > 0) {
-            firstPage.subList(0, abstractIndex).clear();
-        }
+        // Keep title and author metadata visible so the reader can display and translate them.
     }
 
     private String string(Object value) {

@@ -223,7 +223,7 @@
           <div class="pane-header-row">
             <div>
               <h3>充值订单与售后处理</h3>
-              <p class="pane-description">这里处理用户提交的支付工单和退款申请；处理结果会同步回用户充值页。</p>
+              <p class="pane-description">集中处理用户支付工单、退款申请、订单记录与手动充值入账。</p>
             </div>
             <button class="spatial-btn spatial-btn-accent compact-btn" @click="showAddRechargeModal = true">手动入账</button>
           </div>
@@ -357,124 +357,170 @@
 
         <!-- Tab Content: Models (Redesigned 2-Column Layout) -->
         <div v-if="activeTab === 'models'" class="tab-pane models-redesign-pane">
-          
+
           <!-- Header Area -->
           <div class="models-pane-header">
-            <div>
+            <div class="models-pane-header-left">
               <h3>AI 中转模型配置中心</h3>
-              <p class="pane-description">集中管理 API 中转服务商连接参数。可对接下属各模型进行实时测速并勾选分配至对应业务场景。</p>
+              <p class="pane-description">集中管理 API 中转服务商、模型连接与业务号池路由。</p>
             </div>
-            <button class="spatial-btn spatial-btn-accent" @click="openAllScenesPoolModal">
-              全站各模块号池一览
-            </button>
-          </div>
-
-          <!-- Pool Quick Access Badges -->
-          <div class="pools-quick-access spatial-glass-panel">
-            <span class="quick-access-title">业务号池状态：</span>
-            <div class="quick-access-badges">
+            <!-- Scene pool status cards -->
+            <div class="scene-pool-status-bar">
               <button
                 v-for="scene in modelSceneOptions"
                 :key="scene.value"
-                class="pool-quick-badge"
-                @click="openAllScenesPoolModal"
-                title="点击查看号池状态详情"
+                class="scene-status-card"
+                @click="openScenePoolModal(scene.value)"
+                :title="scene.hint"
               >
-                <span class="badge-dot"></span>
-                <strong>{{ scene.label }}号池</strong>
-                <span class="badge-count">{{ getPoolCount(scene.value) }}</span>
+                <div class="scene-status-header">
+                  <span class="scene-status-dot" :class="getPoolCount(scene.value) > 0 ? 'active' : 'inactive'"></span>
+                  <span class="scene-status-name">{{ scene.label }}</span>
+                </div>
+                <div class="scene-status-count">
+                  <strong>{{ getPoolCount(scene.value) }}</strong>
+                  <span>可用</span>
+                </div>
               </button>
             </div>
           </div>
+          <div class="models-two-col-layout" :class="{ 'providers-collapsed': isProvidersCollapsed }">
 
-          <!-- 2-Column Dashboard Layout -->
-          <div class="models-two-col-layout">
-            
             <!-- Column 1: 中转站服务商 -->
             <div class="providers-column spatial-glass-panel">
               <header class="column-header">
-                <strong>中转站服务商</strong>
-                <button class="add-provider-btn" @click="showAddRelayModal = true">
-                  + 添加中转站
+                <strong v-if="!isProvidersCollapsed">中转服务商</strong>
+                <button v-if="!isProvidersCollapsed" class="add-provider-btn" @click="showAddRelayModal = true">
+                  + 添加
+                </button>
+                <button class="collapse-providers-btn" @click="isProvidersCollapsed = !isProvidersCollapsed" :title="isProvidersCollapsed ? '展开中转商列表' : '折叠中转商列表'">
+                  <svg v-if="isProvidersCollapsed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>
                 </button>
               </header>
               <div v-if="loadingRelays" class="loading-state">
                 <span class="loading-spinner"></span> 加载中...
               </div>
               <div v-else-if="relays.length === 0" class="empty-state">
-                暂无服务商
+                暂无
               </div>
               <div v-else class="providers-list">
                 <div
                   v-for="relay in relays"
                   :key="relay.id"
                   class="provider-item-card"
-                  :class="{ active: activeRelay?.id === relay.id }"
+                  :class="{ active: activeRelay?.id === relay.id, 'collapsed-item': isProvidersCollapsed }"
                   @click="activeRelay = relay"
+                  :title="isProvidersCollapsed ? (relay.providerName + ' (' + relay.baseUrl + ')') : ''"
                 >
-                  <div class="provider-card-info">
-                    <span class="provider-name">{{ relay.providerName }}</span>
-                    <span class="provider-url">{{ relay.baseUrl }}</span>
-                  </div>
-                  <button class="provider-delete-btn" type="button" @click.stop="deleteRelay(relay)" title="删除">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 13px; height: 13px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                  </button>
+                  <template v-if="isProvidersCollapsed">
+                    <div class="provider-avatar-circle">
+                      {{ relay.providerName.substring(0, 2).toUpperCase() }}
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="provider-card-info">
+                      <span class="provider-name">{{ relay.providerName }}</span>
+                      <span class="provider-url">{{ relay.baseUrl }}</span>
+                    </div>
+                    <div class="provider-card-actions">
+                      <button class="provider-action-btn edit-btn" type="button" @click.stop="openEditRelayModal(relay)" title="编辑">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 13px; height: 13px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                      <button class="provider-action-btn delete-btn" type="button" @click.stop="deleteRelay(relay)" title="删除">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 13px; height: 13px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                      </button>
+                    </div>
+                  </template>
                 </div>
               </div>
             </div>
 
-            <!-- Column 2: Stack of Config and Models -->
+            <!-- Column 2: Models Config Grid with Pagination -->
             <div class="models-right-stack">
-              <!-- Connect Configuration -->
-              <div class="config-card-panel spatial-glass-panel">
-                <div v-if="!activeRelay" class="empty-state" style="padding: 24px;">
-                  请先选择或添加左侧中转站
+              <!-- Models Panel -->
+              <div class="models-grid-panel spatial-glass-panel">
+                <div v-if="!activeRelay" class="empty-state" style="padding: 60px 0;">
+                  请先在左侧选择或添加中转服务商
                 </div>
-                <div v-else class="provider-config-form">
-                  <header class="column-header">
-                    <strong>{{ activeRelay.providerName }} - 连接配置</strong>
-                  </header>
-                  
-                  <div class="form-body-horizontal">
-                    <div class="form-group-item">
-                      <label>Base URL 接口地址</label>
-                      <input v-model="activeRelay.baseUrl" placeholder="https://api..." class="spatial-input" />
-                    </div>
-                    <div class="form-group-item">
-                      <label>Key / 凭证密钥</label>
-                      <input v-model="activeRelay.apiKey" type="password" placeholder="填写新密钥进行覆盖更新" class="spatial-input" />
-                    </div>
-                    <button class="spatial-btn spatial-btn-accent save-config-btn" :disabled="updatingRelay" @click="saveRelayConfig">
-                      {{ updatingRelay ? "保存中..." : "保存配置" }}
+                <div v-else-if="loadingModels" class="loading-state" style="padding: 60px 0;">
+                  <span class="loading-spinner"></span> 正在读取可用模型列表...
+                </div>
+                <div v-else-if="relayModels.length === 0" class="empty-state" style="padding: 60px 0;">
+                  <strong>未读取到模型列表</strong>
+                  <p v-if="relayModelsError" class="model-load-error">{{ relayModelsError }}</p>
+                  <p v-else>请先配置连接并验证 API Key。</p>
+                  <div class="model-empty-actions">
+                    <button class="spatial-btn spatial-btn-ghost compact-btn" @click="openEditRelayModal(activeRelay)">
+                      配置连接
+                    </button>
+                    <button class="spatial-btn spatial-btn-accent compact-btn" @click="loadRelayModels(activeRelay)">
+                      重新读取模型
                     </button>
                   </div>
                 </div>
-              </div>
-
-              <!-- Models List Grid -->
-              <div v-if="activeRelay" class="models-grid-panel spatial-glass-panel">
-                <div v-if="loadingModels" class="loading-state" style="padding: 40px 0;">
-                  <span class="loading-spinner"></span> 正在读取可用模型...
-                </div>
-                <div v-else-if="relayModels.length === 0" class="empty-state" style="padding: 40px 0;">
-                  未读取到模型列表，请确认 Key 是否配置正确且网络通畅。
-                </div>
                 <div v-else class="models-section">
-                  <header class="column-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                    <strong>包含模型 ({{ relayModels.length }})</strong>
-                    <button class="spatial-btn spatial-btn-accent compact-btn" @click="testAllModelsSpeed">
-                      一键测速
-                    </button>
-                  </header>
-                  
-                  <div class="models-cards-grid">
-                    <article v-for="model in relayModels" :key="model.id" class="model-dashboard-card">
-                      <div class="model-card-header">
-                        <strong class="model-name-id">{{ model.id }}</strong>
-                        <span class="model-badge-provider">{{ activeRelay.providerName }}</span>
+                  <!-- Provider Info Banner -->
+                  <div class="relay-info-banner">
+                    <div class="relay-info-left">
+                      <div class="relay-info-name">{{ activeRelay.providerName }}<span class="relay-info-dash"> - </span><span class="relay-info-subtitle">连接配置</span></div>
+                      <div class="relay-info-url">Base URL &nbsp;<code>{{ activeRelay.baseUrl }}</code></div>
+                    </div>
+                    <div class="relay-info-actions">
+                      <button class="spatial-btn spatial-btn-ghost compact-btn" @click="openEditRelayModal(activeRelay)">
+                        配置连接
+                      </button>
+                      <button class="spatial-btn spatial-btn-accent compact-btn" @click="testAllModelsSpeed">
+                        一键测速
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Models filtering and search sub-header -->
+                  <div class="models-subheader">
+                    <div class="models-filters-left">
+                      <!-- Search Input -->
+                      <div class="model-search-box">
+                        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <circle cx="11" cy="11" r="8"></circle>
+                          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input
+                          v-model="modelSearchQuery"
+                          type="text"
+                          placeholder="搜索模型标识..."
+                          class="spatial-search-input"
+                        />
+                        <button v-if="modelSearchQuery" class="clear-search-btn" @click="modelSearchQuery = ''">×</button>
                       </div>
-                      
-                      <div class="model-speed-row">
+
+                      <!-- Filter Dropdown -->
+                      <div class="model-filter-box">
+                        <span class="filter-label">路由号池:</span>
+                        <select v-model="modelSceneFilter" class="spatial-filter-select">
+                          <option value="all">所有模型</option>
+                          <option value="available">当前可用 (测速成功)</option>
+                          <option value="none">未分配号池</option>
+                          <option value="any">已分配任意号池</option>
+                          <option v-for="scene in modelSceneOptions" :key="scene.value" :value="scene.value">
+                            {{ scene.label }}号池
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="models-filters-right">
+                      <span class="models-count-label">
+                        已选 <em>{{ filteredModels.length }}</em> / 共 {{ relayModels.length }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="models-cards-grid">
+                    <article v-for="model in paginatedModels" :key="model.id" class="model-dashboard-card">
+                      <!-- Card Top: name + speed pill inline -->
+                      <div class="model-card-top-row">
+                        <strong class="model-name-id">{{ model.id }}</strong>
                         <button
                           class="model-speed-pill-new"
                           :class="{
@@ -496,14 +542,42 @@
                         </button>
                       </div>
 
+                      <!-- Provider badge -->
+                      <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                        <span class="model-badge-provider">{{ activeRelay.providerName }}</span>
+                        <span class="model-type-tag" :class="getModelMetadata(model.id).typeClass">
+                          {{ getModelMetadata(model.id).type }}
+                        </span>
+                      </div>
+
+                      <!-- Billing info -->
+                      <div class="model-billing-price">
+                        {{ getModelMetadata(model.id).billing }}
+                      </div>
+
+                      <!-- Model Description -->
+                      <p class="model-desc-info-text">
+                        {{ getModelMetadata(model.id).desc }}
+                      </p>
+
                       <!-- Speed error message -->
                       <div
                         v-if="modelTestResults[model.id] && !modelTestResults[model.id].success && modelTestResults[model.id].message"
-                        class="model-speed-error-msg"
+                        class="model-speed-error-container"
                       >
-                        {{ modelTestResults[model.id].message }}
+                        <div class="model-speed-error-summary" @click="toggleErrorDetail(model.id)">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 12px; height: 12px; margin-right: 4px; color: #ff6b6b;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                          <span>接口返回错误 (点击查看)</span>
+                        </div>
+                        <div
+                          v-if="showErrorDetail[model.id]"
+                          class="model-speed-error-detail"
+                        >
+                          {{ modelTestResults[model.id].message }}
+                        </div>
                       </div>
 
+                      <!-- Scene checkboxes -->
                       <div class="scene-assignments-grid">
                         <span class="assign-label-tag">分配业务号池</span>
                         <div class="checkbox-columns">
@@ -528,43 +602,55 @@
                       </div>
                     </article>
                   </div>
+
+                  <!-- Pagination -->
+                  <div v-if="filteredModels.length > 0" class="models-pagination">
+                    <div v-if="totalPages > 1" class="models-pagination-nav" style="display: flex; align-items: center; gap: 8px;">
+                      <button
+                        :disabled="currentPage === 1"
+                        @click="currentPage--"
+                        class="pagination-arrow-btn"
+                      >
+                        &lt; 上一页
+                      </button>
+                      <div class="pagination-pages">
+                        <button
+                          v-for="page in visiblePages"
+                          :key="page"
+                          :class="{ active: currentPage === page, separator: page === '...' }"
+                          :disabled="page === '...'"
+                          @click="currentPage = page"
+                          class="pagination-page-btn"
+                        >
+                          {{ page }}
+                        </button>
+                      </div>
+                      <button
+                        :disabled="currentPage === totalPages"
+                        @click="currentPage++"
+                        class="pagination-arrow-btn"
+                      >
+                        下一页 &gt;
+                      </button>
+                    </div>
+                    <div v-else></div> <!-- Placeholder to push selector to the right -->
+
+                    <!-- Page Size Selector -->
+                    <div class="models-page-size-wrap">
+                      <select v-model.number="pageSize" class="spatial-page-size-select">
+                        <option :value="12">12 个模型/页</option>
+                        <option :value="24">24 个模型/页</option>
+                        <option :value="48">48 个模型/页</option>
+                        <option :value="96">96 个模型/页</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
+
             </div>
 
           </div>
-
-          <section class="module-route-table spatial-glass-panel">
-            <div class="module-route-head">
-              <h4>业务模块模型路由</h4>
-              <span>{{ flatScenePoolRows.length }} 条模型连接</span>
-            </div>
-            <div class="module-route-table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>业务号池</th>
-                    <th>所属中转站</th>
-                    <th>模型标识</th>
-                    <th>延迟测速</th>
-                    <th>状态</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in flatScenePoolRows.slice(0, 8)" :key="`${row.scene}-${row.id}-${row.modelName}`">
-                    <td>{{ row.sceneLabel }}</td>
-                    <td>{{ row.providerName }}</td>
-                    <td><code>{{ row.modelName }}</code></td>
-                    <td><strong :class="{ error: row.status !== 'available' }">{{ row.status === "available" ? `${row.latencyMs || 0}ms` : "故障" }}</strong></td>
-                    <td><span class="status-tag" :class="row.status">{{ row.status === "available" ? "可用" : "不可用" }}</span></td>
-                  </tr>
-                  <tr v-if="flatScenePoolRows.length === 0">
-                    <td colspan="5" class="empty-row">暂无号池模型，请先在上方模型卡片中勾选业务号池。</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
         </div>
 
         <!-- Tab Content: AI Usage Calls -->
@@ -638,6 +724,23 @@
                 <span>消息内容</span>
                 <textarea v-model.trim="newSiteMessage.content" maxlength="1000" :placeholder="newSiteMessage.messageType === 'timeline' ? '输入本次版本新增、修复、优化内容' : '输入需要全站展示的通知内容'"></textarea>
               </label>
+
+              <!-- Image Upload Section -->
+              <div class="message-image-upload-section">
+                <span>配图上传 (可选)</span>
+                <div v-if="newSiteMessage.imageUrl" class="message-image-preview-card">
+                  <img :src="newSiteMessage.imageUrl" alt="配图预览" />
+                  <button type="button" class="remove-preview-btn" @click="clearMessageImage">移除图片</button>
+                </div>
+                <div v-else class="message-image-upload-trigger">
+                  <label class="upload-trigger-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 15px; height: 15px; margin-right: 6px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    选择配图
+                    <input type="file" accept="image/*" @change="handleMessageImageUpload" style="display: none;" />
+                  </label>
+                </div>
+              </div>
+
               <div class="site-message-form-footer">
                 <span>{{ newSiteMessage.content.length }}/1000</span>
                 <button class="spatial-btn spatial-btn-accent compact-btn" :disabled="siteMessagePublishing">
@@ -652,7 +755,7 @@
                 <span>{{ siteMessages.length }} 条</span>
               </div>
               <article v-for="message in paginatedSiteMessages" :key="message.id" class="site-message-row">
-                <div>
+                <div style="flex: 1; min-width: 0;">
                   <div class="site-message-title-row">
                     <strong>{{ message.title }}</strong>
                     <span class="message-type-badge" :class="message.messageType === 'timeline' ? 'timeline' : 'notice'">
@@ -662,7 +765,16 @@
                       {{ message.activeFlag ? "展示中" : "已撤下" }}
                     </span>
                   </div>
-                  <p>{{ message.content }}</p>
+                  <p style="white-space: pre-wrap; word-break: break-all;">{{ message.content }}</p>
+
+                  <!-- Render message image if it exists -->
+                  <div v-if="message.imageUrl" class="site-message-image-thumb">
+                    <button type="button" class="image-thumb-btn" @click="openCampusImage(message.imageUrl, '消息配图')">
+                      <img :src="message.imageUrl" alt="消息配图" />
+                      <span>点击放大</span>
+                    </button>
+                  </div>
+
                   <small>{{ formatDateTime(message.createdAt) }}</small>
                 </div>
                 <div class="site-message-actions">
@@ -796,68 +908,117 @@
             <button class="spatial-btn spatial-btn-ghost compact-btn" @click="fetchAllData">刷新</button>
           </div>
 
-          <section class="campus-review-list spatial-glass-panel">
-            <article
-              v-for="request in paginatedCampusVerifications"
-              :key="request.id"
-              class="campus-review-row"
-              :class="`status-${request.status}`"
-            >
-              <header>
-                <div>
-                  <span>认证 #{{ request.id }} · {{ formatDateTime(request.createdAt) }}</span>
-                  <strong>{{ request.schoolName }}</strong>
-                  <small>{{ request.userName || "—" }} · {{ request.email || "—" }} · 学号 {{ request.studentNo }}</small>
-                </div>
-                <b>{{ request.statusLabel || campusVerificationStatusLabel(request.status) }}</b>
-              </header>
-              <div class="campus-card-preview-grid">
-                <figure>
-                  <button type="button" class="campus-image-button" @click="openCampusImage(request.studentCardFront, '学生证正面')">
-                    <img :src="request.studentCardFront" alt="学生证正面" />
-                  </button>
-                  <figcaption>学生证正面</figcaption>
-                </figure>
-                <figure>
-                  <button type="button" class="campus-image-button" @click="openCampusImage(request.studentCardBack, '学生证反面')">
-                    <img :src="request.studentCardBack" alt="学生证反面" />
-                  </button>
-                  <figcaption>学生证反面</figcaption>
-                </figure>
-              </div>
-              <em v-if="request.adminNote">审核备注：{{ request.adminNote }}</em>
-              <div class="forum-report-actions">
-                <button
-                  class="spatial-btn spatial-btn-ghost compact-btn"
-                  :disabled="request.status === 'approved'"
-                  @click="reviewCampusVerification(request, 'approved')"
+          <div class="table-container spatial-glass-panel" style="margin-top: 16px;">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th style="white-space: nowrap;">时间</th>
+                  <th style="white-space: nowrap;">申请人</th>
+                  <th>学校与学号</th>
+                  <th>学生证件</th>
+                  <th>审核备注</th>
+                  <th style="white-space: nowrap;">状态</th>
+                  <th style="text-align: right; min-width: 200px; padding-right: 18px;">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="request in paginatedCampusVerifications"
+                  :key="request.id"
+                  :class="`status-${request.status}`"
                 >
-                  通过认证
-                </button>
-                <button
-                  class="spatial-btn spatial-btn-ghost compact-btn danger-lite"
-                  :disabled="request.status === 'rejected'"
-                  @click="reviewCampusVerification(request, 'rejected')"
-                >
-                  驳回
-                </button>
-              </div>
-            </article>
-            <div v-if="!campusVerifications.length" class="payment-empty">暂无校园认证申请。</div>
-            <div v-else class="admin-pagination compact-pagination">
-              <span>{{ paginationText(campusVerifications.length, campusVerificationPage, campusVerificationPageSize) }}</span>
-              <div>
-                <select v-model.number="campusVerificationPageSize" class="pagination-size-select">
-                  <option :value="4">4 条/页</option>
-                  <option :value="8">8 条/页</option>
-                  <option :value="12">12 条/页</option>
-                </select>
-                <button :disabled="campusVerificationPage <= 1" @click="campusVerificationPage -= 1">上一页</button>
-                <strong>{{ campusVerificationPage }} / {{ campusVerificationPageCount }}</strong>
-                <button :disabled="campusVerificationPage >= campusVerificationPageCount" @click="campusVerificationPage += 1">下一页</button>
-              </div>
+                  <td class="ledger-time" style="white-space: nowrap;">
+                    {{ formatDateTime(request.createdAt) }}
+                  </td>
+                  <td>
+                    <div class="campus-user-info">
+                      <strong>{{ request.userName || "—" }}</strong>
+                      <small style="display: block; font-size: 0.72rem; color: var(--spatial-silver); margin-top: 2px;">
+                        {{ request.email || "—" }}
+                      </small>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="campus-school-info">
+                      <strong>{{ request.schoolName }}</strong>
+                      <small style="display: block; font-size: 0.72rem; color: var(--spatial-silver); margin-top: 2px;">
+                        学号: {{ request.studentNo }}
+                      </small>
+                    </div>
+                  </td>
+                  <td>
+                    <!-- Thumbnail preview section -->
+                    <div class="campus-thumbs-row">
+                      <button
+                        v-if="request.studentCardFront"
+                        type="button"
+                        class="campus-thumb-btn"
+                        @click="openCampusImage(request.studentCardFront, '学生证正面')"
+                        title="查看学生证正面大图"
+                      >
+                        <img :src="request.studentCardFront" alt="正面" />
+                        <span>正面</span>
+                      </button>
+                      <button
+                        v-if="request.studentCardBack"
+                        type="button"
+                        class="campus-thumb-btn"
+                        @click="openCampusImage(request.studentCardBack, '学生证反面')"
+                        title="查看学生证反面大图"
+                      >
+                        <img :src="request.studentCardBack" alt="反面" />
+                        <span>反面</span>
+                      </button>
+                    </div>
+                  </td>
+                  <td>
+                    <span v-if="request.adminNote" class="campus-note-text" :title="request.adminNote">
+                      {{ request.adminNote }}
+                    </span>
+                    <span v-else style="color: var(--spatial-silver); font-style: italic; font-size: 0.8rem;">无</span>
+                  </td>
+                  <td>
+                    <span class="campus-status-badge" :class="request.status">
+                      {{ request.statusLabel || campusVerificationStatusLabel(request.status) }}
+                    </span>
+                  </td>
+                  <td style="text-align: right; padding-right: 18px;">
+                    <div class="forum-report-actions" style="justify-content: flex-end; display: flex; gap: 8px;">
+                      <button
+                        class="spatial-btn spatial-btn-ghost compact-btn"
+                        :disabled="request.status === 'approved'"
+                        @click="reviewCampusVerification(request, 'approved')"
+                      >
+                        通过认证
+                      </button>
+                      <button
+                        class="spatial-btn spatial-btn-ghost compact-btn danger-lite"
+                        :disabled="request.status === 'rejected'"
+                        @click="reviewCampusVerification(request, 'rejected')"
+                      >
+                        驳回
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="!campusVerifications.length" class="payment-empty" style="border-top: none;">暂无校园认证申请。</div>
+          </div>
+
+          <div v-if="campusVerifications.length" class="admin-pagination compact-pagination">
+            <span>{{ paginationText(campusVerifications.length, campusVerificationPage, campusVerificationPageSize) }}</span>
+            <div>
+              <select v-model.number="campusVerificationPageSize" class="pagination-size-select">
+                <option :value="4">4 条/页</option>
+                <option :value="8">8 条/页</option>
+                <option :value="12">12 条/页</option>
+              </select>
+              <button :disabled="campusVerificationPage <= 1" @click="campusVerificationPage -= 1">上一页</button>
+              <strong>{{ campusVerificationPage }} / {{ campusVerificationPageCount }}</strong>
+              <button :disabled="campusVerificationPage >= campusVerificationPageCount" @click="campusVerificationPage += 1">下一页</button>
             </div>
-          </section>
+          </div>
         </div>
       </div>
     </section>
@@ -985,48 +1146,72 @@
     <Transition name="fade">
       <div v-if="showViewTeamModal" class="admin-modal-overlay" @click="showViewTeamModal = false">
         <div class="admin-modal-card team-detail-modal spatial-glass-panel" @click.stop>
-          <h4>团队详情</h4>
-          <div class="team-detail-summary">
-            <div><span>团队名称</span><strong>{{ selectedTeam?.name }}</strong></div>
-            <div><span>团队标识</span><strong>{{ selectedTeam?.identifier }}</strong></div>
-            <div><span>成员数量</span><strong>{{ selectedTeamMembers.length }} 人</strong></div>
-          </div>
-          <div v-if="teamMembersLoading" class="team-members-empty">正在加载团队成员...</div>
-          <div v-else class="team-members-table-wrap">
-            <table class="team-members-table">
-              <thead>
-                <tr>
-                  <th>成员</th>
-                  <th>角色</th>
-                  <th>科研等级</th>
-                  <th>会员权益</th>
-                  <th>活跃时长</th>
-                  <th>注册时间</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="member in selectedTeamMembers" :key="member.id">
-                  <td>
-                    <strong>{{ member.name }}</strong>
-                    <small>{{ member.email }}</small>
-                  </td>
-                  <td><span class="role-badge" :class="getRoleClass(member.role)">{{ member.role }}</span></td>
-                  <td><strong>Lv.{{ member.level }}</strong><small>{{ member.levelTitle }}</small></td>
-                  <td>
-                    <strong>{{ membershipPlanName(member.membershipPlan) }}</strong>
-                    <small>综述 {{ member.reviewUsed || 0 }}/{{ member.reviewQuota || 0 }} · PPT {{ member.pptUsed || 0 }}/{{ member.pptQuota || 0 }}</small>
-                  </td>
-                  <td>{{ formatActiveTime(member.activeTime) }}</td>
-                  <td>{{ formatDate(member.createdAt) }}</td>
-                </tr>
-                <tr v-if="selectedTeamMembers.length === 0">
-                  <td colspan="6" class="team-members-empty">该团队暂无成员</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="modal-actions" style="margin-top: 24px;">
-            <button class="spatial-btn spatial-btn-accent" @click="showViewTeamModal = false">关闭</button>
+          <header class="modal-header">
+            <h5>团队详情</h5>
+            <button class="modal-close" @click="showViewTeamModal = false">×</button>
+          </header>
+
+          <div class="modal-body">
+            <!-- Team Info Cards Grid -->
+            <div class="team-detail-summary">
+              <div class="summary-card">
+                <span>团队名称</span>
+                <strong>{{ selectedTeam?.name }}</strong>
+              </div>
+              <div class="summary-card">
+                <span>团队标识</span>
+                <code>{{ selectedTeam?.identifier }}</code>
+              </div>
+              <div class="summary-card">
+                <span>成员数量</span>
+                <strong>{{ selectedTeamMembers.length }} 人</strong>
+              </div>
+            </div>
+
+            <!-- Loading State -->
+            <div v-if="teamMembersLoading" class="team-members-empty">
+              <span class="loading-spinner"></span> 正在加载团队成员...
+            </div>
+
+            <!-- Table Section -->
+            <div v-else class="team-members-table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>成员</th>
+                    <th>角色</th>
+                    <th>科研等级</th>
+                    <th>会员权益</th>
+                    <th>活跃时长</th>
+                    <th>注册时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="member in selectedTeamMembers" :key="member.id">
+                    <td>
+                      <strong>{{ member.name }}</strong>
+                      <small>{{ member.email }}</small>
+                    </td>
+                    <td>
+                      <span class="role-badge" :class="getRoleClass(member.role)">{{ member.role }}</span>
+                    </td>
+                    <td>
+                      <strong>Lv.{{ member.level }}</strong>
+                      <small>{{ member.levelTitle }}</small>
+                    </td>
+                    <td>
+                      <strong>{{ membershipPlanName(member.membershipPlan) }}</strong>
+                      <small>综述 {{ member.reviewUsed || 0 }}/{{ member.reviewQuota || 0 }} · PPT {{ member.pptUsed || 0 }}/{{ member.pptQuota || 0 }}</small>
+                    </td>
+                    <td>{{ formatActiveTime(member.activeTime) }}</td>
+                    <td>{{ formatDate(member.createdAt) }}</td>
+                  </tr>
+                  <tr v-if="selectedTeamMembers.length === 0">
+                    <td colspan="6" class="team-members-empty">该团队暂无成员</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -1140,14 +1325,65 @@
               <input v-model="newRelay.apiKey" type="password" placeholder="密钥敏感信息不会泄露，可为空代表使用默认" class="spatial-input" />
             </div>
             <div class="form-group">
-              <label>默认主控模型</label>
-              <input v-model="newRelay.modelName" placeholder="例如: gpt-4o, claude-3-5-sonnet" class="spatial-input" />
+              <label>OpenAI 协议类型</label>
+              <select v-model="newRelay.apiFormat" class="spatial-select">
+                <option value="openai_chat">Chat Completions</option>
+                <option value="openai_responses">Responses</option>
+              </select>
             </div>
           </div>
           <footer class="modal-footer">
             <button class="spatial-btn spatial-btn-ghost" @click="showAddRelayModal = false">取消</button>
             <button class="spatial-btn spatial-btn-accent" :disabled="submittingNewRelay" @click="submitNewRelay">
               {{ submittingNewRelay ? "保存中..." : "确认添加" }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Edit Relay Modal -->
+    <Transition name="fade">
+      <div v-if="showEditRelayModal" class="admin-modal-overlay" @click="showEditRelayModal = false">
+        <div class="admin-modal-card spatial-glass-panel edit-relay-modal-card" @click.stop>
+          <header class="modal-header">
+            <div>
+              <h5>配置中转代理连接</h5>
+              <p class="subtitle">编辑中转服务商及其路由协议参数</p>
+            </div>
+            <button class="modal-close" @click="showEditRelayModal = false">×</button>
+          </header>
+          <div class="modal-body">
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label style="display: block; margin-bottom: 6px; font-size: 0.8rem; font-weight: 700; color: var(--spatial-gray);">中转商户名称</label>
+              <input v-model="editRelay.providerName" placeholder="例如: QiHang, Anthropic, SiliconFlow" class="spatial-input" style="width: 100%; box-sizing: border-box;" />
+            </div>
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label style="display: block; margin-bottom: 6px; font-size: 0.8rem; font-weight: 700; color: var(--spatial-gray);">接口代理地址 (Base URL)</label>
+              <input v-model="editRelay.baseUrl" placeholder="例如: https://api.qihang.ai/v1" class="spatial-input" style="width: 100%; box-sizing: border-box;" />
+            </div>
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label style="display: block; margin-bottom: 6px; font-size: 0.8rem; font-weight: 700; color: var(--spatial-gray);">API Key / 凭证密钥</label>
+              <input v-model="editRelay.apiKey" type="password" placeholder="留空则沿用原密钥，新输入则覆盖" class="spatial-input" autocomplete="new-password" style="width: 100%; box-sizing: border-box;" />
+            </div>
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label style="display: block; margin-bottom: 6px; font-size: 0.8rem; font-weight: 700; color: var(--spatial-gray);">OpenAI 协议类型</label>
+              <select v-model="editRelay.apiFormat" class="spatial-select" style="width: 100%; box-sizing: border-box;">
+                <option value="openai_chat">Chat Completions</option>
+                <option value="openai_responses">Responses</option>
+              </select>
+            </div>
+            <div class="form-group checkbox-group" style="margin-top: 14px;">
+              <label class="scene-checkbox-label">
+                <input type="checkbox" v-model="editRelay.fullUrl" />
+                <span>使用完整自定义URL路径</span>
+              </label>
+            </div>
+          </div>
+          <footer class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; border-top: 1px solid var(--spatial-line); padding-top: 16px;">
+            <button class="spatial-btn spatial-btn-ghost" @click="showEditRelayModal = false">取消</button>
+            <button class="spatial-btn spatial-btn-accent" :disabled="updatingRelay" @click="submitEditRelayConfig">
+              {{ updatingRelay ? "保存中..." : "保存更改" }}
             </button>
           </footer>
         </div>
@@ -1175,37 +1411,60 @@
               </button>
             </div>
 
-            <div v-if="loadingScenePool" class="loading-state">
+            <div v-if="loadingScenePool && scenePoolData.length === 0" class="loading-state">
               <span class="loading-spinner"></span> 数据更新中...
             </div>
             <div v-else-if="scenePoolData.length === 0" class="empty-state">
               号池为空，请在右侧模型列表中勾选对应模型加入
             </div>
-            <div v-else class="pool-nodes-list">
-              <div
-                v-for="route in scenePoolData"
-                :key="route.id"
-                class="pool-node-item"
-                :class="route.status"
-              >
-                <div class="node-main-info">
-                  <div class="node-title">
-                    <strong>{{ route.providerName }}</strong>
-                    <span class="model-badge">{{ route.modelName }}</span>
-                    <span v-if="route.active" class="node-badge active-tag">主路由</span>
-                  </div>
-                  <span class="node-url">{{ route.baseUrl }}</span>
-                  <span v-if="route.message" class="node-message">{{ route.message }}</span>
-                </div>
-                <div class="node-metrics">
-                  <span class="node-latency" :class="{ error: route.status !== 'available' }">
-                    {{ route.status === 'available' ? `${route.latencyMs}ms` : '故障' }}
-                  </span>
-                  <button v-if="!route.active" class="node-remove-btn" type="button" @click="removeScenePoolRoute(route.id)" title="从号池移除">
-                    ×
-                  </button>
-                </div>
-              </div>
+            <div v-else class="pool-table-wrap" :class="{ 'pool-table-refreshing': loadingScenePool }">
+              <table class="spatial-pool-table">
+                <thead>
+                  <tr>
+                    <th>所属中转站</th>
+                    <th>模型标识</th>
+                    <th>延迟测速</th>
+                    <th>状态</th>
+                    <th style="width: 100px; text-align: center;">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="route in scenePoolData" :key="route.id">
+                    <td>
+                      <div class="provider-info-cell">
+                        <strong>{{ route.providerName }}</strong>
+                        <span class="url-hint">{{ route.baseUrl }}</span>
+                        <!-- Display error message if the route is failed/unhealthy -->
+                        <span v-if="route.status !== 'available' && route.message" class="node-error-message">
+                          {{ route.message }}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <code>{{ route.modelName }}</code>
+                    </td>
+                    <td>
+                      <span class="node-latency" :class="{ error: route.status !== 'available' }">
+                        {{ route.status === 'available' ? `${route.latencyMs}ms` : '故障' }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="status-badge" :class="route.status === 'available' ? 'available' : 'unavailable'">
+                        {{ route.status === 'available' ? '可用' : '不可用' }}
+                      </span>
+                    </td>
+                    <td style="text-align: center;">
+                      <button
+                        class="pool-cancel-btn"
+                        @click="removeScenePoolRoute(route.id)"
+                        title="将该节点移出当前号池"
+                      >
+                        取消号池
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -1222,14 +1481,14 @@
           </header>
           <div class="modal-body">
             <div class="all-pools-container">
-              
+
               <div v-for="scene in modelSceneOptions" :key="scene.value" class="scene-pool-section">
                 <header class="section-title">
                   <span class="bullet-dot"></span>
                   <strong>{{ scene.label }} 号池</strong>
                   <span class="count-tag">已接管 {{ allScenesPoolData[scene.value]?.length || 0 }} 个模型</span>
                 </header>
-                
+
                 <div class="table-wrapper">
                   <table class="scene-pool-table">
                     <thead>
@@ -1389,7 +1648,7 @@ const newTeam = ref({
   name: "",
   identifier: "",
 });
-const newSiteMessage = ref({ title: "", content: "", messageType: "notice" });
+const newSiteMessage = ref({ title: "", content: "", messageType: "notice", imageUrl: "" });
 const tutorialForm = ref({
   title: "",
   category: "使用教程",
@@ -1417,6 +1676,7 @@ const activeRelay = ref(null);
 
 const relayModels = ref([]);
 const loadingModels = ref(false);
+const relayModelsError = ref("");
 
 const modelTestResults = ref({}); // key: modelId, value: { testing: boolean, latencyMs: number, success: boolean, message: string }
 const modelActionStates = ref({}); // key: modelId + '|' + scene, value: boolean
@@ -1429,7 +1689,122 @@ const newRelay = ref({
   baseUrl: "",
   apiKey: "",
   modelName: "gpt-4o",
+  apiFormat: "openai_chat",
 });
+
+const showEditRelayModal = ref(false);
+const editRelay = ref({
+  id: null,
+  providerName: "",
+  baseUrl: "",
+  apiKey: "",
+  modelName: "gpt-4o",
+  apiFormat: "openai_chat",
+  authType: "bearer",
+  fullUrl: false
+});
+
+const isProvidersCollapsed = ref(false);
+
+const currentPage = ref(1);
+const pageSize = ref(12);
+
+const modelSearchQuery = ref("");
+const modelSceneFilter = ref("all");
+
+const filteredModels = computed(() => {
+  if (!activeRelay.value || !relayModels.value) return [];
+
+  let list = relayModels.value;
+
+  // 1. Search Query Filter (Case-insensitive matches model.id)
+  const query = modelSearchQuery.value.trim().toLowerCase();
+  if (query) {
+    list = list.filter(model => model.id.toLowerCase().includes(query));
+  }
+
+  // 2. Scene Assignment or Availability Filter
+  const filterVal = modelSceneFilter.value;
+  if (filterVal !== "all") {
+    if (filterVal === "available") {
+      list = list.filter(model => {
+        const testRes = modelTestResults.value[model.id];
+        return testRes && !testRes.testing && testRes.success;
+      });
+    } else {
+      list = list.filter(model => {
+        const modelKey = `${activeRelay.value.providerName.toLowerCase()}|${activeRelay.value.baseUrl.toLowerCase()}|${model.id}`;
+        const assignments = assignedScenesMap.value[modelKey] || {};
+
+        if (filterVal === "none") {
+          // Models that have no scenes selected (all values false or undefined)
+          return !Object.values(assignments).some(val => val === true);
+        } else if (filterVal === "any") {
+          // Models that have at least one scene selected
+          return Object.values(assignments).some(val => val === true);
+        } else {
+          // Specific scene is selected
+          return assignments[filterVal] === true;
+        }
+      });
+    }
+  }
+
+  // Sort by latency from smallest to largest by default
+  return [...list].sort((a, b) => {
+    const resA = modelTestResults.value[a.id];
+    const resB = modelTestResults.value[b.id];
+
+    const hasLatencyA = resA && !resA.testing && resA.success && typeof resA.latencyMs === 'number';
+    const hasLatencyB = resB && !resB.testing && resB.success && typeof resB.latencyMs === 'number';
+
+    if (hasLatencyA && hasLatencyB) {
+      return resA.latencyMs - resB.latencyMs;
+    }
+    if (hasLatencyA) return -1;
+    if (hasLatencyB) return 1;
+
+    return a.id.localeCompare(b.id);
+  });
+});
+
+const paginatedModels = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  const end = start + pageSize.value;
+  return filteredModels.value.slice(start, end);
+});
+
+const totalPages = computed(() => Math.ceil(filteredModels.value.length / pageSize.value));
+
+watch([modelSearchQuery, modelSceneFilter, pageSize], () => {
+  currentPage.value = 1;
+});
+
+const visiblePages = computed(() => {
+  const pages = [];
+  const total = totalPages.value;
+  const current = currentPage.value;
+
+  if (total <= 7) {
+    for (let i = 1; i <= total; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (current > 4) pages.push('...');
+
+    const start = Math.max(2, current - 2);
+    const end = Math.min(total - 1, current + 2);
+    for (let i = start; i <= end; i++) pages.push(i);
+
+    if (current < total - 3) pages.push('...');
+    pages.push(total);
+  }
+  return pages;
+});
+
+const showErrorDetail = ref({});
+function toggleErrorDetail(modelId) {
+  showErrorDetail.value[modelId] = !showErrorDetail.value[modelId];
+}
 
 const activePoolScene = ref(null);
 const scenePoolData = ref([]);
@@ -1505,7 +1880,7 @@ const adminIcons = {
 const filteredUsers = computed(() => {
   return systemUsers.value.filter(u => {
     const query = searchQuery.value.toLowerCase();
-    const matchesSearch = 
+    const matchesSearch =
       String(u.username || "").toLowerCase().includes(query) ||
       String(u.email || "").toLowerCase().includes(query) ||
       String(u.ip || "").toLowerCase().includes(query);
@@ -1968,12 +2343,25 @@ async function loadAllScenePools() {
   const scenes = ["paper_review", "paper_qa", "topic_research", "meeting_deck", "forum_moderation"];
   const newMap = {};
   const newPoolData = {};
+
+  // Construct a set of active provider keys for fast lookup
+  const activeRelayKeys = new Set(
+    relays.value.map(r => `${r.providerName.toLowerCase()}|${r.baseUrl.toLowerCase()}`)
+  );
+
   for (const scene of scenes) {
     try {
       const pool = await paperpilotApi.getModelPool(scene);
-      newPoolData[scene] = pool;
-      for (const item of pool) {
-        if (item.template) continue;
+
+      // Filter out pool items that belong to relays that no longer exist
+      const activePool = pool.filter(item => {
+        if (item.template) return false;
+        const routeKey = `${item.providerName.toLowerCase()}|${item.baseUrl.toLowerCase()}`;
+        return activeRelayKeys.has(routeKey);
+      });
+
+      newPoolData[scene] = activePool;
+      for (const item of activePool) {
         const routeKey = `${item.providerName.toLowerCase()}|${item.baseUrl.toLowerCase()}`;
         const modelKey = `${routeKey}|${item.modelName}`;
         if (!newMap[modelKey]) {
@@ -1993,18 +2381,27 @@ async function loadAllScenePools() {
 async function loadRelayModels(relay) {
   if (!relay) {
     relayModels.value = [];
+    relayModelsError.value = "";
     return;
   }
   loadingModels.value = true;
   relayModels.value = [];
+  relayModelsError.value = "";
   modelTestResults.value = {};
   try {
     const res = await paperpilotApi.fetchRelayRouteModels(relay.id);
-    if (res && res.models) {
+    if (res?.success === false) {
+      relayModelsError.value = res.message || "模型列表接口返回失败，请检查 Base URL、模型列表地址和 API Key。";
+      relayModels.value = [];
+    } else if (res && res.models) {
       relayModels.value = res.models;
+      if (!res.models.length) {
+        relayModelsError.value = res.message || "接口返回成功但模型列表为空。";
+      }
     }
   } catch (e) {
     console.error("Failed to load relay models:", e);
+    relayModelsError.value = e.response?.data?.message || e.message || "模型列表读取失败。";
   } finally {
     loadingModels.value = false;
   }
@@ -2038,7 +2435,7 @@ async function toggleModelScene(model, scene, currentEnabled) {
   const newEnabled = !currentEnabled;
   try {
     await paperpilotApi.assignRelayModelToScene(activeRelay.value.id, model.id, scene, newEnabled);
-    
+
     const routeKey = `${activeRelay.value.providerName.toLowerCase()}|${activeRelay.value.baseUrl.toLowerCase()}`;
     const modelKey = `${routeKey}|${model.id}`;
     if (!assignedScenesMap.value[modelKey]) {
@@ -2053,9 +2450,10 @@ async function toggleModelScene(model, scene, currentEnabled) {
 }
 
 async function deleteRelay(relay) {
-  if (!confirm(`确定删除中转站 "${relay.providerName}" 吗？此操作将清除其在所有模块的模型池记录。`)) {
-    return;
-  }
+  const ok = await dialogStore.confirm(`确定删除中转站 "${relay.providerName}" 吗？此操作将清除其在所有模块的模型池记录。`, {
+    confirmText: "删除",
+  });
+  if (!ok) return;
   try {
     await paperpilotApi.deleteRelayRoute(relay.id);
     if (activeRelay.value?.id === relay.id) {
@@ -2069,8 +2467,8 @@ async function deleteRelay(relay) {
 }
 
 async function submitNewRelay() {
-  if (!newRelay.value.providerName || !newRelay.value.baseUrl || !newRelay.value.modelName) {
-    dialogStore.alert("请填写完整信息（名称、接口地址、默认模型）");
+  if (!newRelay.value.providerName || !newRelay.value.baseUrl) {
+    dialogStore.alert("请填写完整信息（商户名称、接口代理地址）");
     return;
   }
   submittingNewRelay.value = true;
@@ -2079,20 +2477,65 @@ async function submitNewRelay() {
       providerName: newRelay.value.providerName,
       baseUrl: newRelay.value.baseUrl,
       apiKey: newRelay.value.apiKey || "",
-      modelName: newRelay.value.modelName,
+      modelName: "gpt-4o", // Send "gpt-4o" under-the-hood so backend is happy
       scene: "general",
-      apiFormat: "openai_chat",
+      apiFormat: newRelay.value.apiFormat || "openai_chat",
       authType: "bearer",
       fullUrl: false
     };
     await paperpilotApi.saveModelConfig(payload);
     showAddRelayModal.value = false;
-    newRelay.value = { providerName: "", baseUrl: "", apiKey: "", modelName: "gpt-4o" };
+    newRelay.value = { providerName: "", baseUrl: "", apiKey: "", modelName: "gpt-4o", apiFormat: "openai_chat" };
     await loadRelays();
   } catch (e) {
     dialogStore.alert("保存失败: " + (e.response?.data?.message || e.message));
   } finally {
     submittingNewRelay.value = false;
+  }
+}
+
+function openEditRelayModal(relay) {
+  editRelay.value = {
+    id: relay.id,
+    providerName: relay.providerName,
+    baseUrl: relay.baseUrl,
+    apiKey: "", // placeholder for new key, empty by default
+    modelName: relay.modelName || "gpt-4o",
+    apiFormat: relay.apiFormat || "openai_chat",
+    authType: relay.authType || "bearer",
+    fullUrl: relay.fullUrl || false
+  };
+  showEditRelayModal.value = true;
+}
+
+async function submitEditRelayConfig() {
+  if (!editRelay.value.providerName || !editRelay.value.baseUrl) {
+    dialogStore.alert("请填写完整信息（名称、接口地址）");
+    return;
+  }
+  updatingRelay.value = true;
+  try {
+    const payload = {
+      providerName: editRelay.value.providerName,
+      baseUrl: editRelay.value.baseUrl,
+      apiKey: editRelay.value.apiKey || "",
+      modelName: "gpt-4o", // Send "gpt-4o" under-the-hood so backend is happy
+      scene: "general",
+      apiFormat: editRelay.value.apiFormat,
+      authType: editRelay.value.authType,
+      fullUrl: editRelay.value.fullUrl
+    };
+    await paperpilotApi.saveModelConfig(payload);
+    dialogStore.toast("配置更新成功！");
+    showEditRelayModal.value = false;
+    await loadRelays();
+    if (activeRelay.value && activeRelay.value.providerName === editRelay.value.providerName) {
+      activeRelay.value = relays.value.find(r => r.providerName === editRelay.value.providerName);
+    }
+  } catch (e) {
+    dialogStore.alert("更新失败: " + (e.response?.data?.message || e.message));
+  } finally {
+    updatingRelay.value = false;
   }
 }
 
@@ -2105,7 +2548,15 @@ async function loadScenePoolData() {
   if (!activePoolScene.value) return;
   loadingScenePool.value = true;
   try {
-    scenePoolData.value = await paperpilotApi.getModelPool(activePoolScene.value);
+    const rawData = await paperpilotApi.getModelPool(activePoolScene.value);
+    const activeRelayKeys = new Set(
+      relays.value.map(r => `${r.providerName.toLowerCase()}|${r.baseUrl.toLowerCase()}`)
+    );
+    scenePoolData.value = rawData.filter(item => {
+      if (item.template) return false;
+      const routeKey = `${item.providerName.toLowerCase()}|${item.baseUrl.toLowerCase()}`;
+      return activeRelayKeys.has(routeKey);
+    });
   } catch (e) {
     console.error("Failed to load scene pool:", e);
   } finally {
@@ -2117,7 +2568,15 @@ async function refreshScenePool() {
   if (!activePoolScene.value) return;
   loadingScenePool.value = true;
   try {
-    scenePoolData.value = await paperpilotApi.refreshModelPool(activePoolScene.value);
+    const rawData = await paperpilotApi.refreshModelPool(activePoolScene.value);
+    const activeRelayKeys = new Set(
+      relays.value.map(r => `${r.providerName.toLowerCase()}|${r.baseUrl.toLowerCase()}`)
+    );
+    scenePoolData.value = rawData.filter(item => {
+      if (item.template) return false;
+      const routeKey = `${item.providerName.toLowerCase()}|${item.baseUrl.toLowerCase()}`;
+      return activeRelayKeys.has(routeKey);
+    });
   } catch (e) {
     console.error("Failed to refresh scene pool:", e);
   } finally {
@@ -2140,7 +2599,10 @@ async function cleanupScenePool() {
 }
 
 async function removeScenePoolRoute(routeId) {
-  if (!confirm("确定将该节点移出此场景的可用列表吗？")) return;
+  const ok = await dialogStore.confirm("确定将该节点移出此场景的可用列表吗？", {
+    confirmText: "移出",
+  });
+  if (!ok) return;
   try {
     await paperpilotApi.assignModelPoolRoute(routeId, activePoolScene.value, false);
     await loadScenePoolData();
@@ -2151,12 +2613,148 @@ async function removeScenePoolRoute(routeId) {
 }
 
 watch(activeRelay, (newVal) => {
+  currentPage.value = 1;
+  modelSearchQuery.value = "";
+  modelSceneFilter.value = "all";
   if (newVal) {
     loadRelayModels(newVal);
   } else {
     relayModels.value = [];
+    relayModelsError.value = "";
   }
 });
+
+function getModelMetadata(modelId) {
+  if (!modelId) return { type: "文本", billing: "按量计费", desc: "通用模型", typeClass: "type-text" };
+  const id = modelId.toLowerCase();
+
+  // Default values
+  let type = "文本";
+  let billing = "输入 $0.0015 / 1K | 输出 $0.005 / 1K";
+  let desc = "通用大语言模型，支持文本对话、代码编写与推理";
+  let typeClass = "type-text";
+
+  // 1. Gemini
+  if (id.includes("gemini")) {
+    if (id.includes("flash")) {
+      if (id.includes("lite")) {
+        billing = "输入 $0.000075 / 1K | 输出 $0.0003 / 1K";
+        desc = "轻量级高性价比模型，极速响应，适合低成本任务";
+      } else {
+        billing = "输入 $0.000375 / 1K | 输出 $0.001125 / 1K";
+        desc = "快速且通用的多模态模型，在速度和性能间取得极佳平衡";
+      }
+    } else if (id.includes("pro")) {
+      billing = "输入 $0.00125 / 1K | 输出 $0.00375 / 1K";
+      desc = "Google 旗舰多模态模型，支持复杂推理、代码和高精度分析";
+    }
+    if (id.includes("image") || id.includes("vision")) {
+      type = "图像";
+      typeClass = "type-image";
+      desc = "专为图像生成、视觉理解与分析定制的模型";
+    } else if (id.includes("search")) {
+      type = "检索";
+      typeClass = "type-search";
+      desc = "内置官方搜索引擎组件，支持实时联网检索答疑";
+    } else {
+      type = "多模态";
+      typeClass = "type-multimodal";
+    }
+  }
+  // 2. GPT-4 / GPT-3 / GPT-5
+  else if (id.includes("gpt")) {
+    if (id.includes("gpt-4o-mini")) {
+      billing = "输入 $0.00015 / 1K | 输出 $0.0006 / 1K";
+      desc = "轻量级 GPT-4o 衍生版，速度极快，价格极其便宜";
+      type = "多模态";
+      typeClass = "type-multimodal";
+    } else if (id.includes("gpt-4o")) {
+      billing = "输入 $0.0025 / 1K | 输出 $0.010 / 1K";
+      desc = "OpenAI 旗舰智能模型，全方位顶尖表现，支持视觉分析";
+      type = "多模态";
+      typeClass = "type-multimodal";
+    } else if (id.includes("gpt-4")) {
+      billing = "输入 $0.03 / 1K | 输出 $0.06 / 1K";
+      desc = "经典 GPT-4 复杂推理模型，深度分析与代码逻辑专家";
+    } else if (id.includes("gpt-3.5")) {
+      billing = "输入 $0.0005 / 1K | 输出 $0.0015 / 1K";
+      desc = "快速稳定的 GPT-3.5 经典版本，适合简单文本处理";
+    } else if (id.includes("gpt-5")) {
+      billing = "输入 $0.005 / 1K | 输出 $0.015 / 1K";
+      desc = "新一代超大规模预训练模型，多语种与逻辑分析专家";
+    }
+  }
+  // 3. Claude
+  else if (id.includes("claude")) {
+    if (id.includes("sonnet")) {
+      billing = "输入 $0.003 / 1K | 输出 $0.015 / 1K";
+      desc = "Anthropic 旗舰模型，逻辑写作、代码生成及分析领域的行业标杆";
+      type = "多模态";
+      typeClass = "type-multimodal";
+    } else if (id.includes("haiku")) {
+      billing = "输入 $0.00025 / 1K | 输出 $0.00125 / 1K";
+      desc = "极速轻量级模型，适合高并发、低延迟的日常文本分类及提取";
+    } else if (id.includes("opus")) {
+      billing = "输入 $0.015 / 1K | 输出 $0.075 / 1K";
+      desc = "Claude 系列最强大脑，专攻高难度逻辑、科研解析与算法编写";
+    }
+  }
+  // 4. DeepSeek
+  else if (id.includes("deepseek")) {
+    if (id.includes("r1")) {
+      billing = "输入 ¥0.004 / 1K | 输出 ¥0.016 / 1K";
+      desc = "开源深度推理模型，数理逻辑与复杂推理能力媲美 o1";
+    } else if (id.includes("v3")) {
+      billing = "输入 ¥0.001 / 1K | 输出 ¥0.002 / 1K";
+      desc = "高效低成本大模型，常识问答与通用文本生成性价比极高";
+    } else if (id.includes("coder")) {
+      billing = "输入 ¥0.001 / 1K | 输出 ¥0.002 / 1K";
+      desc = "代码大模型，针对软件工程与算法生成深度优化";
+    }
+    if (id.includes("chat")) {
+      desc = "DeepSeek 官方对话优化版，响应迅速、中文能力极强";
+    }
+  }
+  // 5. Kimi
+  else if (id.includes("kimi") || id.includes("moonshot")) {
+    billing = "输入 ¥0.012 / 1K | 输出 ¥0.012 / 1K";
+    desc = "支持超长上下文关联的中文旗舰大模型，阅读长篇文献专家";
+  }
+  // 6. GLM / ChatGLM
+  else if (id.includes("glm") || id.includes("cogview")) {
+    if (id.includes("cogview") || id.includes("image")) {
+      type = "图像";
+      typeClass = "type-image";
+      billing = "单次计费 ¥0.1 / 张";
+      desc = "智谱 CogView 高保真图像理解与画面生成模型";
+    } else {
+      billing = "输入 ¥0.002 / 1K | 输出 ¥0.006 / 1K";
+      desc = "智谱清言最新对话大模型，学术翻译与中文语义对齐极佳";
+    }
+  }
+  // 7. Qwen / Tongyi
+  else if (id.includes("qwen")) {
+    if (id.includes("vl") || id.includes("audio")) {
+      type = "多模态";
+      typeClass = "type-multimodal";
+      billing = "输入 ¥0.008 / 1K | 输出 ¥0.008 / 1K";
+      desc = "通义千问视觉/语音多模态大模型，支持音视频及图像解析";
+    } else {
+      billing = "输入 ¥0.001 / 1K | 输出 ¥0.002 / 1K";
+      desc = "阿里开源通义千问旗舰级模型，中英文表现优异、覆盖广泛";
+    }
+  }
+
+  // Specific checks for image output/input
+  if (id.includes("dall") || id.includes("sdxl") || id.includes("flux") || id.includes("midjourney")) {
+    type = "图像";
+    typeClass = "type-image";
+    billing = "单次计费 $0.02 - $0.08 / 张";
+    desc = "顶级文生图/图生图扩散模型，用于生成高精度插画与海报";
+  }
+
+  return { type, billing, desc, typeClass };
+}
 
 async function openAllScenesPoolModal() {
   showAllScenesPoolModal.value = true;
@@ -2181,8 +2779,15 @@ function getPoolCount(scene) {
 
 async function testAllModelsSpeed() {
   if (!relayModels.value.length) return;
-  // Run all model speed tests in parallel
-  relayModels.value.forEach(model => testModelSpeed(model));
+  const queue = [...relayModels.value];
+  const concurrency = 4;
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    while (queue.length) {
+      const model = queue.shift();
+      if (model) await testModelSpeed(model);
+    }
+  });
+  await Promise.all(workers);
 }
 
 async function saveRelayConfig() {
@@ -2589,7 +3194,7 @@ async function publishSiteMessage() {
   siteMessagePublishing.value = true;
   try {
     await paperpilotApi.publishSiteMessage(newSiteMessage.value);
-    newSiteMessage.value = { title: "", content: "", messageType: "notice" };
+    newSiteMessage.value = { title: "", content: "", messageType: "notice", imageUrl: "" };
     siteMessages.value = await paperpilotApi.getAdminSiteMessages();
     window.dispatchEvent(new Event("paperpilot:site-messages-changed"));
   } catch (error) {
@@ -2597,6 +3202,34 @@ async function publishSiteMessage() {
   } finally {
     siteMessagePublishing.value = false;
   }
+}
+
+async function handleMessageImageUpload(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  if (!file.type?.startsWith("image/")) {
+    dialogStore.alert("请选择有效的图片文件。");
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    dialogStore.alert("图片文件不能超过 2MB，请压缩后上传。");
+    return;
+  }
+  try {
+    const reader = new FileReader();
+    reader.onload = () => {
+      newSiteMessage.value.imageUrl = reader.result;
+    };
+    reader.readAsDataURL(file);
+  } catch (err) {
+    console.error("Failed to read image:", err);
+    dialogStore.alert("读取图片失败");
+  }
+}
+
+function clearMessageImage() {
+  newSiteMessage.value.imageUrl = "";
 }
 
 async function toggleSiteMessage(message) {
@@ -2820,8 +3453,8 @@ function formatTokenCount(num) {
 }
 
 .admin-shell {
-  max-width: min(1560px, 100%);
-  margin: 0 auto;
+  max-width: 100%;
+  width: 100%;
 }
 
 .admin-header {
@@ -3283,113 +3916,131 @@ function formatTokenCount(num) {
   background-color: rgba(74, 222, 128, 0.02);
 }
 
-.campus-review-list {
-  display: grid;
-  gap: 14px;
-  padding: 18px;
-  border-radius: 16px;
+/* ── Campus Verification Table Custom Elements ── */
+.campus-user-info strong,
+.campus-school-info strong {
+  display: block;
+  font-size: 0.88rem;
+  color: var(--spatial-graphite, #1e293b);
 }
 
-.campus-review-row {
-  display: grid;
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid rgba(15, 23, 42, .08);
-  border-radius: 14px;
-  background: #ffffff;
+:global([data-theme="dark"] .campus-user-info strong),
+:global([data-theme="dark"] .campus-school-info strong) {
+  color: #e2e8f0 !important;
 }
 
-.campus-review-row.status-pending {
-  border-color: rgba(20, 184, 166, .28);
-  background: linear-gradient(135deg, #ecfdf8, #fff);
-}
-
-.campus-review-row.status-approved {
-  border-color: rgba(34, 197, 94, .22);
-  background: linear-gradient(135deg, #f0fdf4, #fff);
-}
-
-.campus-review-row.status-rejected {
-  background: linear-gradient(135deg, #fff1f2, #fff);
-  border-color: rgba(244, 63, 94, .2);
-}
-
-.campus-review-row header {
+.campus-thumbs-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  align-items: center;
+  gap: 8px;
 }
 
-.campus-review-row header span,
-.campus-review-row small,
-.campus-review-row em {
-  display: block;
-  color: #64748b;
-  font-size: .76rem;
-  line-height: 1.5;
-  font-style: normal;
+.campus-thumb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.02);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
 }
 
-.campus-review-row strong {
-  display: block;
-  margin: 4px 0;
-  color: #0f172a;
-  font-size: 1rem;
-}
-
-.campus-review-row header b {
-  flex: 0 0 auto;
-  padding: 5px 10px;
-  border-radius: 999px;
-  color: #0f766e;
-  background: #ccfbf1;
-  font-size: .75rem;
-}
-
-.campus-review-row.status-approved header b {
-  color: #15803d;
-  background: #dcfce7;
-}
-
-.campus-review-row.status-rejected header b {
-  color: #be123c;
-  background: #ffe4e6;
-}
-
-.campus-card-preview-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.campus-card-preview-grid figure {
-  margin: 0;
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #f8fafc;
-}
-
-.campus-image-button {
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: zoom-in;
-}
-
-.campus-card-preview-grid img {
-  width: 100%;
-  height: 180px;
-  display: block;
+.campus-thumb-btn img {
+  width: 24px;
+  height: 24px;
   object-fit: cover;
+  border-radius: 4px;
 }
 
-.campus-card-preview-grid figcaption {
-  padding: 8px 10px;
-  color: #64748b;
-  font-size: .76rem;
+.campus-thumb-btn span {
+  font-size: 0.72rem;
+  color: var(--spatial-graphite, #1e293b);
+  font-weight: 500;
+}
+
+.campus-thumb-btn:hover {
+  background: rgba(59, 130, 246, 0.06);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+:global([data-theme="dark"] .campus-thumb-btn) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+:global([data-theme="dark"] .campus-thumb-btn span) {
+  color: #cbd5e1 !important;
+}
+
+:global([data-theme="dark"] .campus-thumb-btn:hover) {
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.campus-note-text {
+  max-width: 180px;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: var(--spatial-graphite, #1e293b);
+}
+
+:global([data-theme="dark"] .campus-note-text) {
+  color: #94a3b8 !important;
+}
+
+/* Campus status badges */
+.campus-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.campus-status-badge.pending {
+  background: rgba(245, 158, 11, 0.08);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.15);
+}
+
+.campus-status-badge.approved {
+  background: rgba(16, 185, 129, 0.08);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.campus-status-badge.rejected {
+  background: rgba(239, 68, 68, 0.08);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+/* Dark mode overrides for campus badges */
+:global([data-theme="dark"] .campus-status-badge.pending) {
+  background: rgba(245, 158, 11, 0.12) !important;
+  color: #f59e0b !important;
+  border-color: rgba(245, 158, 11, 0.2) !important;
+}
+
+:global([data-theme="dark"] .campus-status-badge.approved) {
+  background: rgba(16, 185, 129, 0.12) !important;
+  color: #10b981 !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+:global([data-theme="dark"] .campus-status-badge.rejected) {
+  background: rgba(239, 68, 68, 0.12) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
 }
 
 .campus-image-overlay {
@@ -3825,26 +4476,37 @@ function formatTokenCount(num) {
 
 @media (max-width: 720px) {
   .admin-shell {
-    padding-inline: 18px;
+    padding-inline: 4px;
   }
 
   .admin-page {
-    padding: 168px 14px 36px;
+    padding: 20px 14px 36px !important;
   }
 
-  .admin-page.admin-sidebar-collapsed {
-    padding-left: 14px;
+  .admin-main-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-top: 24px;
   }
 
   .admin-side-nav,
   .admin-side-nav.collapsed {
-    top: 82px;
-    left: 14px;
-    right: 14px;
-    bottom: auto;
-    width: auto;
-    height: 68px;
-    border-radius: 20px;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05) !important;
+    margin-bottom: 8px !important;
+    backdrop-filter: none !important;
+  }
+
+  :global([data-theme="dark"] .admin-side-nav) {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  .admin-side-toggle {
+    display: none !important;
   }
 
   .admin-side-brand {
@@ -3852,39 +4514,71 @@ function formatTokenCount(num) {
   }
 
   .admin-side-tabs {
-    flex-direction: row;
-    padding: 10px;
-    overflow-x: auto;
+    flex-direction: row !important;
+    padding: 8px !important;
+    overflow-x: auto !important;
+    gap: 8px !important;
+    scrollbar-width: none;
+  }
+
+  .admin-side-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .admin-side-tab,
   .admin-side-nav.collapsed .admin-side-tab {
-    flex: 0 0 auto;
-    width: auto;
-    justify-content: flex-start;
-    min-height: 46px;
-    padding: 0 12px;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    justify-content: center !important;
+    min-height: 40px !important;
+    padding: 8px 14px !important;
   }
 
   .admin-side-nav.collapsed .admin-side-icon,
   .admin-side-icon {
-    width: 30px;
-    height: 30px;
+    width: 20px;
+    height: 20px;
+    margin: 0 !important;
   }
 
   .admin-side-label {
-    display: inline;
+    display: inline !important;
+    font-size: 0.8rem;
   }
 
   .admin-header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 14px;
+    align-items: flex-start !important;
+    flex-direction: column !important;
+    gap: 16px !important;
   }
 
   .admin-header h2 {
-    max-width: 8em;
-    font-size: 2rem;
+    max-width: 100% !important;
+    font-size: 1.8rem !important;
+  }
+
+  .header-right {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    width: 100% !important;
+    gap: 10px !important;
+  }
+
+  .compact-stats-bar {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  /* Toolbar styling for small viewports */
+  .search-filter-toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .search-filter-toolbar > div {
+    width: 100% !important;
   }
 
   .admin-tabs-nav {
@@ -3899,7 +4593,7 @@ function formatTokenCount(num) {
   }
 
   .team-detail-summary {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 }
 
@@ -4605,25 +5299,29 @@ function formatTokenCount(num) {
 }
 
 .admin-modal-card.team-detail-modal {
-  width: min(1240px, calc(100vw - 64px));
-  max-width: 1240px;
-  min-height: 560px;
-  max-height: 88vh;
-  overflow: auto;
-  padding: 36px 40px;
-  background: #ffffff;
+  width: min(1180px, calc(100vw - 48px)) !important;
+  max-width: 1180px !important;
+  min-height: 480px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 24px 32px;
 }
 
-.admin-modal-card.team-detail-modal.spatial-glass-panel {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+.admin-modal-card.team-detail-modal .modal-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 @media (max-width: 720px) {
   .admin-modal-card.team-detail-modal {
-    width: calc(100vw - 24px);
+    width: calc(100vw - 24px) !important;
     min-height: auto;
-    padding: 24px 18px;
+    padding: 20px 16px;
   }
 }
 
@@ -5878,8 +6576,8 @@ function formatTokenCount(num) {
 
 /* Modals layout customization */
 .scene-pool-modal-card {
-  max-width: 580px;
-  width: 90%;
+  max-width: 820px;
+  width: 95%;
 }
 
 .pool-modal-actions {
@@ -5890,120 +6588,196 @@ function formatTokenCount(num) {
   padding-bottom: 14px;
 }
 
-.pool-nodes-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.pool-table-wrap {
+  width: 100%;
   max-height: 400px;
   overflow-y: auto;
-  padding-right: 4px;
+  margin-top: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: opacity 0.25s ease;
 }
 
-.pool-node-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid var(--spatial-line);
-  background: var(--spatial-surface-2);
-  transition: all 0.2s ease;
+.pool-table-wrap.pool-table-refreshing {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
-.pool-node-item.available {
-  border-left: 4px solid #34c759;
+:global([data-theme="dark"] .pool-table-wrap) {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  background: rgba(255, 255, 255, 0.01);
 }
 
-.pool-node-item.failed,
-.pool-node-item.auth_error,
-.pool-node-item.timeout {
-  border-left: 4px solid #ff3b30;
+.spatial-pool-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  text-align: left;
 }
 
-.node-main-info {
+.spatial-pool-table th {
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+:global([data-theme="dark"] .spatial-pool-table th) {
+  color: #8fa0b5 !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.spatial-pool-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  vertical-align: middle;
+  color: var(--spatial-graphite, #1e293b);
+}
+
+:global([data-theme="dark"] .spatial-pool-table td) {
+  border-bottom-color: rgba(255, 255, 255, 0.04) !important;
+  color: #cbd5e1 !important;
+}
+
+.spatial-pool-table tr:last-child td {
+  border-bottom: none;
+}
+
+.spatial-pool-table tbody tr:hover {
+  background: rgba(59, 130, 246, 0.02);
+}
+
+:global([data-theme="dark"] .spatial-pool-table tbody tr:hover) {
+  background: rgba(59, 130, 246, 0.04) !important;
+}
+
+.provider-info-cell {
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  gap: 2px;
+  gap: 3px;
+  max-width: 380px; /* Allow wider content to prevent overflow and wrap text */
 }
 
-.node-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.node-title strong {
+.provider-info-cell strong {
   font-size: 0.88rem;
-  color: var(--spatial-graphite);
+  color: var(--spatial-graphite, #1e293b);
 }
 
-.model-badge {
+:global([data-theme="dark"] .provider-info-cell strong) {
+  color: #e2e8f0 !important;
+}
+
+.provider-info-cell .url-hint {
   font-size: 0.72rem;
-  background: var(--spatial-warm-2);
-  color: var(--spatial-silver);
-  padding: 2px 6px;
-  border-radius: 4px;
+  color: #94a3b8;
   font-family: monospace;
-}
-
-.node-badge {
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.node-badge.active-tag {
-  background: rgba(37, 99, 235, 0.12);
-  color: var(--spatial-accent);
-}
-
-.node-url {
-  font-size: 0.72rem;
-  color: var(--spatial-silver);
   word-break: break-all;
 }
 
-.node-message {
-  font-size: 0.7rem;
-  color: #ff3b30;
-  margin-top: 2px;
+/* Node Error Message */
+.node-error-message {
+  display: block;
+  font-size: 0.72rem;
+  color: #ef4444;
+  margin-top: 4px;
+  line-height: 1.35;
+  word-break: break-all;
+  white-space: pre-wrap;
 }
 
-.node-metrics {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
+:global([data-theme="dark"] .node-error-message) {
+  color: #f87171 !important;
 }
 
-.node-latency {
+.spatial-pool-table code {
+  font-family: monospace;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 3px 6px;
+  border-radius: 4px;
   font-size: 0.8rem;
+  color: #2563eb;
+}
+
+:global([data-theme="dark"] .spatial-pool-table code) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #60a5fa !important;
+}
+
+.spatial-pool-table .node-latency {
   font-weight: 700;
-  color: #34c759;
+  color: #22c55e;
+  font-size: 0.85rem;
 }
 
-.node-latency.error {
-  color: #ff3b30;
+.spatial-pool-table .node-latency.error {
+  color: #ef4444;
 }
 
-.node-remove-btn {
-  background: transparent;
-  border: 0;
-  color: var(--spatial-silver);
-  font-size: 1.2rem;
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.status-badge.available {
+  color: #22c55e;
+}
+
+.status-badge.unavailable {
+  color: #ef4444;
+}
+
+.status-badge::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pool-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.04);
+  color: #ef4444;
   cursor: pointer;
-  padding: 0 4px;
-  display: grid;
-  place-items: center;
-  transition: color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
-.node-remove-btn:hover {
-  color: #ff3b30;
+.pool-cancel-btn:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.2);
 }
+
+:global([data-theme="dark"] .pool-cancel-btn) {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.25) !important;
+  color: #f87171 !important;
+}
+
+:global([data-theme="dark"] .pool-cancel-btn:hover) {
+  background: #ef4444 !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+
 
 /* Sidebar Toggle Overlay */
 .admin-side-toggle {
@@ -6047,8 +6821,14 @@ function formatTokenCount(num) {
 .models-pane-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.models-pane-header-left {
+  flex-shrink: 0;
 }
 
 .models-pane-header h3 {
@@ -6064,6 +6844,108 @@ function formatTokenCount(num) {
   font-size: 0.9rem;
   color: var(--spatial-silver);
   margin: 4px 0 0 0;
+}
+
+/* Scene pool status bar */
+.scene-pool-status-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  padding-top: 6px;
+}
+
+.scene-status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  min-width: 88px;
+}
+
+.scene-status-card:hover {
+  background: rgba(59, 130, 246, 0.06);
+  border-color: rgba(59, 130, 246, 0.2);
+  transform: translateY(-1px);
+}
+
+:global([data-theme="dark"] .scene-status-card) {
+  background: rgba(16, 26, 46, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+:global([data-theme="dark"] .scene-status-card:hover) {
+  background: rgba(37, 60, 110, 0.5) !important;
+  border-color: rgba(59, 130, 246, 0.25) !important;
+}
+
+.scene-status-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.scene-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.scene-status-dot.active {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+  animation: pulse-green 2s infinite;
+}
+
+.scene-status-dot.inactive {
+  background: #374151;
+}
+
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 4px rgba(34, 197, 94, 0.5); }
+  50% { box-shadow: 0 0 10px rgba(34, 197, 94, 0.9); }
+}
+
+.scene-status-name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+:global([data-theme="dark"] .scene-status-name) {
+  color: #7a90aa !important;
+}
+
+.scene-status-count {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.scene-status-count strong {
+  font-size: 1.2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: #1e293b;
+}
+
+:global([data-theme="dark"] .scene-status-count strong) {
+  color: #e2e8f0 !important;
+}
+
+.scene-status-count span {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  font-weight: 500;
 }
 
 .models-two-col-layout {
@@ -6093,9 +6975,9 @@ function formatTokenCount(num) {
 }
 
 .providers-column {
-  min-height: 480px;
   display: flex;
   flex-direction: column;
+  align-self: start;
 }
 
 .config-card-panel {
@@ -6345,83 +7227,136 @@ function formatTokenCount(num) {
 }
 
 .scene-assignments-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border-top: 1px solid var(--spatial-line);
-  padding-top: 12px;
-  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 10px;
+  margin-top: 6px;
 }
 
 .assign-label-tag {
-  font-size: 0.8rem;
+  display: block;
+  font-size: 0.65rem;
   font-weight: 700;
-  color: var(--spatial-gray);
-  margin-bottom: 6px;
+  color: #3d5068;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
 }
 
 .checkbox-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
+/* ── Premium toggleable chip (Linear / Vercel style) ── */
 .scene-checkbox-label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.78rem;
-  color: var(--spatial-silver);
+  gap: 5px;
+  font-size: 0.73rem;
+  font-weight: 500;
+  color: #4a5a72;
   cursor: pointer;
   user-select: none;
+  padding: 4px 10px 4px 8px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  white-space: nowrap;
+  line-height: 1.5;
+  position: relative;
+}
+
+/* Checkmark icon (hidden by default, revealed on check) */
+.scene-checkbox-label::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: transparent;
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+  transition: background 0.18s ease, border-color 0.18s ease;
+  position: relative;
+  top: 0;
+}
+
+.scene-checkbox-label:hover:not(.disabled) {
+  border-color: rgba(99, 130, 200, 0.25);
+  color: #7a93b8;
+  background: rgba(59, 130, 246, 0.04);
 }
 
 .scene-checkbox-label.checked {
-  color: var(--spatial-graphite);
-  font-weight: 600;
+  background: rgba(37, 99, 235, 0.18) !important;
+  border-color: rgba(59, 130, 246, 0.45) !important;
+  color: #93c5fd !important;
+  font-weight: 600 !important;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.1) !important;
+}
+
+.scene-checkbox-label.checked::before {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  /* SVG checkmark via mask */
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 10 10' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 5.5l2.5 2.5 3.5-5' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 10 10' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 5.5l2.5 2.5 3.5-5' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  -webkit-mask-size: cover;
+  mask-size: cover;
 }
 
 .scene-checkbox-label.disabled {
-  opacity: 0.5;
+  opacity: 0.3;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
-/* Custom Checkbox Design matching screenshot */
+/* Completely hide the native checkbox input */
 .scene-checkbox-label input[type="checkbox"] {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  border: 2px solid rgba(148, 163, 184, 0.4);
-  background: rgba(15, 23, 42, 0.2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  outline: none;
-  margin: 0;
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Error message container - contained & truncated */
+.model-speed-error-container {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 8px;
+  overflow: hidden;
   flex-shrink: 0;
 }
 
-.scene-checkbox-label input[type="checkbox"]:checked {
-  background: #3b82f6;
-  border-color: #3b82f6;
+.model-speed-error-summary {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  font-size: 0.72rem;
+  color: #f87171;
+  cursor: pointer;
+  gap: 4px;
+  transition: background 0.15s ease;
 }
 
-.scene-checkbox-label input[type="checkbox"]:checked::after {
-  content: "";
-  position: absolute;
-  width: 4px;
-  height: 8px;
-  border: 2px solid #ffffff;
-  border-left: 0;
-  border-top: 0;
-  transform: rotate(45deg);
-  top: 1px;
-  left: 4px;
+.model-speed-error-summary:hover {
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.model-speed-error-detail {
+  padding: 6px 8px;
+  font-size: 0.68rem;
+  color: #fca5a5;
+  border-top: 1px solid rgba(239, 68, 68, 0.1);
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  max-height: 80px;
+  overflow-y: auto;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 /* Pool Quick Access Styles */
@@ -6673,7 +7608,8 @@ function formatTokenCount(num) {
 }
 
 .admin-shell {
-  max-width: 1500px;
+  max-width: 100%;
+  width: 100%;
 }
 
 .admin-header {
@@ -6793,19 +7729,45 @@ function formatTokenCount(num) {
   background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
   color: #ffffff !important;
   border-radius: 8px !important;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2) !important;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease !important;
 }
 
 :global([data-theme="dark"] .save-config-btn:hover),
 :global([data-theme="dark"] .spatial-btn-accent:hover) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3) !important;
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4) !important;
+}
+
+:global([data-theme="dark"] .spatial-btn-ghost) {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #cbd5e1 !important;
+  border-radius: 8px !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: none !important;
+}
+
+:global([data-theme="dark"] .spatial-btn-ghost:hover:not(:disabled)) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+  transform: translateY(-1.5px) !important;
+}
+
+:global([data-theme="dark"] .spatial-btn-ghost:disabled) {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
 }
 
 .models-two-col-layout {
   grid-template-columns: minmax(280px, 0.92fr) minmax(520px, 1.6fr);
   gap: 22px;
+  transition: grid-template-columns 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.models-two-col-layout.providers-collapsed {
+  grid-template-columns: 88px minmax(520px, 1fr);
 }
 
 .providers-column,
@@ -6815,7 +7777,42 @@ function formatTokenCount(num) {
 }
 
 .providers-column {
-  min-height: 470px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  align-self: start;
+}
+
+.providers-collapsed .providers-column {
+  padding: 20px 8px !important;
+}
+
+.provider-item-card.collapsed-item {
+  justify-content: center !important;
+  padding: 8px !important;
+  width: 44px;
+  height: 44px;
+  border-radius: 50% !important;
+  margin: 0 auto;
+}
+
+.provider-avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+:global([data-theme="dark"] .provider-item-card.collapsed-item.active .provider-avatar-circle) {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.5) !important;
 }
 
 :global([data-theme="dark"] .providers-column .column-header),
@@ -6825,10 +7822,51 @@ function formatTokenCount(num) {
 }
 
 :global([data-theme="dark"] .add-provider-btn) {
-  background: #111d2e !important;
-  border: 1px solid #294062 !important;
-  color: #75a7ff !important;
-  border-radius: 8px !important;
+  background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
+  border: none !important;
+  color: #ffffff !important;
+  border-radius: 6px !important;
+  padding: 4px 10px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25) !important;
+  transition: all 0.2s ease !important;
+}
+
+:global([data-theme="dark"] .add-provider-btn:hover) {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4) !important;
+}
+
+.provider-card-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.provider-action-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: inline-grid;
+  place-items: center;
+  transition: all 0.2s ease;
+}
+
+:global([data-theme="dark"] .provider-action-btn.edit-btn) {
+  color: #94a3b8 !important;
+}
+:global([data-theme="dark"] .provider-action-btn.edit-btn:hover) {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: #3b82f6 !important;
+}
+
+:global([data-theme="dark"] .provider-action-btn.delete-btn) {
+  color: #94a3b8 !important;
+}
+:global([data-theme="dark"] .provider-action-btn.delete-btn:hover) {
+  background: rgba(239, 68, 68, 0.08) !important;
+  color: #f87171 !important;
 }
 
 :global([data-theme="dark"] .provider-item-card) {
@@ -6839,11 +7877,11 @@ function formatTokenCount(num) {
 }
 
 :global([data-theme="dark"] .model-dashboard-card) {
-  background: #0d1527 !important;
-  border: 1px solid #1f2d47 !important;
+  background: linear-gradient(135deg, #111a2d 0%, #09101f 100%) !important;
+  border: 1px solid rgba(59, 130, 246, 0.15) !important;
   border-radius: 16px !important;
-  box-shadow: none !important;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s ease, box-shadow 0.25s ease !important;
 }
 
 :global([data-theme="dark"] .provider-item-card.active) {
@@ -6858,9 +7896,17 @@ function formatTokenCount(num) {
 }
 
 :global([data-theme="dark"] .model-dashboard-card:hover) {
-  transform: translateY(-2px);
-  border-color: #2e3e5c !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25) !important;
+  transform: translateY(-4px) !important;
+  border-color: rgba(59, 130, 246, 0.45) !important;
+  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.18), 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+:global([data-theme="dark"] .model-name-id) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 0.92rem !important;
+  font-weight: 700 !important;
+  color: #f1f5f9 !important;
+  letter-spacing: -0.02em !important;
 }
 
 :global([data-theme="dark"] .spatial-input),
@@ -6882,38 +7928,52 @@ function formatTokenCount(num) {
   gap: 14px;
 }
 
-.model-badge-provider {
-  background: transparent !important;
-  border: 0 !important;
-  padding: 0 !important;
-  color: #6ea1ff !important;
+:global([data-theme="dark"] .model-badge-provider) {
+  font-size: 0.7rem !important;
+  font-weight: 700 !important;
+  color: #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.08) !important;
+  border: 1px solid rgba(59, 130, 246, 0.2) !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  display: inline-block !important;
+  margin-top: 4px !important;
 }
 
 :global([data-theme="dark"] .model-speed-pill-new) {
-  background: rgba(148, 163, 184, 0.05) !important;
-  border: 1px solid rgba(148, 163, 184, 0.2) !important;
-  border-radius: 99px !important;
-  color: #8c98aa !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 6px !important;
+  color: #94a3b8 !important;
+  padding: 4px 10px !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+:global([data-theme="dark"] .model-speed-pill-new:hover:not(:disabled)) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
 }
 
 :global([data-theme="dark"] .model-speed-pill-new.success),
 :global([data-theme="dark"] .latency-text) {
-  background: rgba(69, 224, 131, 0.06) !important;
-  border: 1px solid rgba(69, 224, 131, 0.25) !important;
-  color: #45e083 !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  color: #34d399 !important;
 }
 
 :global([data-theme="dark"] .model-speed-pill-new.error),
 :global([data-theme="dark"] .latency-text.error) {
-  background: rgba(255, 107, 107, 0.06) !important;
-  border: 1px solid rgba(255, 107, 107, 0.25) !important;
-  color: #ff6b6b !important;
+  background: rgba(239, 68, 68, 0.1) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  color: #f87171 !important;
 }
 
 :global([data-theme="dark"] .model-speed-pill-new.testing) {
-  background: rgba(59, 130, 246, 0.06) !important;
-  border: 1px solid rgba(59, 130, 246, 0.25) !important;
-  color: #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.1) !important;
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  color: #60a5fa !important;
 }
 
 :global([data-theme="dark"] .module-route-table strong) {
@@ -6929,13 +7989,14 @@ function formatTokenCount(num) {
 }
 
 :global([data-theme="dark"] .scene-checkbox-label input[type="checkbox"]) {
-  border-color: #334155 !important;
-  background: #0f172a !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  background: transparent !important;
 }
 
 :global([data-theme="dark"] .scene-checkbox-label input[type="checkbox"]:checked) {
   background: #3b82f6 !important;
   border-color: #3b82f6 !important;
+  box-shadow: 0 0 5px rgba(59, 130, 246, 0.6) !important;
 }
 
 .module-route-table {
@@ -7102,5 +8163,896 @@ function formatTokenCount(num) {
   .admin-page {
     padding: 24px 18px 32px;
   }
+}
+
+/* ── Screenshot-style redesign ── */
+
+/* Provider info banner at top of right panel */
+.relay-info-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.05);
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  margin-bottom: 16px;
+}
+
+:global([data-theme="dark"] .relay-info-banner) {
+  background: rgba(20, 35, 65, 0.7) !important;
+  border-color: rgba(59, 130, 246, 0.18) !important;
+}
+
+.relay-info-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.relay-info-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  line-height: 1.3;
+}
+
+.relay-info-dash {
+  color: #4a5a7a;
+  margin: 0 2px;
+}
+
+.relay-info-subtitle {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #7a9ac8;
+}
+
+.relay-info-url {
+  font-size: 0.75rem;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.relay-info-url code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.73rem;
+}
+
+.relay-info-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Models subheader with search and filter */
+.models-subheader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+:global([data-theme="dark"] .models-subheader) {
+  border-bottom-color: #1a2740 !important;
+}
+
+.models-filters-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.models-filters-right {
+  flex-shrink: 0;
+}
+
+/* Search Box */
+.model-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.model-search-box .search-icon {
+  position: absolute;
+  left: 10px;
+  width: 14px;
+  height: 14px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.spatial-search-input {
+  width: 200px;
+  height: 32px;
+  padding: 0 30px 0 30px;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.01);
+  color: var(--spatial-graphite, #1e293b);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.spatial-search-input:focus {
+  background: #ffffff;
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+:global([data-theme="dark"] .spatial-search-input) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  color: #f1f5f9 !important;
+}
+
+:global([data-theme="dark"] .spatial-search-input:focus) {
+  background: rgba(15, 25, 45, 0.8) !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 8px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+
+.clear-search-btn:hover {
+  color: #64748b;
+}
+
+/* Filter Dropdown Box */
+.model-filter-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-filter-box .filter-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+:global([data-theme="dark"] .model-filter-box .filter-label) {
+  color: #8fa0b5 !important;
+}
+
+.spatial-filter-select {
+  height: 32px;
+  padding: 0 24px 0 10px;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.01);
+  color: var(--spatial-graphite, #1e293b);
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.spatial-filter-select:focus,
+.spatial-filter-select:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+:global([data-theme="dark"] .spatial-filter-select) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(15, 25, 45, 0.6) !important;
+  color: #cbd5e1 !important;
+}
+
+:global([data-theme="dark"] .spatial-filter-select:focus) {
+  border-color: rgba(59, 130, 246, 0.4) !important;
+}
+
+.models-count-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #6b7c9a;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.models-count-label em {
+  font-style: normal;
+  color: #60a5fa;
+  font-weight: 700;
+  margin-left: 3px;
+}
+
+
+/* Model card top row: name left, speed pill right */
+.model-card-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.model-card-top-row .model-name-id {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-card-top-row .model-speed-pill-new {
+  flex-shrink: 0;
+}
+
+/* Provider badge sits just below name */
+.model-dashboard-card > .model-badge-provider {
+  align-self: flex-start;
+  margin-top: -4px;
+}
+
+/* Tighten card gaps */
+:global([data-theme="dark"] .model-dashboard-card) {
+  gap: 10px !important;
+}
+
+/* Slightly adjust two-col layout widths to be closer to screenshot */
+.models-two-col-layout {
+  grid-template-columns: 230px 1fr !important;
+  gap: 18px !important;
+}
+
+.models-two-col-layout.providers-collapsed {
+  grid-template-columns: 72px 1fr !important;
+}
+
+/* Provider item cards – tighter, more like screenshot */
+.provider-item-card {
+  padding: 10px 12px !important;
+  border-radius: 10px !important;
+}
+
+.provider-name {
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+}
+
+.provider-url {
+  font-size: 0.68rem !important;
+  max-width: 160px;
+}
+
+/* Providers list gap tighter */
+.providers-list {
+  gap: 6px !important;
+}
+
+/* Remove the old column-header margin from models-grid-panel header since we use banner now */
+.models-grid-panel .column-header {
+  display: none !important;
+}
+
+.model-load-error {
+  max-width: 560px;
+  margin: 10px auto 0;
+  color: #fca5a5;
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.model-empty-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+/* ── Global modal close button ── */
+.modal-close {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 7px !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: #64748b !important;
+  font-size: 1.1rem !important;
+  line-height: 1 !important;
+  cursor: pointer;
+  transition: all 0.18s ease !important;
+  flex-shrink: 0;
+}
+
+.modal-close:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-color: rgba(239, 68, 68, 0.25) !important;
+  color: #f87171 !important;
+}
+
+/* Dark mode modal-header universal style */
+:global([data-theme="dark"] .modal-header) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  border-bottom: 1px solid #1a2740 !important;
+  padding-bottom: 14px !important;
+  margin-bottom: 18px !important;
+}
+
+:global([data-theme="dark"] .modal-header h5),
+:global([data-theme="dark"] .modal-header .modal-title) {
+  color: #dde5f0 !important;
+  margin: 0 !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+}
+
+/* ── Collapse providers button ── */
+.collapse-providers-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #4a5a72;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.collapse-providers-btn:hover {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+:global([data-theme="dark"] .collapse-providers-btn) {
+  border-color: rgba(255, 255, 255, 0.07) !important;
+  background: rgba(15, 25, 45, 0.6) !important;
+  color: #4a5a72 !important;
+}
+
+:global([data-theme="dark"] .collapse-providers-btn:hover) {
+  background: rgba(37, 70, 130, 0.3) !important;
+  border-color: rgba(59, 130, 246, 0.25) !important;
+  color: #7eb3ff !important;
+}
+
+/* ── Models Pagination Redesign ── */
+.models-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 32px;
+  padding: 16px 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+:global([data-theme="dark"] .models-pagination) {
+  border-top-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.models-page-size-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.spatial-page-size-select {
+  height: 34px;
+  padding: 0 28px 0 10px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.02);
+  color: var(--spatial-graphite, #1e293b);
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.spatial-page-size-select:focus,
+.spatial-page-size-select:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.02);
+}
+
+:global([data-theme="dark"] .spatial-page-size-select) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  color: #cbd5e1 !important;
+}
+
+:global([data-theme="dark"] .spatial-page-size-select:focus) {
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  background: rgba(59, 130, 246, 0.08) !important;
+}
+
+.pagination-pages {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pagination-arrow-btn,
+.pagination-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.02);
+  color: var(--spatial-graphite, #1e293b);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.pagination-arrow-btn {
+  padding: 0 14px;
+}
+
+.pagination-page-btn {
+  width: 32px;
+  padding: 0;
+}
+
+.pagination-arrow-btn:disabled,
+.pagination-page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: rgba(0, 0, 0, 0.04) !important;
+  background: transparent !important;
+  color: #94a3b8 !important;
+}
+
+.pagination-arrow-btn:not(:disabled):hover,
+.pagination-page-btn:not(:disabled):hover {
+  background: rgba(59, 130, 246, 0.06);
+  border-color: rgba(59, 130, 246, 0.2);
+  color: #2563eb;
+}
+
+.pagination-page-btn.active {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
+}
+
+.pagination-page-btn.separator {
+  border-color: transparent !important;
+  background: transparent !important;
+  cursor: default;
+  color: #94a3b8;
+  width: 20px;
+}
+
+/* Dark Mode Overrides for Pagination */
+:global([data-theme="dark"] .pagination-arrow-btn),
+:global([data-theme="dark"] .pagination-page-btn) {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  color: #cbd5e1 !important;
+}
+
+:global([data-theme="dark"] .pagination-arrow-btn:disabled),
+:global([data-theme="dark"] .pagination-page-btn:disabled) {
+  opacity: 0.3;
+  border-color: rgba(255, 255, 255, 0.03) !important;
+  background: transparent !important;
+  color: #475569 !important;
+}
+
+:global([data-theme="dark"] .pagination-arrow-btn:not(:disabled):hover),
+:global([data-theme="dark"] .pagination-page-btn:not(:disabled):hover) {
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+  color: #60a5fa !important;
+}
+
+:global([data-theme="dark"] .pagination-page-btn.active) {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25) !important;
+}
+
+/* ── Team Details Modal Redesign ── */
+.team-detail-modal {
+  /* Dimensions are controlled by .admin-modal-card.team-detail-modal for specificity */
+}
+
+.team-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.team-detail-summary .summary-card {
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+:global([data-theme="dark"] .team-detail-summary .summary-card) {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.team-detail-summary .summary-card span {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+:global([data-theme="dark"] .team-detail-summary .summary-card span) {
+  color: #8fa0b5 !important;
+}
+
+.team-detail-summary .summary-card strong {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--spatial-graphite, #1e293b);
+}
+
+:global([data-theme="dark"] .team-detail-summary .summary-card strong) {
+  color: #f1f5f9 !important;
+}
+
+.team-detail-summary .summary-card code {
+  font-family: monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+
+:global([data-theme="dark"] .team-detail-summary .summary-card code) {
+  color: #60a5fa !important;
+  background: rgba(96, 165, 250, 0.08) !important;
+}
+
+/* Members Table wrapper */
+.team-members-table-wrap {
+  flex: 1;
+  max-height: 480px;
+  overflow-y: auto;
+  overflow-x: hidden !important;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.005);
+  margin-bottom: 8px;
+}
+
+:global([data-theme="dark"] .team-members-table-wrap) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.01) !important;
+}
+
+.team-members-table-wrap .admin-table {
+  min-width: 100% !important;
+  width: 100% !important;
+  table-layout: auto;
+}
+
+.team-members-table-wrap .admin-table td {
+  padding: 12px 14px !important;
+  white-space: normal !important; /* Allow small text to wrap */
+  word-break: break-all;
+}
+
+.team-members-table-wrap .admin-table td strong {
+  font-size: 0.86rem;
+  display: block;
+}
+
+.team-members-table-wrap .admin-table td small {
+  display: block;
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+:global([data-theme="dark"] .team-members-table-wrap .admin-table td small) {
+  color: #94a3b8 !important;
+}
+
+/* Dark mode overrides for modal cards */
+:global([data-theme="dark"] .admin-modal-card) {
+  background: var(--spatial-glass, #121a28) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(20px) !important;
+}
+
+:global([data-theme="dark"] .admin-modal-card h4),
+:global([data-theme="dark"] .admin-modal-card h5) {
+  color: #f1f5f9 !important;
+}
+
+:global([data-theme="dark"] .admin-modal-card p) {
+  color: #94a3b8 !important;
+}
+
+.team-members-empty {
+  padding: 40px 0;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+/* ── Model Card Metadata Enhancements ── */
+.model-type-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.model-type-tag.type-text {
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
+}
+:global([data-theme="dark"] .model-type-tag.type-text) {
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: #60a5fa !important;
+}
+
+.model-type-tag.type-image {
+  background: rgba(236, 72, 153, 0.08);
+  color: #ec4899;
+}
+:global([data-theme="dark"] .model-type-tag.type-image) {
+  background: rgba(244, 63, 94, 0.15) !important;
+  color: #fb7185 !important;
+}
+
+.model-type-tag.type-search {
+  background: rgba(16, 185, 129, 0.08);
+  color: #10b981;
+}
+:global([data-theme="dark"] .model-type-tag.type-search) {
+  background: rgba(52, 211, 153, 0.15) !important;
+  color: #34d399 !important;
+}
+
+.model-type-tag.type-multimodal {
+  background: rgba(139, 92, 246, 0.08);
+  color: #8b5cf6;
+}
+:global([data-theme="dark"] .model-type-tag.type-multimodal) {
+  background: rgba(168, 85, 247, 0.15) !important;
+  color: #c084fc !important;
+}
+
+.model-billing-price {
+  font-size: 0.72rem;
+  font-family: monospace;
+  font-weight: 600;
+  color: #0f766e;
+  background: rgba(13, 148, 136, 0.04);
+  border: 1px solid rgba(13, 148, 136, 0.1);
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-top: 6px;
+  align-self: flex-start;
+}
+
+:global([data-theme="dark"] .model-billing-price) {
+  color: #2dd4bf !important;
+  background: rgba(45, 212, 191, 0.08) !important;
+  border-color: rgba(45, 212, 191, 0.15) !important;
+}
+
+.model-desc-info-text {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #64748b;
+  margin: 6px 0 8px 0;
+}
+
+:global([data-theme="dark"] .model-desc-info-text) {
+  color: #94a3b8 !important;
+}
+
+/* ── Dark Mode Adaptation for Payment Orders & Support Tickets ── */
+:global([data-theme="dark"] .payment-work-head strong) {
+  color: #f1f5f9 !important;
+}
+
+:global([data-theme="dark"] .payment-work-head span) {
+  color: #8fa0b5 !important;
+}
+
+:global([data-theme="dark"] .payment-ticket-admin),
+:global([data-theme="dark"] .payment-order-admin) {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+}
+
+:global([data-theme="dark"] .payment-ticket-admin strong),
+:global([data-theme="dark"] .payment-order-admin strong) {
+  color: #f1f5f9 !important;
+}
+
+:global([data-theme="dark"] .payment-ticket-admin span),
+:global([data-theme="dark"] .payment-order-admin span) {
+  color: #cbd5e1 !important;
+}
+
+:global([data-theme="dark"] .payment-ticket-admin small),
+:global([data-theme="dark"] .payment-order-admin small),
+:global([data-theme="dark"] .payment-ticket-admin em) {
+  color: #94a3b8 !important;
+}
+
+:global([data-theme="dark"] .payment-ticket-admin p) {
+  color: #cbd5e1 !important;
+}
+
+:global([data-theme="dark"] .payment-ticket-admin code),
+:global([data-theme="dark"] .payment-order-admin code) {
+  background: rgba(59, 130, 246, 0.1) !important;
+  color: #60a5fa !important;
+}
+
+/* ── Site Message Image Upload Styling ── */
+.message-image-upload-section {
+  margin: 14px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-image-upload-section > span {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--spatial-graphite, #64748b);
+}
+
+.message-image-preview-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px dashed rgba(99, 102, 241, 0.25);
+  background: rgba(99, 102, 241, 0.02);
+  align-self: flex-start;
+}
+
+.message-image-preview-card img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--spatial-line);
+}
+
+.remove-preview-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.remove-preview-btn:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.message-image-upload-trigger {
+  display: flex;
+}
+
+.upload-trigger-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px dashed var(--spatial-line);
+  background: var(--spatial-surface);
+  color: var(--spatial-graphite);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.upload-trigger-label:hover {
+  border-color: #6366f1;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.02);
+}
+
+.site-message-image-thumb {
+  margin-top: 8px;
+  display: inline-flex;
+}
+
+.image-thumb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--spatial-line);
+  background: var(--spatial-surface);
+  color: var(--spatial-graphite);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.image-thumb-btn img {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.image-thumb-btn:hover {
+  border-color: #6366f1;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.02);
 }
 </style>

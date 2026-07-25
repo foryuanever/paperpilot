@@ -1,112 +1,328 @@
 <template>
   <div class="reader-workbench">
-    <header class="reader-toolbar">
-      <div class="reader-toolbar-start">
-        <router-link class="reader-back" to="/library" title="返回文献库" aria-label="返回文献库">←</router-link>
-        <div class="reader-document-meta">
-          <span class="reader-document-title" :title="activePaper.title">{{ activePaper.title }}</span>
-          <small class="reader-document-source">{{ paperSourceLabel || "文献阅读" }}</small>
-        </div>
-      </div>
+    <header class="reader-header-wrapper">
+      <!-- 第一行：多文献多标签导航栏 -->
+      <ReaderMultiTabBar />
 
-      <div class="reader-tools" role="toolbar" aria-label="阅读设置">
-        <button
-          class="reader-translate-toggle"
-          :class="{ active: autoTranslate }"
-          :aria-pressed="autoTranslate"
-          :title="autoTranslate ? '关闭全文翻译' : '开启全文翻译'"
-          @click="toggleTranslation"
-        >
-          <span class="reader-translate-icon" aria-hidden="true">
-            <span class="lang-mark-source">文</span>
-            <span class="lang-mark-target">A</span>
-          </span>
-          <span class="reader-translate-label">全文翻译</span>
-        </button>
+      <!-- 第二行：极简集中式阅读工具栏 (精准自动匹配正文 reading-stage 列) -->
+      <div
+        class="reader-toolbar-row"
+        :class="{ 'assistant-collapsed': assistantCollapsed, 'assistant-wide': assistantExpanded && assistantTab === 'chat' }"
+      >
+        <!-- 左侧边栏对应空占位块 (与左侧边栏宽度 1:1 像素同步) -->
+        <div class="toolbar-sidebar-spacer"></div>
 
-        <div class="reader-provider-select-wrapper" title="切换官方翻译引擎">
-          <div class="reader-provider-active-logo">
-            <span v-if="abstractProvider === 'google'" class="provider-logo provider-logo-google">
-              <span style="color:#4285F4; font-weight: 500; font-family: sans-serif; letter-spacing: -0.5px;">G</span><span style="color:#EA4335; font-weight: 500; font-family: sans-serif; letter-spacing: -0.5px;">o</span><span style="color:#FBBC05; font-weight: 500; font-family: sans-serif; letter-spacing: -0.5px;">o</span><span style="color:#4285F4; font-weight: 500; font-family: sans-serif; letter-spacing: -0.5px;">g</span><span style="color:#34A853; font-weight: 500; font-family: sans-serif; letter-spacing: -0.5px;">l</span><span style="color:#EA4335; font-weight: 500; font-family: sans-serif; letter-spacing: -0.5px; margin-right: 2px;">e</span>
-              <span class="provider-text">翻译</span>
-            </span>
+        <!-- 正文阅读区对应工具列 (绝对自动居中于正文阅读 Stage) -->
+        <div class="toolbar-stage-area">
+          <div class="toolbar-center-dock">
+            <!-- 核心高阶缩放 Widget (- 🔍 130% ▾ +) -->
+            <div class="dock-zoom-widget">
+              <button class="dock-zoom-btn instant-tooltip" data-tip="缩小正文 (-)" @click="zoomReaderOut">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M5 12h14"/></svg>
+              </button>
 
-            <span v-else-if="abstractProvider === 'baidu'" class="provider-logo provider-logo-baidu">
-              <img src="https://fanyi-cdn.cdn.bcebos.com/static/translation/img/header/logo_e835568.png" alt="Baidu" style="height: 16px; margin-right: 2px; transform: translateY(1px);" />
-            </span>
-            <span v-else class="provider-logo provider-logo-text">{{ providerShortLabel(abstractProvider) }}</span>
+              <!-- 缩放百分比 Pill + 下拉预设选单 -->
+              <div class="zoom-dropdown-wrap">
+                <button class="dock-scale-chip instant-tooltip" data-tip="缩放预设 / 自适应" @click.stop="showZoomPresets = !showZoomPresets">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                  <span>{{ Math.round(contentScale * 100) }}%</span>
+                  <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 1px;"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
 
-            <svg class="dropdown-chevron" viewBox="0 0 24 24" width="12" height="12"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
-          </div>
-          <select
-            v-model="abstractProvider"
-            class="reader-provider-select native-overlay"
-            @change="handleProviderChange"
-          >
-            <option
-              v-for="provider in translationProviders"
-              :key="provider.id"
-              :value="provider.id"
-              :disabled="provider.configured === false"
+                <!-- 预设下拉弹出窗 -->
+                <Transition name="tab-popover-fade">
+                  <div v-if="showZoomPresets" class="zoom-presets-popover" @click.stop>
+                    <div class="zoom-popover-head">正文缩放预设</div>
+                    <button
+                      v-for="preset in zoomPresetList"
+                      :key="preset.scale"
+                      class="zoom-preset-item"
+                      :class="{ active: Math.round(contentScale * 100) === Math.round(preset.scale * 100) }"
+                      @click="setScalePreset(preset.scale)"
+                    >
+                      <span>{{ preset.label }}</span>
+                      <svg v-if="Math.round(contentScale * 100) === Math.round(preset.scale * 100)" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    </button>
+
+                    <div class="preset-divider"></div>
+
+                    <button class="zoom-preset-item fit-width-item" @click="fitWidth(); showZoomPresets = false;">
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="16" y2="21"/></svg>
+                      <span>自适应页宽</span>
+                    </button>
+                  </div>
+                </Transition>
+              </div>
+
+              <button class="dock-zoom-btn instant-tooltip" data-tip="放大正文 (+)" @click="zoomReaderIn">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+            </div>
+
+            <span class="dock-divider"></span>
+
+            <!-- 1. 移动 / 选择模式 -->
+            <button
+              class="dock-tool-btn instant-tooltip"
+              :class="{ active: !isDrawingPenActive && activeAnnotateTool === 'select' }"
+              data-tip="移动 / 划词选择 (V)"
+              @click="setMoveTool"
             >
-              {{ provider.label }}{{ provider.configured === false ? "（需配置）" : "" }}
-            </option>
-          </select>
-        </div>
-        <button
-          class="reader-eraser-button"
-          :class="{ restorable: !annotations.length && clearedAnnotationSnapshot.length }"
-          :title="!annotations.length && clearedAnnotationSnapshot.length ? '恢复刚清除的标注' : '清除全部标注'"
-          :aria-label="!annotations.length && clearedAnnotationSnapshot.length ? '恢复刚清除的标注' : '清除全部标注'"
-          @click="clearAllAnnotations"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M16.7 3.9 21 8.2a2 2 0 0 1 0 2.8l-8.1 8.1H6.5L3 15.6a2 2 0 0 1 0-2.8l10.9-8.9a2 2 0 0 1 2.8 0Z" />
-            <path d="m11.2 6.1 6.7 6.7" />
-            <path d="M3 21h18" />
-          </svg>
-        </button>
-        <div class="reader-zoom-control" role="group" aria-label="正文缩放">
-          <button title="缩小正文" aria-label="缩小正文" @click="contentScale = Math.max(0.8, contentScale - 0.1)">−</button>
-          <span class="scale-value">{{ Math.round(contentScale * 100) }}%</span>
-          <button title="放大正文" aria-label="放大正文" @click="contentScale = Math.min(1.5, contentScale + 0.1)">＋</button>
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6.3 3.4 18 15.1l-6.2 1.1-2.9 5.7L6.3 3.4Z"/>
+                <path d="m12.2 15.8 4.8 4.8"/>
+              </svg>
+              <span>选择</span>
+            </button>
+
+            <!-- 2. 文本高亮 -->
+            <button
+              class="dock-tool-btn instant-tooltip"
+              :class="{ active: !isDrawingPenActive && (activeAnnotateTool === 'highlight' || activeAnnotateTool === 'fontColor') }"
+              data-tip="文本高亮 (Highlighter)"
+              @click="activeAnnotateTool = 'highlight'; isDrawingPenActive = false;"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m9 11-6 6v3h3l6-6m-3-3 3-3 6 6-3 3m-6-6 6-6 3 3-6 6"/>
+              </svg>
+              <span>高亮</span>
+            </button>
+
+            <!-- 3. 下划线 (Underline) -->
+            <button
+              class="dock-tool-btn instant-tooltip"
+              :class="{ active: !isDrawingPenActive && activeAnnotateTool === 'underline' }"
+              data-tip="文本下划线 (Underline)"
+              @click="setLineTool('underline')"
+            >
+              <span class="mark-letter mark-underline">U</span>
+              <span>下划线</span>
+            </button>
+
+            <!-- 4. 删除线 (Strikethrough) -->
+            <button
+              class="dock-tool-btn instant-tooltip"
+              :class="{ active: !isDrawingPenActive && activeAnnotateTool === 'strike' }"
+              data-tip="文本删除线 (Strikethrough)"
+              @click="setLineTool('strike')"
+            >
+              <span class="mark-letter mark-strike">S</span>
+              <span>删除线</span>
+            </button>
+
+            <!-- 5. 波浪线 (Wavy Line) -->
+            <button
+              class="dock-tool-btn instant-tooltip"
+              :class="{ active: !isDrawingPenActive && activeAnnotateTool === 'wavy' }"
+              data-tip="文本波浪线 (Wavy Line)"
+              @click="setLineTool('wavy')"
+            >
+              <span class="mark-letter mark-wavy">W</span>
+              <span>波浪线</span>
+            </button>
+
+            <!-- 6. 自由手绘画笔图画 (Pen) -->
+            <button
+              class="dock-tool-btn instant-tooltip"
+              :class="{ active: isDrawingPenActive }"
+              data-tip="自由画笔涂鸦 (Pen Drawing)"
+              @click="toggleDrawingPen"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"/>
+                <path d="M15.8 4.2a2.2 2.2 0 0 1 3.1 3.1L8.2 18 3.5 19.4 4.9 14.8 15.8 4.2Z"/>
+              </svg>
+              <span>画笔</span>
+            </button>
+
+            <!-- 7. 色彩盘 + 全标注粗细大小与高级调色组件 -->
+            <div class="dock-style-wrapper">
+              <div class="dock-color-swatches">
+                <span
+                  v-for="color in textColors"
+                  :key="color.id"
+                  class="dock-color-dot instant-tooltip"
+                  :class="{ active: selectedColor.toLowerCase() === color.value.toLowerCase() }"
+                  :style="{ '--dot-color': color.value }"
+                  :data-tip="color.label"
+                  @click="handleDockColor(color.value)"
+                ></span>
+
+                <!-- 🎨 粗细与高级调色盘按钮 -->
+                <button
+                  class="dock-color-more-btn instant-tooltip"
+                  :class="{ active: showStylePopover }"
+                  data-tip="粗细大小与高级调色盘"
+                  @click.stop="showStylePopover = !showStylePopover"
+                >
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 2a7 7 0 1 0 7 7"/>
+                    <circle cx="7.5" cy="10.5" r=".5" fill="currentColor"/>
+                    <circle cx="12" cy="7.5" r=".5" fill="currentColor"/>
+                    <circle cx="16.5" cy="10.5" r=".5" fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
+
+              <!-- 🎨 高级色彩与粗细大小控制弹出框 (适用于画笔、高亮、划线等所有标注) -->
+              <Transition name="tab-popover-fade">
+                <div v-if="showStylePopover" class="dock-style-popover" @click.stop>
+                  <header class="style-popover-head">
+                    <strong>标注样式与粗细设置</strong>
+                    <span class="style-tool-badge">{{ currentToolLabel }}</span>
+                  </header>
+
+                  <!-- 快速预设色彩网格 -->
+                  <div class="style-section">
+                    <label>预设颜色</label>
+                    <div class="style-color-grid">
+                      <button
+                        v-for="color in brushColors"
+                        :key="color.id"
+                        class="style-color-dot"
+                        :class="{ active: selectedColor.toLowerCase() === color.value.toLowerCase(), light: color.light }"
+                        :style="{ backgroundColor: color.value }"
+                        :title="color.label"
+                        @click="selectBrushColor(color.value)"
+                      ></button>
+                    </div>
+                  </div>
+
+                  <!-- 自定义颜色 -->
+                  <div class="style-custom-color-row">
+                    <span>自定义颜色</span>
+                    <button class="style-picker-trigger" title="打开颜色选择器" @click="activateNativeMarkColorPicker">
+                      <i class="color-preview-circle" :style="{ background: selectedColor }"></i>
+                      <span>选择…</span>
+                    </button>
+                    <input
+                      ref="markColorPicker"
+                      type="color"
+                      class="hidden-color-input"
+                      :value="selectedColor"
+                      @input="selectBrushColor($event.target.value)"
+                    />
+                  </div>
+
+                  <div class="style-divider"></div>
+
+                  <!-- 粗细大小调节 -->
+                  <div class="style-control-row">
+                    <div class="label-with-value">
+                      <label>线条粗细 / 画笔大小</label>
+                      <output>{{ brushWidth }}pt</output>
+                    </div>
+                    <div class="slider-with-preview">
+                      <input v-model.number="brushWidth" type="range" min="1" max="12" step="1" />
+                      <span class="stroke-preview-dot" :style="{ width: `${Math.max(3, brushWidth * 1.5)}px`, height: `${Math.max(3, brushWidth * 1.5)}px`, background: selectedColor }"></span>
+                    </div>
+                  </div>
+
+                  <!-- 不透明度调节 -->
+                  <div class="style-control-row">
+                    <div class="label-with-value">
+                      <label>不透明度</label>
+                      <output>{{ brushOpacity }}%</output>
+                    </div>
+                    <input v-model.number="brushOpacity" type="range" min="10" max="100" step="5" />
+                  </div>
+                </div>
+              </Transition>
+            </div>
+
+            <span class="dock-divider"></span>
+
+            <!-- 右侧动作组向中间紧凑整合 -->
+            <div class="dock-actions-group">
+              <button
+                class="icon-tool-btn undo-action-btn instant-tooltip"
+                :disabled="!annotations.length && !drawingStrokes.length && !clearedAnnotationSnapshot.length"
+                data-tip="撤回上一条 (Undo)"
+                @click="undoLastAnnotation"
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 7v6h6"/>
+                  <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
+                </svg>
+              </button>
+
+              <button
+                class="icon-tool-btn clear-action-btn instant-tooltip"
+                :disabled="!annotations.length && !drawingStrokes.length && !clearedAnnotationSnapshot.length"
+                data-tip="清除全部标记"
+                @click="clearAllAnnotations"
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 6h18"/>
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                </svg>
+              </button>
+
+              <button
+                class="icon-tool-btn pdf-icon-btn instant-tooltip"
+                data-tip="打开原文 PDF"
+                @click="openOriginalPdf"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+              </button>
+
+              <button
+                class="translate-pill-btn instant-tooltip"
+                :class="{ active: autoTranslate }"
+                :data-tip="autoTranslate ? '关闭全文对照翻译' : '开启全文对照翻译'"
+                @click="toggleTranslation"
+              >
+                <span class="lang-mark">文/A</span>
+                <span>沉浸翻译</span>
+              </button>
+
+              <button
+                class="icon-tool-btn instant-tooltip"
+                :data-tip="isDarkTheme ? '切换日间模式' : '切换夜间模式'"
+                @click="toggleTheme"
+              >
+                <svg v-if="isDarkTheme" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              </button>
+
+              <button
+                class="icon-tool-btn instant-tooltip"
+                data-tip="新手操作指引"
+                @click="relaunchReaderTour"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <button
-          class="reader-theme-toggle-btn"
-          :title="isDarkTheme ? '切换为日间明亮模式' : '切换为夜间深色模式'"
-          @click="toggleTheme"
-        >
-          <svg v-if="isDarkTheme" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        </button>
+        <!-- 右侧边栏对应空占位块 -->
+        <div class="toolbar-notes-spacer"></div>
       </div>
 
-      <div class="reader-toolbar-end">
-        <div class="reader-status" aria-label="阅读状态">
-          <span class="reader-status-item">
-            <small>进度</small>
-            <strong>{{ readingProgress }}%</strong>
-          </span>
-          <span class="reader-status-item">
-            <small>页码</small>
-            <strong>{{ loadedPages }}/{{ totalPages || "−" }}</strong>
-          </span>
-        </div>
-        <button class="reader-pdf-action" title="打开原始 PDF" @click="openOriginalPdf">
-          <span class="pdf-label-long">原文 PDF</span>
-          <span class="pdf-label-short">PDF</span>
-        </button>
-      </div>
-      <div class="reader-progress-track" aria-label="阅读进度">
-        <div class="reader-progress-fill" :style="{ width: `${readingProgress}%` }"></div>
+      <!-- 导航栏底部的微光阅读进度条 (100% 满屏通栏) -->
+      <div class="reader-progress-track-bottom" aria-label="阅读进度">
+        <div class="reader-progress-fill-bottom" :style="{ width: `${readingProgress}%` }"></div>
       </div>
     </header>
 
-    <div class="reader-body" :class="{ 'assistant-wide': assistantExpanded && assistantTab === 'chat' }">
+    <div
+      class="reader-body"
+      :class="{
+        'assistant-wide': assistantExpanded && assistantTab === 'chat',
+        'right-notes-closed': !rightNotesOpen
+      }"
+    >
       <aside class="reader-assistant" :class="{ collapsed: assistantCollapsed, expanded: assistantExpanded && assistantTab === 'chat' }">
         <div class="assistant-tabs">
-          <button :class="{ active: assistantTab === 'chat' }" @click="assistantTab = 'chat'">内容详解</button>
+          <button :class="{ active: assistantTab === 'chat' }" @click="assistantTab = 'chat'">文献综述</button>
           <button :class="{ active: assistantTab === 'outline' }" @click="assistantTab = 'outline'">目录</button>
           <button :class="{ active: assistantTab === 'figures' }" @click="assistantTab = 'figures'">图表</button>
           <button :class="{ active: mindMapModal.open }" @click="openMindMapModal">思维导图</button>
@@ -167,12 +383,13 @@
 
       <main ref="readingScroll" class="reading-stage" @mouseup="captureSelection" @contextmenu.prevent="openColorMenu" @scroll="handleReadingScroll" @click="closeColorMenu">
         <div
+          ref="readingColumn"
           class="reading-column"
           :style="{ '--reader-scale': contentScale }"
         >
           <div v-if="loadingPdf" class="reader-state reader-loading-state">
             <div class="reader-state-mark"><span></span></div>
-            <h1>正在准备逐段翻译</h1>
+            <h1>正在准备沉浸翻译</h1>
             <p>{{ parsingMessage }}</p>
             <div class="reader-loading-track"><i :style="{ width: `${parsingProgress}%` }"></i></div>
             <small>{{ parsingProgress }}%</small>
@@ -196,15 +413,29 @@
                   {{ paperMetaTranslation.title || "标题翻译中…" }}
                 </p>
                 <p v-if="paperMetaTranslation.authors || paperMetaTranslation.loadingAuthors" class="paper-author-translation">
-                  {{ paperMetaTranslation.authors || "作者翻译中…" }}
+                  <template v-if="paperMetaTranslation.loadingAuthors && !paperMetaTranslation.authors">作者翻译中…</template>
+                  <template v-else>
+                    <template v-for="part in authorDisplaySegments(paperMetaTranslation.authors)" :key="part.key">
+                      <sup v-if="part.sup" class="author-affiliation-sup">{{ part.text }}</sup>
+                      <span v-else-if="part.orcid" class="author-orcid-badge">iD</span>
+                      <span v-else :class="{ 'author-name-text': part.name }">{{ part.text }}</span>
+                    </template>
+                  </template>
                 </p>
               </div>
-              <div v-if="hasAbstract && !structuredHasAbstract" class="paper-abstract">
+              <div v-if="hasAbstract && !structuredHasAbstract && !structuredDocumentReady" class="paper-abstract">
                 <strong>Abstract</strong>
                 <p class="source-paragraph selectable-paragraph" data-block-id="abstract">
                   <template v-for="segment in annotationSegments('abstract', abstractText)" :key="segment.key">
-                    <span v-if="segment.annotated" class="annotation-highlight" :title="segment.note" @click="editAnnotation(segment.annotation, $event)">
-                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
+                    <span
+                      v-if="segment.annotated"
+                      class="annotation-highlight"
+                      :class="`mark-${segment.annotation.style || 'highlight'}`"
+                      :style="{ '--mark-color': segment.annotation.color || '#fef08a' }"
+                      :title="segment.note"
+                      @click="editAnnotation(segment.annotation, $event)"
+                    >
+                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span v-if="segment.note" class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
                     </span>
                     <template v-else>{{ segment.text }}</template>
                   </template>
@@ -220,7 +451,11 @@
             >
               <div class="page-marker">第 {{ page.pageNumber }} 页</div>
               <template v-for="block in page.blocks" :key="block.id">
-                <h2 v-if="block.kind === 'heading'" class="source-heading">{{ block.text }}</h2>
+                <h2
+                  v-if="block.kind === 'heading'"
+                  class="source-heading"
+                  :class="{ 'abstract-heading': isAbstractHeadingBlock(block) }"
+                >{{ block.text }}</h2>
                 <figure v-else-if="block.kind === 'figure' || block.kind === 'table'" class="pdf-figure-card">
                   <button
                     v-if="block.imageUrl"
@@ -240,22 +475,54 @@
                     </div>
                   </figcaption>
                 </figure>
-                <div v-else-if="block.kind === 'equation'" class="mineru-equation">{{ block.text }}</div>
+                <div
+                  v-else-if="block.kind === 'equation'"
+                  class="mineru-equation selectable-paragraph"
+                  :data-block-id="block.id"
+                  :data-selection-text="equationSelectionText(block, page.pageNumber)"
+                >
+                  <div v-if="block.imageUrl" class="mineru-equation-image-row">
+                    <button
+                      type="button"
+                      class="mineru-equation-image-button"
+                      :aria-label="`查看${block.equationNumber || '公式'}原图`"
+                      @click="viewParsedFigure(block, page.pageNumber)"
+                    >
+                      <img :src="block.imageUrl" :alt="block.text || block.equationNumber || '论文公式'" class="mineru-equation-image" />
+                    </button>
+                    <span v-if="block.equationNumber" class="mineru-equation-number">{{ block.equationNumber }}</span>
+                  </div>
+                  <pre v-if="block.text" class="mineru-equation-text">{{ block.text }}</pre>
+                </div>
                 <div v-else-if="block.kind === 'references'" class="reference-block selectable-paragraph" :data-block-id="block.id">
                   <template v-for="segment in annotationSegments(block.id, block.text)" :key="segment.key">
-                    <span v-if="segment.annotated" class="annotation-highlight" :title="segment.note" @click="editAnnotation(segment.annotation, $event)">
-                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
+                    <span
+                      v-if="segment.annotated"
+                      class="annotation-highlight"
+                      :class="`mark-${segment.annotation.style || 'highlight'}`"
+                      :style="{ '--mark-color': segment.annotation.color || '#fef08a' }"
+                      :title="segment.note"
+                      @click="editAnnotation(segment.annotation, $event)"
+                    >
+                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span v-if="segment.note" class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
                     </span>
                     <template v-else>{{ segment.text }}</template>
                   </template>
                 </div>
                 <p v-else class="source-paragraph selectable-paragraph" :data-block-id="block.id">
                   <template v-for="segment in annotationSegments(block.id, block.text)" :key="segment.key">
-                    <span v-if="segment.annotated" class="annotation-highlight" :title="segment.note" @click="editAnnotation(segment.annotation, $event)">
+                    <span
+                      v-if="segment.annotated"
+                      class="annotation-highlight"
+                      :class="`mark-${segment.annotation.style || 'highlight'}`"
+                      :style="{ '--mark-color': segment.annotation.color || '#fef08a' }"
+                      :title="segment.note"
+                      @click="editAnnotation(segment.annotation, $event)"
+                    >
                       <template v-for="fragment in inlineCitationSegments(segment.text)" :key="fragment.key">
                         <sup v-if="fragment.citation" class="paper-citation-sup">{{ fragment.text }}</sup>
                         <template v-else>{{ fragment.text }}</template>
-                      </template><button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
+                      </template><button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span v-if="segment.note" class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
                     </span>
                     <template v-else>
                       <template v-for="fragment in inlineCitationSegments(segment.text)" :key="fragment.key">
@@ -265,11 +532,15 @@
                     </template>
                   </template>
                 </p>
-                <div v-if="autoTranslate && !['figure', 'table', 'equation', 'references', 'abstract'].includes(block.kind) && !isAbstractBlock(block)" class="translation-unit">
+                <div
+                  v-if="autoTranslate && !['figure', 'table', 'equation', 'references', 'abstract'].includes(block.kind) && !isAbstractHeadingBlock(block)"
+                  class="translation-unit"
+                  :class="{ 'author-translation-unit': isLikelyAuthorBlock(block) }"
+                >
                   <p
                     class="translated-paragraph selectable-paragraph"
                     :data-block-id="block.id"
-                    :class="{ pending: block.translating || !block.translation, error: block.translationError }"
+                    :class="{ pending: block.translating || !block.translation, error: block.translationError, 'paper-author-translation': isLikelyAuthorBlock(block) }"
                   >
                     {{ block.translating ? "本段翻译中…" : block.translationError || block.translation || "译文准备中…" }}<button
                       v-if="!block.translating"
@@ -285,10 +556,23 @@
             </section>
           </article>
 
+          <canvas
+            ref="drawingCanvas"
+            class="reader-drawing-layer"
+            :class="{ active: drawingModeActive }"
+            :style="drawingCanvasStyle"
+            @pointerdown="startInkStroke"
+            @pointermove="moveInkStroke"
+            @pointerup="finishInkStroke"
+            @pointercancel="cancelInkStroke"
+            @pointerleave="finishInkStroke"
+            @wheel.passive="handleCanvasWheel"
+          ></canvas>
+
           <!-- WPS 1:1 绿折线引用批注层 (参照图 2) -->
-          <div v-if="annotations.length" class="wps-comments-container">
+          <div v-if="noteAnnotations.length" class="wps-comments-container">
             <svg class="wps-leader-lines-svg">
-              <g v-for="anno in annotations" :key="`wps-group-${anno.id}`">
+              <g v-for="anno in noteAnnotations" :key="`wps-group-${anno.id}`">
                 <line
                   :x1="anno.x1 || 10"
                   :y1="(anno.y1 || 40) - 8"
@@ -307,7 +591,7 @@
             </svg>
 
             <div
-              v-for="anno in annotations"
+              v-for="anno in noteAnnotations"
               :key="anno.id"
               class="wps-comment-card"
               :style="{ top: `${anno.top || 40}px` }"
@@ -337,47 +621,34 @@
         </div>
       </main>
 
-      <nav class="reader-paper-rail" :class="{ collapsed: railCollapsed }" aria-label="文献切换">
-        <div class="reader-paper-rail-head">
-          <div v-if="!railCollapsed" class="rail-head-info">
-            <span>文献切换</span>
-            <small>{{ currentPage }}/{{ totalPages || loadedPages || "−" }} 页</small>
-          </div>
-          <button
-            class="rail-collapse-btn"
-            :title="railCollapsed ? '展开文献切换栏' : '折叠文献切换栏'"
-            @click="railCollapsed = !railCollapsed"
-          >
-            <svg v-if="railCollapsed" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            <svg v-else viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-          </button>
-        </div>
-        <button
-          v-for="paper in readerPaperTabs"
-          :key="paper.id"
-          class="reader-paper-tab"
-          :class="{ active: paper.id === activePaper.id }"
-          :title="paper.title"
-          @click="switchReaderPaper(paper.id)"
-        >
-          <span class="reader-paper-tab-mark">{{ paperInitial(paper) }}</span>
-          <span v-if="!railCollapsed" class="reader-paper-tab-text">
-            <strong>{{ shortPaperTitle(paper.title, 28) }}</strong>
-            <small>{{ paper.source || paper.publishYear || "文献库" }}</small>
-          </span>
-        </button>
-        <div v-if="!railCollapsed" class="reader-page-mini" aria-label="当前论文页码">
-          <button
-            v-for="page in compactPageTabs"
-            :key="page.key"
-            :class="{ active: currentPage === page.pageNumber, muted: page.ellipsis }"
-            :disabled="page.ellipsis"
-            @click="scrollToPage(page.pageNumber)"
-          >
-            {{ page.label }}
-          </button>
-        </div>
-      </nav>
+      <!-- 右侧层级文献笔记栏 (自适应 Grid 侧边栏) -->
+      <HierarchicalNotesSidebar
+        :paper-id="paperId"
+        :paper-title="activePaper?.title || ''"
+        :paper-note="activePaper?.note || ''"
+        :annotations="annotations"
+        :is-collapsed="!rightNotesOpen"
+        @toggle-collapse="toggleRightNotes"
+        @jump-to-page="scrollToPage"
+        @jump-to-annotation="handleJumpToAnnotation"
+        @show-toast="showReaderToast"
+        @sync-note="syncHierarchicalNoteToLibrary"
+      />
+    </div>
+
+    <div v-if="pinnedScreenshots.length" class="pinned-screenshot-dock" aria-label="固定截图">
+      <article
+        v-for="shot in pinnedScreenshots"
+        :key="shot.id"
+        class="pinned-screenshot-card"
+        :style="{ left: `${shot.x}px`, top: `${shot.y}px`, width: `${shot.width}px` }"
+      >
+        <header>
+          <strong>截图</strong>
+          <button title="关闭截图" @click="removePinnedScreenshot(shot.id)">×</button>
+        </header>
+        <img :src="shot.dataUrl" alt="固定截图" />
+      </article>
     </div>
 
     <div
@@ -436,6 +707,14 @@
         </div>
         <button aria-label="关闭选中内容工具" @click="closeSelectionTranslator">×</button>
       </div>
+      <div class="selection-provider-panel">
+        <span>翻译引擎</span>
+        <select v-model="abstractProvider" @change="handleProviderChange">
+          <option v-for="provider in translationProviders" :key="provider.id" :value="provider.id" :disabled="provider.configured === false">
+            {{ provider.label }}{{ provider.configured === false ? "（需配置）" : "" }}
+          </option>
+        </select>
+      </div>
       <div v-if="selectionTranslator.loading || selectionTranslator.result || selectionTranslator.error" class="selection-result" :class="{ pending: selectionTranslator.loading, error: selectionTranslator.error, 'is-ai-mode': selectionTranslator.resultTitle === 'AI 解读' }">
         <span v-if="selectionTranslator.loading" class="selection-spinner"></span>
         <div>
@@ -459,21 +738,25 @@
     <!-- Apple Intelligence Style Quantum Floating AI Assistant Launcher -->
     <button
       class="apple-ai-launcher"
-      :class="{ expanded: paperChat.open }"
+      :class="{ expanded: paperChat.open, 'right-notes-open': rightNotesOpen, 'right-notes-closed': !rightNotesOpen }"
       :title="paperChat.open ? '收起 AI 研读助手' : '开启 AI 研读助手'"
-      @click="paperChat.open = !paperChat.open"
+      @click="togglePaperChatPanel"
     >
       <div class="ai-sparkle-halo"></div>
       <span class="ai-sparkle-icon">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="url(#ai-grad-btn)"/><defs><linearGradient id="ai-grad-btn" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse"><stop stop-color="#818CF8"/><stop offset="0.5" stop-color="#C084FC"/><stop offset="1" stop-color="#F472B6"/></linearGradient></defs></svg>
       </span>
       <span class="ai-label-text">{{ paperChat.open ? '收起助手' : 'AI 研读助手' }}</span>
-      <span class="ai-shortcut-badge">Cmd+K</span>
     </button>
 
     <Transition name="paper-chat">
-      <section v-if="paperChat.open" class="paper-chat-panel futuristic-void-panel">
-        <header class="void-chat-header">
+      <section
+        v-if="paperChat.open"
+        class="paper-chat-panel futuristic-void-panel"
+        :class="{ 'right-notes-open': rightNotesOpen, 'right-notes-closed': !rightNotesOpen, dragging: paperChatWindow.dragging, positioned: paperChatWindow.x !== null }"
+        :style="paperChatPanelStyle"
+      >
+        <header class="void-chat-header" @pointerdown="startPaperChatDrag">
           <div class="quantum-ai-avatar">
             <svg class="quantum-orb-svg" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="9" stroke="url(#quantum-grad)" stroke-width="1.5" stroke-dasharray="4 2"/>
@@ -495,7 +778,7 @@
             </div>
             <span class="void-sub-title">{{ shortPaperTitle(activePaper.title, 32) }}</span>
           </div>
-          <button class="void-close-btn" title="关闭助手" @click="paperChat.open = false">
+          <button class="void-close-btn" title="关闭助手" @click="closePaperChatPanel">
             <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </header>
@@ -584,25 +867,28 @@
     </Transition>
 
     <div v-if="readerTour.open" class="reader-tour-layer">
-      <div class="reader-tour-shade"></div>
+      <div class="reader-tour-shade" @click="finishTour"></div>
       <div
         v-if="readerTour.rect"
         class="reader-tour-focus"
         :style="{
-          left: `${readerTour.rect.left - 7}px`,
-          top: `${readerTour.rect.top - 7}px`,
-          width: `${readerTour.rect.width + 14}px`,
-          height: `${readerTour.rect.height + 14}px`,
+          left: `${readerTour.rect.left - 6}px`,
+          top: `${readerTour.rect.top - 6}px`,
+          width: `${readerTour.rect.width + 12}px`,
+          height: `${readerTour.rect.height + 12}px`,
         }"
       ></div>
       <section class="reader-tour-card">
-        <span>第 {{ readerTour.index + 1 }} 步 / {{ tourSteps.length }}</span>
+        <header class="tour-card-head">
+          <span class="tour-step-badge">第 {{ readerTour.index + 1 }} 步 / {{ tourSteps.length }}</span>
+          <button class="tour-skip-btn" title="跳过新手指引" @click="finishTour">跳过指引 ×</button>
+        </header>
         <h2>{{ tourSteps[readerTour.index].title }}</h2>
         <p>{{ tourSteps[readerTour.index].description }}</p>
-        <div>
-          <button v-if="readerTour.index > 0" @click="previousTourStep">上一步</button>
-          <button @click="nextTourStep">
-            {{ readerTour.index === tourSteps.length - 1 ? "朕知道了" : "朕知道了，下一步" }}
+        <div class="tour-card-actions">
+          <button v-if="readerTour.index > 0" class="tour-btn-prev" @click="previousTourStep">上一步</button>
+          <button class="tour-btn-next" @click="nextTourStep">
+            {{ readerTour.index === tourSteps.length - 1 ? "完成指引" : "下一步" }}
           </button>
         </div>
       </section>
@@ -617,8 +903,20 @@
             <button @click="closeFigureViewer">关闭</button>
           </div>
         </header>
-        <img v-if="figureViewer.imageUrl" :src="figureViewer.imageUrl" :alt="figureViewer.caption" />
-        <canvas v-else ref="figureCanvasRef"></canvas>
+        <div class="pdf-figure-modal-stage">
+          <img
+            v-if="figureViewer.imageUrl"
+            :src="figureViewer.imageUrl"
+            :alt="figureViewer.caption"
+            :style="{ transform: `rotate(${figureViewer.rotation}deg)` }"
+            @load="autoRotateFigure"
+          />
+          <canvas
+            v-else
+            ref="figureCanvasRef"
+            :style="{ transform: `rotate(${figureViewer.rotation}deg)` }"
+          ></canvas>
+        </div>
       </div>
     </div>
 
@@ -664,10 +962,18 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowR
 import { paperpilotApi } from "../services/paperpilotApi";
 import { useLibraryStore } from "../stores/library";
 import ReaderReportPanel from "../components/ReaderReportPanel.vue";
+import ReaderMultiTabBar from "../components/ReaderMultiTabBar.vue";
+import HierarchicalNotesSidebar from "../components/HierarchicalNotesSidebar.vue";
 import { useRoute } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { rememberLastReading } from "../utils/readingMemory";
 import MarkdownIt from "markdown-it";
+import html2canvas from "html2canvas";
+
+const rightNotesOpen = ref(true);
+function toggleRightNotes() {
+  rightNotesOpen.value = !rightNotesOpen.value;
+}
 
 const markdownRenderer = new MarkdownIt({ html: false, linkify: true, breaks: true });
 function renderMarkdown(text) {
@@ -681,6 +987,8 @@ const route = useRoute();
 const pages = reactive([]);
 const pageCanvasElements = new Map();
 const readingScroll = ref(null);
+const readingColumn = ref(null);
+const drawingCanvas = ref(null);
 const loadingPdf = ref(true);
 const loadError = ref("");
 const parsingMessage = ref("正在进行论文版面解析（完整段落、图表、表格）");
@@ -705,14 +1013,574 @@ const readingProgress = ref(0);
 const autoTranslate = ref(true);
 const assistantCollapsed = ref(false);
 const assistantExpanded = ref(false);
-const railCollapsed = ref(false);
 const assistantTab = ref("chat");
+const showZoomPresets = ref(false);
+const zoomPresetList = [
+  { label: "50%", scale: 0.5 },
+  { label: "75%", scale: 0.75 },
+  { label: "100% (标准)", scale: 1.0 },
+  { label: "125%", scale: 1.25 },
+  { label: "150%", scale: 1.5 },
+  { label: "175%", scale: 1.75 },
+  { label: "200%", scale: 2.0 },
+];
+
+const showStylePopover = ref(false);
+const markColorPicker = ref(null);
+
+const currentToolLabel = computed(() => {
+  if (isDrawingPenActive.value) return "自由手绘画笔";
+  return {
+    select: "划词选择",
+    highlight: "文本高亮",
+    fontColor: "字体颜色",
+    underline: "文本下划线",
+    strike: "文本删除线",
+    wavy: "文本波浪线",
+    pen: "自由手绘画笔"
+  }[activeAnnotateTool.value] || "标注线形";
+});
+
+function activateNativeMarkColorPicker() {
+  markColorPicker.value?.click();
+}
+
+function handleGlobalClick() {
+  showZoomPresets.value = false;
+  showStylePopover.value = false;
+}
+
 const contentScale = ref(1);
+const activeMouseMode = ref("select");
+const activeToolTab = ref("annotate");
+const activeAnnotateTool = ref("highlight");
+const selectedColor = ref("#eab308");
+const isDrawingPenActive = ref(false);
+const drawingToolPanelOpen = ref(false);
+const textMarkPanelOpen = ref("");
+const brushOpacity = ref(100);
+const brushWidth = ref(3);
+const brushColorPicker = ref(null);
+const drawingStrokes = reactive([]);
+const pinnedScreenshots = reactive([]);
+const drawingCanvasBox = reactive({ left: 0, top: 0, width: 0, height: 0 });
+const drawingCanvasStyle = computed(() => ({
+  left: "0px",
+  top: "0px",
+  width: `${drawingCanvasBox.width}px`,
+  height: `${drawingCanvasBox.height}px`,
+}));
+const lineTools = ["underline", "strike", "wavy"];
+const lineToolActive = computed(() => lineTools.includes(activeAnnotateTool.value) && activeMouseMode.value === "draw-line");
+const drawingModeActive = computed(() => isDrawingPenActive.value || lineToolActive.value);
+let activeInkStroke = null;
+let drawingFrame = 0;
+
+function activateBrushTool(closePanel = true) {
+  isDrawingPenActive.value = true;
+  activeMouseMode.value = "draw";
+  activeAnnotateTool.value = "pen";
+  closeSelectionTranslator();
+  window.getSelection()?.removeAllRanges();
+  if (closePanel) drawingToolPanelOpen.value = false;
+  nextTick(resizeDrawingCanvas);
+}
+
+function setMoveTool() {
+  isDrawingPenActive.value = false;
+  activeMouseMode.value = "select";
+  activeAnnotateTool.value = "select";
+  drawingToolPanelOpen.value = false;
+  textMarkPanelOpen.value = "";
+  showReaderToast("已切换为移动/选择模式");
+}
+
+function setLineTool(tool) {
+  isDrawingPenActive.value = false;
+  drawingToolPanelOpen.value = false;
+  textMarkPanelOpen.value = "";
+  activeMouseMode.value = "draw-line";
+  activeAnnotateTool.value = tool;
+  closeSelectionTranslator();
+  window.getSelection()?.removeAllRanges();
+  nextTick(resizeDrawingCanvas);
+  showReaderToast(`已开启${textMarkLabel(tool)}，在正文文字行上拖动即可划线`);
+}
+
+function setTextMarkTool(tool) {
+  isDrawingPenActive.value = false;
+  drawingToolPanelOpen.value = false;
+  textMarkPanelOpen.value = tool;
+  activeMouseMode.value = "select";
+  activeAnnotateTool.value = tool;
+  showReaderToast(`已选择${textMarkLabel(tool)}工具`);
+}
+
+function toggleTextMarkPanel(tool) {
+  isDrawingPenActive.value = false;
+  drawingToolPanelOpen.value = false;
+  activeMouseMode.value = "select";
+  activeAnnotateTool.value = tool;
+  textMarkPanelOpen.value = textMarkPanelOpen.value === tool ? "" : tool;
+}
+
+function textMarkLabel(tool = activeAnnotateTool.value) {
+  return {
+    fontColor: "字体颜色",
+    underline: "下划线",
+    strike: "删除线",
+    wavy: "波浪线",
+  }[tool] || "字体颜色";
+}
+
+function toggleBrushPanel() {
+  textMarkPanelOpen.value = "";
+  drawingToolPanelOpen.value = !drawingToolPanelOpen.value;
+  activateBrushTool(false);
+}
+
+function selectBrushColor(color) {
+  selectedColor.value = color;
+  if (!drawingModeActive.value) applyTextColor(color);
+  showStylePopover.value = false;
+}
+
+function handleDockColor(color) {
+  selectedColor.value = color;
+  if (drawingModeActive.value) {
+    showReaderToast(`已切换线条颜色：${textMarkLabel(activeAnnotateTool.value)}`);
+    return;
+  }
+  applyTextColor(color);
+}
+
+function handleCanvasWheel(e) {
+  if (readingScroll.value) {
+    readingScroll.value.scrollTop += e.deltaY;
+  }
+}
+
+function selectMarkColor(color) {
+  selectedColor.value = color;
+  applyToolbarMark(color);
+}
+
+function selectBrushPreset(color) {
+  selectedColor.value = color;
+  activateBrushTool(false);
+}
+
+function activateNativeColorPicker() {
+  brushColorPicker.value?.click?.();
+}
+
+function toggleDrawingPen() {
+  isDrawingPenActive.value = !isDrawingPenActive.value;
+  activeAnnotateTool.value = isDrawingPenActive.value ? "pen" : "highlight";
+  if (isDrawingPenActive.value) {
+    closeSelectionTranslator();
+    window.getSelection()?.removeAllRanges();
+    nextTick(resizeDrawingCanvas);
+    showReaderToast("已开启自由画笔涂鸦模式，可在页面上随意绘图图画");
+  } else {
+    showReaderToast("已退出画笔图画模式");
+  }
+}
+
+function undoLastAnnotation() {
+  if (drawingStrokes.length) {
+    drawingStrokes.pop();
+    persistDrawingStrokes();
+    redrawDrawingCanvas();
+    showReaderToast("已撤销上一条手绘痕迹");
+  } else if (annotations.length) {
+    annotations.pop();
+    persistAnnotations();
+    showReaderToast("已撤销上一条文字批注");
+  } else if (clearedAnnotationSnapshot.value.length) {
+    annotations.push(...clearedAnnotationSnapshot.value);
+    clearedAnnotationSnapshot.value = [];
+    persistAnnotations();
+    showReaderToast("已恢复清除的图画痕迹");
+  } else {
+    showReaderToast("暂无图画痕迹可撤销");
+  }
+}
+
+function drawingStorageKey() {
+  return `papersolver-reader-ink:${workspaceId.value}`;
+}
+
+function loadDrawingStrokes() {
+  drawingStrokes.splice(0);
+  try {
+    const stored = JSON.parse(localStorage.getItem(drawingStorageKey()) || "[]");
+    if (Array.isArray(stored)) drawingStrokes.push(...stored);
+  } catch {
+    // 忽略损坏的本地手绘缓存。
+  }
+  nextTick(resizeDrawingCanvas);
+}
+
+function persistDrawingStrokes() {
+  localStorage.setItem(drawingStorageKey(), JSON.stringify(drawingStrokes));
+}
+
+function resizeDrawingCanvas() {
+  const canvas = drawingCanvas.value;
+  const column = readingColumn.value;
+  if (!canvas || !column) return;
+  drawingCanvasBox.left = 0;
+  drawingCanvasBox.top = 0;
+  drawingCanvasBox.width = Math.max(1, Math.ceil(column.scrollWidth || column.clientWidth));
+  drawingCanvasBox.height = Math.max(1, Math.ceil(column.scrollHeight || column.clientHeight));
+  const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+  const width = drawingCanvasBox.width;
+  const height = drawingCanvasBox.height;
+  if (canvas.width !== Math.ceil(width * dpr) || canvas.height !== Math.ceil(height * dpr)) {
+    canvas.width = Math.ceil(width * dpr);
+    canvas.height = Math.ceil(height * dpr);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+  }
+  redrawDrawingCanvas();
+}
+
+function drawInkStroke(context, stroke) {
+  if (Array.isArray(stroke?.segments) && stroke.segments.length) {
+    drawLineStroke(context, stroke);
+    return;
+  }
+  const points = Array.isArray(stroke?.points) ? stroke.points : [];
+  if (points.length < 1) return;
+  const first = viewportInkPoint(points[0]);
+  context.save();
+  context.strokeStyle = stroke.color || selectedColor.value;
+  context.lineWidth = stroke.tool === "highlight" ? Math.max(8, (stroke.width || 3) * 2.8) : stroke.width || 3;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.globalAlpha = stroke.tool === "highlight"
+    ? Math.min(0.45, Math.max(0.12, stroke.opacity ?? 0.35))
+    : Math.min(1, Math.max(0.1, stroke.opacity ?? 0.95));
+  if (stroke.tool === "wavy") {
+    drawWavyStroke(context, points.map(viewportInkPoint), Math.max(5, (stroke.width || 2) * 2.2));
+  } else {
+    context.beginPath();
+    context.moveTo(first.x, first.y);
+    points.slice(1).forEach(point => {
+      const next = viewportInkPoint(point);
+      context.lineTo(next.x, next.y);
+    });
+    if (points.length === 1) context.lineTo(first.x + 0.1, first.y + 0.1);
+    context.stroke();
+  }
+  context.restore();
+}
+
+function drawLineStroke(context, stroke) {
+  context.save();
+  context.strokeStyle = stroke.color || selectedColor.value;
+  context.lineWidth = Math.max(1, stroke.width || 2);
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.globalAlpha = Math.min(1, Math.max(0.1, stroke.opacity ?? 0.95));
+  stroke.segments.forEach(segment => {
+    const startX = Math.min(segment.x1, segment.x2);
+    const endX = Math.max(segment.x1, segment.x2);
+    if (Math.abs(endX - startX) < 2) return;
+    if (stroke.tool === "wavy") {
+      drawWavyLineSegment(context, startX, endX, segment.y, Math.max(3, (stroke.width || 2) * 1.45));
+    } else {
+      context.beginPath();
+      context.moveTo(startX, segment.y);
+      context.lineTo(endX, segment.y);
+      context.stroke();
+    }
+  });
+  context.restore();
+}
+
+function drawWavyLineSegment(context, startX, endX, y, amplitude = 3) {
+  const wavelength = 14;
+  context.beginPath();
+  context.moveTo(startX, y);
+  const distance = Math.max(1, endX - startX);
+  const steps = Math.max(8, Math.ceil(distance / 4));
+  for (let index = 1; index <= steps; index += 1) {
+    const t = index / steps;
+    const x = startX + distance * t;
+    const wave = Math.sin((distance * t / wavelength) * Math.PI * 2) * amplitude;
+    context.lineTo(x, y + wave);
+  }
+  context.stroke();
+}
+
+function drawWavyStroke(context, points, amplitude = 6) {
+  if (!points.length) return;
+  const wavelength = 12;
+  context.beginPath();
+  points.forEach((point, pointIndex) => {
+    if (pointIndex === 0) {
+      context.moveTo(point.x, point.y);
+      return;
+    }
+    const previous = points[pointIndex - 1];
+    const dx = point.x - previous.x;
+    const dy = point.y - previous.y;
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const steps = Math.max(2, Math.ceil(distance / 5));
+    const nx = -dy / distance;
+    const ny = dx / distance;
+    for (let index = 1; index <= steps; index += 1) {
+      const t = index / steps;
+      const wave = Math.sin(((pointIndex + t) * distance / wavelength) * Math.PI * 2) * amplitude * 0.45;
+      context.lineTo(previous.x + dx * t + nx * wave, previous.y + dy * t + ny * wave);
+    }
+  });
+  context.stroke();
+}
+
+function redrawDrawingCanvas() {
+  const canvas = drawingCanvas.value;
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const context = canvas.getContext("2d");
+  const width = Number.parseFloat(canvas.style.width) || canvas.width / dpr;
+  const height = Number.parseFloat(canvas.style.height) || canvas.height / dpr;
+  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  context.clearRect(0, 0, width, height);
+  drawingStrokes.forEach(stroke => drawInkStroke(context, stroke));
+  if (activeInkStroke) drawInkStroke(context, activeInkStroke);
+}
+
+function drawInkSegment(from, to, stroke) {
+  const canvas = drawingCanvas.value;
+  if (!canvas || !from || !to) return;
+  if (Array.isArray(stroke?.segments)) {
+    redrawDrawingCanvas();
+    return;
+  }
+  const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+  const context = canvas.getContext("2d");
+  const start = viewportInkPoint(from);
+  const end = viewportInkPoint(to);
+  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  context.save();
+  context.strokeStyle = stroke.color || selectedColor.value;
+  context.lineWidth = stroke.tool === "highlight" ? Math.max(8, (stroke.width || 3) * 2.8) : stroke.width || 3;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.globalAlpha = stroke.tool === "highlight"
+    ? Math.min(0.45, Math.max(0.12, stroke.opacity ?? 0.35))
+    : Math.min(1, Math.max(0.1, stroke.opacity ?? 0.95));
+  if (stroke.tool === "wavy") {
+    drawWavyStroke(context, [start, end], Math.max(5, (stroke.width || 2) * 2.2));
+  } else {
+    context.beginPath();
+    context.moveTo(start.x, start.y);
+    context.lineTo(end.x, end.y);
+    context.stroke();
+  }
+  context.restore();
+}
+
+function inkPointFromEvent(event) {
+  const column = readingColumn.value;
+  const rect = column?.getBoundingClientRect();
+  if (!rect) return { x: 0, y: 0 };
+  return {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
+}
+
+function linePointFromEvent(event) {
+  const columnRect = readingColumn.value?.getBoundingClientRect();
+  if (!columnRect) return null;
+  const paragraph = document.elementsFromPoint(event.clientX, event.clientY)
+    .find(element => element?.classList?.contains("selectable-paragraph"));
+  if (!paragraph) return null;
+  const paragraphRect = paragraph.getBoundingClientRect();
+  const style = window.getComputedStyle(paragraph);
+  const fontSize = Number.parseFloat(style.fontSize) || 16;
+  const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.75;
+  const relativeY = Math.max(0, Math.min(paragraphRect.height, event.clientY - paragraphRect.top));
+  const lineIndex = Math.max(0, Math.floor(relativeY / lineHeight));
+  const lineTop = paragraphRect.top + lineIndex * lineHeight;
+  const lineMid = lineTop + lineHeight * 0.52;
+  const lineBase = lineTop + lineHeight * 0.88;
+  const y = activeAnnotateTool.value === "strike" ? lineMid : lineBase;
+  const blockId = paragraph.dataset?.blockId || "paragraph";
+  return {
+    x: Math.max(paragraphRect.left + 2, Math.min(event.clientX, paragraphRect.right - 2)) - columnRect.left,
+    y: y - columnRect.top,
+    lineKey: `${blockId}:${lineIndex}:${Math.round((y - columnRect.top) * 2) / 2}`,
+  };
+}
+
+function viewportInkPoint(point) {
+  return point;
+}
+
+function scheduleDrawingRedraw() {
+  if (drawingFrame) return;
+  drawingFrame = window.requestAnimationFrame(() => {
+    drawingFrame = 0;
+    resizeDrawingCanvas();
+  });
+}
+
+function startInkStroke(event) {
+  if (!drawingModeActive.value) return;
+  event.preventDefault();
+  event.currentTarget?.setPointerCapture?.(event.pointerId);
+  const tool = isDrawingPenActive.value ? "pen" : activeAnnotateTool.value;
+  const firstPoint = tool === "pen" ? inkPointFromEvent(event) : linePointFromEvent(event);
+  if (!firstPoint) {
+    showReaderToast("请在正文文字行上拖动划线");
+    return;
+  }
+  activeInkStroke = {
+    id: `ink-${Date.now()}`,
+    color: selectedColor.value,
+    width: tool === "pen" ? Math.max(1, Number(brushWidth.value || 3)) : Math.max(1, Number(brushWidth.value || 2)),
+    opacity: Math.min(1, Math.max(0.1, Number(brushOpacity.value || 100) / 100)),
+    tool,
+    points: [firstPoint],
+  };
+  if (tool !== "pen") {
+    activeInkStroke.segments = [{
+      lineKey: firstPoint.lineKey,
+      x1: firstPoint.x,
+      x2: firstPoint.x,
+      y: firstPoint.y,
+    }];
+    redrawDrawingCanvas();
+  } else {
+    drawInkSegment(activeInkStroke.points[0], { x: activeInkStroke.points[0].x + 0.1, y: activeInkStroke.points[0].y + 0.1 }, activeInkStroke);
+  }
+}
+
+function moveInkStroke(event) {
+  if (!drawingModeActive.value || !activeInkStroke) return;
+  event.preventDefault();
+  const previous = activeInkStroke.points[activeInkStroke.points.length - 1];
+  const next = activeInkStroke.tool === "pen" ? inkPointFromEvent(event) : linePointFromEvent(event);
+  if (!next) return;
+  if (Math.hypot(next.x - previous.x, next.y - previous.y) < 1.5) return;
+  activeInkStroke.points.push(next);
+  if (activeInkStroke.tool !== "pen") {
+    extendLineStroke(activeInkStroke, next);
+    redrawDrawingCanvas();
+  } else {
+    drawInkSegment(previous, next, activeInkStroke);
+  }
+}
+
+function extendLineStroke(stroke, point) {
+  const segments = stroke.segments || [];
+  let segment = segments[segments.length - 1];
+  if (!segment || segment.lineKey !== point.lineKey) {
+    segment = {
+      lineKey: point.lineKey,
+      x1: point.x,
+      x2: point.x,
+      y: point.y,
+    };
+    segments.push(segment);
+  } else {
+    segment.x1 = Math.min(segment.x1, point.x);
+    segment.x2 = Math.max(segment.x2, point.x);
+  }
+  stroke.segments = segments;
+}
+
+function finishInkStroke(event) {
+  if (!activeInkStroke) return;
+  event?.preventDefault?.();
+  if (activeInkStroke.points.length > 1) {
+    drawingStrokes.push(activeInkStroke);
+    persistDrawingStrokes();
+  }
+  activeInkStroke = null;
+}
+
+function cancelInkStroke() {
+  activeInkStroke = null;
+  redrawDrawingCanvas();
+}
+
+async function pinReadingScreenshot() {
+  const target = readingScroll.value;
+  if (!target) return;
+  showReaderToast("正在截图并固定到屏幕");
+  const canvas = await html2canvas(target, {
+    backgroundColor: null,
+    scale: Math.min(2, window.devicePixelRatio || 1.5),
+    useCORS: true,
+  });
+  const width = Math.min(360, Math.max(260, Math.round(window.innerWidth * 0.24)));
+  pinnedScreenshots.push({
+    id: `shot-${Date.now()}`,
+    dataUrl: canvas.toDataURL("image/png"),
+    x: Math.max(16, window.innerWidth - width - 24),
+    y: 88 + pinnedScreenshots.length * 24,
+    width,
+  });
+  showReaderToast("截图已固定在屏幕右侧");
+}
+
+function removePinnedScreenshot(id) {
+  const index = pinnedScreenshots.findIndex(item => item.id === id);
+  if (index >= 0) pinnedScreenshots.splice(index, 1);
+}
+
+function fitWidth() {
+  const containerWidth = window.innerWidth - (assistantCollapsed.value ? 60 : 360) - 220;
+  if (containerWidth > 400) {
+    const scale = containerWidth / 800;
+    contentScale.value = Math.min(1.6, Math.max(0.8, Number(scale.toFixed(2))));
+    showReaderToast(`已自适应页宽: ${Math.round(contentScale.value * 100)}%`);
+  } else {
+    contentScale.value = 1.0;
+  }
+}
+
+function zoomReaderIn() {
+  contentScale.value = Math.min(1.6, Number((contentScale.value + 0.1).toFixed(2)));
+  showReaderToast(`正文缩放 ${Math.round(contentScale.value * 100)}%`);
+}
+
+function zoomReaderOut() {
+  contentScale.value = Math.max(0.8, Number((contentScale.value - 0.1).toFixed(2)));
+  showReaderToast(`正文缩放 ${Math.round(contentScale.value * 100)}%`);
+}
+
+function showAssistantTab(tab) {
+  assistantTab.value = tab;
+  assistantCollapsed.value = false;
+  if (tab !== "chat") assistantExpanded.value = false;
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+    showReaderToast("已开启全屏沉浸阅读模式");
+  } else {
+    document.exitFullscreen?.().catch(() => {});
+    showReaderToast("已退出全屏模式");
+  }
+}
+
+function triggerSnapshot() {
+  showReaderToast("截图分析功能已开启，框选页面后即可提取图表与公式");
+}
 const abstractTranslation = ref("");
 const abstractTranslating = ref(false);
 const abstractProvider = ref("google");
 const abstractFromPdf = ref("");
 const structuredHasAbstract = ref(false);
+const structuredDocumentReady = ref(false);
 const paperMetaTranslation = reactive({
   title: "",
   authors: "",
@@ -755,6 +1623,7 @@ const selectionTranslator = reactive({
 });
 const annotations = reactive([]);
 const clearedAnnotationSnapshot = ref([]);
+const noteAnnotations = computed(() => annotations.filter(item => item.type !== "mark"));
 function handleProviderChange() {
   const provider = abstractProvider.value;
   abstractTranslation.value = "";
@@ -783,21 +1652,93 @@ const paperChat = reactive({
     { id: 1, role: "assistant", content: "你好，我会优先结合当前论文回答，也可以协助其他学术研究问题。你可以问研究方法、数据、实验结论或学术概念。" },
   ],
 });
+const paperChatWindow = reactive({
+  x: null,
+  y: null,
+  width: 0,
+  height: 0,
+  dragging: false,
+  userMoved: false,
+  offsetX: 0,
+  offsetY: 0,
+});
+const paperChatPanelStyle = computed(() => ({
+  "--paper-chat-x": `${paperChatWindow.x ?? 0}px`,
+  "--paper-chat-y": `${paperChatWindow.y ?? 68}px`,
+  "--paper-chat-w": `${paperChatWindow.width || Math.min(1320, Math.max(360, window.innerWidth - 48))}px`,
+  "--paper-chat-h": `${paperChatWindow.height || Math.min(920, Math.max(480, window.innerHeight - 78))}px`,
+  left: `${paperChatWindow.x ?? 0}px`,
+  top: `${paperChatWindow.y ?? 68}px`,
+  width: `${paperChatWindow.width || Math.min(1320, Math.max(360, window.innerWidth - 48))}px`,
+  height: `${paperChatWindow.height || Math.min(920, Math.max(480, window.innerHeight - 78))}px`,
+  right: "auto",
+  bottom: "auto",
+  transform: "none",
+}));
+let noteSyncTimer = null;
 const tourSteps = [
-  { selector: ".reader-assistant", title: "先看左侧论文内容详解", description: "整个左侧区域就是论文内容详解，集中展示研究背景、问题、方法、实验结论、创新与局限。" },
-  { selector: ".reader-tools", title: "开启全文翻译", description: "这里可以开关全文翻译并调整阅读比例。" },
-  { selector: ".reading-column", title: "选中文字进行操作", description: "拖选原文或译文后，可以翻译、修改字体颜色，也可以写下批注。" },
-  { selector: ".paper-chat-launcher", title: "使用学术问答", description: "右下角可以询问当前论文或其他学术相关问题，生活娱乐等非学术问题不会回答。" },
+  {
+    selector: ".reader-assistant",
+    title: "① 文献综述区",
+    description: "整个左侧区域展示精读后的文献综述，集中提炼研究背景、研究设计、主要发现、贡献价值与局限展望。",
+  },
+  {
+    selector: ".expand-button",
+    title: "② 左侧栏第 1 级折叠：向右大屏全景展开",
+    description: "点击 Tab 栏右侧的【向右展开】按钮，可以将左侧详解面板扩展为全景大屏模式，排版字幅更宽，适合沉浸研读长篇解析报告。再次点击即可收回。",
+  },
+  {
+    selector: ".collapse-button",
+    title: "③ 左侧栏第 2 级折叠：完全收起侧边栏",
+    description: "点击 Tab 栏最右侧的【收起侧边栏】按钮，可以彻底关闭左侧助手栏，让中间区域获得 100% 全屏视觉宽度，专注看 PDF 原文。",
+  },
+  {
+    selector: ".assistant-tabs",
+    title: "④ 目录、图表与思维导图视图",
+    description: "在 Tab 栏可快速切换【论文目录】与【论文图表】，点击【思维导图】还可一键唤起全屏逻辑架构导图并导出 SVG/PNG 图片。",
+  },
+  {
+    selector: ".reader-tools",
+    title: "⑤ 全文双语对照与缩放控制",
+    description: "顶部控制栏支持一键开启/关闭中英双语对照翻译、调节 50%-200% 页面缩放比例以及全屏沉浸阅读模式。",
+  },
+  {
+    selector: ".reading-column",
+    title: "⑥ 划词翻译、高亮与 AI 批注",
+    description: "在原文或译文区鼠标拖选任意词句，即可唤起划词菜单：实时多语种翻译、多色高亮划线、记录笔记或让 AI 深入解释。",
+  },
+  {
+    selector: ".paper-chat-launcher",
+    title: "⑦ 智能学术 AI 问答助手",
+    description: "随时点击右下角浮标唤起学术对话框，针对当前论文提问公式推导、实验参数细节或深度科研问题。",
+  },
 ];
 const readerTour = reactive({ open: false, index: 0, rect: null });
-const figureViewer = reactive({ open: false, pageNumber: 0, caption: "", imageUrl: "" });
+const figureViewer = reactive({ open: false, pageNumber: 0, caption: "", imageUrl: "", rotation: 0, block: null });
 const mindMapModal = reactive({ open: false });
 const mindMapState = reactive({ loading: false, error: "", report: null });
 const mindMapSvg = ref(null);
 const mindMapInstance = shallowRef(null);
 let mindMapRuntimePromise = null;
 let mindMapTransformer = null;
-let mindMapOptions = null;
+let mindMapDeriveOptions = null;
+
+function createMindMapOptions(dark = isDarkTheme.value) {
+  const palette = dark
+    ? ["#818cf8", "#34d399", "#c084fc", "#fb923c", "#38bdf8", "#f472b6"]
+    : ["#2f6df6", "#14a38b", "#8b5cf6", "#f97316", "#0ea5e9", "#e11d48"];
+  return mindMapDeriveOptions
+    ? mindMapDeriveOptions({
+      color: palette,
+      colorFreezeLevel: 2,
+      duration: 240,
+      fitRatio: 0.92,
+      maxInitialScale: 1.8,
+      maxWidth: 460,
+      paddingX: 18,
+    })
+    : null;
+}
 
 function loadMindMapRuntime() {
   if (!mindMapRuntimePromise) {
@@ -806,16 +1747,8 @@ function loadMindMapRuntime() {
       import("markmap-view"),
     ]).then(([markmapLib, markmapView]) => {
       mindMapTransformer = new markmapLib.Transformer();
-      mindMapOptions = markmapView.deriveOptions({
-        color: ["#2f6df6", "#14a38b", "#8b5cf6", "#f97316", "#0ea5e9", "#e11d48"],
-        colorFreezeLevel: 2,
-        duration: 240,
-        fitRatio: 0.92,
-        maxInitialScale: 1.8,
-        maxWidth: 460,
-        paddingX: 18,
-      });
-      return { Markmap: markmapView.Markmap };
+      mindMapDeriveOptions = markmapView.deriveOptions;
+      return { Markmap: markmapView.Markmap, deriveOptions: markmapView.deriveOptions };
     });
   }
   return mindMapRuntimePromise;
@@ -871,29 +1804,6 @@ const activePaper = computed(() => libraryStore.activeDocument || {
   title: "未选择文献",
   authors: "",
   source: "",
-});
-
-const readerPaperTabs = computed(() =>
-  (libraryStore.state.documents || [])
-    .filter(paper => paper?.id)
-    .slice(0, 10),
-);
-
-const compactPageTabs = computed(() => {
-  const count = Number(totalPages.value || pages.length || 0);
-  if (!count) return [];
-  const current = Number(currentPage.value || 1);
-  const candidates = [1, current - 1, current, current + 1, count]
-    .filter(page => page >= 1 && page <= count);
-  const unique = Array.from(new Set(candidates)).sort((a, b) => a - b);
-  return unique.reduce((items, page, index) => {
-    const previous = unique[index - 1];
-    if (previous && page - previous > 1) {
-      items.push({ key: `gap-${previous}-${page}`, label: "…", pageNumber: previous, ellipsis: true });
-    }
-    items.push({ key: `page-${page}`, label: page, pageNumber: page, ellipsis: false });
-    return items;
-  }, []);
 });
 
 const paperSourceLabel = computed(() => String(activePaper.value?.source || "")
@@ -970,10 +1880,149 @@ function isAuthorSupToken(token, value, start) {
   return /[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s*$/.test(value.slice(0, start)) || /^[,，\s*†‡§]/.test(next);
 }
 
-function paperInitial(paper) {
-  const title = String(paper?.title || "").trim();
-  const first = title.match(/[A-Za-z0-9\u4e00-\u9fa5]/)?.[0] || "P";
-  return /[A-Za-z]/.test(first) ? first.toUpperCase() : first;
+function normalizedAuthorSignature(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/\\/g, "")
+    .replace(/\b(orcid|id)\b/g, "")
+    .replace(/\b[a-z]\b\*?/g, "")
+    .replace(/[\s,.;，；、^*†‡§-]+/g, "");
+}
+
+function isLikelyAuthorText(text) {
+  const value = String(text || "").replace(/\\/g, "").replace(/\s+/g, " ").trim();
+  if (!value || value.length > 520) return false;
+  if (/^(abstract|keywords?|introduction|references)\b/i.test(value)) return false;
+  if (isLikelyAffiliationText(value)) return false;
+  const compactValue = value.replace(/\s+\b[a-z]\b\*?/g, "").replace(/\s+/g, " ");
+  const knownAuthors = String(activePaper.value?.authors || "").trim();
+  const knownSignature = normalizedAuthorSignature(knownAuthors);
+  const valueSignature = normalizedAuthorSignature(value);
+  if (knownSignature && valueSignature) {
+    return knownSignature.includes(valueSignature) || valueSignature.includes(knownSignature);
+  }
+  const authorItems = value.split(/\s*[,;，；]\s*/).filter(item =>
+    /^[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4}(?:\s+[a-z]\*?)?$/.test(item.trim())
+  );
+  const nameMatches = compactValue.match(/\b[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4}\b/g) || [];
+  const separators = (value.match(/[,;，；]/g) || []).length;
+  const sentenceWords = /\b(study|paper|method|result|conclusion|diagnosis|treatment|planning|computed|tomography)\b/i.test(value);
+  return !sentenceWords && ((authorItems.length >= 3 && separators >= 2) || (nameMatches.length >= 3 && separators >= 2));
+}
+
+function isLikelyAffiliationText(text) {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  if (!value) return false;
+  return /\b(university|institute|college|school|department|faculty|hospital|clinic|laboratory|lab|center|centre|teknopark|technopark|park|ministry|academy|corporation|company|ltd|inc|gmbh|city|province|state|country|turkey|türkiye|china|usa|uk|ai)\b/i.test(value);
+}
+
+function isLikelyAuthorBlock(block) {
+  if (!block || ["heading", "figure", "table", "equation", "references"].includes(block.kind)) return false;
+  return isLikelyAuthorText(block.text);
+}
+
+function parsedAuthorText() {
+  for (const page of pages.slice(0, 2)) {
+    const blocks = Array.isArray(page.blocks) ? page.blocks : [];
+    for (const block of blocks) {
+      if (isLikelyAuthorBlock(block)) return String(block.text || "").trim();
+      if (/^abstract\b/i.test(String(block.text || "").trim())) break;
+    }
+  }
+  return "";
+}
+
+function authorsForMetadataTranslation() {
+  return String(activePaper.value?.authors || "").trim() || parsedAuthorText();
+}
+
+const exactAuthorNameTranslations = new Map(Object.entries({
+  "rongli zhang": "张荣莉",
+  "kuo feng hung": "洪国峰",
+  "jiegang yang": "杨杰刚",
+  "andrew nalley": "安德鲁·纳利",
+  "xin li": "李鑫",
+  "mohamad koohi-moghadam": "穆罕默德·库希-莫加达姆",
+  "reza safdari": "礼萨·萨夫达里",
+  "dariush lotfi": "达里乌什·洛特菲",
+  "qi yong h. ai": "艾启勇 H.",
+  "yiu yan leung": "梁耀恩",
+  "kyongtae ty bae": "裴京泰",
+  "elaine r. peskind": "伊莱恩·R.·佩斯金德",
+  "murray a. raskind": "默里·A.·拉斯金德",
+  "michelle a. herman": "米歇尔·A.·赫尔曼",
+  "rosemary morrison": "罗丝玛丽·莫里森",
+  "genevieve matthews": "吉纳维芙·马修斯",
+  "a. carol evans": "A.·卡罗尔·埃文斯",
+  "ben boyarko": "本·博亚科",
+  "guerry peavy": "格雷·皮维",
+  "gabriel c. léger": "加布里埃尔·C.·莱杰",
+  "gabriel c. leger": "加布里埃尔·C.·莱杰",
+  "gregory a. jicha": "格雷戈里·A.·吉查",
+  "neela patel": "尼拉·帕特尔",
+  "sharon a. brangman": "莎朗·A.·布兰格曼",
+  "aimee l. pierce": "艾米·L.·皮尔斯",
+  "lon s. schneider": "朗·S.·施奈德",
+  "shelia jin": "谢莉亚·金",
+}));
+
+const authorNameTokenTranslations = new Map(Object.entries({
+  zhang: "张", hung: "洪", yang: "杨", li: "李", ai: "艾", leung: "梁", bae: "裴",
+  rongli: "荣莉", kuo: "国", feng: "峰", jiegang: "杰刚", xin: "鑫", yiu: "耀", yan: "恩", kyongtae: "京泰", ty: "泰",
+  andrew: "安德鲁", nalley: "纳利", mohamad: "穆罕默德", mohammad: "穆罕默德", koohi: "库希", moghadam: "莫加达姆",
+  reza: "礼萨", safdari: "萨夫达里", dariush: "达里乌什", lotfi: "洛特菲",
+  elaine: "伊莱恩", murray: "默里", raskind: "拉斯金德", michelle: "米歇尔", herman: "赫尔曼",
+  rosemary: "罗丝玛丽", morrison: "莫里森", genevieve: "吉纳维芙", matthews: "马修斯",
+  carol: "卡罗尔", evans: "埃文斯", ben: "本", boyarko: "博亚科", guerry: "格雷", peavy: "皮维",
+  gabriel: "加布里埃尔", leger: "莱杰", gregory: "格雷戈里", jicha: "吉查", neela: "尼拉", patel: "帕特尔",
+  sharon: "莎朗", brangman: "布兰格曼", aimee: "艾米", pierce: "皮尔斯", lon: "朗", schneider: "施奈德",
+  shelia: "谢莉亚", sheila: "希拉", jin: "金",
+}));
+
+function containsCjk(text) {
+  return /[\u3400-\u9fff]/.test(String(text || ""));
+}
+
+function isUntranslatedAuthorResult(source, translated) {
+  const result = String(translated || "").trim();
+  if (!result) return true;
+  if (containsCjk(result)) return false;
+  return normalizedAuthorSignature(source) === normalizedAuthorSignature(result) || isLikelyAuthorText(source);
+}
+
+function fallbackAuthorTranslation(authors) {
+  const value = String(authors || "").replace(/\s+/g, " ").trim();
+  if (!value) return "";
+  return value
+    .split(/\s*[,，;；]\s*/)
+    .map(translateSingleAuthorName)
+    .filter(Boolean)
+    .join("、");
+}
+
+function translateSingleAuthorName(name) {
+  const clean = String(name || "")
+    .replace(/\\/g, "")
+    .replace(/\b(ORCID|iD)\b/gi, "")
+    .replace(/[\^*†‡§]+/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/\s+\b[a-z]\b\.?\s*$/i, "")
+    .trim();
+  if (!clean) return "";
+  const exact = exactAuthorNameTranslations.get(clean.toLowerCase());
+  if (exact) return exact;
+  const translated = clean
+    .split(/(\s+|-)/)
+    .map(part => {
+      if (!part.trim() || part === "-") return part === "-" ? "-" : "";
+      if (/^[A-Z]\.?$/i.test(part)) return part.toUpperCase().replace(/\.$/, ".");
+      return authorNameTokenTranslations.get(part.toLowerCase().replace(/\.$/, "")) || part;
+    })
+    .filter(Boolean)
+    .join("·")
+    .replace(/·-·/g, "-")
+    .replace(/\s+/g, "");
+  return translated || clean;
 }
 
 const textColors = [
@@ -984,6 +2033,49 @@ const textColors = [
   { id: "yellow", label: "黄色", value: "#eab308" },
   { id: "green", label: "绿色", value: "#22c55e" },
   { id: "purple", label: "紫色", value: "#a855f7" },
+];
+
+const brushPresets = [
+  { id: "blue", value: "#4f7ee8" },
+  { id: "black", value: "#111827" },
+  { id: "green", value: "#2f8f4e" },
+];
+
+const textMarkTools = [
+  { id: "fontColor", label: "字体颜色", tip: "字体颜色 (C)", iconClass: "mark-font-color" },
+  { id: "underline", label: "下划线", tip: "下划线 (U)", iconClass: "mark-underline" },
+  { id: "strike", label: "删除线", tip: "删除线 (S)", iconClass: "mark-strike" },
+  { id: "wavy", label: "波浪线", tip: "波浪线 (G)", iconClass: "mark-wavy" },
+];
+
+const brushColors = [
+  { id: "rose-200", label: "浅红", value: "#eea29b" },
+  { id: "amber-200", label: "浅橙", value: "#f6c47a" },
+  { id: "yellow-200", label: "浅黄", value: "#fee59a" },
+  { id: "green-200", label: "浅绿", value: "#8ddda8" },
+  { id: "cyan-200", label: "浅青", value: "#87dadd" },
+  { id: "indigo-200", label: "浅蓝紫", value: "#9b99df" },
+  { id: "purple-200", label: "浅紫", value: "#d491db" },
+  { id: "red-500", label: "红色", value: "#e34b3f" },
+  { id: "orange-500", label: "橙色", value: "#f28c22" },
+  { id: "yellow-400", label: "黄色", value: "#f8c84f" },
+  { id: "green-500", label: "绿色", value: "#4bc66b" },
+  { id: "teal-400", label: "蓝绿", value: "#54c7c6" },
+  { id: "blue-500", label: "蓝色", value: "#527ce0" },
+  { id: "violet-500", label: "紫色", value: "#b54ac8" },
+  { id: "red-900", label: "深红", value: "#8f2d25" },
+  { id: "orange-900", label: "棕橙", value: "#a84e19" },
+  { id: "amber-600", label: "深黄", value: "#ec9e2c" },
+  { id: "green-800", label: "深绿", value: "#2d7f40" },
+  { id: "teal-800", label: "深青", value: "#337d7d" },
+  { id: "blue-900", label: "深蓝", value: "#334d8b" },
+  { id: "purple-900", label: "深紫", value: "#6e2b7f" },
+  { id: "white", label: "白色", value: "#ffffff", light: true },
+  { id: "gray-300", label: "浅灰", value: "#d1d5db", light: true },
+  { id: "gray-500", label: "中灰", value: "#9ca3af" },
+  { id: "gray-700", label: "深灰", value: "#666666" },
+  { id: "gray-900", label: "近黑", value: "#222222" },
+  { id: "black", label: "黑色", value: "#000000" },
 ];
 
 const documentOutline = computed(() =>
@@ -1140,12 +2232,8 @@ async function renderMindMap() {
     const svg = mindMapSvg.value;
     if (!svg) return;
     const { root } = mindMapTransformer.transform(mindMapMarkdown.value);
-    
-    if (isDarkTheme.value) {
-      mindMapOptions.color = ["#818cf8", "#34d399", "#c084fc", "#fb923c", "#38bdf8", "#f472b6"];
-    } else {
-      mindMapOptions.color = ["#2f6df6", "#14a38b", "#8b5cf6", "#f97316", "#0ea5e9", "#e11d48"];
-    }
+    const mindMapOptions = createMindMapOptions();
+    if (!mindMapOptions) throw new Error("markmap 配置初始化失败");
     
     if (mindMapInstance.value) {
       mindMapInstance.value.setOptions(mindMapOptions);
@@ -1153,6 +2241,7 @@ async function renderMindMap() {
     } else {
       mindMapInstance.value = Markmap.create(svg, mindMapOptions, root);
     }
+    mindMapState.error = "";
     requestAnimationFrame(() => focusMindMapReadable());
   } catch (err) {
     console.error("Failed to render mind map:", err);
@@ -1196,14 +2285,25 @@ function serializeMindMapSvg() {
   clone.setAttribute("height", String(Math.max(1, Math.round(rect.height || 620))));
   const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
   
-  const textColor = isDarkTheme.value ? "#cbd5e1" : "#172033";
+  const textColor = isDarkTheme.value ? "#f1f5f9" : "#172033";
   const circleFill = isDarkTheme.value ? "#090d16" : "#ffffff";
   const linkOpacity = isDarkTheme.value ? ".58" : ".72";
   
   style.textContent = `
-    .markmap-node text { font: 650 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: ${textColor}; }
-    .markmap-node circle { stroke-width: 1.5px; fill: ${circleFill}; }
-    .markmap-link { stroke-opacity: ${linkOpacity}; }
+    .markmap-node text { font: 650 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: ${textColor} !important; }
+    .markmap-node circle { stroke-width: 1.5px; fill: ${circleFill} !important; }
+    .markmap-link { stroke-opacity: ${linkOpacity} !important; }
+    .markmap-node div,
+    .markmap-node span,
+    .markmap-foreign,
+    .markmap-foreign * {
+      fill: ${textColor} !important;
+      color: ${textColor} !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+      font-size: 15px !important;
+      font-weight: 650 !important;
+      background: transparent !important;
+    }
   `;
   clone.insertBefore(style, clone.firstChild);
   
@@ -1243,9 +2343,9 @@ async function exportMindMapPng() {
   const rect = svg.getBoundingClientRect();
   const width = Math.max(1, Math.round(rect.width || 980));
   const height = Math.max(1, Math.round(rect.height || 620));
-  const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
+  const encoded = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`;
   const image = new Image();
+  image.decoding = "async";
   image.onload = () => {
     const canvas = document.createElement("canvas");
     canvas.width = width * 2;
@@ -1254,13 +2354,18 @@ async function exportMindMapPng() {
     context.fillStyle = isDarkTheme.value ? "#090d16" : "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    URL.revokeObjectURL(url);
     canvas.toBlob((pngBlob) => {
-      if (pngBlob) downloadMindMapBlob(pngBlob, mindMapExportName("png"));
+      if (pngBlob) {
+        downloadMindMapBlob(pngBlob, mindMapExportName("png"));
+      } else {
+        readerToast.value = "PNG 导出失败，请先导出 SVG";
+      }
     }, "image/png");
   };
-  image.onerror = () => URL.revokeObjectURL(url);
-  image.src = url;
+  image.onerror = () => {
+    readerToast.value = "PNG 导出失败，请先导出 SVG";
+  };
+  image.src = encoded;
 }
 
 watch(mindMapMarkdown, () => {
@@ -1639,19 +2744,43 @@ function viewPageFigure(pageNumber, caption) {
   figureViewer.pageNumber = pageNumber;
   figureViewer.caption = caption || `第 ${pageNumber} 页图表`;
   figureViewer.imageUrl = "";
+  figureViewer.rotation = 0;
+  figureViewer.block = null;
   nextTick(() => renderPagePreview(pageNumber, figureCanvasRef.value));
 }
 
 function viewParsedFigure(block, pageNumber) {
   figureViewer.open = true;
   figureViewer.pageNumber = pageNumber;
-  figureViewer.caption = block.text || `第 ${pageNumber} 页图表`;
+  figureViewer.caption = block.text || block.equationNumber || `第 ${pageNumber} 页图表`;
   figureViewer.imageUrl = block.imageUrl || "";
+  figureViewer.rotation = 0;
+  figureViewer.block = block;
 }
 
 function closeFigureViewer() {
   figureViewer.open = false;
   figureViewer.imageUrl = "";
+  figureViewer.rotation = 0;
+  figureViewer.block = null;
+}
+
+function autoRotateFigure(event) {
+  const image = event?.target;
+  if (!image?.naturalWidth || !image?.naturalHeight) return;
+  figureViewer.rotation = shouldAutoRotateFigure(image.naturalWidth, image.naturalHeight) ? 90 : 0;
+}
+
+function shouldAutoRotateFigure(width, height) {
+  return Number(height || 0) > Number(width || 0) * 1.18;
+}
+
+function equationSelectionText(block, pageNumber) {
+  const text = normalizeText(block?.text || "");
+  if (text) return text;
+  const number = normalizeText(block?.equationNumber || "");
+  const page = Number(pageNumber || 0) > 0 ? `，位于第 ${pageNumber} 页` : "";
+  return `论文公式${number ? ` ${number}` : ""}${page}，请结合公式原图和上下文解读其含义。`;
 }
 
 function openColorMenu(event) {
@@ -1812,16 +2941,108 @@ function addSelectionToChat() {
   const text = selectionTranslator.source;
   if (!text) return;
   const selected = compactForSelectionAi(text, 900);
-  paperChat.open = true;
+  openPaperChatPanel();
   paperChat.question = `请结合当前论文解释这段选中内容：\n${selected.text}`;
   closeSelectionTranslator();
   nextTick(() => document.querySelector(".paper-chat-panel textarea")?.focus());
 }
 
+function syncHierarchicalNoteToLibrary(markdown) {
+  const id = activePaper.value?.id;
+  if (!id) return;
+  const note = String(markdown || "").trim();
+  libraryStore.updateDocument(id, { note });
+  clearTimeout(noteSyncTimer);
+  noteSyncTimer = window.setTimeout(() => {
+    libraryStore.persistDocumentPatch(id, { note }).catch((error) => {
+      console.warn("Failed to sync hierarchical notes to library", error);
+      showReaderToast("文献库笔记同步失败，已先保存在本地");
+    });
+  }, 650);
+}
+
+function preferredPaperChatRect() {
+  const marginX = 24;
+  const marginTop = 54;
+  const marginBottom = 24;
+  const width = Math.min(1320, Math.max(360, window.innerWidth - marginX * 2));
+  const height = Math.min(920, Math.max(480, window.innerHeight - marginTop - marginBottom));
+  return {
+    width,
+    height,
+    x: Math.max(12, Math.round((window.innerWidth - width) / 2)),
+    y: marginTop,
+  };
+}
+
+function resetPaperChatWindowPosition() {
+  const rect = preferredPaperChatRect();
+  paperChatWindow.width = rect.width;
+  paperChatWindow.height = rect.height;
+  paperChatWindow.x = rect.x;
+  paperChatWindow.y = rect.y;
+  paperChatWindow.userMoved = false;
+}
+
+function openPaperChatPanel() {
+  resetPaperChatWindowPosition();
+  paperChat.open = true;
+}
+
+function closePaperChatPanel() {
+  paperChat.open = false;
+  paperChatWindow.dragging = false;
+}
+
+function togglePaperChatPanel() {
+  if (paperChat.open) closePaperChatPanel();
+  else openPaperChatPanel();
+}
+
+function startPaperChatDrag(event) {
+  if (event.target?.closest?.("button, textarea, input, a")) return;
+  event.preventDefault();
+  const panel = event.currentTarget?.closest?.(".paper-chat-panel");
+  if (!panel) return;
+  const rect = panel.getBoundingClientRect();
+  paperChatWindow.dragging = true;
+  paperChatWindow.userMoved = true;
+  paperChatWindow.offsetX = event.clientX - rect.left;
+  paperChatWindow.offsetY = event.clientY - rect.top;
+  paperChatWindow.x = rect.left;
+  paperChatWindow.y = rect.top;
+  try {
+    event.currentTarget?.setPointerCapture?.(event.pointerId);
+  } catch {
+    // Window-level listeners below keep dragging reliable even when capture is unavailable.
+  }
+  window.addEventListener("pointermove", movePaperChatDrag);
+  window.addEventListener("pointercancel", stopPaperChatDrag, { once: true });
+  window.addEventListener("pointerup", stopPaperChatDrag, { once: true });
+}
+
+function movePaperChatDrag(event) {
+  if (!paperChatWindow.dragging) return;
+  event.preventDefault();
+  const width = paperChatWindow.width || Math.min(1180, window.innerWidth - 92);
+  const height = paperChatWindow.height || Math.min(880, window.innerHeight - 104);
+  const minTop = 48;
+  const nextX = event.clientX - paperChatWindow.offsetX;
+  const nextY = event.clientY - paperChatWindow.offsetY;
+  paperChatWindow.x = Math.min(Math.max(12, nextX), Math.max(12, window.innerWidth - width - 12));
+  paperChatWindow.y = Math.min(Math.max(minTop, nextY), Math.max(minTop, window.innerHeight - height - 12));
+}
+
+function stopPaperChatDrag() {
+  paperChatWindow.dragging = false;
+  window.removeEventListener("pointermove", movePaperChatDrag);
+  window.removeEventListener("pointercancel", stopPaperChatDrag);
+}
+
 function analyzeFigure(block) {
   if (!block) return;
   const caption = block.text || (block.kind === "table" ? "表格" : "图像");
-  paperChat.open = true;
+  openPaperChatPanel();
 
   let pageText = "";
   for (const page of pages) {
@@ -1958,7 +3179,7 @@ function clearCustomFontColors() {
 
 function clearAllAnnotations() {
   clearCustomFontColors();
-  if (!annotations.length) {
+  if (!annotations.length && !drawingStrokes.length) {
     if (clearedAnnotationSnapshot.value.length) {
       annotations.push(...clearedAnnotationSnapshot.value);
       clearedAnnotationSnapshot.value = [];
@@ -1971,7 +3192,10 @@ function clearAllAnnotations() {
   }
   clearedAnnotationSnapshot.value = annotations.map(item => ({ ...item }));
   annotations.splice(0, annotations.length);
+  drawingStrokes.splice(0, drawingStrokes.length);
   persistAnnotations();
+  persistDrawingStrokes();
+  redrawDrawingCanvas();
   closeSelectionTranslator();
   showReaderToast("已清除字体颜色与全部标注");
 }
@@ -2101,12 +3325,15 @@ function saveAnnotation() {
   } else {
     annotations.push({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      type: "note",
       blockId: selectionTranslator.blockId,
       preview: selectionTranslator.source.slice(0, 40),
       quote: selectionTranslator.source,
       start: selectionTranslator.start,
       end: selectionTranslator.end,
       note,
+      style: "highlight",
+      color: "#bbf7d0",
       createdAt: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
       ...coords,
     });
@@ -2137,18 +3364,43 @@ function editAnnotation(annotation, event) {
   nextTick(() => fitSelectionPopover(true));
 }
 
-function isAbstractBlock(block) {
+function isAbstractHeadingBlock(block) {
   if (!block) return false;
-  if (block.kind === 'abstract') return true;
   const text = String(block.text || "").trim();
-  return /^abstract\b/i.test(text);
+  return block.kind === "heading" && /^abstract\s*[:：]?$/i.test(text);
+}
+
+function isKeywordBlockText(text) {
+  return /^(keywords?|key\s+words)\s*[:：]/i.test(String(text || "").trim());
+}
+
+function normalizeKeywordBlockText(text) {
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (!isKeywordBlockText(raw)) return raw;
+  const matches = [...raw.matchAll(/\bkeywords?\s*[:：]/gi)];
+  if (matches.length > 1 && matches[1].index > 0) {
+    return raw.slice(0, matches[1].index).trim();
+  }
+  return raw;
+}
+
+function normalizeKeywordTranslation(sourceText, translatedText) {
+  const raw = String(translatedText || "").replace(/\s+/g, " ").trim();
+  if (!isKeywordBlockText(sourceText) || !raw) return raw;
+  const withoutRepeatedLabels = raw
+    .replace(/^(关键词|关键字|keywords?|key\s+words)\s*[:：]\s*/i, "")
+    .replace(/\s+(关键词|关键字|keywords?|key\s+words)\s*[:：]\s*.*$/i, "")
+    .trim();
+  return withoutRepeatedLabels ? `关键词：${withoutRepeatedLabels}` : raw;
 }
 
 async function translateBlock(block, force = false) {
   if (!block || !block.text || block.translating) return;
-  if (isAbstractBlock(block)) return;
+  if (isAbstractHeadingBlock(block)) return;
   if (!force && block.translation) return;
-  const textForTranslation = translationTextWithoutCitations(block.text);
+  const normalizedBlockText = normalizeKeywordBlockText(block.text);
+  if (normalizedBlockText && normalizedBlockText !== block.text) block.text = normalizedBlockText;
+  const textForTranslation = translationTextWithoutCitations(normalizedBlockText);
   if (!textForTranslation) return;
 
   block.translating = true;
@@ -2162,7 +3414,11 @@ async function translateBlock(block, force = false) {
       sourceLang: "auto",
       targetLang: "zh-CN",
     }, { timeout: 45000 });
-    block.translation = String(result?.translatedText || result?.text || "").trim();
+    const translated = String(result?.translatedText || result?.text || "").trim();
+    const normalizedTranslation = normalizeKeywordTranslation(block.text, translated);
+    block.translation = isLikelyAuthorBlock(block) && isUntranslatedAuthorResult(block.text, normalizedTranslation)
+      ? fallbackAuthorTranslation(block.text)
+      : normalizedTranslation;
     if (!block.translation) block.translationError = "本段暂时没有返回译文，请更换翻译引擎重试。";
   } catch (error) {
     console.warn("reader paragraph translation failed", block.id, error);
@@ -2242,7 +3498,7 @@ async function translatePaperMetadata(force = false) {
   paperMetaTranslation.authors = "";
 
   const title = String(activePaper.value?.title || "").trim();
-  const authors = String(activePaper.value?.authors || "").trim();
+  const authors = authorsForMetadataTranslation();
   if (title) {
     paperMetaTranslation.loading = true;
     try {
@@ -2269,7 +3525,10 @@ async function translatePaperMetadata(force = false) {
         sourceLang: "auto",
         targetLang: "zh-CN",
       }, { timeout: 45000 });
-      paperMetaTranslation.authors = String(result?.translatedText || "").trim();
+      const translated = String(result?.translatedText || "").trim();
+      paperMetaTranslation.authors = isUntranslatedAuthorResult(authors, translated)
+        ? fallbackAuthorTranslation(authors)
+        : translated;
     } catch (error) {
       console.warn("paper author translation failed", error);
       paperMetaTranslation.authors = "";
@@ -2297,6 +3556,9 @@ async function renderPagePreview(pageNumber, overrideCanvas) {
     viewport,
     transform: outputScale === 1 ? null : [outputScale, 0, 0, outputScale, 0, 0],
   }).promise;
+  if (overrideCanvas) {
+    figureViewer.rotation = shouldAutoRotateFigure(canvas.width, canvas.height) ? 90 : 0;
+  }
 }
 
 function setPageCanvas(pageNumber, element) {
@@ -2347,14 +3609,16 @@ async function loadPdf() {
 async function hydrateMineruPages(document) {
   pages.splice(0, pages.length);
   const parsedPages = Array.isArray(document?.pages) ? document.pages : [];
+  structuredDocumentReady.value = parsedPages.length > 0;
   structuredHasAbstract.value = parsedPages.some(page =>
     (Array.isArray(page.blocks) ? page.blocks : []).some(block =>
-      block.kind === "heading" && /^abstract$/i.test(String(block.text || "").trim())
+      /^abstract\b/i.test(String(block.text || "").trim())
     )
   );
   parsedPages.forEach((sourcePage) => {
     const blocks = (Array.isArray(sourcePage.blocks) ? sourcePage.blocks : []).map(block => ({
       ...block,
+      text: normalizeKeywordBlockText(block.text || ""),
       assetPath: block.imageUrl || "",
       imageUrl: "",
       translation: "",
@@ -2384,6 +3648,8 @@ async function hydrateMineruPages(document) {
       console.warn("mineru asset load failed", block.assetPath, error);
     }
   }));
+  await nextTick();
+  resizeDrawingCanvas();
 }
 
 async function loadStructuredDocument() {
@@ -2410,6 +3676,7 @@ async function loadStructuredDocument() {
     await hydrateMineruPages(document);
     parsingProgress.value = 100;
     if (autoTranslate.value) {
+      translatePaperMetadata(true);
       pages.filter(page => page.pageNumber <= 2).forEach(page => translatePage(page));
     }
   } catch (error) {
@@ -2457,9 +3724,11 @@ async function loadTranslationProviders() {
   }
 }
 
-function captureSelection() {
+function captureSelection(event) {
+  if (isDrawingPenActive.value) return;
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || !selection.rangeCount) {
+    if (captureBlockSelectionFromEvent(event)) return;
     selectionReady.value = false;
     selectedRange.value = null;
     closeSelectionTranslator();
@@ -2479,6 +3748,7 @@ function captureSelection() {
   selectionReady.value = true;
   const selectedText = normalizeText(selection.toString());
   if (!selectedText) {
+    if (captureBlockSelectionFromEvent(event)) return;
     closeSelectionTranslator();
     return;
   }
@@ -2506,6 +3776,36 @@ function captureSelection() {
   placeSelectionPopover(rect, popoverWidth);
   selectionTranslator.open = true;
   nextTick(() => fitSelectionPopover(false));
+}
+
+function captureBlockSelectionFromEvent(event) {
+  const target = event?.target;
+  const blockElement = target?.closest?.(".mineru-equation.selectable-paragraph");
+  if (!blockElement) return false;
+  const selectedText = normalizeText(blockElement.dataset.selectionText || blockElement.innerText || "");
+  if (!selectedText) return false;
+  const rect = blockElement.getBoundingClientRect();
+  selectionReady.value = true;
+  selectedRange.value = null;
+  selectionTranslator.source = selectedText;
+  selectionTranslator.paragraph = selectedText;
+  selectionTranslator.sentence = selectedText;
+  selectionTranslator.preview = selectedText.length > 180 ? `${selectedText.slice(0, 180)}…` : selectedText;
+  selectionTranslator.result = "";
+  selectionTranslator.resultTitle = "";
+  selectionTranslator.loadingText = "正在处理公式…";
+  selectionTranslator.wasCompacted = false;
+  selectionTranslator.error = "";
+  selectionTranslator.blockId = blockElement.dataset.blockId || "";
+  selectionTranslator.start = -1;
+  selectionTranslator.end = -1;
+  selectionTranslator.annotating = false;
+  selectionTranslator.annotationDraft = "";
+  selectionTranslator.editingAnnotationId = "";
+  placeSelectionPopover(rect, 392);
+  selectionTranslator.open = true;
+  nextTick(() => fitSelectionPopover(false));
+  return true;
 }
 
 function applyTextColor(color) {
@@ -2543,9 +3843,74 @@ function applyTextColor(color) {
   selectionReady.value = false;
 }
 
-function applySelectionColor(color) {
-  applyTextColor(color);
+function syncSelectionForToolbarMark() {
+  if (selectionTranslator.blockId && selectionTranslator.start >= 0 && selectionTranslator.end > selectionTranslator.start) return true;
+  const selection = window.getSelection();
+  const range = selectedRange.value || (selection && selection.rangeCount ? selection.getRangeAt(0).cloneRange() : null);
+  if (!range || range.collapsed) return false;
+  const root = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+    ? range.commonAncestorContainer
+    : range.commonAncestorContainer.parentElement;
+  const paragraphElement = root?.closest?.(".selectable-paragraph")
+    || range.startContainer.parentElement?.closest?.(".selectable-paragraph");
+  const selectedText = normalizeText(range.toString());
+  const selectionOffsets = getSelectionOffsets(paragraphElement, range);
+  if (!paragraphElement || !selectedText || !selectionOffsets) return false;
+  selectedRange.value = range.cloneRange();
+  selectionReady.value = true;
+  selectionTranslator.source = selectedText;
+  selectionTranslator.preview = selectedText.length > 180 ? `${selectedText.slice(0, 180)}…` : selectedText;
+  selectionTranslator.blockId = paragraphElement.dataset?.blockId || "";
+  selectionTranslator.start = selectionOffsets.start;
+  selectionTranslator.end = selectionOffsets.end;
+  return Boolean(selectionTranslator.blockId);
+}
+
+function applyToolbarMark(color) {
+  selectedColor.value = color;
+  if (!["fontColor", "underline", "strike", "wavy"].includes(activeAnnotateTool.value)) {
+    activeAnnotateTool.value = "fontColor";
+  }
+  if (!syncSelectionForToolbarMark()) {
+    showReaderToast(`请先选中文本，再添加${textMarkLabel()}标记`);
+    return;
+  }
+  const existingIndex = annotations.findIndex(item =>
+    item.type === "mark"
+    && item.blockId === selectionTranslator.blockId
+    && item.start === selectionTranslator.start
+    && item.end === selectionTranslator.end
+  );
+  const mark = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    type: "mark",
+    blockId: selectionTranslator.blockId,
+    preview: selectionTranslator.source.slice(0, 40),
+    quote: selectionTranslator.source,
+    start: selectionTranslator.start,
+    end: selectionTranslator.end,
+    note: "",
+    style: activeAnnotateTool.value,
+    color,
+    createdAt: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+  };
+  if (existingIndex >= 0) annotations.splice(existingIndex, 1, mark);
+  else annotations.push(mark);
+  persistAnnotations();
+  textMarkPanelOpen.value = "";
   closeSelectionTranslator();
+  window.getSelection()?.removeAllRanges();
+  selectedRange.value = null;
+  selectionReady.value = false;
+  selectionTranslator.blockId = "";
+  selectionTranslator.start = -1;
+  selectionTranslator.end = -1;
+  showReaderToast(`已添加${textMarkLabel()}标记`);
+}
+
+function applySelectionColor(color) {
+  activeAnnotateTool.value = "fontColor";
+  applyToolbarMark(color);
 }
 
 function updateTourRect(attempt = 0) {
@@ -2564,28 +3929,46 @@ function updateTourRect(attempt = 0) {
   readerTour.rect = { left, top, width: right - left, height: bottom - top };
 }
 
+function prepareTourStepState(index) {
+  if (index <= 3) {
+    assistantCollapsed.value = false;
+    assistantTab.value = "chat";
+  }
+}
+
 function nextTourStep() {
   if (readerTour.index >= tourSteps.length - 1) {
-    readerTour.open = false;
-    localStorage.setItem("papersolver-reader-tour-v3", "done");
+    finishTour();
     return;
   }
   readerTour.index += 1;
+  prepareTourStepState(readerTour.index);
   nextTick(updateTourRect);
 }
 
 function previousTourStep() {
   readerTour.index = Math.max(0, readerTour.index - 1);
+  prepareTourStepState(readerTour.index);
+  nextTick(updateTourRect);
+}
+
+function finishTour() {
+  readerTour.open = false;
+  localStorage.setItem("papersolver-reader-tour-v3", "done");
+}
+
+function relaunchReaderTour() {
+  assistantCollapsed.value = false;
+  assistantExpanded.value = false;
+  assistantTab.value = "chat";
+  readerTour.open = true;
+  readerTour.index = 0;
   nextTick(updateTourRect);
 }
 
 function startReaderTour() {
   if (localStorage.getItem("papersolver-reader-tour-v3") === "done") return;
-  assistantCollapsed.value = false;
-  assistantTab.value = "chat";
-  readerTour.open = true;
-  readerTour.index = 0;
-  nextTick(updateTourRect);
+  relaunchReaderTour();
 }
 
 function resetReaderDocumentState() {
@@ -2594,6 +3977,9 @@ function resetReaderDocumentState() {
   window.getSelection()?.removeAllRanges();
   selectedRange.value = null;
   selectionReady.value = false;
+  activeInkStroke = null;
+  drawingStrokes.splice(0);
+  pinnedScreenshots.splice(0);
   pages.splice(0, pages.length);
   pageCanvasElements.clear();
   mineruAssetUrls.splice(0).forEach(url => URL.revokeObjectURL(url));
@@ -2607,6 +3993,7 @@ function resetReaderDocumentState() {
   abstractTranslating.value = false;
   abstractFromPdf.value = "";
   structuredHasAbstract.value = false;
+  structuredDocumentReady.value = false;
   totalPages.value = 0;
   loadedPages.value = 0;
   currentPage.value = 1;
@@ -2622,6 +4009,7 @@ async function switchReaderPaper(id) {
   if (activePaper.value) rememberLastReading(authStore.session.user, activePaper.value);
   resetReaderDocumentState();
   loadAnnotations();
+  loadDrawingStrokes();
   await nextTick();
   if (autoTranslate.value) translatePaperMetadata(true);
   loadStructuredDocument();
@@ -2636,9 +4024,11 @@ function handleReadingScroll() {
   const container = readingScroll.value;
   if (!container) return;
   const scrollable = container.scrollHeight - container.clientHeight;
-  readingProgress.value = scrollable > 0
-    ? Math.min(100, Math.max(0, Math.round((container.scrollTop / scrollable) * 100)))
-    : 0;
+  if (scrollable <= 0 || container.scrollTop + container.clientHeight >= container.scrollHeight - 12) {
+    readingProgress.value = 100;
+  } else {
+    readingProgress.value = Math.min(100, Math.max(0, Math.round((container.scrollTop / scrollable) * 100)));
+  }
   const sections = Array.from(container.querySelectorAll(".reflow-page"));
   const nearest = sections.reduce((best, section) => {
     const distance = Math.abs(section.getBoundingClientRect().top - container.getBoundingClientRect().top - 70);
@@ -2658,7 +4048,16 @@ function openOriginalPdf() {
   if (pdfSource.value) window.open(pdfSource.value, "_blank", "noopener,noreferrer");
 }
 
+function handleReaderResize() {
+  updateTourRect();
+  resizeDrawingCanvas();
+  if (paperChat.open && !paperChatWindow.userMoved) {
+    resetPaperChatWindowPosition();
+  }
+}
+
 onMounted(async () => {
+  applyTheme(currentTheme.value);
   await libraryStore.hydrateLibrary();
   if (activePaper.value) rememberLastReading(authStore.session.user, activePaper.value);
   if (route.query.panel === "analysis") {
@@ -2668,18 +4067,20 @@ onMounted(async () => {
   await loadTranslationProviders();
   if (autoTranslate.value) translatePaperMetadata();
   loadAnnotations();
+  loadDrawingStrokes();
   loadStructuredDocument();
-  window.addEventListener("resize", updateTourRect);
+  window.addEventListener("resize", handleReaderResize);
   window.setTimeout(startReaderTour, 900);
 });
 
 onBeforeUnmount(() => {
   destroyed = true;
   clearTimeout(readerToastTimer);
+  clearTimeout(noteSyncTimer);
   destroyMindMap();
   if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl);
   mineruAssetUrls.forEach(url => URL.revokeObjectURL(url));
-  window.removeEventListener("resize", updateTourRect);
+  window.removeEventListener("resize", handleReaderResize);
   pdfDocument?.destroy?.();
 });
 </script>
@@ -2692,6 +4093,7 @@ onBeforeUnmount(() => {
   --reader-line: #e3e9f2;
   --reader-panel: #f7f9fc;
   --reader-toolbar-height: 60px;
+  --reader-tabbar-height: 34px;
   height: 100vh;
   overflow: hidden;
   background: var(--reader-canvas);
@@ -2699,19 +4101,1422 @@ onBeforeUnmount(() => {
   font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
 }
 
-.reader-toolbar {
+.reader-header-wrapper {
   position: relative;
-  z-index: 30;
-  height: var(--reader-toolbar-height);
+  z-index: 120;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+
+.reader-toolbar-row {
+  position: relative;
+  height: 38px;
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto minmax(240px, 1fr);
+  grid-template-columns: 340px minmax(0, 1fr) 300px;
   align-items: center;
-  gap: 18px;
-  padding: 0 16px;
-  color: #263244;
-  background: #ffffff;
-  border-bottom: 0;
   box-sizing: border-box;
+  transition: grid-template-columns 200ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.reader-toolbar-row.assistant-collapsed {
+  grid-template-columns: 46px minmax(0, 1fr) 300px;
+}
+
+.reader-toolbar-row.assistant-wide {
+  grid-template-columns: clamp(440px, 38vw, 580px) minmax(440px, 1fr) 300px;
+}
+
+.reader-toolbar-row.right-notes-closed {
+  grid-template-columns: 340px minmax(0, 1fr) 44px;
+}
+
+.reader-toolbar-row.assistant-collapsed.right-notes-closed {
+  grid-template-columns: 46px minmax(0, 1fr) 44px;
+}
+
+.reader-toolbar-row.assistant-wide.right-notes-closed {
+  grid-template-columns: clamp(440px, 38vw, 580px) minmax(440px, 1fr) 44px;
+}
+
+.toolbar-sidebar-spacer {
+  min-width: 0;
+  height: 100%;
+}
+
+.toolbar-stage-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+.toolbar-notes-spacer {
+  min-width: 0;
+  height: 100%;
+}
+
+/* 核心集中控制总成 Dock */
+.toolbar-center-dock {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(241, 245, 249, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.7), 0 2px 10px rgba(15, 23, 42, 0.05);
+}
+
+.dock-zoom-widget {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: #ffffff;
+  padding: 2px 4px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+}
+
+.dock-zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #0f172a;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dock-zoom-btn svg {
+  stroke-width: 2.8;
+  color: #0f172a;
+}
+
+.dock-zoom-btn:hover {
+  background: #6366f1;
+  color: #ffffff;
+}
+
+.dock-zoom-btn:hover svg {
+  color: #ffffff;
+}
+
+.dock-scale-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  background: transparent;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dock-style-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dock-color-more-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  border-radius: 50%;
+  background: #ffffff;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.dock-color-more-btn:hover,
+.dock-color-more-btn.active {
+  background: #4f46e5;
+  color: #ffffff;
+  border-color: #4f46e5;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.dock-style-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 220;
+  width: 280px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+  box-sizing: border-box;
+}
+
+.style-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.style-popover-head strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.style-tool-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+}
+
+.style-section {
+  margin-bottom: 10px;
+}
+
+.style-section label,
+.style-custom-color-row span {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.style-color-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.style-color-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.style-color-dot:hover,
+.style-color-dot.active {
+  transform: scale(1.2);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+}
+
+.style-custom-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.style-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.color-preview-circle {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+.hidden-color-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+
+.style-divider {
+  height: 1px;
+  background: rgba(226, 232, 240, 0.8);
+  margin: 10px 0;
+}
+
+.style-control-row {
+  margin-bottom: 10px;
+}
+
+.label-with-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: #64748b;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.label-with-value output {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.slider-with-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slider-with-preview input[type="range"],
+.style-control-row input[type="range"] {
+  flex: 1;
+  accent-color: #6366f1;
+}
+
+.stroke-preview-dot {
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+:root[data-theme="dark"] .dock-zoom-widget {
+  background: #1e293b;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+:root[data-theme="dark"] .dock-zoom-btn {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .dock-zoom-btn svg {
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .dock-zoom-btn:hover {
+  background: #818cf8;
+  color: #0f172a;
+}
+
+:root[data-theme="dark"] .dock-zoom-btn:hover svg {
+  color: #0f172a;
+}
+
+:root[data-theme="dark"] .dock-scale-chip {
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .dock-style-popover {
+  background: rgba(15, 23, 42, 0.96);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+}
+
+:root[data-theme="dark"] .style-popover-head strong,
+:root[data-theme="dark"] .label-with-value output {
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .style-picker-trigger {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #f8fafc;
+}
+
+.zoom-presets-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  width: 140px;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  box-sizing: border-box;
+}
+
+.zoom-popover-head {
+  padding: 4px 8px 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  margin-bottom: 4px;
+}
+
+.zoom-preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.zoom-preset-item:hover {
+  background: rgba(241, 245, 249, 0.9);
+  color: #0f172a;
+}
+
+.zoom-preset-item.active {
+  background: rgba(99, 102, 241, 0.1);
+  color: #4f46e5;
+  font-weight: 700;
+}
+
+.preset-divider {
+  height: 1px;
+  background: rgba(226, 232, 240, 0.8);
+  margin: 4px 0;
+}
+
+.fit-width-item {
+  justify-content: flex-start;
+  gap: 6px;
+  color: #6366f1;
+}
+
+:root[data-theme="dark"] .zoom-presets-popover {
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme="dark"] .zoom-preset-item {
+  color: #94a3b8;
+}
+
+:root[data-theme="dark"] .zoom-preset-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .zoom-preset-item.active {
+  background: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+}
+
+.dock-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(203, 213, 225, 0.8);
+  margin: 0 4px;
+}
+
+.dock-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ⚡ 即时 0 延迟浮动解释提示框 (Instant Zero-Delay Tooltips) */
+.instant-tooltip {
+  position: relative;
+}
+
+.instant-tooltip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px) scale(0.95);
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.08s ease, transform 0.08s ease, visibility 0.08s ease;
+  z-index: 999;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.instant-tooltip:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.dock-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dock-tool-btn:hover {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.dock-tool-btn.active {
+  background: #ffffff;
+  color: #4f46e5;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.18);
+}
+
+.mark-letter {
+  position: relative;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.mark-underline::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: -2px;
+  height: 2px;
+  background: currentColor;
+}
+
+.mark-strike::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: 50%;
+  height: 2px;
+  background: currentColor;
+  transform: translateY(-50%);
+}
+
+.mark-wavy::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: -2px;
+  height: 3px;
+  background: radial-gradient(circle at 2px 2px, transparent 1.5px, currentColor 1.7px, currentColor 2.5px, transparent 2.7px) 0 0 / 6px 3px repeat-x;
+}
+
+/* 调色盘色点 */
+.dock-color-swatches {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 4px 0 6px;
+}
+
+.dock-color-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--dot-color);
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.16s ease;
+}
+
+.dock-color-dot:hover,
+.dock-color-dot.active {
+  transform: scale(1.25);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+}
+
+/* 通用图标按钮 */
+.icon-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.icon-tool-btn:hover:not(:disabled) {
+  background: rgba(241, 245, 249, 0.9);
+  color: #0f172a;
+}
+
+.icon-tool-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.undo-action-btn:hover:not(:disabled) {
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+  transform: rotate(-15deg);
+}
+
+.clear-action-btn:hover:not(:disabled) {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.translate-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  animation: immersive-translate-blink 1.55s ease-in-out infinite;
+}
+
+.translate-pill-btn:hover {
+  background: rgba(99, 102, 241, 0.08);
+  color: #4f46e5;
+}
+
+.translate-pill-btn.active {
+  color: #4f46e5;
+  font-weight: 700;
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.translate-pill-btn .lang-mark {
+  font-size: 11px;
+  font-weight: 800;
+  color: #6366f1;
+}
+
+@keyframes immersive-translate-blink {
+  0%, 100% {
+    box-shadow: 0 0 0 rgba(99, 102, 241, 0);
+    opacity: 0.78;
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(99, 102, 241, 0.34);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .translate-pill-btn {
+    animation: none;
+  }
+}
+
+.download-pdf-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 8px;
+  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.08);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.download-pdf-pill-btn:hover {
+  background: rgba(99, 102, 241, 0.16);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+/* 导航栏底部的微光阅读进度条 */
+.reader-progress-track-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.5px;
+  background: rgba(226, 232, 240, 0.5);
+  overflow: hidden;
+}
+
+.reader-progress-fill-bottom {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #3b82f6, #10b981);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
+  transition: width 0.15s ease-out;
+}
+
+/* 🌙 暗色模式适配 */
+:root[data-theme="dark"] .reader-header-wrapper {
+  background: rgba(15, 23, 42, 0.9);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme="dark"] .toolbar-center-dock {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .dock-tool-btn {
+  color: #94a3b8;
+}
+
+:root[data-theme="dark"] .dock-tool-btn:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme="dark"] .dock-tool-btn.active {
+  background: #1e293b;
+  color: #818cf8;
+  box-shadow: 0 2px 10px rgba(129, 140, 248, 0.25);
+}
+
+:root[data-theme="dark"] .icon-tool-btn {
+  color: #94a3b8;
+}
+
+:root[data-theme="dark"] .icon-tool-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .download-pdf-pill-btn {
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.16);
+}
+
+:root[data-theme="dark"] .download-pdf-pill-btn:hover {
+  background: rgba(99, 102, 241, 0.28);
+  color: #c7d2fe;
+}
+
+.reader-tab-tool {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #303640;
+  cursor: pointer;
+  transition: background 0.08s ease, color 0.08s ease, box-shadow 0.08s ease;
+}
+
+.reader-tab-tool:hover,
+.reader-tab-tool.active {
+  background: #dfe6ee;
+  color: #172033;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.4);
+}
+
+.mark-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 24px;
+  color: currentColor;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mark-icon::after {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  content: "";
+}
+
+.font-color-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mark-underline::after {
+  bottom: 1px;
+  height: 2px;
+  background: currentColor;
+}
+
+.mark-strike::after {
+  top: 12px;
+  height: 2px;
+  background: currentColor;
+}
+
+.mark-wavy::after {
+  bottom: 0;
+  height: 5px;
+  background:
+    radial-gradient(circle at 3px 4px, transparent 3px, currentColor 3.3px, currentColor 4.2px, transparent 4.5px)
+    0 0 / 8px 5px repeat-x;
+}
+
+.mark-tool-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.mark-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  z-index: 95;
+  width: 286px;
+  padding: 10px 12px 12px;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14), 0 2px 8px rgba(15, 23, 42, 0.08);
+  color: #2f333a;
+  transform: translateX(-50%);
+}
+
+.mark-popover-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #20242c;
+}
+
+.mark-popover-head .mark-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 22px;
+}
+
+.mark-popover-head strong {
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.mark-color-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 24px);
+  justify-content: space-between;
+  row-gap: 10px;
+}
+
+.mark-popover-hint {
+  margin-top: 10px;
+  color: #8a94a3;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.tooltip-fast {
+  position: relative;
+}
+
+.tooltip-fast::after,
+.tooltip-fast::before {
+  position: absolute;
+  left: 50%;
+  z-index: 140;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 0.04s linear, transform 0.04s linear;
+}
+
+.tooltip-fast::after {
+  top: calc(100% + 10px);
+  content: attr(data-tip);
+  white-space: nowrap;
+  padding: 7px 10px;
+  border-radius: 5px;
+  background: #22242a;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.24);
+}
+
+.tooltip-fast::before {
+  top: calc(100% + 4px);
+  content: "";
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid #22242a;
+  border-left: 6px solid transparent;
+}
+
+.tooltip-fast:hover::after,
+.tooltip-fast:hover::before {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.natural-tool-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(226, 232, 240, 0.8);
+  margin: 0 4px;
+}
+
+.natural-draw-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.brush-tool-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.move-tool-btn svg,
+.natural-pen-btn svg {
+  flex: 0 0 auto;
+}
+
+.cursor-tool-icon {
+  stroke-width: 2.05;
+}
+
+/* 画笔涂鸦按钮 */
+.natural-pen-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.natural-pen-btn:hover {
+  background: rgba(99, 102, 241, 0.08);
+  color: #4f46e5;
+}
+
+.natural-pen-btn.active {
+  background: linear-gradient(135deg, #6366f1, #3b82f6);
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3);
+}
+
+.brush-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 90;
+  width: 286px;
+  padding: 10px 12px 12px;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14), 0 2px 8px rgba(15, 23, 42, 0.08);
+  color: #2f333a;
+}
+
+.brush-tool-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.brush-tool-choice {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 38px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #20242c;
+  cursor: pointer;
+  transition: background 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.brush-tool-choice:hover,
+.brush-tool-choice.active {
+  background: #dce3eb;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.35);
+}
+
+.brush-tool-choice:active {
+  transform: scale(0.96);
+}
+
+.brush-tool-choice svg {
+  width: 25px;
+  height: 25px;
+}
+
+.brush-squiggle {
+  position: absolute;
+  left: 10px;
+  bottom: 6px;
+  width: 22px;
+  height: 3px;
+  border-radius: 999px;
+  transform: rotate(-8deg);
+}
+
+.brush-divider {
+  height: 1px;
+  margin: 10px 4px 12px;
+  background: #cfd6de;
+}
+
+.brush-color-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 24px);
+  justify-content: space-between;
+  row-gap: 10px;
+}
+
+.brush-color-dot {
+  width: 24px;
+  height: 24px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+}
+
+.brush-color-dot.light {
+  border-color: #d3d8df;
+}
+
+.brush-color-dot:hover,
+.brush-color-dot.active {
+  transform: scale(1.04);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 3px #2f333a, 0 3px 10px rgba(15, 23, 42, 0.2);
+}
+
+.brush-custom-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 30px 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2f333a;
+}
+
+.brush-plus-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #2f333a;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #2f333a;
+  cursor: pointer;
+}
+
+.brush-native-picker {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.brush-control {
+  margin-top: 12px;
+}
+
+.brush-control label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 14px;
+  font-weight: 650;
+  color: #2f333a;
+}
+
+.brush-slider-row {
+  display: grid;
+  grid-template-columns: 1fr 62px;
+  gap: 10px;
+  align-items: center;
+}
+
+.brush-slider-row input[type="range"] {
+  width: 100%;
+  accent-color: #4f7ec8;
+}
+
+.brush-slider-row output {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  height: 34px;
+  border: 1px solid #cfd6de;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #2f333a;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* 通用无框图标按钮 */
+.natural-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.natural-icon-btn:hover:not(:disabled) {
+  background: rgba(226, 232, 240, 0.6);
+  color: #0f172a;
+}
+
+.natural-icon-btn.active {
+  background: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+}
+
+.natural-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.natural-scale-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 7px;
+  background: rgba(248, 250, 252, 0.82);
+  color: #475569;
+  font-size: 12px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.natural-scale-chip:hover {
+  border-color: rgba(99, 102, 241, 0.38);
+  background: rgba(99, 102, 241, 0.08);
+  color: #4f46e5;
+}
+
+.undo-btn {
+  color: #6366f1;
+}
+
+.undo-btn:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.1);
+  color: #4338ca;
+  transform: rotate(-15deg);
+}
+
+/* 调色盘色点组 */
+.natural-color-swatches {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.natural-color-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--swatch-color);
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.18s ease;
+}
+
+.natural-color-dot:hover,
+.natural-color-dot.active {
+  transform: scale(1.25);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+}
+
+/* 全文翻译与 Engine 组 */
+.natural-translate-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.natural-translate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.natural-translate-btn:hover {
+  background: rgba(99, 102, 241, 0.08);
+  color: #4f46e5;
+}
+
+.natural-translate-btn.active {
+  color: #4f46e5;
+  font-weight: 700;
+}
+
+.natural-translate-btn .lang-icon {
+  font-size: 11px;
+  font-weight: 800;
+  color: #6366f1;
+}
+
+.natural-provider-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.natural-provider-wrapper:hover {
+  background: rgba(226, 232, 240, 0.6);
+  color: #0f172a;
+}
+
+.provider-text.google-color { color: #4285F4; }
+.provider-text.baidu-color { color: #2932e1; }
+
+/* 导航栏底部的微光阅读进度条 */
+.reader-progress-track-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(226, 232, 240, 0.5);
+  overflow: hidden;
+}
+
+.reader-progress-fill-bottom {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #3b82f6, #10b981);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
+  transition: width 0.15s ease-out;
+}
+
+/* 🌙 暗色模式 */
+:root[data-theme="dark"] .reader-toolbar.natural-toolbar {
+  background: rgba(15, 23, 42, 0.9);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .reader-tab-center-tools {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.9);
+  box-shadow: 0 1px 12px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme="dark"] .reader-tab-tool {
+  color: #cbd5e1;
+}
+
+:root[data-theme="dark"] .reader-tab-tool:hover,
+:root[data-theme="dark"] .reader-tab-tool.active {
+  background: rgba(148, 163, 184, 0.2);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.14);
+}
+
+:root[data-theme="dark"] .toolbar-color-dot:hover,
+:root[data-theme="dark"] .toolbar-color-dot.active {
+  box-shadow: 0 0 0 2px #0f172a, 0 0 0 4px rgba(248, 250, 252, 0.78);
+}
+
+:root[data-theme="dark"] .natural-pen-btn {
+  color: #cbd5e1;
+}
+
+:root[data-theme="dark"] .natural-pen-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+}
+
+:root[data-theme="dark"] .brush-popover {
+  border-color: rgba(148, 163, 184, 0.34);
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.46);
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .mark-popover {
+  border-color: rgba(148, 163, 184, 0.34);
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.46);
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .mark-popover-head {
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .mark-popover-hint {
+  color: #94a3b8;
+}
+
+:root[data-theme="dark"] .brush-tool-choice {
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .brush-tool-choice:hover,
+:root[data-theme="dark"] .brush-tool-choice.active {
+  background: rgba(148, 163, 184, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.14);
+}
+
+:root[data-theme="dark"] .brush-choice-label {
+  color: #cbd5e1;
+}
+
+:root[data-theme="dark"] .brush-divider {
+  background: rgba(226, 232, 240, 0.18);
+}
+
+:root[data-theme="dark"] .brush-color-dot:hover,
+:root[data-theme="dark"] .brush-color-dot.active {
+  border-color: #0f172a;
+  box-shadow: 0 0 0 3px #f8fafc, 0 4px 14px rgba(0, 0, 0, 0.34);
+}
+
+:root[data-theme="dark"] .brush-custom-row,
+:root[data-theme="dark"] .brush-control label {
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .brush-plus-btn,
+:root[data-theme="dark"] .brush-slider-row output {
+  border-color: rgba(226, 232, 240, 0.24);
+  background: rgba(15, 23, 42, 0.88);
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .natural-scale-chip {
+  border-color: rgba(226, 232, 240, 0.14);
+  background: rgba(15, 23, 42, 0.76);
+  color: #cbd5e1;
+}
+
+:root[data-theme="dark"] .natural-scale-chip:hover {
+  border-color: rgba(129, 140, 248, 0.4);
+  background: rgba(99, 102, 241, 0.18);
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .natural-icon-btn {
+  color: #94a3b8;
+}
+
+:root[data-theme="dark"] .natural-icon-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .undo-btn {
+  color: #818cf8;
+}
+
+:root[data-theme="dark"] .reader-progress-track-bottom {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .reader-progress-track {
@@ -2911,12 +5716,13 @@ onBeforeUnmount(() => {
 .pdf-label-short { display: none; }
 
 .reader-body {
-  height: calc(100vh - var(--reader-toolbar-height));
+  height: calc(100vh - var(--reader-toolbar-height) - var(--reader-tabbar-height));
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr) 226px;
+  grid-template-columns: 340px minmax(0, 1fr) 300px;
   min-height: 0;
   background:
     linear-gradient(90deg, #f8fafc 0, #f7f9fc 300px, #f4f7fb 430px, #edf3f8 100%);
+  transition: grid-template-columns 200ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .reader-assistant {
@@ -2931,49 +5737,81 @@ onBeforeUnmount(() => {
 }
 
 .reader-assistant.collapsed { width: 46px; }
-.reader-body:has(.reader-assistant.collapsed) { grid-template-columns: 46px minmax(0, 1fr) 226px; }
-.reader-body.assistant-wide { grid-template-columns: clamp(440px, 38vw, 580px) minmax(440px, 1fr) 226px; }
-.reader-body:has(.reader-paper-rail.collapsed) { grid-template-columns: 340px minmax(0, 1fr) 52px; }
-.reader-body:has(.reader-assistant.collapsed):has(.reader-paper-rail.collapsed) { grid-template-columns: 46px minmax(0, 1fr) 52px; }
-.reader-body.assistant-wide:has(.reader-paper-rail.collapsed) { grid-template-columns: clamp(440px, 38vw, 580px) minmax(440px, 1fr) 52px; }
+.reader-body:has(.reader-assistant.collapsed) { grid-template-columns: 46px minmax(0, 1fr) 300px; }
+.reader-body.assistant-wide { grid-template-columns: clamp(440px, 38vw, 580px) minmax(440px, 1fr) 300px; }
+
+.reader-body.right-notes-closed {
+  grid-template-columns: 340px minmax(0, 1fr) 44px;
+}
+.reader-body.right-notes-closed:has(.reader-assistant.collapsed) {
+  grid-template-columns: 46px minmax(0, 1fr) 44px;
+}
+.reader-body.right-notes-closed.assistant-wide {
+  grid-template-columns: clamp(440px, 38vw, 580px) minmax(440px, 1fr) 44px;
+}
 .reader-assistant.expanded { width: auto; }
 
 .assistant-tabs {
-  height: 48px;
+  height: 52px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  border-bottom: 0;
-  padding: 6px 12px 4px;
-  background: transparent;
+  gap: 6px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(12px);
   flex: 0 0 auto;
 }
 
 .assistant-tabs button {
-  height: 34px;
-  padding: 0 12px;
+  height: 36px;
+  min-width: 52px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 999px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
-  color: #667085;
-  font-size: 12px;
-  font-weight: 650;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  writing-mode: horizontal-tb;
+  word-break: keep-all;
+  line-height: 1;
   cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.assistant-tabs button:hover { color: #334155; background: rgba(255, 255, 255, .66); }
-.assistant-tabs button.active { color: var(--reader-accent); background: rgba(47, 109, 246, .1); }
+.assistant-tabs button:hover {
+  color: #1e293b;
+  background: transparent;
+  border-bottom-color: rgba(37, 99, 235, 0.24);
+}
+
+.assistant-tabs button.active {
+  color: #2563eb;
+  background: transparent;
+  border-bottom-color: #2563eb;
+  box-shadow: none;
+}
 
 /* Left sidebar expand/collapse buttons */
 .assistant-tabs .icon-button {
   width: 34px;
+  height: 34px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 9px;
   color: #64748b;
-  background: transparent;
+  background: rgba(241, 245, 249, 0.6);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.assistant-tabs .icon-button:hover {
+  color: #0f172a;
+  background: #e2e8f0;
 }
 .expand-button { margin-left: auto; }
 .expand-button:hover, .collapse-button:hover {
@@ -2988,6 +5826,17 @@ onBeforeUnmount(() => {
 }
 .collapse-button { margin-left: 2px; }
 .reader-assistant.collapsed .assistant-tabs button:not(.collapse-button) { display: none; }
+.reader-assistant:not(.expanded) .assistant-tabs {
+  gap: 4px;
+  padding-inline: 10px;
+}
+
+.reader-assistant:not(.expanded) .assistant-tabs button:not(.icon-button) {
+  min-width: 50px;
+  padding-inline: 6px;
+  font-size: 12px;
+  letter-spacing: 0;
+}
 
 .assistant-scroll {
   flex: 1 1 0;
@@ -3047,6 +5896,7 @@ onBeforeUnmount(() => {
 }
 
 .reading-column {
+  position: relative;
   width: min(100% - 86px, 1120px);
   min-height: 100%;
   margin: 0 auto;
@@ -3058,6 +5908,71 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   box-shadow: 0 22px 58px rgba(31, 45, 68, .07);
   font-size: calc(16px * var(--reader-scale));
+}
+
+.reader-drawing-layer {
+  position: absolute;
+  z-index: 46;
+  display: block;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.reader-drawing-layer.active {
+  cursor: crosshair;
+  pointer-events: auto;
+}
+
+.pinned-screenshot-dock {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+}
+
+.pinned-screenshot-card {
+  position: fixed;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.24);
+  pointer-events: auto;
+}
+
+.pinned-screenshot-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid #e5eaf1;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.pinned-screenshot-card header button {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.pinned-screenshot-card header button:hover {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.pinned-screenshot-card img {
+  display: block;
+  width: 100%;
+  max-height: min(62vh, 560px);
+  object-fit: contain;
+  background: #f8fafc;
 }
 
 .paper-heading {
@@ -3125,6 +6040,11 @@ onBeforeUnmount(() => {
   color: #1769e0;
 }
 
+.source-heading.abstract-heading {
+  color: #1f2937;
+  font-size: 0.95em;
+}
+
 .source-paragraph,
 .translated-paragraph {
   max-width: 100%;
@@ -3140,12 +6060,33 @@ onBeforeUnmount(() => {
   position: relative;
   padding: 0 .08em .08em;
   border-radius: 3px;
-  background: linear-gradient(180deg, rgba(255,255,255,0) 44%, rgba(94, 111, 255, .14) 44%, rgba(94, 111, 255, .14) 91%, rgba(255,255,255,0) 91%);
-  box-shadow: inset 0 -1px rgba(48, 72, 186, .16);
+  background: transparent;
+  box-shadow: none;
   cursor: pointer;
 }
 .annotation-highlight:hover {
-  background: linear-gradient(180deg, rgba(255,255,255,0) 38%, rgba(94, 111, 255, .2) 38%, rgba(94, 111, 255, .2) 92%, rgba(255,255,255,0) 92%);
+  background: color-mix(in srgb, var(--mark-color, #527ce0) 10%, transparent);
+}
+.annotation-highlight.mark-fontColor {
+  color: var(--mark-color, inherit);
+}
+.annotation-highlight.mark-underline {
+  text-decoration-line: underline;
+  text-decoration-color: var(--mark-color, #527ce0);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.18em;
+}
+.annotation-highlight.mark-strike {
+  text-decoration-line: line-through;
+  text-decoration-color: var(--mark-color, #527ce0);
+  text-decoration-thickness: 2px;
+}
+.annotation-highlight.mark-wavy {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--mark-color, #527ce0);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.2em;
 }
 .annotation-delete {
   display: inline-grid;
@@ -3318,6 +6259,34 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, .08);
   font-size: 16px;
 }
+.selection-provider-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: fit-content;
+  min-width: 260px;
+  margin: 6px auto 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(31, 42, 61, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.1);
+}
+.selection-provider-panel select {
+  min-width: 132px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #d7dee9;
+  border-radius: 8px;
+  color: #1f2937;
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+}
 .selection-note-action { color: #f6fbf7 !important; }
 .selection-mark-dots {
   position: relative;
@@ -3462,23 +6431,37 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
 }
 
+.apple-ai-launcher,
 .paper-chat-launcher {
   position: fixed;
   right: 24px;
   bottom: 24px;
   z-index: 82;
-  width: 50px;
+  width: auto;
+  min-width: 50px;
   height: 50px;
-  display: grid;
-  place-items: center;
-  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
   border: 1px solid rgba(148, 163, 184, .28);
-  border-radius: 50%;
+  border-radius: 999px;
   color: #2563eb;
   background: rgba(255, 255, 255, .92);
   box-shadow: 0 16px 34px rgba(30, 41, 59, .16);
   backdrop-filter: blur(14px);
   cursor: pointer;
+  transition: right 200ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.apple-ai-launcher.right-notes-open,
+.paper-chat-launcher.right-notes-open {
+  right: 324px;
+}
+
+.apple-ai-launcher.right-notes-closed,
+.paper-chat-launcher.right-notes-closed {
+  right: 60px;
 }
 .paper-chat-launcher:hover { color: #1d4ed8; background: #fff; transform: translateY(-1px); }
 .paper-chat-launcher.open { color: #fff; background: #263a5c; }
@@ -3486,11 +6469,13 @@ onBeforeUnmount(() => {
 .paper-chat-launcher > span { font-size: 26px; font-weight: 300; line-height: 1; }
 .paper-chat-panel {
   position: fixed;
-  right: 24px;
-  bottom: 88px;
+  left: 50%;
+  right: auto;
+  top: 78px;
+  bottom: auto;
   z-index: 81;
-  width: min(440px, calc(100vw - 32px));
-  height: min(640px, calc(100vh - 120px));
+  width: min(1040px, calc(100vw - 96px));
+  height: min(820px, calc(100vh - 112px));
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
@@ -3499,7 +6484,16 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.85);
   box-shadow: 0 12px 48px rgba(15, 23, 42, 0.12), 0 4px 16px rgba(15, 23, 42, 0.04);
   backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  transform: translateX(-50%);
+  transition: width 200ms cubic-bezier(.22, 1, .36, 1), height 200ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.paper-chat-panel.right-notes-open {
+  right: auto;
+}
+
+.paper-chat-panel.right-notes-closed {
+  right: auto;
 }
 .paper-chat-panel > header {
   display: flex;
@@ -3508,22 +6502,27 @@ onBeforeUnmount(() => {
   padding: 16px 20px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.6);
   background: linear-gradient(135deg, rgba(239, 246, 255, 0.6), rgba(255, 255, 255, 0.4));
+  cursor: grab;
+  user-select: none;
 }
+.paper-chat-panel.dragging > header { cursor: grabbing; }
 .paper-chat-mark { width: 36px; height: 36px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 12px; color: #fff; background: linear-gradient(135deg, #3b82f6, #6366f1); font: 800 13px/1 Inter, sans-serif; box-shadow: 0 4px 12px rgba(59,130,246,0.25); }
 .paper-chat-panel > header > div:last-child { display: grid; gap: 4px; }
 .paper-chat-panel > header strong { color: #0f172a; font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
 .paper-chat-panel > header span { max-width: 320px; overflow: hidden; color: #64748b; font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.paper-chat-messages { overflow-y: auto; padding: 20px 20px; background: transparent; display: flex; flex-direction: column; gap: 16px; }
+.paper-chat-messages { overflow-y: auto; padding: 24px 32px; background: transparent; display: flex; flex-direction: column; gap: 18px; }
 .paper-chat-message { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 0; }
+.paper-chat-message.assistant { width: min(860px, 100%); margin-inline: auto; }
+.paper-chat-message.user { width: min(860px, 100%); margin-inline: auto; }
 .paper-chat-message > span { width: 28px; height: 28px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 10px; color: #2563eb; background: rgba(59,130,246,0.1); font-size: 11px; font-weight: 800; }
-.paper-chat-message p { max-width: 86%; margin: 0; padding: 12px 16px; border: 1px solid rgba(226, 232, 240, 0.8); border-radius: 16px; border-top-left-radius: 4px; color: #334155; background: rgba(255,255,255,0.7); font-size: 13px; line-height: 1.6; white-space: pre-wrap; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+.paper-chat-message p { max-width: min(760px, 92%); margin: 0; padding: 12px 16px; border: 1px solid rgba(226, 232, 240, 0.8); border-radius: 16px; border-top-left-radius: 4px; color: #334155; background: rgba(255,255,255,0.7); font-size: 13px; line-height: 1.6; white-space: pre-wrap; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
 .paper-chat-message.user { justify-content: flex-end; }
 .paper-chat-message.user p { color: #fff; border-color: transparent; border-radius: 16px; border-top-right-radius: 4px; background: linear-gradient(135deg, #2563eb, #4f46e5); box-shadow: 0 4px 12px rgba(37,99,235,0.2); }
 .paper-chat-thinking { display: flex; gap: 5px; align-items: center; min-height: 20px; }
 .paper-chat-thinking i { width: 6px; height: 6px; border-radius: 50%; background: #94a3b8; animation: chat-dot 1s ease-in-out infinite; }
 .paper-chat-thinking i:nth-child(2) { animation-delay: .15s; }
 .paper-chat-thinking i:nth-child(3) { animation-delay: .3s; }
-.paper-chat-panel form { display: grid; grid-template-columns: minmax(0, 1fr) 42px; align-items: end; gap: 12px; margin: 0 16px; padding: 12px; border: 1px solid rgba(226, 232, 240, 0.8); border-radius: 20px; background: rgba(255, 255, 255, 0.6); box-shadow: 0 4px 16px rgba(0,0,0,0.03); }
+.paper-chat-panel form { display: grid; grid-template-columns: minmax(0, 1fr) 42px; align-items: end; gap: 12px; margin: 0 auto 16px; width: min(820px, calc(100% - 48px)); padding: 12px; border: 1px solid rgba(226, 232, 240, 0.8); border-radius: 20px; background: rgba(255, 255, 255, 0.6); box-shadow: 0 4px 16px rgba(0,0,0,0.03); }
 .paper-chat-panel textarea { min-height: 42px; max-height: 120px; resize: none; box-sizing: border-box; padding: 12px 14px; border: none; border-radius: 12px; outline: 0; color: #1e293b; background: transparent; font: 13px/1.5 inherit; }
 .paper-chat-panel textarea::placeholder { color: #94a3b8; }
 .paper-chat-panel textarea:focus { background: rgba(255,255,255,0.9); }
@@ -3534,8 +6533,156 @@ onBeforeUnmount(() => {
 .paper-chat-enter-active,
 .paper-chat-leave-active { transition: opacity 160ms ease, transform 180ms cubic-bezier(.22, 1, .36, 1); transform-origin: bottom right; }
 .paper-chat-enter-from,
-.paper-chat-leave-to { opacity: 0; transform: translateY(8px) scale(.98); }
+.paper-chat-leave-to { opacity: 0; transform: translateX(-50%) translateY(8px) scale(.98); }
 @keyframes chat-dot { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
+:root[data-theme="dark"] .apple-ai-launcher,
+:root[data-theme="dark"] .paper-chat-launcher {
+  border-color: rgba(192, 132, 252, 0.3);
+  color: #f6f3ff;
+  background:
+    linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(168, 85, 247, 0.16)),
+    rgba(20, 14, 38, 0.88);
+  box-shadow: 0 18px 42px rgba(5, 3, 12, 0.42), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+:root[data-theme="dark"] .apple-ai-launcher:hover,
+:root[data-theme="dark"] .paper-chat-launcher:hover {
+  color: #ffffff;
+  background:
+    linear-gradient(135deg, rgba(139, 92, 246, 0.36), rgba(217, 70, 239, 0.22)),
+    rgba(26, 19, 48, 0.95);
+  transform: translateY(-1px);
+}
+
+:root[data-theme="dark"] .futuristic-void-panel.paper-chat-panel {
+  border-color: rgba(192, 132, 252, 0.24);
+  background:
+    radial-gradient(circle at 15% 0%, rgba(139, 92, 246, 0.22), transparent 34%),
+    linear-gradient(180deg, rgba(24, 18, 43, 0.96), rgba(10, 8, 20, 0.96));
+  box-shadow: 0 26px 78px rgba(3, 2, 10, 0.58), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+:root[data-theme="dark"] .futuristic-void-panel .void-chat-header,
+:root[data-theme="dark"] .paper-chat-panel > header {
+  border-bottom-color: rgba(192, 132, 252, 0.18);
+  background:
+    linear-gradient(135deg, rgba(109, 40, 217, 0.24), rgba(168, 85, 247, 0.1)),
+    rgba(20, 14, 38, 0.82);
+}
+
+:root[data-theme="dark"] .futuristic-void-panel .void-main-title strong,
+:root[data-theme="dark"] .paper-chat-panel > header strong {
+  color: #f6f3ff;
+}
+
+:root[data-theme="dark"] .futuristic-void-panel .void-sub-title,
+:root[data-theme="dark"] .paper-chat-panel > header span {
+  color: #b9a8e8;
+}
+
+:root[data-theme="dark"] .futuristic-void-panel .tech-tag-pill,
+:root[data-theme="dark"] .futuristic-void-panel .ai-meta-banner {
+  border: 1px solid rgba(192, 132, 252, 0.22);
+  color: #d8b4fe;
+  background: rgba(139, 92, 246, 0.13);
+}
+
+:root[data-theme="dark"] .futuristic-void-panel .quantum-ai-avatar,
+:root[data-theme="dark"] .futuristic-void-panel .assistant-sparkle-avatar,
+:root[data-theme="dark"] .paper-chat-message > span {
+  color: #d8b4fe;
+  background: rgba(139, 92, 246, 0.18);
+  box-shadow: 0 0 18px rgba(139, 92, 246, 0.22);
+}
+
+:root[data-theme="dark"] .futuristic-void-panel .void-close-btn {
+  color: #c4b5fd;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme="dark"] .futuristic-void-panel .void-close-btn:hover {
+  color: #ffffff;
+  background: rgba(139, 92, 246, 0.2);
+}
+
+:root[data-theme="dark"] .futuristic-void-panel .void-chat-body,
+:root[data-theme="dark"] .paper-chat-messages {
+  background: transparent;
+}
+
+:root[data-theme="dark"] .futuristic-void-panel .message-content-wrapper,
+:root[data-theme="dark"] .paper-chat-message p {
+  border-color: rgba(192, 132, 252, 0.18);
+  color: #eee8ff;
+  background: rgba(24, 18, 43, 0.72);
+  box-shadow: 0 10px 28px rgba(5, 3, 12, 0.22);
+}
+
+:root[data-theme="dark"] .paper-chat-message.user p {
+  border-color: transparent;
+  color: #ffffff;
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.28);
+}
+
+:root[data-theme="dark"] .futuristic-void-panel .message-text,
+:root[data-theme="dark"] .futuristic-void-panel .markdown-rendered {
+  color: #eee8ff;
+}
+
+:root[data-theme="dark"] .futuristic-void-panel .void-quick-prompts button {
+  border: 1px solid rgba(192, 132, 252, 0.18);
+  color: #d8ccff;
+  background: rgba(139, 92, 246, 0.1);
+}
+
+:root[data-theme="dark"] .futuristic-void-panel .void-quick-prompts button:hover {
+  border-color: rgba(216, 180, 254, 0.34);
+  color: #ffffff;
+  background: rgba(139, 92, 246, 0.2);
+}
+
+:root[data-theme="dark"] .paper-chat-panel form,
+:root[data-theme="dark"] .futuristic-void-panel .void-input-form {
+  border-color: rgba(192, 132, 252, 0.2);
+  background: rgba(16, 13, 30, 0.72);
+  box-shadow: 0 10px 30px rgba(5, 3, 12, 0.22);
+}
+
+:root[data-theme="dark"] .paper-chat-panel textarea,
+:root[data-theme="dark"] .futuristic-void-panel textarea {
+  color: #f6f3ff;
+  background: transparent;
+}
+
+:root[data-theme="dark"] .paper-chat-panel textarea::placeholder {
+  color: #9b8ac7;
+}
+
+:root[data-theme="dark"] .paper-chat-panel textarea:focus {
+  background: rgba(139, 92, 246, 0.08);
+}
+
+:root[data-theme="dark"] .paper-chat-panel form button,
+:root[data-theme="dark"] .futuristic-void-panel .cyber-send-btn {
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  box-shadow: 0 10px 22px rgba(124, 58, 237, 0.3);
+}
+
+:root[data-theme="dark"] .paper-chat-panel form button:hover:not(:disabled),
+:root[data-theme="dark"] .futuristic-void-panel .cyber-send-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #8b5cf6, #c084fc);
+}
+
+:root[data-theme="dark"] .futuristic-void-panel .void-footer-note,
+:root[data-theme="dark"] .paper-chat-panel > small {
+  color: #8f7bbd;
+}
+
+:root[data-theme="dark"] .paper-chat-thinking i {
+  background: #c084fc;
+}
 .reader-toast {
   position: fixed;
   left: 50%;
@@ -3565,8 +6712,52 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 4px rgba(59, 130, 246, .18), 0 0 0 100vmax rgba(10, 16, 26, .7);
   pointer-events: none;
 }
-.reader-tour-card { position: absolute; z-index: 2; left: 50%; bottom: 46px; width: min(430px, calc(100vw - 32px)); transform: translateX(-50%); padding: 19px 20px; border-radius: 14px; background: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, .28); }
-.reader-tour-card > span { color: #2451a6; font-size: 10px; font-weight: 750; }
+.reader-tour-card {
+  position: absolute;
+  z-index: 10;
+  left: 50%;
+  bottom: 46px;
+  width: min(460px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  padding: 22px 24px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.22), 0 4px 16px rgba(0, 0, 0, 0.08);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tour-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.tour-step-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(129, 140, 248, 0.25);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.tour-skip-btn {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.tour-skip-btn:hover {
+  color: #64748b;
+  background: rgba(0, 0, 0, 0.05);
+}
 
 @media (max-width: 1100px) {
   .reader-toolbar { grid-template-columns: minmax(180px, 1fr) auto auto; gap: 8px; padding-inline: 8px; }
@@ -3578,8 +6769,6 @@ onBeforeUnmount(() => {
   .reading-column { width: calc(100% - 32px); padding: 30px 36px 90px; }
   .block-annotation-note { width: 31px; margin-right: -28px; }
   .block-annotation-note p { display: none; }
-  .reader-paper-tab { grid-template-columns: 1fr; min-height: 50px; }
-  .reader-paper-tab-mark { display: none; }
 }
 
 @media (max-width: 820px) {
@@ -3588,7 +6777,6 @@ onBeforeUnmount(() => {
   .reader-status { display: none; }
   .reader-zoom-control { display: none; }
   .reader-body { position: relative; grid-template-columns: minmax(0, 1fr); }
-  .reader-paper-rail { display: none; }
   .reader-assistant {
     position: absolute;
     inset: 0 auto 0 0;
@@ -3641,14 +6829,90 @@ onBeforeUnmount(() => {
   .block-annotation-note::before { width: 34px; }
   .block-annotation-note p { display: block; }
   .paper-chat-launcher { right: 14px; bottom: 14px; width: 48px; height: 48px; }
-  .paper-chat-panel { right: 8px; bottom: 70px; width: calc(100vw - 16px); height: min(590px, calc(100vh - 82px)); }
+  .paper-chat-panel { left: 50%; right: auto; top: 70px; bottom: auto; width: calc(100vw - 16px); height: min(680px, calc(100vh - 82px)); transform: translateX(-50%); }
   .reader-tour-card { bottom: 18px; width: calc(100vw - 20px); box-sizing: border-box; }
 }
-.reader-tour-card h2 { margin: 7px 0 7px; color: #24324a; font-size: 17px; }
-.reader-tour-card p { margin: 0; color: #596579; font-size: 12px; line-height: 1.7; }
-.reader-tour-card > div { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-.reader-tour-card button { min-height: 34px; padding: 0 14px; border: 0; border-radius: 8px; color: #4b5563; background: #e9edf2; font-size: 11px; font-weight: 700; cursor: pointer; }
-.reader-tour-card button:last-child { color: #fff; background: #2f6df6; }
+.reader-tour-card h2 {
+  margin: 4px 0 8px;
+  color: #0f172a;
+  font-size: 16.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+.reader-tour-card p {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.tour-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+.tour-btn-prev {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  color: #475569;
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tour-btn-prev:hover {
+  color: #0f172a;
+  background: #e2e8f0;
+}
+.tour-btn-next {
+  height: 36px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 10px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #6366f1, #3b82f6);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  transition: all 0.22s;
+}
+.tour-btn-next:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.5);
+}
+
+:root[data-theme="dark"] .reader-tour-card {
+  background: rgba(15, 23, 42, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6) !important;
+}
+:root[data-theme="dark"] .reader-tour-card h2 {
+  color: #f8fafc !important;
+}
+:root[data-theme="dark"] .reader-tour-card p {
+  color: #cbd5e1 !important;
+}
+:root[data-theme="dark"] .tour-step-badge {
+  color: #a5b4fc !important;
+  background: rgba(99, 102, 241, 0.2) !important;
+  border-color: rgba(129, 140, 248, 0.35) !important;
+}
+:root[data-theme="dark"] .tour-btn-prev {
+  color: #cbd5e1 !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+:root[data-theme="dark"] .tour-btn-prev:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+}
 
 .pdf-figure-card {
   display: block;
@@ -3684,8 +6948,9 @@ onBeforeUnmount(() => {
 .pdf-figure-caption { color: #303846; font-size: 0.86em; font-weight: 600; line-height: 1.55; font-family: "Times New Roman", serif; }
 .pdf-figure-view { margin-left: auto; padding: 4px 10px; border: 1px solid #1769e0; border-radius: 5px; color: #1769e0; background: #fff; font-size: 11px; cursor: pointer; }
 .pdf-figure-view:hover { background: #1769e0; color: #fff; }
-.pdf-figure-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: rgba(15, 23, 42, 0.55); }
-.pdf-figure-modal { width: min(90vw, 760px); max-height: 90vh; overflow: auto; padding: 14px; border-radius: 12px; background: #fff; }
+
+.pdf-figure-overlay { position: fixed; left: 0; right: 0; top: var(--reader-toolbar-height); bottom: 0; z-index: 80; display: grid; place-items: center; background: rgba(15, 23, 42, 0.55); padding: 18px; }
+.pdf-figure-modal { width: min(96vw, 1680px); height: calc(100vh - var(--reader-toolbar-height) - 36px); max-height: calc(100vh - var(--reader-toolbar-height) - 36px); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 14px; border-radius: 14px; background: #fff; box-shadow: 0 24px 64px -16px rgba(15, 23, 42, 0.22); }
 .pdf-figure-modal header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #f1f5f9; }
 .pdf-figure-modal header strong { color: #0f172a; font-size: 14px; font-weight: 600; max-width: 60%; }
 .pdf-figure-modal-actions { display: flex; gap: 8px; }
@@ -3693,16 +6958,33 @@ onBeforeUnmount(() => {
 .pdf-figure-analyze-modal:hover { background: #4f46e5; transform: translateY(-1px); box-shadow: 0 4px 10px rgba(99,102,241,0.35); }
 .pdf-figure-modal header > button, .pdf-figure-modal-actions > button:last-child { padding: 5px 12px; border: 0; border-radius: 8px; background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
 .pdf-figure-modal header > button:hover, .pdf-figure-modal-actions > button:last-child:hover { background: #e2e8f0; color: #0f172a; }
-.pdf-figure-modal canvas { max-width: 100%; height: auto !important; background: #fff; }
-.pdf-figure-modal > img { display: block; max-width: 100%; max-height: calc(90vh - 70px); margin: 0 auto; object-fit: contain; }
-.mind-map-overlay { position: fixed; inset: 0; z-index: 82; display: grid; place-items: center; padding: 18px; background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-.mind-map-modal { width: min(98vw, 1480px); height: min(94vh, 980px); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border: 1px solid rgba(23, 32, 51, 0.08); border-radius: 16px; background: #ffffff; box-shadow: 0 24px 64px -16px rgba(15, 23, 42, 0.22); }
-.mind-map-modal header { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 72px; padding: 14px 24px; border-bottom: 1px solid #edf1f6; }
+.pdf-figure-modal-stage {
+  display: grid;
+  min-height: 0;
+  overflow: auto;
+  place-items: center;
+  background: #ffffff;
+}
+.pdf-figure-modal-stage canvas,
+.pdf-figure-modal-stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: #fff;
+  transform-origin: center center;
+  transition: transform 180ms ease;
+}
+.pdf-figure-modal-stage canvas { height: auto !important; }
+.mind-map-overlay { position: fixed; left: 0; right: 0; top: var(--reader-toolbar-height); bottom: 0; z-index: 82; display: grid; place-items: center; padding: 16px; background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.mind-map-modal { width: min(98vw, 1680px); height: calc(100vh - var(--reader-toolbar-height) - 32px); max-height: calc(100vh - var(--reader-toolbar-height) - 32px); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border: 1px solid rgba(23, 32, 51, 0.08); border-radius: 16px; background: #ffffff; box-shadow: 0 24px 64px -16px rgba(15, 23, 42, 0.22); }
+
+.mind-map-modal header { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 64px; padding: 12px 20px; border-bottom: 1px solid #edf1f6; }
 .mind-map-modal header div { display: grid; min-width: 0; gap: 3px; }
 .mind-map-modal header strong { color: #172033; font-size: 18px; font-weight: 800; }
-.mind-map-modal header span { overflow: hidden; max-width: 680px; color: #7b8798; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.mind-map-modal-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
-.mind-map-modal-actions button { height: 36px; padding: 0 16px; border-radius: 99px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+.mind-map-modal header span { overflow: hidden; max-width: min(680px, 42vw); color: #7b8798; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.mind-map-modal-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
+.mind-map-modal-actions button { height: 34px; padding: 0 13px; border-radius: 99px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
 .mind-map-modal-actions button.btn-export { border: 1px solid #dce5ef; color: #475569; background: #ffffff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
 .mind-map-modal-actions button.btn-export:hover { border-color: #94a3b8; color: #0f172a; background: #f8fafc; transform: translateY(-1.5px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
 .mind-map-modal-actions button.btn-export:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
@@ -3713,7 +6995,16 @@ onBeforeUnmount(() => {
 .mind-map-canvas { position: relative; min-height: 0; overflow: hidden; background: linear-gradient(180deg, #f8fafc, #f1f5f9); }
 .mind-map-svg { display: block; width: 100%; height: 100%; min-height: 0; cursor: grab; }
 .mind-map-svg:active { cursor: grabbing; }
-.mind-map-svg :deep(.markmap-node text) { font: 650 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #172033; }
+.mind-map-svg :deep(.markmap-node text),
+.mind-map-svg :deep(.markmap-node tspan),
+.mind-map-svg :deep(.markmap-node div),
+.mind-map-svg :deep(.markmap-node span),
+.mind-map-svg :deep(.markmap-foreign),
+.mind-map-svg :deep(.markmap-foreign *) {
+  font: 650 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  fill: #172033 !important;
+  color: #172033 !important;
+}
 .mind-map-svg :deep(.markmap-node circle) { r: 5; stroke-width: 2px; fill: #ffffff; }
 .mind-map-svg :deep(.markmap-link) { stroke-width: 2px; stroke-opacity: 0.72; }
 .mind-map-zoom-controls { position: absolute; bottom: 24px; right: 24px; z-index: 10; display: flex; gap: 6px; padding: 6px; border: 1px solid rgba(23, 32, 51, 0.08); border-radius: 99px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08); }
@@ -3730,17 +7021,68 @@ onBeforeUnmount(() => {
 .paper-meta-translation { margin: 12px 0 6px; padding-left: 12px; border-left: 2px solid #9fb5d8; }
 .paper-heading .paper-meta-translation p { margin: 4px 0; color: #26364d !important; font-family: "Songti SC", "Noto Serif SC", serif; line-height: 1.74; }
 .paper-heading .paper-title-translation { font-size: clamp(24px, 1.72vw, 30px) !important; font-weight: 850; color: #172842 !important; }
-.paper-heading .paper-author-translation { font-size: 15.5px !important; color: #31445f !important; }
+.paper-author-translation,
+.paper-heading .paper-author-translation {
+  color: #2f7fa9 !important;
+  font-family: Georgia, "Times New Roman", "Songti SC", serif !important;
+  font-size: clamp(15px, 1.18vw, 19px) !important;
+  font-weight: 500;
+  line-height: 1.55 !important;
+  letter-spacing: 0;
+}
+.paper-heading .paper-author-translation .author-name-text,
+.paper-author-translation .author-name-text,
+.paper-heading .paper-author-translation .author-affiliation-sup,
+.paper-author-translation .author-affiliation-sup {
+  color: inherit !important;
+}
+.author-translation-unit { border-left-color: #2f7fa9; }
 .paper-citation-sup { margin-inline: 1px; color: #2563eb; font-size: 0.68em; font-weight: 650; line-height: 0; vertical-align: super; }
-.mineru-equation { overflow-x: auto; margin: 18px 0; padding: 14px 18px; border-left: 3px solid #6d5dfc; background: #f7f6ff; color: #25233d; font: 15px/1.7 "Times New Roman", serif; white-space: pre-wrap; }
+.mineru-equation { overflow-x: auto; margin: 18px 0; padding: 14px 18px; border-left: 3px solid #6d5dfc; background: #f7f6ff; color: #25233d; font: 15px/1.7 "Times New Roman", serif; white-space: pre-wrap; user-select: text; }
+.mineru-equation-image-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-width: max-content;
+}
+.mineru-equation-image-button {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+.mineru-equation-image {
+  display: block;
+  max-width: min(100%, 720px);
+  max-height: 150px;
+  object-fit: contain;
+  object-position: left center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #ffffff;
+}
+.mineru-equation-number {
+  color: #475569;
+  font: 600 13px/1 "Times New Roman", serif;
+  white-space: nowrap;
+}
+.mineru-equation-text { margin: 8px 0 0; color: inherit; background: transparent; font: inherit; white-space: pre-wrap; }
 .reference-block { margin: 12px 0; color: #4a5362; font: 0.82em/1.75 "Times New Roman", "Songti SC", serif; white-space: pre-wrap; }
 :root[data-theme="dark"] .reference-block { color: #cbd5e1; background: rgba(30, 41, 59, 0.35); border-left: 3px solid rgba(148, 163, 184, 0.4); padding: 10px 14px; border-radius: 0 8px 8px 0; }
 :root[data-theme="dark"] .paper-meta-translation { border-left-color: #607da8; }
 :root[data-theme="dark"] .paper-heading .paper-meta-translation p { color: #f1f6ff !important; }
 :root[data-theme="dark"] .paper-heading .paper-title-translation { color: #ffffff !important; }
-:root[data-theme="dark"] .paper-heading .paper-author-translation { color: #e9f1fb !important; }
+:root[data-theme="dark"] .paper-author-translation,
+:root[data-theme="dark"] .paper-heading .paper-author-translation { color: #7dc4ec !important; }
+:root[data-theme="dark"] .author-translation-unit { border-left-color: #7dc4ec; }
 :root[data-theme="dark"] .paper-citation-sup { color: #93c5fd; }
 :root[data-theme="dark"] .mineru-equation { background: rgba(30, 41, 59, 0.6); border-left-color: #818cf8; color: #f1f5f9; }
+:root[data-theme="dark"] .mineru-equation-image { background: #ffffff; }
+:root[data-theme="dark"] .mineru-equation-number { color: #cbd5e1; }
 .assistant-empty { padding: 10px 12px; color: #8a94a4; font-size: 11px; }
 
 .reader-state { min-height: 70vh; display: flex; align-items: center; justify-content: center; gap: 10px; color: #667085; font-size: 13px; }
@@ -3754,174 +7096,6 @@ onBeforeUnmount(() => {
 .reader-loading-track i { display: block; height: 100%; border-radius: inherit; background: #087f8c; transition: width 180ms ease-out; }
 .reader-loading-state small { color: #7a8494; font-size: 11px; }
 .reader-loading-state .reader-process-note { margin-top: 28px; color: #8792a3; font-size: 11px; }
-
-.reader-paper-rail {
-  min-width: 0;
-  overflow-y: auto;
-  padding: 16px 12px;
-  background: rgba(248, 250, 252, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-left: 1px solid rgba(226, 232, 240, 0.8);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.reader-paper-rail.collapsed {
-  padding: 16px 8px;
-  overflow: hidden;
-}
-
-.reader-paper-rail-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 2px 14px;
-  color: #334155;
-}
-.rail-head-info {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  flex: 1 1 auto;
-}
-.rail-head-info span { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; }
-.rail-head-info small { color: #94a3b8; font-size: 11px; font-weight: 600; }
-
-.rail-collapse-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  background: rgba(255, 255, 255, 0.8);
-  color: #64748b;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  flex: 0 0 auto;
-}
-.rail-collapse-btn:hover {
-  background: #ffffff;
-  color: #0f172a;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transform: translateY(-1px);
-}
-.reader-paper-rail.collapsed .reader-paper-rail-head {
-  justify-content: center;
-  margin-bottom: 16px;
-}
-
-.reader-paper-tab {
-  width: 100%;
-  min-height: 56px;
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  padding: 8px 10px;
-  border: 1px solid rgba(255,255,255,0.6);
-  border-radius: 14px;
-  color: #475569;
-  background: rgba(255, 255, 255, 0.6);
-  text-align: left;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.reader-paper-rail.collapsed .reader-paper-tab {
-  grid-template-columns: 36px;
-  justify-content: center;
-  padding: 6px 0;
-  min-height: 48px;
-  border-radius: 12px;
-}
-.reader-paper-tab:hover {
-  transform: translateY(-1.5px);
-  border-color: rgba(255, 255, 255, 0.95);
-  background: rgba(255, 255, 255, .95);
-  box-shadow: 0 6px 20px rgba(15, 23, 42, .07);
-}
-.reader-paper-tab.active {
-  border-color: rgba(99, 102, 241, 0.3);
-  color: #4f46e5;
-  background: #ffffff;
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.12);
-  position: relative;
-}
-.reader-paper-tab.active::before {
-  content: "";
-  position: absolute;
-  left: -1px;
-  top: 18%;
-  bottom: 18%;
-  width: 3px;
-  background: #6366f1;
-  border-radius: 4px;
-}
-.reader-paper-tab-mark {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border-radius: 10px;
-  color: #6366f1;
-  background: rgba(99, 102, 241, 0.08);
-  font-size: 13px;
-  font-weight: 700;
-  transition: all 0.2s ease;
-}
-.reader-paper-tab.active .reader-paper-tab-mark {
-  color: #fff;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3);
-}
-.reader-paper-tab-text {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-.reader-paper-tab-text strong {
-  overflow: hidden;
-  color: inherit;
-  font-size: 11px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.reader-paper-tab-text small {
-  overflow: hidden;
-  color: #8a96a7;
-  font-size: 9px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.reader-page-mini {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 14px 4px 0;
-  padding-top: 12px;
-  border-top: 1px solid rgba(226, 232, 240, .9);
-}
-.reader-page-mini button {
-  min-width: 28px;
-  height: 28px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 9px;
-  color: #64748b;
-  background: rgba(255, 255, 255, .64);
-  font-size: 10px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.reader-page-mini button:hover { color: #334155; background: #fff; }
-.reader-page-mini button.active { color: #fff; background: #2563eb; }
-.reader-page-mini button.muted { color: #a0a8b5; cursor: default; background: transparent; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -3981,6 +7155,21 @@ onBeforeUnmount(() => {
   box-shadow: 0 22px 58px rgba(0, 0, 0, 0.5);
 }
 
+:root[data-theme="dark"] .pinned-screenshot-card {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: #111827;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="dark"] .pinned-screenshot-card header {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  color: #e5e7eb;
+}
+
+:root[data-theme="dark"] .pinned-screenshot-card img {
+  background: #0f172a;
+}
+
 :root[data-theme="dark"] .paper-heading {
   border-bottom-color: rgba(255, 255, 255, 0.1);
 }
@@ -4003,6 +7192,10 @@ onBeforeUnmount(() => {
   color: #60a5fa;
 }
 
+:root[data-theme="dark"] .source-heading.abstract-heading {
+  color: #f4f4f6;
+}
+
 :root[data-theme="dark"] .translated-paragraph {
   color: #cbd5e1;
 }
@@ -4011,42 +7204,69 @@ onBeforeUnmount(() => {
   border-left-color: rgba(99, 102, 241, 0.5);
 }
 
+.reflow-document .paper-heading .paper-meta-translation .paper-author-translation,
+.reflow-document .translation-unit.author-translation-unit .translated-paragraph.paper-author-translation {
+  color: #2f7fa9 !important;
+  font-family: Georgia, "Times New Roman", "Songti SC", serif !important;
+  font-size: clamp(15px, 1.18vw, 19px) !important;
+  font-weight: 500 !important;
+  line-height: 1.55 !important;
+  letter-spacing: 0 !important;
+}
+
+.reflow-document .translation-unit.author-translation-unit {
+  border-left-color: #2f7fa9 !important;
+}
+
+.reflow-document .paper-author-translation .author-name-text,
+.reflow-document .paper-author-translation .author-affiliation-sup {
+  color: inherit !important;
+}
+
+:root[data-theme="dark"] .reflow-document .paper-heading .paper-meta-translation .paper-author-translation,
+:root[data-theme="dark"] .reflow-document .translation-unit.author-translation-unit .translated-paragraph.paper-author-translation {
+  color: #7dc4ec !important;
+}
+
+:root[data-theme="dark"] .reflow-document .translation-unit.author-translation-unit {
+  border-left-color: #7dc4ec !important;
+}
+
+:root[data-theme="dark"] .assistant-tabs {
+  background: linear-gradient(180deg, rgba(16, 23, 37, 0.94), rgba(11, 16, 28, 0.96)) !important;
+  border-bottom-color: rgba(148, 163, 184, 0.18) !important;
+  backdrop-filter: blur(16px) !important;
+}
+
 :root[data-theme="dark"] .assistant-tabs button {
-  color: #94a3b8 !important;
+  color: #aab7ca !important;
   background: transparent !important;
+  border-color: transparent !important;
 }
 
 :root[data-theme="dark"] .assistant-tabs button:hover {
-  color: #f1f5f9 !important;
-  background: rgba(255, 255, 255, 0.1) !important;
+  color: #e0faff !important;
+  background: transparent !important;
+  border-bottom-color: rgba(34, 211, 238, 0.38) !important;
 }
 
 :root[data-theme="dark"] .assistant-tabs button.active {
-  color: #60a5fa !important;
-  background: rgba(59, 130, 246, 0.2) !important;
-  border: 1px solid rgba(96, 165, 250, 0.25) !important;
+  color: #ecfeff !important;
+  background: transparent !important;
+  border-bottom-color: #22d3ee !important;
+  box-shadow: 0 6px 14px -14px rgba(34, 211, 238, 0.5) !important;
 }
 
 :root[data-theme="dark"] .assistant-tabs .icon-button {
-  color: #94a3b8 !important;
-  background: rgba(255, 255, 255, 0.05) !important;
+  color: #cbd5e1 !important;
+  background: rgba(15, 23, 42, 0.78) !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
 }
 
 :root[data-theme="dark"] .assistant-tabs .icon-button:hover {
-  color: #ffffff !important;
-  background: rgba(255, 255, 255, 0.15) !important;
-}
-
-:root[data-theme="dark"] .rail-collapse-btn {
-  background: rgba(30, 41, 59, 0.6) !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-  color: #94a3b8 !important;
-}
-
-:root[data-theme="dark"] .rail-collapse-btn:hover {
-  background: rgba(51, 65, 85, 0.8) !important;
-  color: #f8fafc !important;
-  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #e0faff !important;
+  background: rgba(8, 145, 178, 0.18) !important;
+  border-color: rgba(34, 211, 238, 0.34) !important;
 }
 
 :root[data-theme="dark"] .assistant-scroll h3 {
@@ -4111,8 +7331,14 @@ onBeforeUnmount(() => {
   background: #090d16;
 }
 
-:root[data-theme="dark"] .mind-map-svg :deep(.markmap-node text) {
-  fill: #cbd5e1;
+:root[data-theme="dark"] .mind-map-svg :deep(.markmap-node text),
+:root[data-theme="dark"] .mind-map-svg :deep(.markmap-node tspan),
+:root[data-theme="dark"] .mind-map-svg :deep(.markmap-node div),
+:root[data-theme="dark"] .mind-map-svg :deep(.markmap-node span),
+:root[data-theme="dark"] .mind-map-svg :deep(.markmap-foreign),
+:root[data-theme="dark"] .mind-map-svg :deep(.markmap-foreign *) {
+  fill: #f1f5f9 !important;
+  color: #f1f5f9 !important;
 }
 
 :root[data-theme="dark"] .mind-map-svg :deep(.markmap-node circle) {
@@ -4169,62 +7395,6 @@ onBeforeUnmount(() => {
   color: #ffffff;
 }
 
-/* Right side literature switcher rail */
-:root[data-theme="dark"] .reader-paper-rail {
-  background: rgba(15, 23, 42, 0.65) !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
-  border-left-color: rgba(255, 255, 255, 0.06) !important;
-}
-
-:root[data-theme="dark"] .reader-paper-rail-head {
-  color: #94a3b8 !important;
-}
-
-:root[data-theme="dark"] .reader-paper-tab {
-  background: rgba(255, 255, 255, 0.03) !important;
-  border-color: rgba(255, 255, 255, 0.06) !important;
-  color: #cbd5e1 !important;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important;
-}
-
-:root[data-theme="dark"] .reader-paper-tab:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border-color: rgba(255, 255, 255, 0.15) !important;
-  color: #f8fafc !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
-}
-
-:root[data-theme="dark"] .reader-paper-tab.active {
-  background: linear-gradient(145deg, rgba(30, 64, 175, 0.4), rgba(15, 23, 42, 0.6)) !important;
-  border-color: rgba(59, 130, 246, 0.4) !important;
-  color: #93c5fd !important;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
-}
-
-:root[data-theme="dark"] .reader-paper-tab.active::before {
-  background: #60a5fa !important;
-}
-
-:root[data-theme="dark"] .reader-paper-tab-mark {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05)) !important;
-  color: #60a5fa !important;
-  box-shadow: inset 0 2px 4px rgba(255,255,255,0.05) !important;
-}
-
-:root[data-theme="dark"] .reader-paper-tab.active .reader-paper-tab-mark {
-  background: #2563eb !important;
-  color: #ffffff !important;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
-}
-
-:root[data-theme="dark"] .reader-paper-tab-text strong {
-  color: #f1f5f9 !important;
-}
-:root[data-theme="dark"] .reader-paper-tab-text small {
-  color: #64748b !important;
-}
-
 :root[data-theme="dark"] .icon-button {
   color: #94a3b8 !important;
 }
@@ -4235,6 +7405,7 @@ onBeforeUnmount(() => {
 
 /* Text selection translator popover and annotation editor */
 :root[data-theme="dark"] .selection-result,
+:root[data-theme="dark"] .selection-provider-panel,
 :root[data-theme="dark"] .selection-annotation-editor {
   background: rgba(14, 14, 20, 0.96) !important;
   border-color: rgba(255, 255, 255, 0.12) !important;
@@ -4243,6 +7414,7 @@ onBeforeUnmount(() => {
 }
 
 :root[data-theme="dark"] .selection-result p,
+:root[data-theme="dark"] .selection-provider-panel select,
 :root[data-theme="dark"] .selection-annotation-editor textarea {
   color: #e2e2e6 !important;
   background: #141e2e !important;
@@ -4252,5 +7424,81 @@ onBeforeUnmount(() => {
 :root[data-theme="dark"] .selectable-paragraph::selection {
   background: rgba(59, 130, 246, 0.35) !important;
   color: #ffffff !important;
+}
+
+.paper-chat-panel.futuristic-void-panel {
+  left: var(--paper-chat-x) !important;
+  top: var(--paper-chat-y) !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: var(--paper-chat-w) !important;
+  max-width: none !important;
+  height: var(--paper-chat-h) !important;
+  max-height: none !important;
+  transform: none !important;
+}
+
+.paper-chat-panel.futuristic-void-panel.positioned {
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+}
+
+.paper-chat-panel.futuristic-void-panel .paper-chat-messages,
+.paper-chat-panel.futuristic-void-panel .void-chat-body {
+  padding: 28px clamp(30px, 5vw, 72px) !important;
+}
+
+.paper-chat-panel.futuristic-void-panel .paper-chat-message.assistant,
+.paper-chat-panel.futuristic-void-panel .paper-chat-message.user {
+  width: min(940px, 100%) !important;
+}
+
+.paper-chat-panel.futuristic-void-panel .paper-chat-message p,
+.paper-chat-panel.futuristic-void-panel .message-content-wrapper {
+  max-width: 100% !important;
+}
+
+.paper-chat-panel.futuristic-void-panel form,
+.paper-chat-panel.futuristic-void-panel .void-input-form {
+  width: min(940px, calc(100% - 64px)) !important;
+}
+
+.paper-chat-panel.futuristic-void-panel .markdown-rendered strong,
+.paper-chat-panel.futuristic-void-panel .markdown-rendered b,
+.paper-chat-panel.futuristic-void-panel .message-text strong,
+.paper-chat-panel.futuristic-void-panel .message-text b {
+  color: #0f766e !important;
+  font-weight: 800;
+}
+
+.paper-chat-panel.futuristic-void-panel .markdown-rendered code,
+.paper-chat-panel.futuristic-void-panel .message-text code {
+  color: #0f766e !important;
+  background: rgba(20, 184, 166, 0.1) !important;
+  border: 1px solid rgba(20, 184, 166, 0.18) !important;
+}
+
+:root[data-theme="dark"] .paper-chat-panel.futuristic-void-panel .markdown-rendered strong,
+:root[data-theme="dark"] .paper-chat-panel.futuristic-void-panel .markdown-rendered b,
+:root[data-theme="dark"] .paper-chat-panel.futuristic-void-panel .message-text strong,
+:root[data-theme="dark"] .paper-chat-panel.futuristic-void-panel .message-text b {
+  color: #e8fbff !important;
+}
+
+:root[data-theme="dark"] .paper-chat-panel.futuristic-void-panel .markdown-rendered code,
+:root[data-theme="dark"] .paper-chat-panel.futuristic-void-panel .message-text code,
+:root[data-theme="dark"] .paper-chat-panel.futuristic-void-panel .markdown-rendered a,
+:root[data-theme="dark"] .paper-chat-panel.futuristic-void-panel .message-text a {
+  color: #67e8f9 !important;
+  background: rgba(8, 145, 178, 0.16) !important;
+  border-color: rgba(34, 211, 238, 0.18) !important;
+}
+
+@media (max-width: 760px) {
+  .paper-chat-panel.futuristic-void-panel form,
+  .paper-chat-panel.futuristic-void-panel .void-input-form {
+    width: calc(100% - 24px) !important;
+  }
 }
 </style>

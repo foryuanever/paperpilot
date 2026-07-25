@@ -85,12 +85,8 @@ export const paperpilotApi = {
     const { data } = await apiClient.get(`/api/admin/model-config/pool/${id}/models`, { timeout: 120000 });
     return data;
   },
-  async testModelConfig(id, modelName) {
-    const { data } = await apiClient.post(`/api/admin/pool/${id}/test-model`, null, { params: { modelName } });
-    return data;
-  },
   async deleteModelRoute(id) {
-    await apiClient.delete(`/api/admin/pool/${id}`);
+    await apiClient.delete(`/api/admin/model-config/pool/${id}`);
   },
   async deleteRelayRoute(id) {
     const { data } = await apiClient.delete(`/api/admin/model-config/pool/${id}/relay`);
@@ -125,6 +121,14 @@ export const paperpilotApi = {
       },
       timeout: 180000,
     });
+    return data;
+  },
+  async importZoteroOnline(payload) {
+    const { data } = await apiClient.post("/api/papers/import-zotero-online", payload, { timeout: 180000 });
+    return data;
+  },
+  async importZoteroLocal(payload = {}) {
+    const { data } = await apiClient.post("/api/papers/import-zotero-local", payload, { timeout: 180000 });
     return data;
   },
   async getDashboardSummary() {

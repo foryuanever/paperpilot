@@ -149,13 +149,12 @@ router.beforeEach((to) => {
     return { name: "login" };
   }
   const userRole = authStore.session.user?.role;
-  if (to.meta.adminOnly && userRole !== "管理员") {
+  const userId = authStore.session.user?.userId;
+  const hasBackendUserId = Number.isFinite(Number(userId));
+  if (to.meta.adminOnly && (userRole !== "管理员" || !hasBackendUserId)) {
     return { path: "/library" };
   }
   if (authStore.session.isAuthenticated && (to.path === "/" || to.path === "/login")) {
-    if (userRole === "管理员") {
-      return { path: "/admin" };
-    }
     return { path: "/library" };
   }
   return true;

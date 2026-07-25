@@ -59,6 +59,40 @@ public class PaperController {
         return zoteroImportService.importFile(file);
     }
 
+    @PostMapping("/import-zotero-online")
+    public java.util.Map<String, Object> importZoteroOnline(@RequestBody java.util.Map<String, Object> body) throws IOException, InterruptedException {
+        String userId = java.util.Objects.toString(body.get("userId"), "").trim();
+        String apiKey = java.util.Objects.toString(body.get("apiKey"), "").trim();
+        int limit = 100;
+        Object rawLimit = body.get("limit");
+        if (rawLimit instanceof Number number) {
+            limit = number.intValue();
+        } else if (rawLimit != null) {
+            try {
+                limit = Integer.parseInt(rawLimit.toString());
+            } catch (NumberFormatException ignored) {
+                limit = 100;
+            }
+        }
+        return zoteroImportService.importOnline(userId, apiKey, limit);
+    }
+
+    @PostMapping("/import-zotero-local")
+    public java.util.Map<String, Object> importZoteroLocal(@RequestBody(required = false) java.util.Map<String, Object> body) throws IOException, InterruptedException {
+        int limit = 100;
+        Object rawLimit = body == null ? null : body.get("limit");
+        if (rawLimit instanceof Number number) {
+            limit = number.intValue();
+        } else if (rawLimit != null) {
+            try {
+                limit = Integer.parseInt(rawLimit.toString());
+            } catch (NumberFormatException ignored) {
+                limit = 100;
+            }
+        }
+        return zoteroImportService.importLocal(limit);
+    }
+
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public LibraryPaperVO uploadNewPaper(@RequestParam("file") MultipartFile file) throws IOException {
         if (file.isEmpty()) {

@@ -173,7 +173,8 @@
                     <template v-if="canTryRead(paper)">
                       <button class="spatial-btn spatial-btn-dual" @click="openDualReader(paper)">对照翻译</button>
                       <button class="spatial-btn spatial-btn-line-ai" @click="openLineAiReader(paper)">
-                        <span>逐段翻译</span>
+                        <span>沉浸翻译</span>
+                        <em class="reader-recommend-badge">荐</em>
                       </button>
                     </template>
                     <button v-else class="spatial-btn spatial-btn-warning" @click="openPdfLinkEditor(paper)">关联 PDF</button>
@@ -247,7 +248,7 @@
           <label class="file-drop field-wide">
             <input type="file" accept="application/pdf,.pdf" @change="selectPersonalPdf" />
             <strong>{{ personalPdf?.name || "选择本地 PDF" }}</strong>
-            <small>上传后由 PaperSolver 储存，并可直接进入对照或逐段翻译。</small>
+            <small>上传后由 PaperSolver 储存，并可直接进入对照或沉浸翻译。</small>
           </label>
           <footer class="field-wide">
             <button type="button" class="spatial-btn spatial-btn-ghost" @click="resetPersonalPaper">清空</button>
@@ -262,27 +263,68 @@
         <header>
           <div>
             <h2>从 Zotero 导入</h2>
-            <p>上传 Zotero 导出的 BibTeX、RIS 或 CSL JSON 文件，批量写入当前账号文献库。</p>
+            <p>读取本机 Zotero Desktop 文献库，自动导入题录并复制已保存的 PDF 附件。</p>
           </div>
         </header>
         <section class="zotero-import-panel">
           <div class="zotero-copy">
-            <span>Zotero 导入</span>
-            <h3>把 Zotero 文件夹批量带进文献库</h3>
-            <p>在 Zotero 里选择条目或文件夹，导出为 BibTeX、RIS 或 CSL JSON 后上传。系统会读取标题、作者、年份、期刊、DOI/URL，并自动合并重复文献。</p>
+            <span>LOCAL ZOTERO</span>
+            <h3>同步文献和本机 PDF</h3>
+            <p>保持 Zotero Desktop 打开，PaperSolver 会读取当前本机文库；如果条目下有 PDF 附件，会复制到项目 uploads，进入阅读器后不需要再次手动上传。</p>
+            <div class="zotero-step-grid" aria-label="Zotero 同步流程">
+              <div>
+                <b>1</b>
+                <strong>连接本机</strong>
+                <small>读取 23119 本机服务</small>
+              </div>
+              <div>
+                <b>2</b>
+                <strong>同步题录</strong>
+                <small>标题、作者、摘要、年份</small>
+              </div>
+              <div>
+                <b>3</b>
+                <strong>复制 PDF</strong>
+                <small>Zotero storage 附件</small>
+              </div>
+            </div>
             <div class="zotero-format-row">
+              <b>本机同步</b>
+              <b>PDF 附件</b>
               <b>BibTeX</b>
               <b>RIS</b>
               <b>CSL JSON</b>
             </div>
           </div>
           <div class="zotero-action-box">
+            <div class="zotero-online-card">
+              <div class="zotero-card-head">
+                <div>
+                  <strong>本机 Zotero 同步</strong>
+                  <small>推荐方式，可自动带入本地 PDF 附件。</small>
+                </div>
+                <span>推荐</span>
+              </div>
+              <label class="zotero-limit-field">
+                <span>同步上限</span>
+                <input v-model.number="zoteroOnline.limit" type="number" min="1" max="200" />
+                <em>篇</em>
+              </label>
+              <button class="spatial-btn spatial-btn-accent" type="button" :disabled="zoteroOnline.importing" @click="submitZoteroOnlineImport">
+                {{ zoteroOnline.importing ? "读取本机 Zotero 中…" : "检测本机 Zotero 并同步" }}
+              </button>
+              <small class="zotero-safe-note">不读取或保存 Zotero 密码。若 Zotero 未开启本机通信，系统会提示去设置中启用。</small>
+            </div>
+            <div class="zotero-divider"><span>或上传导出文件</span></div>
             <label class="zotero-file-drop">
               <input type="file" accept=".bib,.ris,.json,application/json,text/plain" @change="selectZoteroFile" />
+              <span class="zotero-file-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
+              </span>
               <strong>{{ zoteroFile?.name || "选择 Zotero 导出文件" }}</strong>
               <small>{{ zoteroFile ? formatFileSize(zoteroFile.size) : "从 Zotero 导出的 .bib / .ris / .json" }}</small>
             </label>
-            <button class="spatial-btn spatial-btn-accent" type="button" :disabled="zoteroImporting || !zoteroFile" @click="submitZoteroImport">
+            <button class="spatial-btn spatial-btn-ghost zotero-file-import-btn" type="button" :disabled="zoteroImporting || !zoteroFile" @click="submitZoteroImport">
               {{ zoteroImporting ? "导入中…" : "从 Zotero 导入" }}
             </button>
             <div v-if="zoteroResult" class="zotero-result" :class="{ partial: zoteroResult.failed > 0 }">
@@ -339,7 +381,7 @@
       <section class="note-modal">
         <header>
           <div>
-            <span>{{ noteEditor.paper?.note ? "已保存笔记" : "尚未添加笔记" }}</span>
+            <span>{{ noteEditor.paper?.note ? "已同步阅读页 Markdown" : "尚未添加笔记" }}</span>
             <h3>{{ noteEditor.paper?.title || "我的笔记" }}</h3>
           </div>
           <button type="button" @click="closeNoteEditor">×</button>
@@ -348,7 +390,7 @@
         <textarea
           v-model="noteEditor.text"
           class="note-modal-editor"
-          placeholder="补充阅读结论、正文页码、实验结果、组会问题、导师建议..."
+          placeholder="这里保存的是阅读页右侧层级笔记导出的 Markdown。可补充阅读结论、正文页码、实验结果、组会问题、导师建议..."
         ></textarea>
         <footer>
           <button type="button" class="spatial-btn spatial-btn-ghost" @click="closeNoteEditor">取消</button>
@@ -368,7 +410,7 @@
           </div>
           <button type="button" @click="closePdfLinkEditor">×</button>
         </header>
-        <p class="note-paper-title">选择本地 PDF 文件上传，上传后即可进入双栏或逐段翻译。</p>
+        <p class="note-paper-title">选择本地 PDF 文件上传，上传后即可进入双栏或沉浸翻译。</p>
         <label class="pdf-upload-drop field-wide">
           <input type="file" accept="application/pdf,.pdf" @change="pickPdfUploadFile" />
           <strong>{{ pdfLinkEditor.fileName || "选择本地 PDF 文件" }}</strong>
@@ -537,6 +579,10 @@ const personalImporting = ref(false);
 const zoteroFile = ref(null);
 const zoteroImporting = ref(false);
 const zoteroResult = ref(null);
+const zoteroOnline = reactive({
+  limit: 100,
+  importing: false,
+});
 const uploadingWorkspace = ref("");
 let toastTimer = null;
 
@@ -966,6 +1012,27 @@ async function submitZoteroImport() {
   }
 }
 
+async function submitZoteroOnlineImport() {
+  if (zoteroOnline.importing) return;
+  zoteroOnline.importing = true;
+  zoteroResult.value = null;
+  try {
+    const result = await paperpilotApi.importZoteroLocal({
+      limit: Math.max(1, Math.min(200, Number(zoteroOnline.limit) || 100)),
+    });
+    zoteroResult.value = result;
+    await refreshLibraryFromBackend();
+    refreshFilterOptions();
+    showToast(`Zotero 验证成功，已同步 ${result.imported || 0} 篇文献`);
+    if (result.imported > 0) selectTab("papers");
+  } catch (error) {
+    console.error("zotero online import failed", error);
+    showToast(error?.response?.data?.message || "未检测到本机 Zotero，请先打开 Zotero Desktop");
+  } finally {
+    zoteroOnline.importing = false;
+  }
+}
+
 function resetPersonalPaper() {
   Object.assign(personalPaper, {
     title: "",
@@ -1256,44 +1323,102 @@ onUnmounted(() => {
 
 .zotero-import-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 430px);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 440px);
+  gap: 20px;
   margin-top: 22px;
-  padding: 20px;
-  border: 1px solid #d8e5f6;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #f8fbff 0%, #ffffff 58%, #f7fff9 100%);
+  padding: 18px;
+  border: 1px solid #cfddec;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.94), rgba(255, 255, 255, 0.96) 48%, rgba(236, 253, 245, 0.88)),
+    #ffffff;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
 }
 
 .zotero-copy {
   display: grid;
   align-content: start;
-  gap: 9px;
+  gap: 12px;
+  min-height: 100%;
+  padding: 20px;
+  border: 1px solid rgba(59, 130, 246, 0.16);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(20, 184, 166, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 250, 252, 0.92));
 }
 
 .zotero-copy > span {
   width: max-content;
-  padding: 4px 9px;
+  padding: 5px 10px;
   border-radius: 999px;
   color: #0f766e;
-  background: #dffcf3;
-  font-size: 11px;
+  background: rgba(20, 184, 166, 0.13);
+  font-size: 10px;
   font-weight: 850;
+  letter-spacing: .08em;
 }
 
 .zotero-copy h3 {
   margin: 0;
   color: var(--spatial-graphite);
-  font-size: 18px;
-  line-height: 1.35;
+  font-size: 24px;
+  line-height: 1.22;
+  letter-spacing: 0;
 }
 
 .zotero-copy p {
   max-width: 68ch;
   margin: 0;
   color: #53647a;
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.7;
+}
+
+.zotero-step-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.zotero-step-grid div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.zotero-step-grid b {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-bottom: 9px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #2563eb, #14b8a6);
+  font-size: 11px;
+}
+
+.zotero-step-grid strong,
+.zotero-step-grid small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zotero-step-grid strong {
+  color: #1f2a3d;
+  font-size: 12px;
+}
+
+.zotero-step-grid small {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 10.5px;
 }
 
 .zotero-format-row {
@@ -1314,21 +1439,149 @@ onUnmounted(() => {
 
 .zotero-action-box {
   display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.zotero-online-card {
+  display: grid;
+  gap: 13px;
+  padding: 16px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 14px 36px rgba(37, 99, 235, 0.08);
+}
+
+.zotero-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.zotero-card-head strong,
+.zotero-card-head small {
+  display: block;
+}
+
+.zotero-card-head strong {
+  color: #172033;
+  font-size: 15px;
+}
+
+.zotero-card-head small {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.zotero-card-head > span {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.14);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.zotero-online-card label {
+  display: flex;
+  align-items: center;
   gap: 10px;
+}
+
+.zotero-online-card label span {
+  flex: 0 0 auto;
+  color: #53647a;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.zotero-online-card input {
+  min-width: 0;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  border: 1px solid #cbd8e8;
+  border-radius: 9px;
+  padding: 9px 10px;
+  color: #1f2a3d;
+  background: #fff;
+  font-size: 13px;
+}
+
+.zotero-limit-field em {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.zotero-online-card small {
+  color: #6c7e93;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.zotero-safe-note {
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.zotero-divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 9px;
+  color: #8794a8;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.zotero-divider::before,
+.zotero-divider::after {
+  content: "";
+  height: 1px;
+  background: #d9e3f0;
 }
 
 .zotero-file-drop {
   position: relative;
   display: grid;
   gap: 4px;
-  min-height: 88px;
+  min-height: 92px;
   align-content: center;
-  padding: 15px 16px;
+  padding: 15px 16px 15px 54px;
   border: 1px dashed #91b3df;
   border-radius: 12px;
   color: #244a7b;
   background: #f4f8ff;
   cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.zotero-file-drop:hover {
+  transform: translateY(-1px);
+  border-color: #2563eb;
+  background: #eef6ff;
+}
+
+.zotero-file-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
+  transform: translateY(-50%);
 }
 
 .zotero-file-drop input {
@@ -1348,6 +1601,10 @@ onUnmounted(() => {
 .zotero-file-drop small {
   color: #6c7e93;
   font-size: 11px;
+}
+
+.zotero-file-import-btn {
+  width: 100%;
 }
 
 .zotero-result {
@@ -1480,6 +1737,7 @@ onUnmounted(() => {
 .spatial-btn-dual:hover { background: #066a75; }
 
 .spatial-btn-line-ai {
+  position: relative;
   display: inline-flex !important;
   align-items: center;
   border-color: #6d28d9;
@@ -1487,6 +1745,24 @@ onUnmounted(() => {
   background: #7c3aed;
 }
 .spatial-btn-line-ai:hover { color: #fff; background: #6d28d9; }
+.reader-recommend-badge {
+  position: absolute;
+  top: -9px;
+  right: -8px;
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  color: #7a2e00;
+  background: linear-gradient(135deg, #fde68a, #f59e0b);
+  box-shadow: 0 6px 14px rgba(245, 158, 11, 0.28);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+}
 
 .library-toolbar-left,
 .library-toolbar-right {
@@ -2508,12 +2784,18 @@ onUnmounted(() => {
 }
 
 :root[data-theme="dark"] .zotero-import-panel {
-  background: #101827 !important;
+  border-color: rgba(96, 165, 250, 0.16) !important;
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.96) 48%, rgba(8, 47, 73, 0.58)),
+    #0f172a !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.32) !important;
 }
 
 :root[data-theme="dark"] .zotero-copy {
-  background: rgba(139, 92, 246, 0.08) !important;
-  border-color: rgba(139, 92, 246, 0.22) !important;
+  background:
+    radial-gradient(circle at top right, rgba(20, 184, 166, 0.14), transparent 36%),
+    rgba(15, 23, 42, 0.74) !important;
+  border-color: rgba(45, 212, 191, 0.18) !important;
   color: #eef4ff !important;
 }
 
@@ -2526,7 +2808,21 @@ onUnmounted(() => {
 }
 
 :root[data-theme="dark"] .zotero-copy span {
-  color: #c084fc !important;
+  color: #5eead4 !important;
+  background: rgba(20, 184, 166, 0.12) !important;
+}
+
+:root[data-theme="dark"] .zotero-step-grid div {
+  background: rgba(15, 23, 42, 0.58) !important;
+  border-color: rgba(148, 163, 184, 0.16) !important;
+}
+
+:root[data-theme="dark"] .zotero-step-grid strong {
+  color: #eef4ff !important;
+}
+
+:root[data-theme="dark"] .zotero-step-grid small {
+  color: #94a3b8 !important;
 }
 
 :root[data-theme="dark"] .zotero-format-row b {
@@ -2536,9 +2832,9 @@ onUnmounted(() => {
 }
 
 :root[data-theme="dark"] .zotero-file-drop {
-  background: rgba(139, 92, 246, 0.06) !important;
-  border-color: rgba(139, 92, 246, 0.35) !important;
-  color: #c084fc !important;
+  background: rgba(37, 99, 235, 0.08) !important;
+  border-color: rgba(96, 165, 250, 0.34) !important;
+  color: #93c5fd !important;
 }
 
 :root[data-theme="dark"] .zotero-file-drop strong {
@@ -2547,6 +2843,58 @@ onUnmounted(() => {
 
 :root[data-theme="dark"] .zotero-file-drop small {
   color: #a8b3c7 !important;
+}
+
+:root[data-theme="dark"] .zotero-file-icon {
+  color: #7dd3fc !important;
+  background: rgba(14, 165, 233, 0.13) !important;
+}
+
+:root[data-theme="dark"] .zotero-online-card {
+  background: rgba(15, 23, 42, 0.74) !important;
+  border-color: rgba(96, 165, 250, 0.2) !important;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.22) !important;
+}
+
+:root[data-theme="dark"] .zotero-card-head strong {
+  color: #eef4ff !important;
+}
+
+:root[data-theme="dark"] .zotero-card-head small {
+  color: #9aa9bd !important;
+}
+
+:root[data-theme="dark"] .zotero-card-head > span {
+  color: #5eead4 !important;
+  background: rgba(20, 184, 166, 0.12) !important;
+}
+
+:root[data-theme="dark"] .zotero-online-card label span,
+:root[data-theme="dark"] .zotero-online-card small {
+  color: #a8b3c7 !important;
+}
+
+:root[data-theme="dark"] .zotero-limit-field em {
+  color: #94a3b8 !important;
+}
+
+:root[data-theme="dark"] .zotero-online-card input {
+  background: rgba(15, 23, 42, 0.86) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  color: #f4f4f6 !important;
+}
+
+:root[data-theme="dark"] .zotero-safe-note {
+  background: rgba(20, 184, 166, 0.08) !important;
+}
+
+:root[data-theme="dark"] .zotero-divider {
+  color: #8795aa !important;
+}
+
+:root[data-theme="dark"] .zotero-divider::before,
+:root[data-theme="dark"] .zotero-divider::after {
+  background: rgba(148, 163, 184, 0.2) !important;
 }
 
 :root[data-theme="dark"] .file-drop,
@@ -2596,5 +2944,3 @@ onUnmounted(() => {
   color: #a8b3c7 !important;
 }
 </style>
-
-

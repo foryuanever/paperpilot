@@ -46,6 +46,9 @@ paperpilot:
     baidu-secret: ${BAIDU_SECRET:}
     microsoft-key: ${MICROSOFT_TRANSLATOR_KEY:}
     microsoft-region: ${MICROSOFT_TRANSLATOR_REGION:eastasia}
+    tencent-secret-id: ${TENCENT_TRANSLATE_SECRET_ID:}
+    tencent-secret-key: ${TENCENT_TRANSLATE_SECRET_KEY:}
+    tencent-region: ${TENCENT_TRANSLATE_REGION:ap-guangzhou}
   pdfmathtranslate:
     base-url: ${PDFMATH_TRANSLATE_URL:http://127.0.0.1:11008}
   mineru:

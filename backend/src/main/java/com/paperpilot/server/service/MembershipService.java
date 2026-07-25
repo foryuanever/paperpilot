@@ -74,6 +74,7 @@ public class MembershipService {
     }
 
     public void consume(AppUserEntity user, String action) {
+        if ("管理员".equals(user.getRole())) return;
         expireIfNeeded(user);
         String kind = entitlementFor(action);
         if (kind == null) return;
@@ -103,6 +104,7 @@ public class MembershipService {
     public void assertAvailable(Long userId, String action) {
         AppUserEntity user = users.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
+        if ("管理员".equals(user.getRole())) return;
         expireIfNeeded(user);
         String kind = entitlementFor(action);
         if (kind == null) return;

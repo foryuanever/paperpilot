@@ -1,4 +1,4 @@
-import { computed, reactive, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { defineStore } from "pinia";
 import { paperpilotApi } from "../services/paperpilotApi";
 
@@ -77,6 +77,16 @@ export const useLibraryStore = defineStore("library", () => {
     })),
   );
 
+  const openTabIds = ref(readJson("paperpilot-open-tabs", []));
+
+  watch(
+    openTabIds,
+    (val) => {
+      localStorage.setItem("paperpilot-open-tabs", JSON.stringify(val));
+    },
+    { deep: true },
+  );
+
   watch(
     state,
     (value) => {
@@ -89,12 +99,17 @@ export const useLibraryStore = defineStore("library", () => {
     () => state.documents.find((item) => item.id === state.activeDocumentId) || state.documents[0] || null,
   );
 
+  const openTabs = computed(() => {
+    return openTabIds.value
+      .map((id) => state.documents.find((doc) => doc.id === id))
+      .filter(Boolean);
+  });
+
   function addDocument(document) {
-    if (state.documents.some((item) => item.id === document.id || item.title === document.title)) {
-      return;
+    if (!state.documents.some((item) => item.id === document.id || item.title === document.title)) {
+      state.documents.unshift(document);
     }
-    state.documents.unshift(document);
-    state.activeDocumentId = document.id;
+    setActiveDocument(document.id);
   }
 
   function replaceDocuments(documents) {
@@ -106,6 +121,24 @@ export const useLibraryStore = defineStore("library", () => {
 
   function setActiveDocument(id) {
     state.activeDocumentId = id;
+    if (id && !openTabIds.value.includes(id)) {
+      openTabIds.value.push(id);
+    }
+  }
+
+  function closeTab(id) {
+    openTabIds.value = openTabIds.value.filter((tabId) => tabId !== id);
+    if (state.activeDocumentId === id) {
+      const nextId = openTabIds.value[openTabIds.value.length - 1] || "";
+      state.activeDocumentId = nextId;
+      return nextId;
+    }
+    return state.activeDocumentId;
+  }
+
+  function closeAllTabs() {
+    openTabIds.value = [];
+    state.activeDocumentId = "";
   }
 
   function updateProgress(id, progress) {
@@ -187,9 +220,12 @@ export const useLibraryStore = defineStore("library", () => {
   return {
     activeDocument,
     addDocument,
+    closeAllTabs,
+    closeTab,
     deleteDocument,
     hydrateLibrary,
     normalizeBackendPaper,
+    openTabs,
     persistDocumentPatch,
     replaceDocuments,
     setActiveDocument,

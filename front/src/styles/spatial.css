@@ -1857,7 +1857,7 @@ html[data-theme="dark"] body .expanded-card li > span {
    2. QUANTUM VOID SCI-FI AI ASSISTANT (FLOATING & FUTURISTIC)
    ══════════════════════════════════════════════════════════════ */
 
-.futuristic-void-panel {
+.futuristic-void-panel:not(.paper-chat-panel) {
   position: fixed !important;
   right: 28px !important;
   bottom: 88px !important;
@@ -1998,10 +1998,10 @@ html[data-theme="dark"] body .expanded-card li > span {
 
 /* Chat Body - Ethereal Fluid Messages (No rigid square boxes!) */
 .void-chat-body {
-  padding: 18px 18px !important;
+  padding: 16px 18px !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 20px !important;
+  gap: 12px !important;
   overflow-y: auto !important;
 }
 
@@ -2081,12 +2081,12 @@ html[data-theme="dark"] body .expanded-card li > span {
 
 /* Assistant Message: Ethereal Stream with Soft Backdrop */
 .paper-chat-message.assistant .message-text {
-  padding: 14px 18px !important;
+  padding: 12px 16px !important;
   border-radius: 4px 20px 20px 20px !important;
   font-size: 13px !important;
-  line-height: 1.68 !important;
+  line-height: 1.5 !important;
   margin: 0 !important;
-  white-space: pre-wrap !important;
+  white-space: normal !important;
 }
 
 :root[data-theme="light"] .paper-chat-message.assistant .message-text {
@@ -2106,29 +2106,45 @@ html[data-theme="dark"] body .expanded-card li > span {
 .message-text.markdown-rendered h1,
 .message-text.markdown-rendered h2,
 .message-text.markdown-rendered h3 {
-  margin: 12px 0 6px !important;
+  margin: 6px 0 3px !important;
   font-weight: 700 !important;
-  line-height: 1.35 !important;
+  line-height: 1.28 !important;
 }
 .message-text.markdown-rendered h1 { font-size: 15px !important; color: #6366f1 !important; }
 .message-text.markdown-rendered h2 { font-size: 14px !important; }
 .message-text.markdown-rendered h3 { font-size: 13px !important; }
 .message-text.markdown-rendered p {
-  margin: 0 0 10px !important;
-  line-height: 1.6 !important;
+  margin: 0 0 3px !important;
+  line-height: 1.46 !important;
   white-space: normal !important;
+}
+.message-text.markdown-rendered h1 + p,
+.message-text.markdown-rendered h2 + p,
+.message-text.markdown-rendered h3 + p {
+  margin-top: 0 !important;
+}
+.message-text.markdown-rendered p + h1,
+.message-text.markdown-rendered p + h2,
+.message-text.markdown-rendered p + h3 {
+  margin-top: 8px !important;
 }
 .message-text.markdown-rendered p:last-child {
   margin-bottom: 0 !important;
 }
+.paper-chat-message.assistant .message-text.markdown-rendered > *:first-child {
+  margin-top: 0 !important;
+}
+.paper-chat-message.assistant .message-text.markdown-rendered > *:last-child {
+  margin-bottom: 0 !important;
+}
 .message-text.markdown-rendered ul,
 .message-text.markdown-rendered ol {
-  margin: 6px 0 10px !important;
+  margin: 3px 0 4px !important;
   padding-left: 18px !important;
 }
 .message-text.markdown-rendered li {
-  margin: 4px 0 !important;
-  line-height: 1.55 !important;
+  margin: 1px 0 !important;
+  line-height: 1.44 !important;
 }
 .message-text.markdown-rendered strong {
   font-weight: 700 !important;

@@ -3,12 +3,14 @@ package com.paperpilot.server.service;
 import com.paperpilot.server.dto.LoginRequest;
 import com.paperpilot.server.dto.RegisterRequest;
 import com.paperpilot.server.entity.AppUserEntity;
+import com.paperpilot.server.entity.VerificationCodeEntity;
 import com.paperpilot.server.entity.SystemLogEntity;
 import com.paperpilot.server.repository.AppUserRepository;
 import com.paperpilot.server.repository.InviteCodeRepository;
 import com.paperpilot.server.repository.SystemLogRepository;
 import com.paperpilot.server.repository.PaperRepository;
 import com.paperpilot.server.repository.TranslationRecordRepository;
+import com.paperpilot.server.repository.VerificationCodeRepository;
 import com.paperpilot.server.vo.AuthSessionVO;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,7 +27,6 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthService {
@@ -35,6 +36,7 @@ public class AuthService {
     private final SystemLogRepository systemLogRepository;
     private final PaperRepository paperRepository;
     private final TranslationRecordRepository translationRecordRepository;
+    private final VerificationCodeRepository verificationCodeRepository;
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
     private final String mailUsername;
     private static final SecureRandom CODE_RANDOM = new SecureRandom();
@@ -46,6 +48,7 @@ public class AuthService {
         SystemLogRepository systemLogRepository,
         PaperRepository paperRepository,
         TranslationRecordRepository translationRecordRepository,
+        VerificationCodeRepository verificationCodeRepository,
         ObjectProvider<JavaMailSender> mailSenderProvider,
         @Value("${spring.mail.username:}") String mailUsername
     ) {
@@ -54,6 +57,7 @@ public class AuthService {
         this.systemLogRepository = systemLogRepository;
         this.paperRepository = paperRepository;
         this.translationRecordRepository = translationRecordRepository;
+        this.verificationCodeRepository = verificationCodeRepository;
         this.mailSenderProvider = mailSenderProvider;
         this.mailUsername = mailUsername;
     }
@@ -108,7 +112,7 @@ public class AuthService {
         user.setPlainPassword(request.getPassword());
         user.setLastIp(ipAddress);
         AppUserEntity saved = appUserRepository.save(user);
-        registerVerificationCodes.remove(email);
+        consumeVerificationCode(email, "REGISTER");
 
         logAction("成功注册新用户: " + saved.getUsername() + " (" + saved.getEmail() + "), 身份: " + saved.getRole(), "info", ipAddress);
         return toSession(saved);
@@ -241,9 +245,6 @@ public class AuthService {
         logAction("管理员移除了系统用户 " + user.getUsername() + " (" + user.getEmail() + ")", "warn", ip);
     }
 
-    private final Map<String, VerificationEntry> passwordVerificationCodes = new ConcurrentHashMap<>();
-    private final Map<String, VerificationEntry> registerVerificationCodes = new ConcurrentHashMap<>();
-
     public void sendRegisterVerificationCode(String email) {
         String normalizedEmail = normalizeEmail(email);
         ensureQqEmail(normalizedEmail);
@@ -251,7 +252,7 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "该邮箱已注册，一个邮箱只能注册一个账号");
         }
         String code = generateCode();
-        registerVerificationCodes.put(normalizedEmail, new VerificationEntry(code, LocalDateTime.now().plus(VERIFICATION_TTL)));
+        saveVerificationCode(normalizedEmail, "REGISTER", code);
         sendVerificationMail(
             normalizedEmail,
             "PaperSolver 注册验证码",
@@ -266,7 +267,7 @@ public class AuthService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "该邮箱用户不存在"));
 
         String code = generateCode();
-        passwordVerificationCodes.put(normalizedEmail, new VerificationEntry(code, LocalDateTime.now().plus(VERIFICATION_TTL)));
+        saveVerificationCode(normalizedEmail, "FORGOT-PASSWORD", code);
 
         sendVerificationMail(
             normalizedEmail,
@@ -279,7 +280,7 @@ public class AuthService {
     @Transactional
     public void resetPasswordWithCode(String email, String code, String newPassword) {
         String normalizedEmail = normalizeEmail(email);
-        VerificationEntry savedCode = passwordVerificationCodes.get(normalizedEmail);
+        VerificationCodeEntity savedCode = verificationCodeRepository.findByEmailAndPurpose(normalizedEmail, "FORGOT-PASSWORD").orElse(null);
         if (!isValidCode(savedCode, code)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "验证码无效或已过期");
         }
@@ -290,22 +291,41 @@ public class AuthService {
         user.setPasswordHash(hash(newPassword));
         user.setPlainPassword(newPassword);
         appUserRepository.save(user);
-        passwordVerificationCodes.remove(normalizedEmail);
+        consumeVerificationCode(normalizedEmail, "FORGOT-PASSWORD");
 
         logAction("用户重置密码成功 (通过验证码): " + user.getUsername() + " (" + user.getEmail() + ")", "info", user.getLastIp());
     }
 
     private void verifyRegisterCode(String email, String code) {
-        VerificationEntry entry = registerVerificationCodes.get(email);
+        VerificationCodeEntity entry = verificationCodeRepository.findByEmailAndPurpose(email, "REGISTER").orElse(null);
         if (!isValidCode(entry, code)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "验证码无效或已过期");
         }
     }
 
-    private boolean isValidCode(VerificationEntry entry, String code) {
+    private boolean isValidCode(VerificationCodeEntity entry, String code) {
         return entry != null
-            && !LocalDateTime.now().isAfter(entry.expiresAt())
-            && entry.code().equals(text(code));
+            && entry.getUsedAt() == null
+            && !LocalDateTime.now().isAfter(entry.getExpiresAt())
+            && entry.getCode().equals(text(code));
+    }
+
+    private void saveVerificationCode(String email, String purpose, String code) {
+        VerificationCodeEntity entity = verificationCodeRepository.findByEmailAndPurpose(email, purpose)
+            .orElseGet(VerificationCodeEntity::new);
+        entity.setEmail(email);
+        entity.setPurpose(purpose);
+        entity.setCode(code);
+        entity.setExpiresAt(LocalDateTime.now().plus(VERIFICATION_TTL));
+        entity.setUsedAt(null);
+        verificationCodeRepository.save(entity);
+    }
+
+    private void consumeVerificationCode(String email, String purpose) {
+        verificationCodeRepository.findByEmailAndPurpose(email, purpose).ifPresent(entity -> {
+            entity.setUsedAt(LocalDateTime.now());
+            verificationCodeRepository.save(entity);
+        });
     }
 
     private String generateCode() {
@@ -346,8 +366,6 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "注册邮箱必须是 QQ 邮箱，例如 123456@qq.com");
         }
     }
-
-    private record VerificationEntry(String code, LocalDateTime expiresAt) {}
 
     private AuthSessionVO toSession(AppUserEntity user) {
         return new AuthSessionVO(

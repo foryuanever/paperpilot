@@ -2,6 +2,7 @@ package com.paperpilot.server.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.paperpilot.server.entity.BackendJobEntity;
 import com.paperpilot.server.entity.MeetingReportEntity;
 import com.paperpilot.server.entity.ModelConfigEntity;
 import com.paperpilot.server.entity.PaperEntity;
@@ -76,14 +77,20 @@ public class MeetingReportService {
     private static final int PPTXGEN_TIMEOUT_SECONDS = 120;
     private static final long STALE_JOB_MILLIS = Duration.ofMinutes(3).toMillis();
     private static final Map<String, List<String>> SECTION_BLOCKS = Map.of(
-        "synthesis", List.of("研究背景", "研究问题", "研究方法与数据", "实验与结论", "创新点与启示", "局限性"),
+        "synthesis", List.of(
+            "领域现状", "研究缺口", "研究目标",
+            "研究对象", "方法设计", "评价指标",
+            "结果表现", "对比证据", "机制解释",
+            "主要创新", "研究意义", "适用场景",
+            "研究局限", "应用风险", "未来方向"
+        ),
         "basicInfo", List.of("论文定位", "发表信息", "汇报价值"),
-        "overview", List.of("核心要点", "研究问题", "主要贡献"),
-        "background", List.of("核心要点", "关键问题", "本文思想", "关键贡献"),
-        "method", List.of("整体框架", "关键模块", "实现流程"),
-        "results", List.of("主要发现", "对比结果", "实验结论"),
-        "conclusion", List.of("研究结论", "现有不足", "未来展望"),
-        "datasets", List.of("数据来源", "数据设置", "评测指标")
+        "overview", List.of("领域现状", "研究缺口", "研究目标"),
+        "background", List.of("领域现状", "研究缺口", "研究目标"),
+        "method", List.of("研究对象", "方法设计", "评价指标"),
+        "results", List.of("结果表现", "对比证据", "机制解释"),
+        "conclusion", List.of("主要创新", "研究意义", "适用场景", "研究局限", "应用风险", "未来方向"),
+        "datasets", List.of("研究对象", "评价指标")
     );
     private final PaperRepository paperRepository;
     private final MeetingReportRepository reportRepository;
@@ -94,6 +101,7 @@ public class MeetingReportService {
     private final MembershipService membershipService;
     private final NotificationService notificationService;
     private final ExternalSearchService externalSearchService;
+    private final BackendJobService backendJobService;
     private final ObjectMapper objectMapper;
     private final Map<String, ReportJob> jobs = new ConcurrentHashMap<>();
     private final Map<String, DeckJob> deckJobs = new ConcurrentHashMap<>();
@@ -127,6 +135,7 @@ public class MeetingReportService {
         MembershipService membershipService,
         NotificationService notificationService,
         ExternalSearchService externalSearchService,
+        BackendJobService backendJobService,
         ObjectMapper objectMapper
     ) {
         this.paperRepository = paperRepository;
@@ -138,6 +147,7 @@ public class MeetingReportService {
         this.membershipService = membershipService;
         this.notificationService = notificationService;
         this.externalSearchService = externalSearchService;
+        this.backendJobService = backendJobService;
         this.objectMapper = objectMapper;
     }
 
@@ -186,6 +196,10 @@ public class MeetingReportService {
         Long userId = currentUserService.getOrCreateDefaultUserId();
         ReportJob job = jobs.get(jobKey(userId, workspaceId));
         if (job == null) {
+            Optional<BackendJobEntity> saved = backendJobService.find("MEETING_REPORT", userId, workspaceId);
+            if (saved.isPresent()) {
+                return backendJobService.toMap(saved.get());
+            }
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("status", "idle");
             response.put("progress", 0);
@@ -218,12 +232,12 @@ public class MeetingReportService {
         });
         String paperText = extractPaperText(paper);
         boolean fullTextAvailable = paperText.length() > 1200;
-        if (job != null) job.progress(10, "已读取论文，开始逐章分析");
+        if (job != null) job.progress(10, "已读取论文，开始生成 5 个文献综述模块");
 
         AtomicInteger index = new AtomicInteger(0);
         for (String key : SECTION_KEYS) {
             int current = index.getAndIncrement();
-            if (job != null) job.progress(12 + current * 11, "正在生成：" + sectionName(key));
+            if (job != null) job.progress(reportProgress(current, false), "正在生成：" + reportModuleName(key));
             try {
                 AiChatService.ChatResult result = callSectionModel(
                     sectionSystemPrompt(key),
@@ -235,7 +249,7 @@ public class MeetingReportService {
                 completionTokens += result.completionTokens();
                 totalTokens += result.totalTokens();
                 aiSuccessCount++;
-                if (job != null) job.progress(20 + current * 11, "已完成：" + sectionName(key));
+                if (job != null) job.progress(reportProgress(current, true), "已完成：" + reportModuleName(key));
             } catch (Exception error) {
                 failedSections.add(sectionName(key) + "：" + readableError(error));
                 if (isGeneratedFallback(sections.get(key))) sections.put(key, "");
@@ -271,7 +285,7 @@ public class MeetingReportService {
                 totalTokens
             );
         }
-        if (job != null) job.progress(100, "组会汇报已保存");
+        if (job != null) job.progress(100, "文献综述已保存");
         Map<String, Object> result = response(paper, report);
         Map<String, Object> usage = Map.of(
             "promptTokens", promptTokens,
@@ -781,6 +795,17 @@ public class MeetingReportService {
         }
         DeckJob job = deckJobs.get(cleanJobId);
         if (job == null) {
+            Optional<BackendJobEntity> saved = backendJobService.find("MEETING_DECK", null, cleanJobId);
+            if (saved.isPresent()) {
+                Map<String, Object> response = backendJobService.toMap(saved.get());
+                response.put("jobId", cleanJobId);
+                response.put("stage", response.get("message"));
+                response.put("statusUrl", "/api/meeting-reports/deck/jobs/" + cleanJobId + "/status");
+                if (Boolean.TRUE.equals(response.get("success"))) {
+                    response.put("downloadUrl", "/api/meeting-reports/deck/jobs/" + cleanJobId + "/download");
+                }
+                return response;
+            }
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "PPT 任务不存在或已过期");
         }
         return deckJobResponse(job);
@@ -3145,6 +3170,7 @@ public class MeetingReportService {
             .replace("\\n", "\n")
             .replace("\\t", " ")
             .replaceAll("(?m)([：:])\\s*分析内容\\s*", "$1")
+            .replaceAll("(?m)^\\s*(?:[-•·○◦▪▫]|\\d+[.、)]|[（(]\\d+[）)])?\\s*(?:领域现状|研究缺口|研究目标|研究对象|方法设计|评价指标|结果表现|对比证据|机制解释|主要创新|研究意义|适用场景|研究局限|应用风险|未来方向)\\s*[：:]\\s*(?=\\S)", "")
             .replaceAll("（\\s*(?:来自)?摘要\\s*）", "")
             .replaceAll("\\(\\s*(?:from\\s+)?abstract\\s*\\)", "")
             .replaceAll("（\\s*正文片段(?:未明确)?\\s*）", "")
@@ -3209,6 +3235,21 @@ public class MeetingReportService {
             case "basicInfo:论文定位" -> "该论文围绕《" + titleText + "》展开，可作为组会中介绍研究问题与领域脉络的核心材料。";
             case "basicInfo:发表信息" -> "来源为 " + paper.getSource() + "，年份为 " + Optional.ofNullable(paper.getPublishYear()).orElse("未知") + "，作者为 " + Optional.ofNullable(paper.getAuthors()).orElse("未补全") + "。";
             case "basicInfo:汇报价值" -> "适合从研究动机、方法设计、实验验证和局限展望四条线组织汇报。";
+            case "synthesis:领域现状", "overview:领域现状", "background:领域现状" -> "该研究所在领域已有相关问题意识和方法积累，摘要线索为：" + shorten(abstractText, 110);
+            case "synthesis:研究缺口", "overview:研究缺口", "background:研究缺口" -> "待核对：摘要尚不足以完整判断既有研究缺口，建议优先查看引言和相关工作中对现有方法不足的表述。";
+            case "synthesis:研究目标", "overview:研究目标", "background:研究目标" -> "该研究目标可先概括为围绕题目所指核心问题建立分析或验证路径，具体目标需结合引言末段核对。";
+            case "synthesis:研究对象", "method:研究对象", "datasets:研究对象" -> "研究对象应从论文任务、样本、材料、语料、实验对象或案例中提取；当前摘要依据为：" + shorten(abstractText, 100);
+            case "synthesis:方法设计", "method:方法设计" -> "方法设计应按输入对象、核心机制、处理流程和输出目标组织，不能只复述技术名；具体模块需查阅方法章节。";
+            case "synthesis:评价指标", "method:评价指标", "datasets:评价指标" -> "待核对：评价指标、基线、样本划分或评估维度需要从实验设置章节确认，避免依据摘要编造数值。";
+            case "synthesis:结果表现", "results:结果表现" -> "结果表现应优先写论文已验证的主结果、指标变化和关键现象；当前材料不足时需回到结果章节核对。";
+            case "synthesis:对比证据", "results:对比证据" -> "对比证据应围绕基线方法、对照组、消融实验或不同场景结果展开；没有正文证据时不编造比较对象。";
+            case "synthesis:机制解释", "results:机制解释" -> "机制解释应说明为什么这些结果支持论文观点，例如方法模块、数据处理或理论框架如何影响结果。";
+            case "synthesis:主要创新", "conclusion:主要创新" -> "主要创新需要回到论文自己的方法、问题定义、数据使用或论证角度，避免把普通背景表述当成创新。";
+            case "synthesis:研究意义", "conclusion:研究意义" -> "研究意义应说明该工作对领域问题、方法选择、证据补充或实践应用的具体推动，而不是泛泛写重要。";
+            case "synthesis:适用场景", "conclusion:适用场景" -> "适用场景应从论文任务、实验对象和结论边界推断；若正文未说明，应作为待核对内容处理。";
+            case "synthesis:研究局限", "conclusion:研究局限" -> "研究局限可从数据规模、样本代表性、方法假设、评测覆盖、泛化能力或真实场景迁移分析。";
+            case "synthesis:应用风险", "conclusion:应用风险" -> "应用风险应围绕误差来源、偏差、泛化失败、成本、解释性或部署条件展开，不要泛泛写仍需改进。";
+            case "synthesis:未来方向", "conclusion:未来方向" -> "未来方向应与本文局限一一对应，例如补充数据、扩展场景、改进评测或验证关键机制。";
             case "overview:核心要点" -> "论文摘要显示，研究围绕题目所指问题提出分析或方法贡献。摘要依据：" + shorten(abstractText, 90);
             case "overview:研究问题" -> "需要解释该工作要解决的主要任务、既有方法不足以及本文希望改善的指标或能力。";
             case "overview:主要贡献" -> "可将贡献归纳为问题定义、方法方案、实验验证与应用价值，具体细节需结合正文核对。";
@@ -3437,35 +3478,43 @@ public class MeetingReportService {
 
     private String systemPrompt() {
         return """
-            你是一名严谨的科研组会论文汇报助手。请基于用户提供的论文题录和摘要，用简体中文输出严格 JSON，
+            你是一名严谨的学术文献综述助手。请基于用户提供的论文题录和摘要，用简体中文输出严格 JSON，
             只能包含 basicInfo、overview、background、method、results、conclusion、datasets 七个字符串字段。
-            每个字段必须包含指定小标题，格式为“小标题：分析内容”，每个小标题独占一行或一段：
+            每个字段必须包含指定小标题，格式为“小标题：\\n要点句”，每个小标题独占一段：
             basicInfo 必须包含：论文定位、发表信息、汇报价值。
-            overview 必须包含：核心要点、研究问题、主要贡献。
-            background 必须包含：核心要点、关键问题、本文思想、关键贡献。
-            method 必须包含：整体框架、关键模块、实现流程。
-            results 必须包含：主要发现、对比结果、实验结论。
-            conclusion 必须包含：研究结论、现有不足、未来展望。
-            datasets 必须包含：数据来源、数据设置、评测指标。
-            每个小标题至少 2 句，适合研究生组会直接讲述；明确区分论文事实和基于摘要的合理判断。
+            overview/background 必须围绕：领域现状、研究缺口、研究目标。
+            method/datasets 必须围绕：研究对象、方法设计、评价指标。
+            results 必须围绕：结果表现、对比证据、机制解释。
+            conclusion 必须围绕：主要创新、研究意义、适用场景、研究局限、应用风险、未来方向。
+            每个小标题下输出 1-5 个要点，数量由论文信息密度决定；信息充分可以多写，信息不足就少写，不能为了凑数硬分。
+            同一小标题下的要点必须平行：它们应回答同一种问题。例如“研究缺口”只写缺口或未解决问题，不要混入本文目的；“评价指标”只写数据划分、指标或评估维度，不要混入研究意义。
+            每个要点必须是完整判断句，包含论文中的对象、方法、数据、指标、结论或边界之一；禁止只有“首先、随着、本文目的、研究表明、具有重要意义”这类空泛开头。
+            每条要点禁止重复父级小标题或任意小标题标签；不要写“领域现状：……”“研究缺口：……”“研究目标：……”，要直接写具体判断。
+            分点前先在内部判断该小标题的分类标准，再按同一标准切分；不要按句子顺序机械拆成“第一：首先；第二：随着；第三：本文目的”。
+            明确区分论文事实和基于摘要的合理判断。
             不要编造具体数值、数据集、实验结论或作者没有给出的事实；信息不足时说明“摘要未明确，需要查阅正文”。
             """;
     }
 
     private String fullReportSystemPrompt() {
         return """
-            你是一名严谨、高效的科研组会论文精读助手。你的任务是阅读用户给出的论文题录、摘要和 PDF 正文抽取片段，生成七章组会分析。
+            你是一名严谨、高效的学术文献综述助手。你的任务是阅读用户给出的论文题录、摘要和 PDF 正文抽取片段，生成结构清晰的文献综述分析。
             必须输出严格 JSON，不要输出 Markdown、解释、代码块或任何提示词复述。
             JSON 只能包含 basicInfo、overview、background、method、results、conclusion、datasets 七个字符串字段。
-            每个字段必须按指定小标题展开，格式为“小标题：分析内容”。
+            每个字段必须按指定小标题展开，格式为“小标题：\\n要点句”。
             basicInfo：论文定位、发表信息、汇报价值。
-            overview：核心要点、研究问题、主要贡献。
-            background：核心要点、关键问题、本文思想、关键贡献。
-            method：整体框架、关键模块、实现流程。
-            results：主要发现、对比结果、实验结论。
-            conclusion：研究结论、现有不足、未来展望。
-            datasets：数据来源、数据设置、评测指标。
-            每个小标题下写 3-5 个中文要点，每个要点要具体、可直接放进研究生组会笔记。
+            overview/background：领域现状、研究缺口、研究目标。
+            method/datasets：研究对象、方法设计、评价指标。
+            results：结果表现、对比证据、机制解释。
+            conclusion：主要创新、研究意义、适用场景、研究局限、应用风险、未来方向。
+            每个小标题下写 1-5 个中文要点，数量必须由材料中的有效信息决定，不要固定写满，不要机械平均。
+            分点质量要求：
+            1. 同一小标题内所有要点必须属于同一层级、同一分类标准；不能第一条讲背景、第二条讲方法、第三条讲本文目的。
+            2. 每个要点必须是完整学术判断句，写清对象、方法、数据/材料、指标、结果、机制或边界中的至少一项。
+            3. 禁止用“首先、其次、随着、近年来、本文目的、本文主要、研究表明”作为分点逻辑；这些不是分类标准。
+            4. 分点要按语义类别组织，例如研究缺口可分“数据缺口、方法缺口、验证缺口”，方法设计可分“输入、核心机制、训练/推理、输出”，结果表现可分“主结果、对比结果、消融/敏感性结果”。
+            5. 如果某类内容只有 1 条有效信息，就只写 1 条；如果没有可靠依据，写 1 条“待核对：……”并说明应查哪个章节，不要编造。
+            6. 每条要点不能以当前小标题或其他小标题标签开头；错误示例：“研究缺口：模型缺少临床验证”；正确示例：“现有模型缺少跨机构临床验证，难以证明泛化能力。”。
             能从正文片段判断的内容要说明依据来自引言、方法、实验、结果或结论；没有证据时明确写“正文片段未明确，需要查阅原文对应章节”，并说明要查什么。
             不要编造论文没有给出的数据集、数值、实验结论、作者观点或引用。
             禁止出现“用户要求”“我们被要求”“可以写”“我将”“提示词”“JSON字段”等元叙述。
@@ -3476,41 +3525,47 @@ public class MeetingReportService {
         String headings = String.join("、", SECTION_BLOCKS.getOrDefault(key, List.of()));
         if ("synthesis".equals(key)) {
             return """
-            你是一名论文精读助手。请对下面的论文进行内容详解，不要简单翻译或摘要，而是提炼核心贡献，并分析研究背景、问题、方法与数据、实验结论、创新启示和局限性。
+            你是一名论文文献综述助手。请对下面的论文进行综述式精读，不要简单翻译或摘要，而是提炼研究背景、研究设计、主要发现、贡献价值与局限展望。
             输出严格 JSON，只包含一个字段 section，字段值为中文字符串。
             section 内容必须按这些小标题展开：%s。
-            每个小标题格式必须是“小标题：”，冒号后先写 1-2 句完整段落描述（正式学术语言，提炼而非复述），再用换行列出 2-4 个要点，每个要点是完整句子，不要用“• ”或“- ”开头。
+            每个小标题格式必须是“小标题：”，冒号后换行列出 1-5 个要点；有几条有效信息就写几条，不要固定数量。
             冒号后不得为空；不得把“研究背景：”“研究问题：”“要点：”等只有标签、没有内容的文字当作要点。
-            要求：使用正式学术语言；提炼核心贡献而非复述原文；分析优势与不足；最后总结对该领域的启示。
+            分点必须合理：同一小标题内的要点必须平行，不能第一条讲领域背景、第二条讲方法、第三条讲研究目的。每条都要围绕该小标题本身回答同一种问题。
+            每条要点禁止复读小标题标签；不要写“领域现状：……”“研究缺口：……”“研究目标：……”，直接写该要点的具体判断。
+            禁止“第一：首先”“第二：随着”“第三：本文目的”这类按句子顺序切分的乱分点；分点必须按语义类别切分，例如数据、方法、指标、结论、边界。
+            要求：使用正式学术语言；提炼核心贡献而非复述原文；分析优势与不足；总结对该领域的启示。
             不要输出 Markdown、解释或多余文字，只输出 JSON。不要出现我们被要求、用户要求、可以写、我将等元叙述。
             """.formatted(headings);
         }
         return """
-            你是一名像“小绿鲸文献阅读器”那样工作的科研论文精读助手，但输出要更适合研究生组会汇报。
-            你的目标不是摘要复述，而是帮助用户快速抓住：论文解决什么关键问题、为什么重要、作者怎么做、实验证据是否支撑、有什么不足。
+            你是一名科研论文文献综述助手。
+            你的目标不是摘要复述，而是帮助用户按综述逻辑抓住：研究背景是什么、缺口在哪里、作者怎么设计研究、证据是否支撑、贡献和边界是什么。
             请只分析一个章节，输出严格 JSON。
             JSON 只能包含一个字段 section，字段值为中文字符串。
             section 内容必须按这些小标题展开：%s。
-            每个小标题格式必须是“小标题：”，冒号后直接写 5-8 个中文要点，禁止写“分析内容”四个字。
+            每个小标题格式必须是“小标题：”，冒号后直接写 1-5 个中文要点，禁止写“分析内容”四个字。
             冒号后不得为空；每个要点必须包含完整判断和具体内容，禁止单独输出“小标题：”“要点：”或其他空标签。
-            每个要点至少 45 个汉字，必须足够具体，适合直接放进研究生组会讲稿。
+            每个要点至少 35 个汉字，必须足够具体，适合直接放进文献综述笔记。
             写作方法：
             1. 先在内部通读材料，形成“论文主线”：研究对象、核心痛点、方法/理论工具、数据或材料、实验/论证证据、结论和局限。
-            2. 每个要点都要围绕这条主线，不要按模板硬凑；优先写论文里真正有信息密度的内容。
-            3. 每个小标题都按固定逻辑组织：先写核心判断，再写依据或机制，最后写研究含义或可追问问题。
-            4. 每个小标题第一条必须是总论句，后续要点必须分别回答不同问题，禁止相邻两条表达同一件事。
-            5. 对方法章节，要拆成输入、核心机制、处理流程、输出/目标四段；对结果章节，要写清基线、指标、主要现象、消融或对照的意义；对背景章节，要写清已有工作缺口。
+            2. 每个小标题先确定一个分类标准，再按这个标准分点；不要按原文句子顺序或时间顺序硬拆。
+            3. 同一小标题下所有要点必须平行。例如“研究缺口”只能写不同类型的缺口；“方法设计”只能写方法结构、流程、机制；“评价指标”只能写数据、指标、基线或评估维度。
+            4. 分点数量 1-5 条即可。材料足够写 4-5 条，材料一般写 2-3 条，材料很少写 1 条，不要为了凑数重复。
+            5. 对方法章节，可按输入对象、核心机制、训练/推理流程、输出目标切分；对结果章节，可按主结果、对比证据、消融/敏感性、机制解释切分；对背景章节，可按领域现状、数据缺口、方法缺口、验证缺口切分。
             6. 如果是综述、理论、系统或人文社科论文，不要强行套机器学习实验结构；应按该论文实际的论证材料、案例、文本、制度、系统功能或理论框架分析。
             7. 信息不足时不要反复写“原文未明确”。每个小标题最多只允许 1 条“待核对”要点，而且必须放在该小标题最后，用“待核对：……”开头。
+            8. 每条要点禁止重复父级小标题或任意指定小标题标签；不要写“领域现状：……”“研究缺口：……”“方法设计：……”。小标题已经由外层提供，要点必须直接进入内容。
             质量标准：
             - 所有分析必须紧扣用户给出的论文题目、摘要和正文片段，不得套用其他论文、其他任务或通用模板。
             - 每个要点必须包含具体信息：论文中的对象/概念/方法/数据/材料/指标/结论至少命中一项。
             - 不要把作者姓名、普通术语、搜索关键词或论文题目中的孤立词当成贡献。
             - 不要只写“采用 Vue / SpringBoot / MySQL”这种技术栈摘要；除非论文就是软件系统研究，并且必须说明技术选择服务了什么研究目标或验证环节。
             - 同一小标题内不得重复“本文聚焦/旨在/通过……实现……”这类同义开头；每条要点的功能必须不同：定义问题、解释机制、列证据、评价结果、指出边界。
+            - 禁止输出“第一：首先”“第二：随着”“第三：本文目的”这种毫无分类逻辑的分点；序号只是展示编号，不是内容逻辑。
             - 不要在每个要点末尾机械标注“来自摘要”“来自正文片段”“摘要”。不要重复写“原文未明确”“正文片段未明确”。
             - 如果材料没有提供某项事实，不要编造；将不足压缩成最后一条“待核对：建议查看……章节确认……”，同一小标题只能出现一次。
             - 优先提取论文自己的专有概念、任务定义、数据来源、方法模块、实验指标和结论；每个要点都要能回答“这篇论文为什么重要、证据在哪里、下一步能追问什么”。
+            - 输出前自检：删掉所有“父标题：内容”形式的要点；检查同一小标题内每条要点是否按同一个分类标准切分，若不是就合并或重写。
             禁止分析本次提示词或写作任务本身，禁止出现“我们被要求”“用户要求”“可以写”“我认为应该写”“汇报时可”“可简要说明”“可以提到”这类元叙述。
             每个小标题内容必须直接回答该小标题，不要把数据来源内容写到评测指标，也不要把研究背景内容写到数据集。
             每个要点直接写成完整句子，不要用“• ”或“- ”开头。不要在每条后面反复写“正文片段”“正文片段未明确”“原文未明确”“需要查阅实验章节”这类尾注；必要时统一写成最后一条“待核对：……”。
@@ -3529,9 +3584,10 @@ public class MeetingReportService {
         if ("synthesis".equals(key)) {
             return "请生成章节：" + sectionName(key)
                 + "\n\n" + paperPrompt(paper)
-                + "\n\n【任务】请以学术文献综述的写作方式分析这篇论文，从研究背景、研究问题、研究方法与数据、实验与结论、创新点与启示、局限性等方面总结。"
-                + "\n【要求】使用正式学术语言；提炼核心贡献而非复述原文；分析该研究与现有研究相比的优势和不足；最后总结对本研究领域的启示。"
-                + "\n【格式】按小标题展开，每个小标题先写1-2句完整段落描述，再列出2-4个要点（完整句子，不要用•或-开头）。"
+                + "\n\n【任务】请以学术文献综述的写作方式分析这篇论文，按领域现状、研究缺口、研究目标、研究对象、方法设计、评价指标、结果表现、对比证据、机制解释、主要创新、研究意义、适用场景、研究局限、应用风险、未来方向展开。"
+                + "\n【要求】使用正式学术语言；提炼核心贡献而非复述原文；每个小标题下只写 1-5 个合理要点；同一小标题下要点必须同层级、同类型。"
+                + "\n【禁止复读标题】要点里不要再写“领域现状：”“研究缺口：”“研究目标：”等标签；外层已有小标题，要点直接写具体判断。"
+                + "\n【格式】按小标题展开，每个小标题直接列要点（完整句子，不要用•或-开头）。"
                 + "\n\n【正文读取状态】" + (fullTextAvailable ? "已读取 PDF 文本层" : "未读取到可用 PDF 文本层")
                 + "\n【分析材料】" + sourceLabel
                 + "\n" + relevantReportText(paperText);
@@ -3542,6 +3598,7 @@ public class MeetingReportService {
             + "\n【小绿鲸式精读目标】输出要像资深研究生读完论文后的研究笔记：先抓主线，再拆方法，再解释结果意义，最后指出不足和可追问点；不要机械复述栏目。"
             + "\n【重点判断】先识别本文真正的研究对象、问题、方法、证据和结论；不要把作者姓名、年份、普通概念或搜索关键词误当成论文贡献。"
             + "\n【证据优先】能从材料中找到证据的写成具体判断；找不到证据时不要反复写“原文未明确”，只在小标题最后用一条“待核对：……”说明需要核对的正文位置。"
+            + "\n【禁止复读标题】要点里不要再写当前小标题或其他小标题标签；例如在“研究缺口”下直接写“缺少跨机构临床验证……”，不要写“研究缺口：缺少跨机构临床验证……”。"
             + "\n【表达限制】不要写“汇报时可”“可简要说明”“可以提到”这类提示性口吻；直接写论文判断、研究含义和追问方向。"
             + "\n\n【正文读取状态】" + (fullTextAvailable ? "已读取 PDF 文本层" : "未读取到可用 PDF 文本层")
             + "\n【分析材料】" + sourceLabel
@@ -3552,7 +3609,7 @@ public class MeetingReportService {
         String sourceLabel = fullTextAvailable
             ? "已读取 PDF 文本层。下面材料包含题录、摘要、开头和各章节相关正文片段，请优先基于正文片段分析。"
             : "未读取到可用 PDF 文本层。下面只有题录和摘要，必须明确正文待核对信息。";
-        return "请一次性生成七章组会汇报分析。"
+        return "请一次性生成文献综述分析。"
             + "\n\n" + paperPrompt(paper)
             + "\n\n【正文读取状态】" + sourceLabel
             + "\n【论文材料】\n" + relevantReportText(paperText);
@@ -3560,15 +3617,33 @@ public class MeetingReportService {
 
     private String sectionName(String key) {
         return switch (key) {
-            case "synthesis" -> "论文内容详解";
+            case "synthesis" -> "文献综述总览";
             case "basicInfo" -> "一、基本信息";
-            case "overview" -> "二、文章概述";
-            case "background" -> "三、研究背景";
-            case "method" -> "四、研究思路";
-            case "results" -> "五、研究结果";
-            case "conclusion" -> "六、研究结论、不足与展望";
-            case "datasets" -> "七、数据集";
+            case "overview" -> "二、研究背景";
+            case "background" -> "三、背景证据";
+            case "method" -> "四、研究设计";
+            case "results" -> "五、主要发现";
+            case "conclusion" -> "六、贡献价值与局限展望";
+            case "datasets" -> "七、对象与指标";
             default -> key;
+        };
+    }
+
+    private int reportProgress(int index, boolean done) {
+        int total = Math.max(1, SECTION_KEYS.size());
+        int step = done ? index + 1 : index;
+        return Math.min(96, 12 + (int) Math.round(step * 82.0 / total));
+    }
+
+    private String reportModuleName(String key) {
+        return switch (key) {
+            case "synthesis" -> "文献综述总览";
+            case "basicInfo" -> "论文信息";
+            case "overview", "background" -> "研究背景";
+            case "method", "datasets" -> "研究设计";
+            case "results" -> "主要发现";
+            case "conclusion" -> "贡献价值与局限展望";
+            default -> sectionName(key);
         };
     }
 
@@ -3584,6 +3659,8 @@ public class MeetingReportService {
     }
 
     private Map<String, Object> jobResponse(ReportJob job) {
+        String status = "completed".equals(job.status()) ? "COMPLETED" : "failed".equals(job.status()) ? "FAILED" : "RUNNING";
+        backendJobService.upsert("MEETING_REPORT", job.userId(), job.workspaceId(), status, job.progress(), job.message(), job.paperTitle());
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("workspaceId", job.workspaceId());
         response.put("status", job.status());
@@ -3597,6 +3674,20 @@ public class MeetingReportService {
 
     private Map<String, Object> deckJobResponse(DeckJob job) {
         if ("generated".equals(job.status())) ensurePptUsageRecorded(job);
+        String status = switch (job.status()) {
+            case "generated" -> "GENERATED";
+            case "failed" -> "FAILED";
+            case "awaiting_agent" -> "AWAITING_AGENT";
+            default -> "RUNNING";
+        };
+        BackendJobEntity saved = backendJobService.upsert("MEETING_DECK", job.userId(), job.jobId(), status, job.progress(), job.message(), job.stage());
+        if (!job.result().isEmpty()) {
+            try {
+                saved.setResultJson(objectMapper.writeValueAsString(job.result()));
+            } catch (Exception ignored) {
+                saved.setResultJson("");
+            }
+        }
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("jobId", job.jobId());
         response.put("status", job.status());

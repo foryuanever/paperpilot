@@ -55,3 +55,4 @@ backups/
 *.bak
 *.bak-*
 *-bak-*
+diff.txt

@@ -22,10 +22,12 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -44,6 +46,7 @@ public class AiChatService {
         "google/gemma-4-26b-a4b-it:free"
     );
     private static final int MAX_POOL_FALLBACK_ROUTES = 8;
+    private static final Semaphore MODEL_TEST_LIMITER = new Semaphore(6);
     private static final Map<String, String> OPEN_CODE_FREE_MODEL_ALIASES = Map.ofEntries(
         Map.entry("DeepSeek V4 Flash Free", "oc/deepseek-v4-flash-free"),
         Map.entry("deepseek v4 flash free", "oc/deepseek-v4-flash-free"),
@@ -149,25 +152,23 @@ public class AiChatService {
     ) throws Exception {
         String scene = inferModelConfigScene(systemPrompt, userPrompt);
         ModelConfigEntity config = activeSceneConfig(scene);
-        String baseUrl = config == null ? "https://api.openai.com/v1" : config.getBaseUrl();
-        String apiKey = config == null ? "" : config.getApiKey();
-        String apiFormat = config == null ? "openai_chat" : config.getApiFormat();
-        String authType = config == null ? "bearer" : config.getAuthType();
-        boolean fullUrl = config != null && config.isFullUrl();
-        String customUserAgent = config == null ? "" : config.getCustomUserAgent();
-        String activeModel = normalizeOpenCodeFreeModel(config == null ? "gpt-4.1-mini" : config.getModelName());
         List<ModelRoute> routes = new ArrayList<>();
-        for (String model : expandedModels(activeModel, baseUrl, config == null ? "" : config.getProviderName(), fallbackModels)) {
-            routes.add(new ModelRoute(baseUrl, apiKey, model, apiFormat, authType, fullUrl, customUserAgent));
+        List<ModelConfigEntity> pool = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(scene).stream()
+            .filter(row -> StringUtils.hasText(row.getApiKey()))
+            .filter(row -> StringUtils.hasText(row.getModelName()))
+            .filter(row -> StringUtils.hasText(row.getBaseUrl()))
+            .sorted(this::comparePoolRoute)
+            .toList();
+        if (pool.isEmpty() && config != null) {
+            pool = List.of(config);
         }
-        int fallbackRouteCount = 0;
-        for (ModelConfigEntity row : modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(scene)) {
-            if (config != null && Objects.equals(row.getId(), config.getId())) continue;
-            if (!row.isActive()) continue;
+        int routeCount = 0;
+        for (ModelConfigEntity row : pool) {
             if (!StringUtils.hasText(row.getApiKey()) || !StringUtils.hasText(row.getModelName()) || !StringUtils.hasText(row.getBaseUrl())) continue;
-            if (fallbackRouteCount >= MAX_POOL_FALLBACK_ROUTES) break;
-            fallbackRouteCount++;
-            for (String model : expandedModels(row.getModelName(), row.getBaseUrl(), row.getProviderName(), fallbackModels)) {
+            if (routeCount >= MAX_POOL_FALLBACK_ROUTES) break;
+            routeCount++;
+            Iterable<String> expansion = shouldUseConfiguredPoolOnly(scene) ? List.of(row.getModelName()) : expandedModels(row.getModelName(), row.getBaseUrl(), row.getProviderName(), fallbackModels);
+            for (String model : expansion) {
                 routes.add(new ModelRoute(
                     row.getBaseUrl(),
                     row.getApiKey(),
@@ -178,6 +179,9 @@ public class AiChatService {
                     row.getCustomUserAgent()
                 ));
             }
+        }
+        if (routes.isEmpty() && config == null) {
+            routes.add(new ModelRoute("https://api.openai.com/v1", "", "gpt-4.1-mini", "openai_chat", "bearer", false, ""));
         }
         if (routes.isEmpty()) {
             throw new IllegalStateException("当前入口未配置可用模型，请在管理员 AI 路由中为 " + scene + " 配置第三方 OpenAI 兼容中转。");
@@ -205,6 +209,39 @@ public class AiChatService {
             lastError = "未被质量门跳过的模型已耗尽，正在放开跳过列表重试完整模型池";
         }
         throw new IllegalStateException("模型池全部尝试失败，最后错误：" + lastError);
+    }
+
+    private boolean shouldUseConfiguredPoolOnly(String scene) {
+        return ModelConfigService.SCENE_PAPER_REVIEW.equals(scene)
+            || ModelConfigService.SCENE_PAPER_QA.equals(scene)
+            || ModelConfigService.SCENE_TOPIC_RESEARCH.equals(scene);
+    }
+
+    private int comparePoolRoute(ModelConfigEntity a, ModelConfigEntity b) {
+        int status = Integer.compare(poolStatusRank(a), poolStatusRank(b));
+        if (status != 0) return status;
+        int latency = Long.compare(poolLatency(a), poolLatency(b));
+        if (latency != 0) return latency;
+        int active = Boolean.compare(!a.isActive(), !b.isActive());
+        if (active != 0) return active;
+        return nullSafeUpdatedAt(b).compareTo(nullSafeUpdatedAt(a));
+    }
+
+    private int poolStatusRank(ModelConfigEntity row) {
+        String status = Objects.toString(row.getLastStatus(), "").trim().toLowerCase(Locale.ROOT);
+        if ("available".equals(status)) return 0;
+        if ("unknown".equals(status) || status.isBlank()) return 1;
+        if ("limited".equals(status) || "timeout".equals(status) || "needs_adapter".equals(status)) return 2;
+        return 3;
+    }
+
+    private long poolLatency(ModelConfigEntity row) {
+        Long value = row.getLastLatencyMs();
+        return value == null || value <= 0 ? 99_999L : value;
+    }
+
+    private java.time.LocalDateTime nullSafeUpdatedAt(ModelConfigEntity row) {
+        return row.getUpdatedAt() == null ? java.time.LocalDateTime.MIN : row.getUpdatedAt();
     }
 
     public ChatResult chatJsonForDeckAgent(
@@ -389,13 +426,20 @@ public class AiChatService {
             if (models.isEmpty()) throw new IllegalStateException("模型列表为空，请手动填写模型名称");
             resolvedModel = models.get(0).id();
         }
-        return send(
-            baseUrl, resolvedKey, resolvedModel, apiFormat, authType, fullUrl, customUserAgent,
-            "You are a connection tester. Reply with only OK.",
-            "OK",
-            24,
-            false
-        );
+        if (!MODEL_TEST_LIMITER.tryAcquire(1, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("测速队列繁忙，请稍后重试");
+        }
+        try {
+            return send(
+                baseUrl, resolvedKey, resolvedModel, apiFormat, authType, fullUrl, customUserAgent,
+                "You are a connection tester. Reply with only OK.",
+                "OK",
+                24,
+                false
+            );
+        } finally {
+            MODEL_TEST_LIMITER.release();
+        }
     }
 
     public ChatResult chat(
@@ -448,22 +492,99 @@ public class AiChatService {
         List<String> candidates = buildModelCandidates(baseUrl, fullUrl, modelsUrl);
         String lastError = "没有可尝试的模型端点";
         for (String url : candidates) {
-            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(15))
-                .GET();
-            applyHeaders(builder, resolvedKey, authType, apiFormat, customUserAgent);
-            HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                List<ModelInfo> models = parseModels(response.body());
-                models.sort(Comparator.comparing(ModelInfo::id));
-                return models;
+            try {
+                HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+                    .timeout(Duration.ofSeconds(15))
+                    .GET();
+                applyHeaders(builder, resolvedKey, authType, apiFormat, customUserAgent);
+                HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                    List<ModelInfo> models = parseModels(response.body());
+                    models.sort(Comparator.comparing(ModelInfo::id));
+                    return models;
+                }
+                lastError = responseError(response);
+                if (response.statusCode() != 404 && response.statusCode() != 405) break;
+            } catch (Exception exception) {
+                lastError = exception.getMessage();
+                if (shouldTryCurlModelFallback(exception)) {
+                    List<ModelInfo> models = fetchModelsWithCurl(url, resolvedKey, authType, apiFormat, customUserAgent);
+                    models.sort(Comparator.comparing(ModelInfo::id));
+                    return models;
+                }
             }
-            lastError = responseError(response);
-            if (response.statusCode() != 404 && response.statusCode() != 405) break;
         }
         throw new IllegalStateException("获取模型列表失败：" + lastError);
     }
 
+    private boolean shouldTryCurlModelFallback(Exception exception) {
+        String message = exception.getMessage();
+        if (!StringUtils.hasText(message)) return false;
+        String normalized = message.toLowerCase();
+        return normalized.contains("subject alternative")
+            || normalized.contains("no subject alternative dns name")
+            || normalized.contains("sslhandshake")
+            || normalized.contains("certificate");
+    }
+
+    private List<ModelInfo> fetchModelsWithCurl(
+        String url,
+        String apiKey,
+        String authType,
+        String apiFormat,
+        String customUserAgent
+    ) throws Exception {
+        List<String> command = new ArrayList<>(List.of(
+            "curl",
+            "-sS",
+            "--connect-timeout", "8",
+            "--max-time", "20"
+        ));
+        addCurlHeaders(command, apiKey, authType, apiFormat, customUserAgent);
+        command.add(url);
+
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        byte[] output = process.getInputStream().readAllBytes();
+        boolean finished = process.waitFor(22, TimeUnit.SECONDS);
+        String body = new String(output, StandardCharsets.UTF_8);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new IllegalStateException("curl 模型列表请求超时");
+        }
+        if (process.exitValue() != 0) {
+            throw new IllegalStateException(body.isBlank() ? "curl 模型列表请求失败" : body.trim());
+        }
+        List<ModelInfo> models = parseModels(body);
+        if (models.isEmpty() && body.stripLeading().startsWith("<")) {
+            throw new IllegalStateException("模型列表地址返回了网页 HTML，请填写正确的 /v1/models 地址");
+        }
+        return models;
+    }
+
+    private void addCurlHeaders(
+        List<String> command,
+        String apiKey,
+        String authType,
+        String apiFormat,
+        String customUserAgent
+    ) {
+        String resolvedAuth = StringUtils.hasText(authType)
+            ? authType : "anthropic".equals(apiFormat) ? "x-api-key" : "bearer";
+        if (StringUtils.hasText(apiKey) && !"none".equals(resolvedAuth)) {
+            String headerName = "bearer".equals(resolvedAuth) ? "Authorization" : resolvedAuth;
+            String headerValue = "bearer".equals(resolvedAuth) ? "Bearer " + apiKey.trim() : apiKey.trim();
+            command.add("-H");
+            command.add(headerName + ": " + headerValue);
+        }
+        if ("anthropic".equals(apiFormat)) {
+            command.add("-H");
+            command.add("anthropic-version: 2023-06-01");
+        }
+        if (StringUtils.hasText(customUserAgent)) {
+            command.add("-A");
+            command.add(customUserAgent.trim());
+        }
+    }
     private ChatResult send(
         String baseUrl,
         String apiKey,
@@ -667,7 +788,7 @@ public class AiChatService {
     }
 
     private int requestTimeoutSeconds(String systemPrompt, String userPrompt, boolean connectionTest) {
-        if (connectionTest) return 15;
+        if (connectionTest) return 7;
         String scene = inferModelConfigScene(systemPrompt, userPrompt);
         if (ModelConfigService.SCENE_TOPIC_RESEARCH.equals(scene)) return 90;
         if (ModelConfigService.SCENE_PAPER_QA.equals(scene)) return 90;
@@ -943,7 +1064,7 @@ public class AiChatService {
             aiUsageService.recordAndCharge(
                 user.getId(),
                 modelName,
-                inferScene(systemPrompt, userPrompt),
+                inferModelConfigScene(systemPrompt, userPrompt),
                 inferAction(systemPrompt, userPrompt),
                 inferPaperTitle(systemPrompt, userPrompt),
                 usage.promptTokens(),
@@ -987,8 +1108,8 @@ public class AiChatService {
         if (combined.contains("deep-research") || combined.contains("选题调研") || combined.contains("选题广场") || combined.contains("可执行选题") || combined.contains("topic research")) return ModelConfigService.SCENE_TOPIC_RESEARCH;
         if (combined.contains("translate") || combined.contains("翻译")) return "translate";
         if (combined.contains("meeting report") || combined.contains("组会")) return "report";
-        if (combined.contains("summary") || combined.contains("综述")) return "summary";
         if (combined.contains("question") || combined.contains("问答")) return "qa";
+        if (combined.contains("summary") || combined.contains("综述")) return "summary";
         return "analyze";
     }
 
@@ -1003,11 +1124,11 @@ public class AiChatService {
         if (combined.contains("meeting report") || combined.contains("组会") || combined.contains("ppt")) {
             return ModelConfigService.SCENE_MEETING_DECK;
         }
-        if (combined.contains("summary") || combined.contains("综述") || combined.contains("文献综述")) {
-            return ModelConfigService.SCENE_PAPER_REVIEW;
-        }
         if (combined.contains("question") || combined.contains("问答") || combined.contains("qa") || combined.contains("回答用户")) {
             return ModelConfigService.SCENE_PAPER_QA;
+        }
+        if (combined.contains("summary") || combined.contains("综述") || combined.contains("文献综述")) {
+            return ModelConfigService.SCENE_PAPER_REVIEW;
         }
         return ModelConfigService.SCENE_PAPER_QA;
     }

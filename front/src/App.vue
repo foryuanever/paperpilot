@@ -189,6 +189,9 @@
                     <time>{{ formatSiteMessageTime(message.createdAt) }}</time>
                     <h3>{{ message.title }}</h3>
                     <p>{{ message.content }}</p>
+                    <div v-if="message.imageUrl" class="timeline-feed-image">
+                      <img :src="message.imageUrl" alt="公告配图" />
+                    </div>
                   </article>
                 </div>
                 <div v-else class="announcement-empty">暂无版本更新公告。</div>
@@ -1488,6 +1491,24 @@ async function submitPasswordChange() {
   line-height: 1.72;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.timeline-feed-image {
+  margin-top: 10px;
+  display: block;
+}
+
+.timeline-feed-image img {
+  max-width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+:global([data-theme="dark"] .timeline-feed-image img) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 .announcement-empty {

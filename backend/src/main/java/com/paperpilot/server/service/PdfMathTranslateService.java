@@ -28,6 +28,7 @@ public class PdfMathTranslateService {
 
     private final PaperRepository paperRepository;
     private final CurrentUserService currentUserService;
+    private final BackendJobService backendJobService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
@@ -42,19 +43,25 @@ public class PdfMathTranslateService {
     public PdfMathTranslateService(
         PaperRepository paperRepository,
         CurrentUserService currentUserService,
+        BackendJobService backendJobService,
         ObjectMapper objectMapper
     ) {
         this.paperRepository = paperRepository;
         this.currentUserService = currentUserService;
+        this.backendJobService = backendJobService;
         this.objectMapper = objectMapper;
     }
 
     public Map<String, Object> start(String workspaceId, String service) {
         PaperEntity paper = requirePaper(workspaceId);
+        Long userId = currentUserService.getOrCreateDefaultUserId();
         if (Files.exists(cachedPdf(workspaceId))) {
+            backendJobService.upsert("PDF_MATH_TRANSLATE", userId, workspaceId, "SUCCESS", 100, "双栏翻译 PDF 已生成", "");
             return Map.of("taskId", "cached", "state", "SUCCESS", "reused", true, "cached", true);
         }
-        String existingTask = tasksByWorkspace.get(workspaceId);
+        String existingTask = backendJobService.find("PDF_MATH_TRANSLATE", userId, workspaceId)
+            .map(job -> job.getExternalTaskId())
+            .orElseGet(() -> tasksByWorkspace.get(workspaceId));
         if (existingTask != null) {
             Map<String, Object> existingStatus = status(workspaceId);
             String state = String.valueOf(existingStatus.getOrDefault("state", ""));
@@ -86,6 +93,7 @@ public class PdfMathTranslateService {
             String taskId = String.valueOf(payload.getOrDefault("id", ""));
             if (taskId.isBlank()) throw unavailable("双栏翻译服务未返回任务编号");
             tasksByWorkspace.put(workspaceId, taskId);
+            backendJobService.externalTask("PDF_MATH_TRANSLATE", userId, workspaceId, taskId, "PENDING", 10, "双栏翻译任务已提交");
             return Map.of("taskId", taskId, "state", "PENDING", "reused", false);
         } catch (ResponseStatusException error) {
             throw error;
@@ -96,7 +104,9 @@ public class PdfMathTranslateService {
 
     public Map<String, Object> status(String workspaceId) {
         requirePaper(workspaceId);
+        Long userId = currentUserService.getOrCreateDefaultUserId();
         if (Files.exists(cachedPdf(workspaceId))) {
+            backendJobService.upsert("PDF_MATH_TRANSLATE", userId, workspaceId, "SUCCESS", 100, "双栏翻译 PDF 已生成", "");
             return new java.util.LinkedHashMap<>(Map.of(
                 "taskId", "cached",
                 "state", "SUCCESS",
@@ -115,6 +125,9 @@ public class PdfMathTranslateService {
             }
             Map<String, Object> payload = objectMapper.readValue(response.body(), new TypeReference<>() {});
             payload.put("taskId", taskId);
+            String state = String.valueOf(payload.getOrDefault("state", payload.getOrDefault("status", "RUNNING")));
+            int progress = "SUCCESS".equalsIgnoreCase(state) ? 100 : ("FAILURE".equalsIgnoreCase(state) ? 100 : 50);
+            backendJobService.externalTask("PDF_MATH_TRANSLATE", userId, workspaceId, taskId, state.toUpperCase(), progress, "双栏翻译状态：" + state);
             return payload;
         } catch (ResponseStatusException error) {
             throw error;
@@ -125,6 +138,7 @@ public class PdfMathTranslateService {
 
     public byte[] bilingualPdf(String workspaceId) {
         requirePaper(workspaceId);
+        Long userId = currentUserService.getOrCreateDefaultUserId();
         Path cached = cachedPdf(workspaceId);
         if (Files.exists(cached)) {
             try {
@@ -145,6 +159,7 @@ public class PdfMathTranslateService {
             }
             Files.createDirectories(cacheDir);
             Files.write(cached, response.body());
+            backendJobService.upsert("PDF_MATH_TRANSLATE", userId, workspaceId, "SUCCESS", 100, "双栏翻译 PDF 已缓存", "");
             return response.body();
         } catch (ResponseStatusException error) {
             throw error;
@@ -164,7 +179,10 @@ public class PdfMathTranslateService {
     }
 
     private String requireTask(String workspaceId) {
-        String taskId = tasksByWorkspace.get(workspaceId);
+        Long userId = currentUserService.getOrCreateDefaultUserId();
+        String taskId = backendJobService.find("PDF_MATH_TRANSLATE", userId, workspaceId)
+            .map(job -> job.getExternalTaskId())
+            .orElseGet(() -> tasksByWorkspace.get(workspaceId));
         if (taskId == null || taskId.isBlank()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "尚未创建双栏翻译任务");
         }

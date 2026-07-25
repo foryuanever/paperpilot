@@ -52,35 +52,6 @@ public class ResearchDataService {
         .followRedirects(HttpClient.Redirect.ALWAYS)
         .connectTimeout(Duration.ofSeconds(20))
         .build();
-    private final List<SearchPaperVO> seededSearchPapers = List.of(
-        new SearchPaperVO(
-            "sr-transformer",
-            "Attention Is All You Need",
-            "arXiv",
-            "Ashish Vaswani et al.",
-            "2017",
-            "The transformer architecture removes recurrence and relies entirely on attention mechanisms.",
-            "https://arxiv.org/pdf/1706.03762.pdf"
-        ),
-        new SearchPaperVO(
-            "sr-bert",
-            "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
-            "ACL Anthology",
-            "Jacob Devlin et al.",
-            "2019",
-            "BERT pre-trains deep bidirectional representations from unlabeled text.",
-            "https://aclanthology.org/N19-1423.pdf"
-        ),
-        new SearchPaperVO(
-            "sr-rag",
-            "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
-            "NeurIPS",
-            "Patrick Lewis et al.",
-            "2020",
-            "A hybrid parametric and non-parametric memory approach for generation.",
-            "https://papers.nips.cc/paper_files/paper/2020/file/6b493230205f780e1bc26945df7481e5-Paper.pdf"
-        )
-    );
 
     public ResearchDataService(
         PaperRepository paperRepository,
@@ -178,15 +149,18 @@ public class ResearchDataService {
     }
 
     public List<SearchPaperVO> searchPapers(String keyword, String author) {
-        String normalizedKeyword = keyword == null ? "" : keyword.toLowerCase(Locale.ROOT);
-        String normalizedAuthor = author == null ? "" : author.toLowerCase(Locale.ROOT);
-        return seededSearchPapers.stream()
-            .filter((paper) -> normalizedKeyword.isBlank()
-                || paper.getTitle().toLowerCase(Locale.ROOT).contains(normalizedKeyword)
-                || paper.getAbstractText().toLowerCase(Locale.ROOT).contains(normalizedKeyword))
-            .filter((paper) -> normalizedAuthor.isBlank()
-                || paper.getAuthors().toLowerCase(Locale.ROOT).contains(normalizedAuthor))
+        Long userId = currentUserService.getOrCreateDefaultUserId();
+        String normalizedKeyword = keyword == null ? "" : keyword.trim();
+        String normalizedAuthor = author == null ? "" : author.trim();
+        List<SearchPaperVO> local = paperRepository.searchUserPapers(userId, normalizedKeyword, normalizedAuthor).stream()
+            .map(this::toSearchPaper)
             .toList();
+        if (!local.isEmpty() || normalizedKeyword.isBlank()) return local;
+        try {
+            return externalSearchService.searchByQuery(normalizedKeyword, "crossref", 1, 20).getItems();
+        } catch (Exception ignored) {
+            return local;
+        }
     }
 
     @Transactional
@@ -412,6 +386,18 @@ public class ResearchDataService {
                 ? inferImportSource(entity.getSourceUrl(), entity.getPaperUrl(), entity.getSource())
                 : entity.getImportSource(),
             entity.getAbstractText() == null ? "" : entity.getAbstractText()
+        );
+    }
+
+    private SearchPaperVO toSearchPaper(PaperEntity entity) {
+        return new SearchPaperVO(
+            entity.getWorkspaceId(),
+            entity.getTitle(),
+            entity.getSource(),
+            sanitizeAuthors(entity.getAuthors()),
+            entity.getPublishYear() == null ? "-" : entity.getPublishYear(),
+            entity.getAbstractText() == null ? "" : entity.getAbstractText(),
+            firstNonBlank(entity.getPaperUrl(), entity.getSourceUrl())
         );
     }
 

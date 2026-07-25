@@ -72,7 +72,9 @@ public class PaperWorkspaceService {
         if (duplicate != null) {
             mergeDuplicateMetadata(duplicate, enriched, request);
             duplicate.setReadAt(LocalDateTime.now());
-            return toWorkspace(paperRepository.save(duplicate));
+            PaperEntity saved = paperRepository.save(duplicate);
+            researchDataService.upsertImportedPaper(toLibraryPaper(saved));
+            return toWorkspace(saved);
         }
         enforceDailyImportQuota(currentUser);
         String workspaceId = UUID.randomUUID().toString();
@@ -88,7 +90,7 @@ public class PaperWorkspaceService {
         entity.setImportSource(importSource);
         entity.setTitle(limit(firstMeaningfulTitle(enriched, request, trustRequestMetadata), 512));
         entity.setAuthors(limit(firstNonBlank(enriched == null ? "" : enriched.getAuthors(), trustRequestMetadata ? request.getAuthors() : "", "作者待补全"), 255));
-        String candidatePaperUrl = firstNonBlank(enriched == null ? "" : enriched.getPdfUrl(), requestPaperUrl, entity.getSourceUrl());
+        String candidatePaperUrl = importPdfCandidate(enriched, requestPaperUrl, entity.getSourceUrl());
         String cachedPaperUrl = cacheImportedPdf(workspaceId, candidatePaperUrl);
         entity.setPaperUrl(cachedPaperUrl);
         String abstractText = firstNonBlank(enriched == null ? "" : enriched.getAbstractText(), trustRequestMetadata ? request.getAbstractText() : "");
@@ -151,7 +153,7 @@ public class PaperWorkspaceService {
             }
             entity.setSourceUrl(firstNonBlank(enriched.getSourceUrl(), entity.getSourceUrl(), request.getSourceUrl()));
             entity.setImportSource(firstNonBlank(hostLabel(entity.getSourceUrl()), entity.getImportSource(), request.getImportSource()));
-            String candidatePaperUrl = firstNonBlank(enriched.getPdfUrl(), request.getPaperUrl(), entity.getPaperUrl());
+            String candidatePaperUrl = importPdfCandidate(enriched, request.getPaperUrl(), entity.getPaperUrl());
             if (!isLocalCachedPdf(entity.getPaperUrl()) && !candidatePaperUrl.isBlank()) {
                 entity.setPaperUrl(cacheImportedPdf(entity.getWorkspaceId(), candidatePaperUrl));
             }
@@ -347,6 +349,9 @@ public class PaperWorkspaceService {
 
     private String cacheImportedPdf(String workspaceId, String paperUrl) {
         String normalizedUrl = normalizePdfUrl(unwrapProxyUrl(paperUrl));
+        if (isLocalPdfFileUrl(normalizedUrl)) {
+            return cacheLocalPdfFile(workspaceId, normalizedUrl, paperUrl);
+        }
         if (!isRemotePdfCandidate(normalizedUrl)) {
             return paperUrl;
         }
@@ -355,6 +360,7 @@ public class PaperWorkspaceService {
                 .timeout(Duration.ofSeconds(12))
                 .header("Accept", "application/pdf,application/octet-stream,*/*")
                 .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+                .header("Zotero-API-Version", "3")
                 .header("Referer", refererFor(normalizedUrl))
                 .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 PaperSolver/1.0")
                 .GET()
@@ -374,6 +380,27 @@ public class PaperWorkspaceService {
             }
             return paperUrl;
         }
+    }
+
+    private String cacheLocalPdfFile(String workspaceId, String fileUrl, String fallbackUrl) {
+        try {
+            Path source = Path.of(URI.create(fileUrl));
+            if (!Files.exists(source) || !looksLikePdf(Files.readAllBytes(source))) {
+                return fallbackUrl;
+            }
+            Path uploadDir = Path.of("uploads");
+            Files.createDirectories(uploadDir);
+            Files.copy(source, uploadDir.resolve(workspaceId + ".pdf"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return "/api/papers/uploads/" + workspaceId + ".pdf";
+        } catch (Exception error) {
+            return fallbackUrl;
+        }
+    }
+
+    private String importPdfCandidate(SearchPaperVO enriched, String requestPaperUrl, String fallbackUrl) {
+        String requestUrl = firstNonBlank(requestPaperUrl);
+        if (isZoteroLocalFileUrl(requestUrl) || isLocalPdfFileUrl(requestUrl)) return requestUrl;
+        return firstNonBlank(enriched == null ? "" : enriched.getPdfUrl(), requestUrl, fallbackUrl);
     }
 
     private SearchPaperVO betterPaper(SearchPaperVO current, SearchPaperVO next) {
@@ -564,8 +591,19 @@ public class PaperWorkspaceService {
             && (normalized.contains(".pdf")
                 || normalized.contains("/pdf/")
                 || normalized.contains("/pdfft")
+                || isZoteroLocalFileUrl(normalized)
                 || normalized.contains("pdf.sciencedirectassets.com")
                 || normalized.contains("arxiv.org/pdf/"));
+    }
+
+    private boolean isZoteroLocalFileUrl(String url) {
+        String normalized = firstNonBlank(url).toLowerCase(Locale.ROOT).replace("localhost", "127.0.0.1");
+        return normalized.matches("https?://127\\.0\\.0\\.1:23119/api/users/\\d+/items/[^/]+/file.*");
+    }
+
+    private boolean isLocalPdfFileUrl(String url) {
+        String normalized = firstNonBlank(url).toLowerCase(Locale.ROOT);
+        return normalized.startsWith("file:/") && normalized.contains(".pdf");
     }
 
     private boolean isPublisherAssetOrPdfUrl(String url) {

@@ -61,6 +61,18 @@ public class ModelConfigEntity {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "last_status", length = 32)
+    private String lastStatus;
+
+    @Column(name = "last_message", length = 760)
+    private String lastMessage;
+
+    @Column(name = "last_latency_ms")
+    private Long lastLatencyMs;
+
+    @Column(name = "last_tested_at")
+    private LocalDateTime lastTestedAt;
+
     @PrePersist
     @PreUpdate
     void touch() {
@@ -150,4 +162,13 @@ public class ModelConfigEntity {
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
     }
+
+    public String getLastStatus() { return lastStatus; }
+    public void setLastStatus(String lastStatus) { this.lastStatus = lastStatus; }
+    public String getLastMessage() { return lastMessage; }
+    public void setLastMessage(String lastMessage) { this.lastMessage = lastMessage; }
+    public Long getLastLatencyMs() { return lastLatencyMs; }
+    public void setLastLatencyMs(Long lastLatencyMs) { this.lastLatencyMs = lastLatencyMs; }
+    public LocalDateTime getLastTestedAt() { return lastTestedAt; }
+    public void setLastTestedAt(LocalDateTime lastTestedAt) { this.lastTestedAt = lastTestedAt; }
 }

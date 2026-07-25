@@ -355,6 +355,9 @@ public class ModelConfigService {
         if (!StringUtils.hasText(resolvedModel)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "模型 ID 不能为空");
         }
+        if (resolvedModel.equals(source.getModelName())) {
+            return checkPoolEntity(source);
+        }
         ModelConfigEntity probe = copyRoute(source, normalizeScene(source.getScene()), resolvedModel);
         return checkPoolEntity(probe);
     }
@@ -434,10 +437,10 @@ public class ModelConfigService {
 
     private Map<String, Object> checkPoolEntity(ModelConfigEntity entity) {
         if (!StringUtils.hasText(entity.getApiKey())) {
-            return poolRow(entity, "unconfigured", "缺少 API Key，暂不参与自动调用", null);
+            return rememberPoolCheck(entity, "unconfigured", "缺少 API Key，暂不参与自动调用", null);
         }
         if (!StringUtils.hasText(entity.getModelName()) || "待填写".equals(entity.getModelName())) {
-            return poolRow(entity, "unconfigured", "缺少模型名称，请先填写或获取模型列表", null);
+            return rememberPoolCheck(entity, "unconfigured", "缺少模型名称，请先填写或获取模型列表", null);
         }
         long start = System.nanoTime();
         try {
@@ -451,13 +454,27 @@ public class ModelConfigService {
                 entity.getCustomUserAgent()
             );
             long latencyMs = Math.max(1L, (System.nanoTime() - start) / 1_000_000L);
-            return poolRow(entity, "available", "可用，模型返回：" + result.modelName(), latencyMs);
+            return rememberPoolCheck(entity, "available", "可用，模型返回：" + result.modelName(), latencyMs);
         } catch (Exception error) {
-            return poolRow(entity, classifyPoolError(error), readableMessage(error), Math.max(1L, (System.nanoTime() - start) / 1_000_000L));
+            return rememberPoolCheck(entity, classifyPoolError(error), readableMessage(error), Math.max(1L, (System.nanoTime() - start) / 1_000_000L));
         }
     }
 
+    private Map<String, Object> rememberPoolCheck(ModelConfigEntity entity, String status, String message, Long latencyMs) {
+        if (entity.getId() != null) {
+            entity.setLastStatus(status);
+            entity.setLastMessage(shorten(message, 740));
+            entity.setLastLatencyMs(latencyMs);
+            entity.setLastTestedAt(LocalDateTime.now());
+            modelConfigRepository.save(entity);
+        }
+        return poolRow(entity, status, message, latencyMs);
+    }
+
     private Map<String, Object> poolRow(ModelConfigEntity entity, String status, String message, Long latencyMs) {
+        String resolvedStatus = "unknown".equals(status) && StringUtils.hasText(entity.getLastStatus()) ? entity.getLastStatus() : status;
+        String resolvedMessage = "unknown".equals(status) && StringUtils.hasText(entity.getLastMessage()) ? entity.getLastMessage() : message;
+        Long resolvedLatencyMs = latencyMs != null ? latencyMs : entity.getLastLatencyMs();
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("id", entity.getId());
         row.put("providerName", entity.getProviderName());
@@ -472,14 +489,20 @@ public class ModelConfigService {
         row.put("keyConfigured", StringUtils.hasText(entity.getApiKey()));
         row.put("active", entity.isActive());
         row.put("template", false);
-        row.put("status", status);
-        row.put("message", message);
-        row.put("latencyMs", latencyMs);
+        row.put("status", resolvedStatus);
+        row.put("message", resolvedMessage);
+        row.put("latencyMs", resolvedLatencyMs);
+        row.put("lastTestedAt", entity.getLastTestedAt());
         row.put("updatedAt", entity.getUpdatedAt());
         row.put("keyUrl", inferKeyUrl(entity.getProviderName(), entity.getBaseUrl()));
         row.put("duplicateCount", 1);
-        row.put("priority", entity.isActive() ? "00" : statusPriority(status) + "-" + entity.getId());
+        row.put("priority", poolPriority(entity, resolvedStatus, resolvedLatencyMs));
         return row;
+    }
+
+    private String poolPriority(ModelConfigEntity entity, String status, Long latencyMs) {
+        long latency = latencyMs == null ? 99_999L : latencyMs;
+        return statusPriority(status) + "-" + String.format("%08d", latency) + "-" + (entity.isActive() ? "0" : "1") + "-" + entity.getId();
     }
 
     public static String normalizeScene(String scene) {
@@ -565,6 +588,11 @@ public class ModelConfigService {
 
     private String normalizeText(String value) {
         return Objects.toString(value, "").trim().toLowerCase();
+    }
+
+    private String shorten(String value, int max) {
+        String text = Objects.toString(value, "").replaceAll("\\s+", " ").trim();
+        return text.length() <= max ? text : text.substring(0, Math.max(0, max - 1)) + "…";
     }
 
     private String cleanupReason(ModelConfigEntity entity, Set<String> seenRoutes) {
