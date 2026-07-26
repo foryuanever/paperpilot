@@ -269,12 +269,28 @@ export const paperpilotApi = {
       || normalized.includes("arxiv.org/pdf/");
   },
   async translate(payload, options = {}) {
+    if (canUseDesktopTranslation(payload?.provider) && window.paperSolverDesktop?.translate) {
+      return window.paperSolverDesktop.translate(payload);
+    }
     const { data } = await apiClient.post("/api/translate", payload, { timeout: options.timeout || 45000 });
     return data;
   },
   async getTranslationProviders() {
-    const { data } = await apiClient.get("/api/translate/providers");
-    return data;
+    const providers = [];
+    if (window.paperSolverDesktop?.getTranslationProviders) {
+      try {
+        providers.push(...await window.paperSolverDesktop.getTranslationProviders());
+      } catch {
+        // 桌面本机翻译能力不可用时继续读取后端列表。
+      }
+    }
+    try {
+      const { data } = await apiClient.get("/api/translate/providers");
+      providers.push(...(Array.isArray(data) ? data : []));
+    } catch (error) {
+      if (!providers.length) throw error;
+    }
+    return mergeTranslationProviders(providers);
   },
   async startPdfMathTranslation(workspaceId, service = "google") {
     const { data } = await apiClient.post(`/api/pdfmathtranslate/${workspaceId}/translate`, { service }, { timeout: 60000 });
@@ -727,3 +743,36 @@ export const paperpilotApi = {
     return data;
   },
 };
+
+function canUseDesktopTranslation(provider) {
+  if (!window.paperSolverDesktop?.isDesktop) return false;
+  const normalized = String(provider || "google").trim().toLowerCase();
+  return ["google", "google-web", "deeplx", "libretranslate", "mtranserver"].includes(normalized);
+}
+
+function mergeTranslationProviders(providers) {
+  const map = new Map();
+  for (const provider of providers) {
+    if (!provider?.id) continue;
+    const id = String(provider.id);
+    const existing = map.get(id) || {};
+    if (existing.local && !provider.local) {
+      map.set(id, {
+        ...provider,
+        ...existing,
+        id,
+        configured: String(existing.configured ?? provider.configured ?? false),
+        local: true,
+      });
+      continue;
+    }
+    map.set(id, {
+      ...existing,
+      ...provider,
+      id,
+      configured: String(provider.configured ?? existing.configured ?? false),
+      local: Boolean(provider.local ?? existing.local),
+    });
+  }
+  return Array.from(map.values());
+}

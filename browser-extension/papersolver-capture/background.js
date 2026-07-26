@@ -1,10 +1,23 @@
 const DEFAULT_API_BASE = "http://127.0.0.1:8080";
+const DESKTOP_CAPTURE_BASE = "http://127.0.0.1:18765";
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.set({ apiBase: DEFAULT_API_BASE });
+  chrome.action.setIcon({ path: { 128: "icon-gray-128.png" } });
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === "loading") {
+    setPageDetectionState(tabId, 0);
+  }
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "PAPERSOLVER_PAGE_DETECTED") {
+    setPageDetectionState(sender?.tab?.id, Number(message.count) || 0);
+    sendResponse({ ok: true });
+    return false;
+  }
   if (message?.type === "PAPERSOLVER_SAVE_SESSION") {
     saveSession(message.payload)
       .then(() => sendResponse({ ok: true }))
@@ -46,6 +59,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+function setPageDetectionState(tabId, count) {
+  if (!tabId || !chrome.action) return;
+  const active = count > 0;
+  chrome.action.setIcon({
+    tabId,
+    path: { 128: active ? "icon-active-128.png" : "icon-gray-128.png" }
+  });
+  chrome.action.setTitle({
+    tabId,
+    title: active ? `PaperSolver：识别到 ${count} 篇可导入文献` : "PaperSolver：当前页面未识别到可导入文献"
+  });
+  chrome.action.setBadgeText({ tabId, text: active ? String(Math.min(count, 99)) : "" });
+  chrome.action.setBadgeBackgroundColor({ tabId, color: active ? "#2563eb" : "#6b7280" });
+}
+
 async function importPaper(payload) {
   const { apiBase = DEFAULT_API_BASE, userId = "" } = await chrome.storage.sync.get(["apiBase", "userId"]);
   const body = normalizePayload(payload);
@@ -56,10 +84,15 @@ async function importPaper(payload) {
   if (/^\d+$/.test(String(userId))) {
     headers["X-PaperPilot-User-Id"] = String(userId);
   }
+  const importBody = {
+    ...body,
+    pdfDataUrl: "",
+    pdfFileName: ""
+  };
   const response = await fetch(`${apiBase.replace(/\/$/, "")}/api/papers/import`, {
     method: "POST",
     headers,
-    body: JSON.stringify(body)
+    body: JSON.stringify(importBody)
   });
   if (!response.ok) {
     throw new Error(await responseErrorMessage(response));
@@ -71,21 +104,29 @@ async function importPaper(payload) {
   result.pdfCapturePending = false;
   result.pdfUploadError = "";
   if (clean(body.pdfDataUrl).startsWith("data:application/pdf")) {
-    const uploadResult = await withTimeout(
-      uploadPdfBlobResult(apiBase, headers, clean(result?.workspaceId), dataUrlToBlob(body.pdfDataUrl), clean(body.pdfFileName) || `${clean(result?.workspaceId)}.pdf`),
-      20000,
-      { ok: false, error: "上传接口超时" }
-    );
-    result.pdfUploaded = Boolean(uploadResult?.ok);
-    result.pdfUploadError = clean(uploadResult?.error);
-    if (!result.pdfUploaded) {
+    const localResult = await cachePdfOnDesktop(clean(result?.workspaceId), body.pdfDataUrl, clean(body.pdfFileName) || `${clean(result?.workspaceId)}.pdf`);
+    result.pdfUploaded = Boolean(localResult?.ok);
+    result.pdfLocalCached = Boolean(localResult?.ok);
+    result.paperUrl = localResult?.paperUrl || result.paperUrl;
+    result.pdfUploadError = clean(localResult?.error);
+    if (result.pdfUploaded) {
+      await markBackendDesktopCache(apiBase, headers, clean(result?.workspaceId));
+    } else {
       result.pdfCapturePending = true;
       await storePendingPdfCapture(result, body);
     }
   } else if (isLikelyPdfUrl(clean(body.paperUrl))) {
-    result.pdfCapturePending = true;
-    await storePendingPdfCapture(result, body);
-    queuePdfCapture(apiBase, headers, result, body);
+    const downloaded = await withTimeout(
+      uploadCurrentPdfIfPossible(apiBase, headers, result, body),
+      28000,
+      false
+    );
+    result.pdfUploaded = Boolean(downloaded);
+    result.pdfLocalCached = Boolean(downloaded);
+    if (!downloaded) {
+      result.pdfCapturePending = true;
+      result.pdfUploadError = result.pdfUploadError || "无法直接下载 PDF。请确认桌面端已打开，或该网站允许插件读取 PDF。";
+    }
   }
   return result;
 }
@@ -116,12 +157,10 @@ async function uploadPdfDataFromPage(payload = {}) {
   if (/^\d+$/.test(String(userId))) {
     headers["X-PaperPilot-User-Id"] = String(userId);
   }
-  const uploaded = await withTimeout(
-    uploadPdfBlob(apiBase, headers, workspaceId, dataUrlToBlob(pdfDataUrl), clean(payload.pdfFileName) || `${workspaceId}.pdf`),
-    20000,
-    false
-  );
+  const localResult = await cachePdfOnDesktop(workspaceId, pdfDataUrl, clean(payload.pdfFileName) || `${workspaceId}.pdf`);
+  const uploaded = Boolean(localResult?.ok);
   if (uploaded) {
+    await markBackendDesktopCache(apiBase, headers, workspaceId);
     await chrome.storage.local.remove("pendingPdfCapture");
   }
   return uploaded;
@@ -148,7 +187,7 @@ function queuePdfCapture(apiBase, headers, result, body) {
         type: "basic",
         iconUrl: "icon-128.svg",
         title: uploaded ? "PaperSolver PDF 已同步" : "PaperSolver PDF 捕获未完成",
-        message: uploaded ? "官网 PDF 已自动导入文献库" : "文献已入库，PDF 捕获超时。可打开 PDF 原标签页再次导入。"
+        message: uploaded ? "官网 PDF 已保存到桌面端本机目录" : "文献已入库，PDF 捕获超时。可打开 PDF 原标签页再次导入。"
       });
     })
     .catch(() => {
@@ -167,7 +206,9 @@ async function uploadCurrentPdfIfPossible(apiBase, headers, result, body) {
   if (!workspaceId) return false;
   if (String(result?.paperUrl || "").includes("/api/papers/uploads/")) return true;
   if (clean(body.pdfDataUrl).startsWith("data:application/pdf")) {
-    return uploadPdfBlob(apiBase, headers, workspaceId, dataUrlToBlob(body.pdfDataUrl), clean(body.pdfFileName) || `${workspaceId}.pdf`);
+    const result = await cachePdfOnDesktop(workspaceId, body.pdfDataUrl, clean(body.pdfFileName) || `${workspaceId}.pdf`);
+    if (result?.ok) await markBackendDesktopCache(apiBase, headers, workspaceId);
+    return Boolean(result?.ok);
   }
   if (!isLikelyPdfUrl(pdfUrl)) return false;
   try {
@@ -183,7 +224,9 @@ async function uploadCurrentPdfIfPossible(apiBase, headers, result, body) {
     if (!blob || blob.size < 16) return;
     const header = await blob.slice(0, 4).text();
     if (header !== "%PDF") return;
-    return uploadPdfBlob(apiBase, headers, workspaceId, blob, `${workspaceId}.pdf`);
+    const result = await cachePdfOnDesktop(workspaceId, await blobToDataUrl(blob), `${workspaceId}.pdf`);
+    if (result?.ok) await markBackendDesktopCache(apiBase, headers, workspaceId);
+    return Boolean(result?.ok);
   } catch {
     // Fall through to tab capture. Some publishers only expose the PDF inside a browser tab.
   }
@@ -228,6 +271,47 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([bytes], { type: mime });
 }
 
+async function blobToDataUrl(blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return `data:${blob.type || "application/pdf"};base64,${btoa(binary)}`;
+}
+
+async function cachePdfOnDesktop(workspaceId, pdfDataUrl, pdfFileName) {
+  if (!workspaceId || !clean(pdfDataUrl).startsWith("data:application/pdf")) {
+    return { ok: false, error: "PDF 内容为空" };
+  }
+  try {
+    const response = await fetchWithTimeout(`${DESKTOP_CAPTURE_BASE}/cache-pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId, pdfDataUrl, pdfFileName })
+    }, 22000);
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result?.ok) return result;
+    return { ok: false, error: clean(result?.error) || `桌面端返回 HTTP ${response.status}` };
+  } catch {
+    return { ok: false, error: "桌面端未打开，或本机 PDF 接收服务不可用" };
+  }
+}
+
+async function markBackendDesktopCache(apiBase, headers, workspaceId) {
+  if (!workspaceId) return false;
+  const response = await fetchWithTimeout(`${apiBase.replace(/\/$/, "")}/api/library/papers/${encodeURIComponent(workspaceId)}`, {
+    method: "PATCH",
+    headers: {
+      ...headers,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ paperUrl: `desktop-cache://${workspaceId}` })
+  }, 12000);
+  return response.ok;
+}
+
 async function capturePdfViaBrowserTab(apiBase, headers, workspaceId, pdfUrl) {
   if (!chrome.tabs || !chrome.scripting) return false;
   let tabId = null;
@@ -265,7 +349,9 @@ async function capturePdfViaBrowserTab(apiBase, headers, workspaceId, pdfUrl) {
     }), 18000, []);
     const value = injection?.result;
     if (value?.ok && value.dataUrl) {
-      return uploadPdfBlob(apiBase, headers, workspaceId, dataUrlToBlob(value.dataUrl), value.fileName || `${workspaceId}.pdf`);
+      const result = await cachePdfOnDesktop(workspaceId, value.dataUrl, value.fileName || `${workspaceId}.pdf`);
+      if (result?.ok) await markBackendDesktopCache(apiBase, headers, workspaceId);
+      return Boolean(result?.ok);
     }
   } catch {
     return false;

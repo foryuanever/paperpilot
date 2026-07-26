@@ -11,6 +11,7 @@ import com.paperpilot.server.entity.CheckinEntity;
 import com.paperpilot.server.entity.AppUserEntity;
 import com.paperpilot.server.entity.TranslationRecordEntity;
 import com.paperpilot.server.entity.TeamEntity;
+import com.paperpilot.server.entity.TutorialArticleEntity;
 
 import com.paperpilot.server.repository.InviteCodeRepository;
 import com.paperpilot.server.repository.PaperRepository;
@@ -23,6 +24,7 @@ import com.paperpilot.server.repository.AnnouncementRepository;
 import com.paperpilot.server.repository.SharedResourceRepository;
 import com.paperpilot.server.repository.CheckinRepository;
 import com.paperpilot.server.repository.TeamRepository;
+import com.paperpilot.server.repository.TutorialArticleRepository;
 
 import com.paperpilot.server.service.CurrentUserService;
 import org.springframework.boot.CommandLineRunner;
@@ -51,7 +53,8 @@ public class BootstrapDataConfig {
         AnnouncementRepository announcementRepository,
         SharedResourceRepository sharedResourceRepository,
         CheckinRepository checkinRepository,
-        TeamRepository teamRepository
+        TeamRepository teamRepository,
+        TutorialArticleRepository tutorialArticleRepository
     ) {
         return (args) -> {
             seedInviteCodes(inviteCodeRepository);
@@ -66,6 +69,7 @@ public class BootstrapDataConfig {
             seedAnnouncements(announcementRepository);
             seedSharedResources(sharedResourceRepository);
             seedCheckins(checkinRepository);
+            seedTutorialArticles(tutorialArticleRepository);
 
             if (paperRepository.count() > 0) {
                 return;
@@ -200,6 +204,60 @@ public class BootstrapDataConfig {
         paper.setReadAt(readAt);
         paper.setUploadedAt(uploadedAt);
         return paper;
+    }
+
+    private void seedTutorialArticles(TutorialArticleRepository repo) {
+        String content = zoteroTutorialContent();
+        TutorialArticleEntity existing = repo.findAll().stream()
+            .filter(article -> "Zotero 本机同步设置".equals(article.getTitle()))
+            .findFirst()
+            .orElse(null);
+        if (existing != null) {
+            existing.setCategory("导入教程");
+            existing.setSortOrder(-20);
+            existing.setActiveFlag(true);
+            existing.setContent(content);
+            repo.save(existing);
+            return;
+        }
+
+        TutorialArticleEntity article = new TutorialArticleEntity();
+        article.setTitle("Zotero 本机同步设置");
+        article.setCategory("导入教程");
+        article.setSortOrder(-20);
+        article.setActiveFlag(true);
+        article.setContent(content);
+        repo.save(article);
+    }
+
+    private String zoteroTutorialContent() {
+        return """
+            ## Zotero 本机同步设置
+
+            从 Zotero 导入文献前，请先打开 Zotero Desktop，并确认本机通信开关已经启用。
+
+            ![Zotero 高级设置中的本机通讯开关](/tutorials/zotero-local-api-setting.png)
+
+            ### 需要打开的位置
+
+            1. 打开 Zotero Desktop。
+            2. 进入 **Zotero 设置**。
+            3. 选择左侧 **高级**。
+            4. 在 **杂项** 中勾选：**允许此计算机上的其他应用程序与 Zotero 通讯**。
+            5. 确认页面显示本机接口：`http://localhost:23119/api/`。
+
+            ### 导入时会同步什么
+
+            - 论文题录：标题、作者、期刊/会议、年份、摘要、DOI。
+            - PDF 附件：如果 Zotero 条目下已经保存 PDF，PaperSolver 会复制到项目文献库。
+            - 已导入文献：再次同步时会尝试补全 PDF，不需要重复手动上传。
+
+            ### 常见问题
+
+            - 如果提示 403，说明 Zotero 本机通信开关没有打开。
+            - 如果只导入题录没有 PDF，先确认 Zotero 条目下真的有 PDF 附件。
+            - PaperSolver 不读取或保存 Zotero 密码。
+            """;
     }
 
     private void seedUsers(AppUserRepository appUserRepository) {

@@ -30,9 +30,19 @@ public class TranslateService {
 
     private static final int MAX_CHUNK_SIZE = 4500;
     private static final Map<String, String> PROVIDER_LABELS = new LinkedHashMap<>() {{
+        put("google-web", "Google 网页翻译");
         put("google", "谷歌翻译");
+        put("google-api", "Google(API)");
+        put("bing", "必应翻译");
+        put("cnki", "CNKI 翻译");
+        put("deeplx", "DeepLX");
         put("baidu", "百度翻译");
         put("youdao", "有道翻译");
+        put("huoshan-web", "火山网页翻译");
+        put("tencent-transmart", "腾讯 TranSmart");
+        put("haici", "海词翻译");
+        put("libretranslate", "LibreTranslate");
+        put("mtranserver", "MTranServer");
         put("microsoft", "微软翻译");
         put("tencent", "腾讯翻译");
         put("deepl", "DeepL");
@@ -79,6 +89,18 @@ public class TranslateService {
     @Value("${paperpilot.translate.tencent-region:ap-guangzhou}")
     private String tencentRegion;
 
+    @Value("${paperpilot.translate.deeplx-endpoint:}")
+    private String deeplxEndpoint;
+
+    @Value("${paperpilot.translate.libretranslate-endpoint:}")
+    private String libreTranslateEndpoint;
+
+    @Value("${paperpilot.translate.mtranserver-endpoint:}")
+    private String mtranServerEndpoint;
+
+    @Value("${paperpilot.translate.google-api-key:}")
+    private String googleApiKey;
+
 
     public TranslateResultVO translate(TranslateRequest request) {
         String provider = normalizeProvider(request.getProvider());
@@ -95,12 +117,19 @@ public class TranslateService {
 
         try {
             String translated = switch (provider) {
+                case "google-web" -> translateWithGoogle(text, sourceLang, targetLang);
                 case "google" -> translateWithGoogle(text, sourceLang, targetLang);
+                case "google-api" -> translateWithGoogleApi(text, sourceLang, targetLang);
                 case "youdao" -> translateWithYoudao(text, sourceLang, targetLang);
+                case "deeplx" -> translateWithDeepLX(text, sourceLang, targetLang);
+                case "libretranslate" -> translateWithLibreTranslate(text, sourceLang, targetLang);
+                case "mtranserver" -> translateWithMTranServer(text, sourceLang, targetLang);
                 case "deepl" -> translateWithDeepL(text, sourceLang, targetLang);
                 case "baidu" -> translateWithBaidu(text, sourceLang, targetLang);
                 case "microsoft" -> translateWithMicrosoft(text, sourceLang, targetLang);
                 case "tencent" -> translateWithTencent(text, sourceLang, targetLang);
+                case "bing", "cnki", "huoshan-web", "tencent-transmart", "haici" ->
+                    throw new IllegalStateException("该网页引擎需要桌面端本机插件模式，当前后端暂不可用");
                 default -> throw new IllegalArgumentException("不支持的翻译引擎: " + provider);
             };
 
@@ -154,8 +183,13 @@ public class TranslateService {
 
     private boolean isProviderConfigured(String provider) {
         return switch (provider) {
+            case "google-web" -> true;
             case "google" -> true;
+            case "google-api" -> StringUtils.hasText(googleApiKey);
             case "youdao" -> false;
+            case "deeplx" -> StringUtils.hasText(deeplxEndpoint);
+            case "libretranslate" -> StringUtils.hasText(libreTranslateEndpoint);
+            case "mtranserver" -> StringUtils.hasText(mtranServerEndpoint);
             case "deepl" -> StringUtils.hasText(deeplApiKey);
             case "baidu" -> StringUtils.hasText(baiduAppId) && StringUtils.hasText(baiduSecret);
             case "microsoft" -> StringUtils.hasText(microsoftKey);
@@ -169,6 +203,10 @@ public class TranslateService {
             return "google";
         }
         String normalized = provider.trim().toLowerCase(Locale.ROOT);
+        if ("googleapi".equals(normalized)) return "google-api";
+        if ("deeplcustom".equals(normalized) || "deeplx-api".equals(normalized)) return "deeplx";
+        if ("huoshanweb".equals(normalized)) return "huoshan-web";
+        if ("tencenttransmart".equals(normalized) || "transmart".equals(normalized)) return "tencent-transmart";
         return "ai".equals(normalized) ? "google" : normalized;
     }
 
@@ -226,6 +264,126 @@ public class TranslateService {
             }
         }
         return builder.toString();
+    }
+
+    private String translateWithGoogleApi(String text, String sourceLang, String targetLang) throws Exception {
+        if (!StringUtils.hasText(googleApiKey)) {
+            throw new IllegalStateException("未配置 Google Translation API Key");
+        }
+        String endpoint = "https://translation.googleapis.com/language/translate/v2?key="
+            + URLEncoder.encode(googleApiKey, StandardCharsets.UTF_8);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("q", text);
+        payload.put("target", normalizeGoogleApiTarget(targetLang));
+        payload.put("format", "text");
+        if (!"auto".equalsIgnoreCase(sourceLang)) {
+            payload.put("source", normalizeGoogleApiTarget(sourceLang));
+        }
+        HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint))
+            .timeout(Duration.ofSeconds(20))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
+            .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 400) {
+            throw new IllegalStateException("HTTP " + response.statusCode());
+        }
+        JsonNode translations = objectMapper.readTree(response.body()).path("data").path("translations");
+        if (!translations.isArray() || translations.isEmpty()) {
+            throw new IllegalStateException("Google API 返回为空");
+        }
+        return translations.get(0).path("translatedText").asText("");
+    }
+
+    private String translateWithDeepLX(String text, String sourceLang, String targetLang) throws Exception {
+        if (!StringUtils.hasText(deeplxEndpoint)) {
+            throw new IllegalStateException("未配置 DeepLX Endpoint");
+        }
+        String endpoint = deeplxEndpoint.replaceAll("/+$", "");
+        if (!endpoint.endsWith("/translate")) {
+            endpoint += "/translate";
+        }
+        String payload = objectMapper.writeValueAsString(Map.of(
+            "text", text,
+            "source_lang", "auto".equalsIgnoreCase(sourceLang) ? "AUTO" : mapDeepLSource(sourceLang),
+            "target_lang", mapDeepLTarget(targetLang)
+        ));
+        HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint))
+            .timeout(Duration.ofSeconds(30))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(payload))
+            .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 400) {
+            throw new IllegalStateException("HTTP " + response.statusCode());
+        }
+        JsonNode root = objectMapper.readTree(response.body());
+        String translated = firstJsonText(root, "data", "translation", "translatedText", "text", "result");
+        if (!StringUtils.hasText(translated)) {
+            throw new IllegalStateException("DeepLX 返回为空");
+        }
+        return translated;
+    }
+
+    private String translateWithLibreTranslate(String text, String sourceLang, String targetLang) throws Exception {
+        if (!StringUtils.hasText(libreTranslateEndpoint)) {
+            throw new IllegalStateException("未配置 LibreTranslate Endpoint");
+        }
+        String endpoint = libreTranslateEndpoint.replaceAll("/+$", "");
+        if (!endpoint.endsWith("/translate")) {
+            endpoint += "/translate";
+        }
+        String payload = objectMapper.writeValueAsString(Map.of(
+            "q", text,
+            "source", "auto".equalsIgnoreCase(sourceLang) ? "auto" : mapLibreLang(sourceLang),
+            "target", mapLibreLang(targetLang),
+            "format", "text"
+        ));
+        HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint))
+            .timeout(Duration.ofSeconds(30))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(payload))
+            .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 400) {
+            throw new IllegalStateException("HTTP " + response.statusCode());
+        }
+        JsonNode root = objectMapper.readTree(response.body());
+        String translated = firstJsonText(root, "translatedText", "translation", "text", "result");
+        if (!StringUtils.hasText(translated)) {
+            throw new IllegalStateException("LibreTranslate 返回为空");
+        }
+        return translated;
+    }
+
+    private String translateWithMTranServer(String text, String sourceLang, String targetLang) throws Exception {
+        if (!StringUtils.hasText(mtranServerEndpoint)) {
+            throw new IllegalStateException("未配置 MTranServer Endpoint");
+        }
+        String endpoint = mtranServerEndpoint.replaceAll("/+$", "");
+        if (!endpoint.endsWith("/translate")) {
+            endpoint += "/translate";
+        }
+        String payload = objectMapper.writeValueAsString(Map.of(
+            "text", text,
+            "from", "auto".equalsIgnoreCase(sourceLang) ? "auto" : mapLibreLang(sourceLang),
+            "to", mapLibreLang(targetLang)
+        ));
+        HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint))
+            .timeout(Duration.ofSeconds(30))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(payload))
+            .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 400) {
+            throw new IllegalStateException("HTTP " + response.statusCode());
+        }
+        JsonNode root = objectMapper.readTree(response.body());
+        String translated = firstJsonText(root, "translation", "translatedText", "text", "result", "data");
+        if (!StringUtils.hasText(translated)) {
+            throw new IllegalStateException("MTranServer 返回为空");
+        }
+        return translated;
     }
 
     private String translateWithYoudao(String text, String sourceLang, String targetLang) throws Exception {
@@ -466,6 +624,50 @@ public class TranslateService {
         if ("es".equalsIgnoreCase(lang)) return "spa";
         if ("ru".equalsIgnoreCase(lang)) return "ru";
         return "auto";
+    }
+
+    private String normalizeGoogleApiTarget(String lang) {
+        if ("zh-CN".equalsIgnoreCase(lang) || "zh".equalsIgnoreCase(lang)) return "zh-CN";
+        if ("zh-TW".equalsIgnoreCase(lang)) return "zh-TW";
+        if ("ja".equalsIgnoreCase(lang) || "jp".equalsIgnoreCase(lang)) return "ja";
+        if ("ko".equalsIgnoreCase(lang) || "kor".equalsIgnoreCase(lang)) return "ko";
+        if ("en".equalsIgnoreCase(lang)) return "en";
+        if ("fr".equalsIgnoreCase(lang)) return "fr";
+        if ("de".equalsIgnoreCase(lang)) return "de";
+        if ("es".equalsIgnoreCase(lang)) return "es";
+        if ("ru".equalsIgnoreCase(lang)) return "ru";
+        return lang;
+    }
+
+    private String mapLibreLang(String lang) {
+        if ("auto".equalsIgnoreCase(lang)) return "auto";
+        if ("zh-CN".equalsIgnoreCase(lang) || "zh".equalsIgnoreCase(lang)) return "zh";
+        if ("zh-TW".equalsIgnoreCase(lang)) return "zt";
+        if ("ja".equalsIgnoreCase(lang) || "jp".equalsIgnoreCase(lang)) return "ja";
+        if ("ko".equalsIgnoreCase(lang) || "kor".equalsIgnoreCase(lang)) return "ko";
+        if ("en".equalsIgnoreCase(lang)) return "en";
+        if ("fr".equalsIgnoreCase(lang)) return "fr";
+        if ("de".equalsIgnoreCase(lang)) return "de";
+        if ("es".equalsIgnoreCase(lang)) return "es";
+        if ("ru".equalsIgnoreCase(lang)) return "ru";
+        return lang;
+    }
+
+    private String firstJsonText(JsonNode root, String... fieldNames) {
+        if (root == null || root.isMissingNode() || root.isNull()) return "";
+        for (String fieldName : fieldNames) {
+            JsonNode node = root.path(fieldName);
+            if (node.isTextual() && StringUtils.hasText(node.asText())) {
+                return node.asText();
+            }
+            if (node.isObject() || (node.isArray() && !node.isEmpty())) {
+                String nested = firstJsonText(node.isArray() ? node.get(0) : node, fieldNames);
+                if (StringUtils.hasText(nested)) return nested;
+            }
+        }
+        if (root.isTextual()) return root.asText();
+        if (root.isArray() && !root.isEmpty()) return firstJsonText(root.get(0), fieldNames);
+        return "";
     }
 
     private String mapYoudaoLangType(String sourceLang, String targetLang) {

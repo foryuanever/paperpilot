@@ -22,6 +22,48 @@
         <div v-if="!currentFilterOptions.length" class="library-filter-empty">暂无选项</div>
       </div>
     </Teleport>
+    <Teleport to="body">
+      <div v-if="zoteroGuideOpen" class="zotero-guide-backdrop" @click.self="closeZoteroGuide">
+        <section class="zotero-guide-dialog" role="dialog" aria-modal="true" aria-labelledby="zotero-guide-title">
+          <header class="zotero-guide-head">
+            <div>
+              <span>ZOTERO LOCAL ACCESS</span>
+              <h2 id="zotero-guide-title">本机同步设置教程</h2>
+              <p>开启 Zotero 本机通讯后，PaperSolver 才能读取题录并把条目下的 PDF 保存到桌面端本机缓存。</p>
+            </div>
+            <button type="button" aria-label="关闭 Zotero 设置教程" @click="closeZoteroGuide">×</button>
+          </header>
+
+          <div class="zotero-guide-body">
+            <figure class="zotero-guide-image">
+              <img src="/tutorials/zotero-local-api-setting.png" alt="Zotero 高级设置中的本机通讯开关" />
+            </figure>
+
+            <div class="zotero-guide-content">
+              <section>
+                <h3>需要打开的位置</h3>
+                <ol>
+                  <li>打开 Zotero Desktop。</li>
+                  <li>进入 <strong>Zotero 设置</strong>。</li>
+                  <li>选择左侧 <strong>高级</strong>。</li>
+                  <li>在 <strong>杂项</strong> 中勾选 <strong>允许此计算机上的其他应用程序与 Zotero 通讯</strong>。</li>
+                  <li>确认页面显示本机接口：<code>http://localhost:23119/api/</code>。</li>
+                </ol>
+              </section>
+
+              <section>
+                <h3>同步内容</h3>
+                <ul>
+                  <li>题录：标题、作者、期刊/会议、年份、摘要、DOI。</li>
+                  <li>PDF 附件：如果 Zotero 条目下已保存 PDF，桌面端会保存到本机缓存，不上传服务器。</li>
+                  <li>再次同步：会尝试补全已导入文献的 PDF，不需要重复手动上传。</li>
+                </ul>
+              </section>
+            </div>
+          </div>
+        </section>
+      </div>
+    </Teleport>
     <div class="spatial-page library-spatial">
     <section class="spatial-chapter library-workbench-head" data-reveal="off">
       <div class="spatial-chapter-inner library-head-inner" data-reveal="off">
@@ -248,7 +290,7 @@
           <label class="file-drop field-wide">
             <input type="file" accept="application/pdf,.pdf" @change="selectPersonalPdf" />
             <strong>{{ personalPdf?.name || "选择本地 PDF" }}</strong>
-            <small>上传后由 PaperSolver 储存，并可直接进入对照或沉浸翻译。</small>
+            <small>{{ isDesktopApp ? "桌面端会保存到本机，不上传服务器。" : "上传后由 PaperSolver 储存，并可直接进入对照或沉浸翻译。" }}</small>
           </label>
           <footer class="field-wide">
             <button type="button" class="spatial-btn spatial-btn-ghost" @click="resetPersonalPaper">清空</button>
@@ -270,7 +312,7 @@
           <div class="zotero-copy">
             <span>LOCAL ZOTERO</span>
             <h3>同步文献和本机 PDF</h3>
-            <p>保持 Zotero Desktop 打开，PaperSolver 会读取当前本机文库；如果条目下有 PDF 附件，会复制到项目 uploads，进入阅读器后不需要再次手动上传。</p>
+            <p>保持 Zotero Desktop 打开，PaperSolver 会读取当前本机文库；如果条目下有 PDF 附件，会保存到桌面端本机缓存，进入阅读器后不需要再次手动上传。</p>
             <div class="zotero-step-grid" aria-label="Zotero 同步流程">
               <div>
                 <b>1</b>
@@ -301,7 +343,7 @@
               <div class="zotero-card-head">
                 <div>
                   <strong>本机 Zotero 同步</strong>
-                  <small>推荐方式，可自动带入本地 PDF 附件。</small>
+                  <small>推荐方式，可自动保存本地 PDF 附件。</small>
                 </div>
                 <span>推荐</span>
               </div>
@@ -313,7 +355,10 @@
               <button class="spatial-btn spatial-btn-accent" type="button" :disabled="zoteroOnline.importing" @click="submitZoteroOnlineImport">
                 {{ zoteroOnline.importing ? "读取本机 Zotero 中…" : "检测本机 Zotero 并同步" }}
               </button>
-              <small class="zotero-safe-note">不读取或保存 Zotero 密码。若 Zotero 未开启本机通信，系统会提示去设置中启用。</small>
+              <div class="zotero-help-strip">
+                <small>不读取或保存 Zotero 密码。若 Zotero 未开启本机通信，先按教程打开本机通讯。</small>
+                <button type="button" @click="openZoteroGuide">查看设置教程</button>
+              </div>
             </div>
             <div class="zotero-divider"><span>或上传导出文件</span></div>
             <label class="zotero-file-drop">
@@ -327,16 +372,19 @@
             <button class="spatial-btn spatial-btn-ghost zotero-file-import-btn" type="button" :disabled="zoteroImporting || !zoteroFile" @click="submitZoteroImport">
               {{ zoteroImporting ? "导入中…" : "从 Zotero 导入" }}
             </button>
-            <div v-if="zoteroResult" class="zotero-result" :class="{ partial: zoteroResult.failed > 0 }">
+            <div v-if="zoteroResult" class="zotero-result" :class="{ partial: zoteroResult.failed > 0 || zoteroResult.pdfSkipped > 0 }">
               <strong>识别 {{ zoteroResult.detected }} 篇，已导入 {{ zoteroResult.imported }} 篇</strong>
+              <span v-if="zoteroResult.pdfUploaded">{{ isDesktopApp ? "已本机保存 PDF" : "已自动补充 PDF" }} {{ zoteroResult.pdfUploaded }} 篇。</span>
+              <span v-if="zoteroResult.pdfSkipped">有 {{ zoteroResult.pdfSkipped }} 篇未补 PDF，展开下方可查看原因。</span>
               <span v-if="zoteroResult.failed">失败 {{ zoteroResult.failed }} 篇，可能触发每日导入额度或缺少标题。</span>
-              <span v-else>导入完成，文献已进入当前账号文献库。</span>
+              <span v-else-if="!zoteroResult.pdfSkipped">导入完成，文献已进入当前账号文献库。</span>
+              <span v-else>题录已导入，缺失 PDF 的文献可后续手动上传或回 Zotero 下载附件后再次同步。</span>
             </div>
-            <details v-if="zoteroFailedItems.length" class="zotero-failed-details">
-              <summary>查看失败明细</summary>
-              <p v-for="item in zoteroFailedItems" :key="item.title">
+            <details v-if="zoteroIssueItems.length" class="zotero-failed-details">
+              <summary>查看未完成明细</summary>
+              <p v-for="item in zoteroIssueItems" :key="`${item.title}-${item.pdfStatus || item.status}`">
                 <strong>{{ item.title }}</strong>
-                <span>{{ item.message }}</span>
+                <span>{{ item.message || item.pdfMessage || pdfStatusText(item.pdfStatus) }}</span>
               </p>
             </details>
           </div>
@@ -346,23 +394,23 @@
       <section v-else-if="activeTab === 'storage'" class="library-management-panel">
         <header class="storage-head">
           <div>
-            <h2>上传与储存</h2>
-            <p>集中管理本地 PDF、替换文件与云端储存状态。</p>
+            <h2>PDF 文件管理</h2>
+            <p>{{ isDesktopApp ? "集中管理桌面端本机 PDF、替换文件与缓存状态。" : "集中管理本地 PDF、替换文件与云端储存状态。" }}</p>
           </div>
           <div class="storage-summary">
             <strong>{{ storedCount }}</strong>
-            <span>已储存 PDF / {{ libraryStore.state.documents.length }} 篇</span>
+            <span>{{ isDesktopApp ? "本机 PDF" : "已储存 PDF" }} / {{ libraryStore.state.documents.length }} 篇</span>
           </div>
         </header>
         <div class="storage-list">
           <article v-for="paper in libraryStore.state.documents" :key="paper.id">
             <div>
               <strong>{{ paper.title }}</strong>
-              <span>{{ canTryRead(paper) ? "PDF 已关联，可用于双栏与逐段翻译" : "尚未上传 PDF" }}</span>
+              <span>{{ canTryRead(paper) ? "PDF 已关联，可用于双栏与沉浸翻译" : "尚未关联 PDF" }}</span>
             </div>
             <label class="replace-upload">
               <input type="file" accept="application/pdf,.pdf" @change="uploadReplacementPdf(paper, $event)" />
-              {{ uploadingWorkspace === paper.workspaceId ? "上传中…" : canTryRead(paper) ? "替换 PDF" : "上传 PDF" }}
+              {{ uploadingWorkspace === paper.workspaceId ? (isDesktopApp ? "保存中…" : "上传中…") : canTryRead(paper) ? "替换 PDF" : "关联 PDF" }}
             </label>
           </article>
         </div>
@@ -406,7 +454,7 @@
         <header>
           <div>
             <span>关联 PDF</span>
-            <h3>{{ pdfLinkEditor.paper?.title || "上传 PDF" }}</h3>
+            <h3>{{ pdfLinkEditor.paper?.title || "关联 PDF" }}</h3>
           </div>
           <button type="button" @click="closePdfLinkEditor">×</button>
         </header>
@@ -414,13 +462,13 @@
         <label class="pdf-upload-drop field-wide">
           <input type="file" accept="application/pdf,.pdf" @change="pickPdfUploadFile" />
           <strong>{{ pdfLinkEditor.fileName || "选择本地 PDF 文件" }}</strong>
-          <small>支持 .pdf 格式，上传后由 PaperSolver 储存。</small>
+          <small>{{ isDesktopApp ? "支持 .pdf 格式，桌面端会保存到本机缓存。" : "支持 .pdf 格式，上传后由 PaperSolver 储存。" }}</small>
         </label>
         <p v-if="pdfLinkEditor.error" class="pdf-link-error">{{ pdfLinkEditor.error }}</p>
         <footer>
           <button type="button" class="spatial-btn spatial-btn-ghost" @click="closePdfLinkEditor">取消</button>
           <button type="button" class="spatial-btn spatial-btn-accent" :disabled="pdfLinkEditor.saving" @click="savePdfLinkEditor">
-            {{ pdfLinkEditor.saving ? "上传中..." : "上传 PDF" }}
+            {{ pdfLinkEditor.saving ? (isDesktopApp ? "保存中..." : "上传中...") : (isDesktopApp ? "保存到本机" : "上传 PDF") }}
           </button>
         </footer>
       </section>
@@ -484,6 +532,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useScrollReveal } from "../composables/useScrollReveal";
 import { useLibraryStore } from "../stores/library";
 import { useAuthStore } from "../stores/auth";
+import { useDialogStore } from "../stores/dialog";
 import { paperpilotApi } from "../services/paperpilotApi";
 import { rememberLastReading } from "../utils/readingMemory";
 import CheckinLottery from "../components/CheckinLottery.vue";
@@ -494,6 +543,8 @@ const router = useRouter();
 const route = useRoute();
 const libraryStore = useLibraryStore();
 const authStore = useAuthStore();
+const dialogStore = useDialogStore();
+const isDesktopApp = Boolean(window.paperSolverDesktop?.isDesktop);
 const keyword = ref("");
 const openFilter = ref("");
 const filterButtonRefs = ref({});
@@ -563,7 +614,7 @@ const libraryTabs = [
   { id: "papers", label: "全部文献", description: "阅读、翻译与分析" },
   { id: "add", label: "个人文献添加", description: "题录与本地 PDF" },
   { id: "zotero", label: "Zotero 导入", description: "批量题录导入" },
-  { id: "storage", label: "上传与储存", description: "文件管理与替换" },
+  { id: "storage", label: "PDF 管理", description: "文件管理与替换" },
 ];
 const validTabs = new Set(libraryTabs.map(item => item.id));
 const activeTab = ref(validTabs.has(String(route.query.tab)) ? String(route.query.tab) : "papers");
@@ -579,6 +630,7 @@ const personalImporting = ref(false);
 const zoteroFile = ref(null);
 const zoteroImporting = ref(false);
 const zoteroResult = ref(null);
+const zoteroGuideOpen = ref(false);
 const zoteroOnline = reactive({
   limit: 100,
   importing: false,
@@ -681,7 +733,7 @@ function closeAllFilters(event) {
 const readableCount = computed(() => libraryStore.state.documents.filter((paper) => canTryRead(paper)).length);
 const notesCount = computed(() => libraryStore.state.documents.filter((paper) => String(paper.note || "").trim()).length);
 const storedCount = computed(() => libraryStore.state.documents.filter((paper) =>
-  String(paper.paperUrl || "").includes("/api/papers/uploads/"),
+  String(paper.paperUrl || "").includes("/api/papers/uploads/") || isDesktopCacheUrl(paper.paperUrl),
 ).length);
 watch(() => route.query.tab, (tab) => {
   activeTab.value = validTabs.has(String(tab)) ? String(tab) : "papers";
@@ -690,6 +742,14 @@ watch(() => route.query.tab, (tab) => {
 function selectTab(tab) {
   activeTab.value = tab;
   router.replace({ path: "/library", query: tab === "papers" ? {} : { tab } });
+}
+
+function openZoteroGuide() {
+  zoteroGuideOpen.value = true;
+}
+
+function closeZoteroGuide() {
+  zoteroGuideOpen.value = false;
 }
 
 function venueTypeClass(type) {
@@ -778,6 +838,13 @@ function showToast(msg) {
 }
 
 async function directDelete(paper) {
+  const ok = await dialogStore.confirm(`确定删除文献《${paper.title || "未命名论文"}》吗？删除后会从文献库移除，已保存的阅读进度和关联信息也会一起清理。`, {
+    title: "删除文献",
+    confirmText: "删除",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await libraryStore.deleteDocument(paper.id);
     showToast(`文献《${paper.title}》已成功删除`);
@@ -817,6 +884,7 @@ function isReadablePdfUrl(url) {
   const normalized = paperpilotApi.normalizePdfUrl(url);
   const lower = normalized.toLowerCase();
   if (!normalized) return false;
+  if (isDesktopCacheUrl(normalized)) return true;
   if (lower.startsWith("blob:") || lower.startsWith("data:")) return true;
   if (lower.includes("/api/papers/uploads/")) return true;
   if (lower.includes("sciencedirect.com/science/article/pii/") || lower.includes("pdf.sciencedirectassets.com")) return false;
@@ -839,8 +907,17 @@ function canTryRead(paper) {
   return Boolean(resolveReadablePdfSource(paper));
 }
 
+function isDesktopCacheUrl(url) {
+  return String(url || "").trim().toLowerCase().startsWith("desktop-cache://");
+}
+
+function desktopCacheUrl(workspaceId) {
+  return workspaceId ? `desktop-cache://${workspaceId}` : "";
+}
+
 function pdfHref(paper) {
   const source = resolveReadablePdfSource(paper);
+  if (isDesktopCacheUrl(source)) return "";
   return source ? paperpilotApi.buildPdfProxyUrl(source) : "";
 }
 
@@ -895,13 +972,18 @@ async function savePdfLinkEditor() {
   pdfLinkEditor.value.error = "";
   try {
     if (paper.workspaceId) {
-      await paperpilotApi.uploadPaperPdf(paper.workspaceId, file);
+      await cacheDesktopPdfFromFile(paper.workspaceId, file);
+      if (isDesktopApp) {
+        await libraryStore.persistDocumentPatch(paper.id, { paperUrl: desktopCacheUrl(paper.workspaceId) });
+      } else {
+        await paperpilotApi.uploadPaperPdf(paper.workspaceId, file);
+      }
     } else {
       await libraryStore.persistDocumentPatch(paper.id, { paperUrl: "" });
     }
     await libraryStore.hydrateLibrary();
     const updated = libraryStore.state.documents.find((item) => item.id === paper.id);
-    showToast("PDF 已上传");
+    showToast(isDesktopApp ? "PDF 已保存到本机" : "PDF 已上传");
     pdfLinkEditor.value.open = false;
     if (updated && canTryRead(updated)) {
       openLineAiReader(updated);
@@ -982,8 +1064,10 @@ function selectZoteroFile(event) {
   zoteroResult.value = null;
 }
 
-const zoteroFailedItems = computed(() =>
-  (zoteroResult.value?.items || []).filter((item) => item.status === "failed").slice(0, 8),
+const zoteroIssueItems = computed(() =>
+  (zoteroResult.value?.items || [])
+    .filter((item) => item.status === "failed" || ["failed", "skipped"].includes(item.pdfStatus))
+    .slice(0, 12),
 );
 
 function formatFileSize(size) {
@@ -1017,20 +1101,145 @@ async function submitZoteroOnlineImport() {
   zoteroOnline.importing = true;
   zoteroResult.value = null;
   try {
-    const result = await paperpilotApi.importZoteroLocal({
-      limit: Math.max(1, Math.min(200, Number(zoteroOnline.limit) || 100)),
-    });
+    const limit = Math.max(1, Math.min(200, Number(zoteroOnline.limit) || 100));
+    const result = isDesktopApp
+      ? await importZoteroLocalFromDesktop(limit)
+      : await paperpilotApi.importZoteroLocal({ limit });
     zoteroResult.value = result;
     await refreshLibraryFromBackend();
     refreshFilterOptions();
-    showToast(`Zotero 验证成功，已同步 ${result.imported || 0} 篇文献`);
-    if (result.imported > 0) selectTab("papers");
+    const pdfText = result.pdfUploaded ? `，${isDesktopApp ? "已本机保存 PDF" : "已补 PDF"} ${result.pdfUploaded} 篇` : "";
+    const skippedText = result.pdfSkipped ? `，${result.pdfSkipped} 篇未补 PDF` : "";
+    showToast(`Zotero 验证成功，已同步 ${result.imported || 0} 篇文献${pdfText}${skippedText}`);
+    if (result.imported > 0 && !result.failed && !result.pdfSkipped) selectTab("papers");
   } catch (error) {
     console.error("zotero online import failed", error);
     showToast(error?.response?.data?.message || "未检测到本机 Zotero，请先打开 Zotero Desktop");
   } finally {
     zoteroOnline.importing = false;
   }
+}
+
+async function importZoteroLocalFromDesktop(limit) {
+  if (!window.paperSolverDesktop?.importZoteroLocal) {
+    throw new Error("当前桌面端不支持本机 Zotero 同步");
+  }
+  const localResult = await window.paperSolverDesktop.importZoteroLocal({ limit });
+  const sourceItems = Array.isArray(localResult?.items) ? localResult.items.slice(0, limit) : [];
+  const resultItems = [];
+  let imported = 0;
+  let failed = 0;
+  let pdfUploaded = 0;
+  let pdfSkipped = 0;
+  for (const item of sourceItems) {
+    const { localPdf, ...paperPayload } = item;
+    const row = { title: item.title || "未命名文献" };
+    try {
+      const workspace = await paperpilotApi.importPaper(paperPayload);
+      imported += 1;
+      row.status = "imported";
+      row.workspaceId = workspace?.workspaceId || "";
+      if (row.workspaceId && localPdf) {
+        try {
+          const payload = await readDesktopZoteroPdfPayload(localPdf);
+          await cacheDesktopPdf(row.workspaceId, payload);
+          await paperpilotApi.updateLibraryPaper(row.workspaceId, { paperUrl: desktopCacheUrl(row.workspaceId) });
+          pdfUploaded += 1;
+          row.pdfStatus = "cached";
+        } catch (pdfError) {
+          pdfSkipped += 1;
+          row.pdfStatus = "failed";
+          row.pdfMessage = pdfError?.message || (isDesktopApp ? "PDF 附件保存到本机失败" : "PDF 附件上传失败");
+        }
+      } else {
+        pdfSkipped += 1;
+        row.pdfStatus = "skipped";
+        row.pdfMessage = item.localPdfMessage || pdfStatusText(item.localPdfStatus) || "Zotero 条目下没有可读取的 PDF 附件。";
+      }
+    } catch (error) {
+      failed += 1;
+      row.status = "failed";
+      row.message = error?.response?.data?.message || error?.message || "导入失败";
+    }
+    resultItems.push(row);
+  }
+  return {
+    fileName: "Zotero 本机同步（桌面端）",
+    detected: sourceItems.length,
+    imported,
+    failed,
+    limited: Boolean(localResult?.limited) || sourceItems.length >= limit,
+    verified: true,
+    local: true,
+    desktop: true,
+    pdfUploaded,
+    pdfSkipped,
+    items: resultItems,
+  };
+}
+
+function pdfStatusText(status) {
+  if (status === "missing") return "Zotero 条目下没有可读取的 PDF 附件。";
+  if (status === "failed") return "读取 Zotero PDF 附件信息失败。";
+  if (status === "found") return "已找到 PDF，但保存流程未完成。";
+  return "";
+}
+
+async function readDesktopZoteroPdfPayload(pdfRef) {
+  if (!window.paperSolverDesktop?.readZoteroPdf) {
+    throw new Error("当前桌面端不支持自动读取 Zotero PDF");
+  }
+  const payload = await window.paperSolverDesktop.readZoteroPdf(pdfRef);
+  if (!payload?.base64) {
+    throw new Error("Zotero PDF 内容为空");
+  }
+  return payload;
+}
+
+async function cacheDesktopPdf(workspaceId, payload) {
+  if (!window.paperSolverDesktop?.cachePdf || !workspaceId || !payload?.base64) return;
+  try {
+    await window.paperSolverDesktop.cachePdf({
+      workspaceId,
+      fileName: payload.fileName || "zotero-attachment.pdf",
+      mimeType: payload.mimeType || "application/pdf",
+      base64: payload.base64,
+    });
+  } catch (error) {
+    console.warn("desktop pdf cache failed", error);
+  }
+}
+
+async function cacheDesktopPdfFromFile(workspaceId, file) {
+  if (!window.paperSolverDesktop?.cachePdf || !workspaceId || !file) return;
+  const base64 = await fileToBase64(file);
+  await cacheDesktopPdf(workspaceId, {
+    fileName: file.name || `${workspaceId}.pdf`,
+    mimeType: file.type || "application/pdf",
+    base64,
+  });
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result || "");
+      resolve(value.includes(",") ? value.split(",").pop() : value);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function desktopPdfPayloadToFile(payload) {
+  const binary = atob(payload.base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  const fileName = payload.fileName || "zotero-attachment.pdf";
+  return new File([bytes], fileName, { type: payload.mimeType || "application/pdf" });
 }
 
 function resetPersonalPaper() {
@@ -1061,7 +1270,12 @@ async function submitPersonalPaper() {
       abstractText: personalPaper.abstractText.trim(),
     });
     if (result?.workspaceId) {
-      await paperpilotApi.uploadPaperPdf(result.workspaceId, personalPdf.value);
+      await cacheDesktopPdfFromFile(result.workspaceId, personalPdf.value);
+      if (isDesktopApp) {
+        await paperpilotApi.updateLibraryPaper(result.workspaceId, { paperUrl: desktopCacheUrl(result.workspaceId) });
+      } else {
+        await paperpilotApi.uploadPaperPdf(result.workspaceId, personalPdf.value);
+      }
     }
     await refreshLibraryFromBackend();
     showToast("个人文献已添加到个人文献库");
@@ -1080,12 +1294,17 @@ async function uploadReplacementPdf(paper, event) {
   if (!file || !paper?.workspaceId || uploadingWorkspace.value) return;
   uploadingWorkspace.value = paper.workspaceId;
   try {
-    await paperpilotApi.uploadPaperPdf(paper.workspaceId, file);
+    await cacheDesktopPdfFromFile(paper.workspaceId, file);
+    if (isDesktopApp) {
+      await libraryStore.persistDocumentPatch(paper.id, { paperUrl: desktopCacheUrl(paper.workspaceId) });
+    } else {
+      await paperpilotApi.uploadPaperPdf(paper.workspaceId, file);
+    }
     await refreshLibraryFromBackend();
-    showToast(`《${paper.title}》PDF 已更新`);
+    showToast(isDesktopApp ? `《${paper.title}》PDF 已保存到本机` : `《${paper.title}》PDF 已更新`);
   } catch (error) {
     console.error("paper upload failed", error);
-    showToast("PDF 上传失败");
+    showToast(isDesktopApp ? "PDF 保存失败" : "PDF 上传失败");
   } finally {
     uploadingWorkspace.value = "";
     event.target.value = "";
@@ -1530,6 +1749,162 @@ onUnmounted(() => {
   padding: 9px 10px;
   border-radius: 10px;
   background: rgba(15, 118, 110, 0.08);
+}
+
+.zotero-help-strip {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(20, 184, 166, 0.14);
+  border-radius: 12px;
+  background: rgba(15, 118, 110, 0.07);
+}
+
+.zotero-help-strip small {
+  color: #5e7087;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.zotero-help-strip button {
+  width: max-content;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  padding: 0 0 2px;
+  color: #0f766e;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.zotero-help-strip button:hover {
+  color: #2563eb;
+}
+
+.zotero-guide-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 520;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(2, 6, 23, 0.62);
+}
+
+.zotero-guide-dialog {
+  width: min(1040px, calc(100vw - 48px));
+  max-height: min(860px, calc(100vh - 56px));
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+}
+
+.zotero-guide-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #f8fbff, #ffffff);
+}
+
+.zotero-guide-head span {
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.zotero-guide-head h2 {
+  margin: 7px 0 7px;
+  color: #0f172a;
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.zotero-guide-head p {
+  margin: 0;
+  color: #52637a;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.zotero-guide-head button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d7e2ef;
+  border-radius: 10px;
+  color: #64748b;
+  background: #ffffff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.zotero-guide-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(300px, .88fr);
+  gap: 0;
+  max-height: calc(min(860px, 100vh - 56px) - 102px);
+  overflow: auto;
+}
+
+.zotero-guide-image {
+  margin: 0;
+  padding: 22px;
+  border-right: 1px solid #e2e8f0;
+  background: #eef4fb;
+}
+
+.zotero-guide-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid #d7e2ef;
+  border-radius: 12px;
+  background: #111827;
+}
+
+.zotero-guide-content {
+  display: grid;
+  align-content: start;
+  gap: 20px;
+  padding: 24px;
+}
+
+.zotero-guide-content h3 {
+  margin: 0 0 10px;
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.zotero-guide-content ol,
+.zotero-guide-content ul {
+  margin: 0;
+  padding-left: 22px;
+  color: #243246;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.zotero-guide-content li + li {
+  margin-top: 6px;
+}
+
+.zotero-guide-content strong {
+  color: #0f172a;
+}
+
+.zotero-guide-content code {
+  padding: 2px 7px;
+  border-radius: 7px;
+  color: #2563eb;
+  background: #eef5ff;
+  font-weight: 800;
 }
 
 .zotero-divider {
@@ -2888,6 +3263,62 @@ onUnmounted(() => {
   background: rgba(20, 184, 166, 0.08) !important;
 }
 
+:root[data-theme="dark"] .zotero-help-strip {
+  border-color: rgba(45, 212, 191, 0.18) !important;
+  background: rgba(20, 184, 166, 0.08) !important;
+}
+
+:root[data-theme="dark"] .zotero-help-strip small {
+  color: #a8b3c7 !important;
+}
+
+:root[data-theme="dark"] .zotero-help-strip button {
+  color: #5eead4 !important;
+}
+
+:root[data-theme="dark"] .zotero-guide-dialog {
+  border-color: rgba(148, 163, 184, 0.2) !important;
+  background: #0f1726 !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.46) !important;
+}
+
+:root[data-theme="dark"] .zotero-guide-head {
+  border-bottom-color: rgba(148, 163, 184, 0.18) !important;
+  background: linear-gradient(180deg, #111b2b, #0f1726) !important;
+}
+
+:root[data-theme="dark"] .zotero-guide-head h2,
+:root[data-theme="dark"] .zotero-guide-content h3,
+:root[data-theme="dark"] .zotero-guide-content strong {
+  color: #f6f8fb !important;
+}
+
+:root[data-theme="dark"] .zotero-guide-head p,
+:root[data-theme="dark"] .zotero-guide-content ol,
+:root[data-theme="dark"] .zotero-guide-content ul {
+  color: #dbe7f7 !important;
+}
+
+:root[data-theme="dark"] .zotero-guide-head button {
+  border-color: rgba(148, 163, 184, 0.22) !important;
+  color: #cbd5e1 !important;
+  background: rgba(15, 23, 42, 0.86) !important;
+}
+
+:root[data-theme="dark"] .zotero-guide-image {
+  border-right-color: rgba(148, 163, 184, 0.18) !important;
+  background: #08111f !important;
+}
+
+:root[data-theme="dark"] .zotero-guide-image img {
+  border-color: rgba(148, 163, 184, 0.22) !important;
+}
+
+:root[data-theme="dark"] .zotero-guide-content code {
+  color: #93c5fd !important;
+  background: rgba(37, 99, 235, 0.18) !important;
+}
+
 :root[data-theme="dark"] .zotero-divider {
   color: #8795aa !important;
 }
@@ -2912,6 +3343,18 @@ onUnmounted(() => {
 :root[data-theme="dark"] .file-drop small,
 :root[data-theme="dark"] .pdf-upload-drop small {
   color: #94a3b8 !important;
+}
+
+:root[data-theme="dark"] .zotero-result {
+  color: #bbf7d0 !important;
+  background: rgba(20, 83, 45, 0.24) !important;
+  border-color: rgba(74, 222, 128, 0.32) !important;
+}
+
+:root[data-theme="dark"] .zotero-result.partial {
+  color: #fed7aa !important;
+  background: rgba(124, 45, 18, 0.24) !important;
+  border-color: rgba(251, 146, 60, 0.34) !important;
 }
 
 :root[data-theme="dark"] .zotero-failed-details {

@@ -253,7 +253,11 @@ public class ResearchDataService {
         if (request.getPaperUrl() != null) {
             String cached = cachePdf(entity.getWorkspaceId(), request.getPaperUrl());
             entity.setPaperUrl(cached);
-            if (cached.startsWith("/api/papers/uploads/")) {
+            if (isDesktopCachedPdf(cached)) {
+                entity.setProgress("1%");
+                entity.setNote("PDF 已保存到桌面端本机，可进入阅读解析。");
+                entity.setJournalTags(String.join(",", mergeTags(entity.getJournalTags(), List.of("本机PDF"))));
+            } else if (cached.startsWith("/api/papers/uploads/")) {
                 entity.setProgress("1%");
                 entity.setNote("PDF 已缓存，可进入阅读解析。");
                 entity.setJournalTags(String.join(",", mergeTags(entity.getJournalTags(), List.of("PDF已缓存"))));
@@ -683,6 +687,7 @@ public class ResearchDataService {
 
     private String cachePdf(String workspaceId, String paperUrl) {
         String normalizedUrl = normalizePdfUrl(unwrapProxyUrl(paperUrl));
+        if (isDesktopCachedPdf(normalizedUrl)) return normalizedUrl;
         if (!isRemotePdfCandidate(normalizedUrl)) return paperUrl == null ? "" : paperUrl;
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create(normalizedUrl))
@@ -708,6 +713,10 @@ public class ResearchDataService {
             }
             return paperUrl == null ? "" : paperUrl;
         }
+    }
+
+    private boolean isDesktopCachedPdf(String url) {
+        return firstNonBlank(url).startsWith("desktop-cache://");
     }
 
     private String normalizePdfUrl(String url) {

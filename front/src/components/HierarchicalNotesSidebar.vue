@@ -189,6 +189,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from "vue";
 import HierarchicalTreeNode from "./HierarchicalTreeNode.vue";
+import { useDialogStore } from "../stores/dialog";
 
 const props = defineProps({
   paperId: { type: String, default: "" },
@@ -199,6 +200,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["toggle-collapse", "jump-to-page", "jump-to-annotation", "show-toast", "sync-note"]);
+const dialogStore = useDialogStore();
 
 const searchQuery = ref("");
 const selectedNodeId = ref(null);
@@ -559,13 +561,18 @@ function deleteNodeFromList(list, id) {
   return false;
 }
 
-function deleteNode(node) {
-  if (confirm(`确定删除笔记节点“${node.title}”及其子级项吗？`)) {
-    deleteNodeFromList(notesTree.value, node.id);
-    if (selectedNodeId.value === node.id) selectedNodeId.value = null;
-    saveNotesToStorage();
-    emit("show-toast", "节点已删除");
-  }
+async function deleteNode(node) {
+  const ok = await dialogStore.confirm(`确定删除笔记节点“${node.title}”及其子级项吗？`, {
+    title: "删除笔记节点",
+    confirmText: "删除",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok) return;
+  deleteNodeFromList(notesTree.value, node.id);
+  if (selectedNodeId.value === node.id) selectedNodeId.value = null;
+  saveNotesToStorage();
+  emit("show-toast", "节点已删除");
 }
 
 // 划词快速摘录为层级节点

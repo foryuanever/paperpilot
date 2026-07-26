@@ -317,18 +317,32 @@ function updateClock() {
   flex: 0 0 auto;
   min-width: 150px;
   min-height: 58px;
-  border: 0;
+  border: 1px solid rgba(79, 70, 229, 0.18);
   border-radius: 999px;
-  color: #056245;
-  background: #c7efd9;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(125, 211, 252, 0.52), transparent 34%),
+    linear-gradient(135deg, #4f46e5 0%, #2563eb 54%, #0891b2 100%);
   font-size: 17px;
   font-weight: 850;
   cursor: pointer;
-  box-shadow: 0 12px 22px rgba(16, 185, 129, .14);
+  box-shadow: 0 16px 30px rgba(37, 99, 235, .22);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
 .checkin-card-action:hover {
-  background: #b8e8cd;
+  transform: translateY(-1px);
+  border-color: rgba(96, 165, 250, 0.42);
+  box-shadow: 0 18px 34px rgba(37, 99, 235, .28);
+}
+
+.checkin-lottery-card.checked .checkin-card-action {
+  color: #ffffff;
+  border-color: rgba(99, 102, 241, 0.38);
+  background:
+    radial-gradient(circle at 20% 18%, rgba(216, 180, 254, 0.44), transparent 32%),
+    linear-gradient(135deg, #5b5cf6 0%, #3b82f6 58%, #06b6d4 100%);
+  box-shadow: 0 16px 34px rgba(59, 130, 246, .26);
 }
 
 .checkin-card-action:disabled {
@@ -354,8 +368,8 @@ function updateClock() {
   border: 1px solid rgba(148, 163, 184, .24);
   border-radius: 24px;
   background:
-    radial-gradient(circle at 18% 8%, rgba(34, 197, 94, .12), transparent 34%),
-    radial-gradient(circle at 92% 14%, rgba(37, 99, 235, .14), transparent 34%),
+    radial-gradient(circle at 18% 8%, rgba(34, 211, 238, .12), transparent 34%),
+    radial-gradient(circle at 92% 14%, rgba(79, 70, 229, .16), transparent 34%),
     #ffffff;
   box-shadow: 0 28px 80px rgba(15, 23, 42, .26);
   color: #0f172a;
@@ -416,11 +430,11 @@ function updateClock() {
 }
 
 .wheel-center-inner {
-  fill: #ecfdf5;
+  fill: #eef5ff;
 }
 
 .wheel-center-text {
-  fill: #047857;
+  fill: #2563eb;
   font-size: 13px;
   font-weight: 950;
 }
@@ -432,10 +446,10 @@ function updateClock() {
   z-index: 5;
   width: 28px;
   height: 34px;
-  background: #0f8d66;
+  background: #4f46e5;
   clip-path: polygon(50% 100%, 0 0, 100% 0);
   transform: translateX(-50%);
-  filter: drop-shadow(0 9px 10px rgba(15, 141, 102, .22));
+  filter: drop-shadow(0 9px 10px rgba(79, 70, 229, .24));
 }
 
 .lottery-copy span {
@@ -468,7 +482,7 @@ function updateClock() {
   border: 0;
   border-radius: 14px;
   color: #fff;
-  background: linear-gradient(135deg, #0f8d66, #2563eb);
+  background: linear-gradient(135deg, #4f46e5, #2563eb);
   font-size: 15px;
   font-weight: 900;
   cursor: pointer;
@@ -507,8 +521,8 @@ function updateClock() {
 }
 
 .lottery-streak {
-  color: #047857;
-  background: #ecfdf5;
+  color: #1e3a8a;
+  background: #eef5ff;
 }
 
 .lottery-streak strong {
@@ -545,8 +559,8 @@ function updateClock() {
 /* ── DARK MODE ADAPTATIONS FOR CHECKIN LOTTERY ── */
 :root[data-theme="dark"] .checkin-lottery-modal {
   background:
-    radial-gradient(circle at 18% 8%, rgba(34, 197, 94, .16), transparent 34%),
-    radial-gradient(circle at 92% 14%, rgba(37, 99, 235, .16), transparent 34%),
+    radial-gradient(circle at 18% 8%, rgba(34, 211, 238, .12), transparent 34%),
+    radial-gradient(circle at 92% 14%, rgba(99, 102, 241, .2), transparent 34%),
     #121a28 !important;
   border-color: rgba(226, 235, 255, 0.14) !important;
   color: #eef4ff !important;
@@ -568,6 +582,40 @@ function updateClock() {
 
 :root[data-theme="dark"] .lottery-copy p {
   color: #a8b3c7 !important;
+}
+
+:root[data-theme="dark"] .checkin-card-copy p {
+  color: #a8b3c7 !important;
+}
+
+:root[data-theme="dark"] .checkin-card-time span {
+  color: #94a3b8 !important;
+}
+
+:root[data-theme="dark"] .checkin-card-time strong {
+  color: #eef4ff !important;
+}
+
+:root[data-theme="dark"] .checkin-card-time b {
+  color: #f8fafc !important;
+}
+
+:root[data-theme="dark"] .checkin-lottery-card.checked .checkin-card-action {
+  color: #ffffff !important;
+  border-color: rgba(165, 180, 252, 0.58) !important;
+  background:
+    radial-gradient(circle at 22% 20%, rgba(216, 180, 254, 0.5), transparent 34%),
+    linear-gradient(135deg, #6366f1 0%, #3b82f6 58%, #06b6d4 100%) !important;
+  text-shadow: 0 1px 0 rgba(15, 23, 42, .22) !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, .06) inset,
+    0 16px 34px rgba(37, 99, 235, .32),
+    0 0 22px rgba(99, 102, 241, .22) !important;
+}
+
+:root[data-theme="dark"] .lottery-streak {
+  color: #c7d2fe !important;
+  background: rgba(79, 70, 229, .14) !important;
 }
 
 :root[data-theme="dark"] .lottery-result {

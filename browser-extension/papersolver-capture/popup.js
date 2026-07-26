@@ -2,15 +2,16 @@ const input = document.getElementById("apiBase");
 const statusEl = document.getElementById("status");
 const accountEl = document.getElementById("account");
 const versionEl = document.getElementById("version");
+const desktopStateEl = document.getElementById("desktopState");
 
 versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
 
 chrome.storage.sync.get(["apiBase", "userId", "userName"], (data) => {
   input.value = data.apiBase || "http://127.0.0.1:8080";
-  if (data.userId) {
-    accountEl.textContent = `已绑定账号：${data.userName || "PaperSolver 用户"}（ID ${data.userId}）`;
-  }
+  accountEl.textContent = "请打开并登录 PaperSolver 桌面客户端完成绑定。";
 });
+
+checkDesktopState();
 
 document.getElementById("save").addEventListener("click", () => {
   const value = input.value.trim() || "http://127.0.0.1:8080";
@@ -21,6 +22,35 @@ document.getElementById("save").addEventListener("click", () => {
     }, 1600);
   });
 });
+
+async function checkDesktopState() {
+  desktopStateEl.classList.remove("bad");
+  desktopStateEl.textContent = "正在检测桌面端本机保存服务...";
+  try {
+    const response = await fetch("http://127.0.0.1:18765/health", { method: "GET" });
+    const data = await response.json();
+    if (!response.ok || !data?.ok) throw new Error();
+    if (data.apiBaseUrl) {
+      input.value = data.apiBaseUrl;
+      await chrome.storage.sync.set({ apiBase: data.apiBaseUrl });
+    }
+    if (data.session?.userId) {
+      await chrome.storage.sync.set({
+        userId: String(data.session.userId),
+        userName: data.session.userName || "PaperSolver 用户",
+        appUrl: "papersolver-desktop"
+      });
+      accountEl.textContent = `已绑定客户端账号：${data.session.userName || "PaperSolver 用户"}（ID ${data.session.userId}）`;
+      desktopStateEl.textContent = `桌面端已连接，PDF 将保存到：${data.pdfStorageDir || "已配置目录"}`;
+    } else {
+      desktopStateEl.classList.add("bad");
+      desktopStateEl.textContent = "桌面端已打开，但未检测到客户端登录账号。请先在客户端登录一次。";
+    }
+  } catch {
+    desktopStateEl.classList.add("bad");
+    desktopStateEl.textContent = "未连接到桌面端。请打开最新版 PaperSolver 桌面端，并先配置 PDF 保存目录。";
+  }
+}
 
 document.getElementById("test").addEventListener("click", async () => {
   const apiBase = input.value.trim() || "http://127.0.0.1:8080";

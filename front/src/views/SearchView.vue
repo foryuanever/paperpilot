@@ -8,7 +8,7 @@
 
         <section class="capture-flow-hero" data-reveal>
           <div class="flow-head">
-            <span class="plugin-badge">PaperSolver Capture · v0.2.5</span>
+            <span class="plugin-badge">PaperSolver Capture · v0.3.0</span>
             <h1>官网文献捕获流程</h1>
             <p>从搜索源进入官网，插件只在明确论文页安静出现，确认后把题录与 PDF 送回文献库。</p>
           </div>
@@ -35,12 +35,12 @@
             </article>
           </div>
           <div class="browser-downloads">
-            <a class="browser-download-btn" href="/downloads/papersolver-capture-chrome-v0.2.5.zip" download>
+            <a class="browser-download-btn" href="/downloads/papersolver-capture-chrome-v0.3.0.zip" download>
               <span class="browser-logo chrome-logo"></span>
               <strong>Chrome 下载</strong>
               <small>开发者模式加载</small>
             </a>
-            <a class="browser-download-btn" href="/downloads/papersolver-capture-edge-v0.2.5.zip" download>
+            <a class="browser-download-btn" href="/downloads/papersolver-capture-edge-v0.3.0.zip" download>
               <span class="browser-logo edge-logo"></span>
               <strong>Edge 下载</strong>
               <small>开发者模式加载</small>

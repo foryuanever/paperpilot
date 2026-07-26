@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from "vue-router";
+import { createRouter, createWebHashHistory, createWebHistory } from "vue-router";
 import LibraryView from "../views/LibraryView.vue";
 import LoginView from "../views/LoginView.vue";
 import ModelCenterView from "../views/ModelCenterView.vue";
@@ -136,7 +136,7 @@ const routes = [
 ];
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: import.meta.env.VITE_DESKTOP_APP === "true" ? createWebHashHistory() : createWebHistory(),
   routes,
   scrollBehavior() {
     return { top: 0 };

@@ -7,7 +7,12 @@
       <!-- 第二行：极简集中式阅读工具栏 (精准自动匹配正文 reading-stage 列) -->
       <div
         class="reader-toolbar-row"
-        :class="{ 'assistant-collapsed': assistantCollapsed, 'assistant-wide': assistantExpanded && assistantTab === 'chat' }"
+        :class="{
+          'assistant-collapsed': assistantCollapsed,
+          'assistant-wide': assistantExpanded && assistantTab === 'chat',
+          'right-notes-open': rightNotesOpen,
+          'right-notes-closed': !rightNotesOpen
+        }"
       >
         <!-- 左侧边栏对应空占位块 (与左侧边栏宽度 1:1 像素同步) -->
         <div class="toolbar-sidebar-spacer"></div>
@@ -744,7 +749,7 @@
     >
       <div class="ai-sparkle-halo"></div>
       <span class="ai-sparkle-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="url(#ai-grad-btn)"/><defs><linearGradient id="ai-grad-btn" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse"><stop stop-color="#818CF8"/><stop offset="0.5" stop-color="#C084FC"/><stop offset="1" stop-color="#F472B6"/></linearGradient></defs></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="url(#ai-grad-btn)"/><defs><linearGradient id="ai-grad-btn" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse"><stop stop-color="#EDE9FE"/><stop offset="0.48" stop-color="#C4B5FD"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient></defs></svg>
       </span>
       <span class="ai-label-text">{{ paperChat.open ? '收起助手' : 'AI 研读助手' }}</span>
     </button>
@@ -785,7 +790,7 @@
 
         <div class="paper-chat-messages void-chat-body">
           <article
-            v-for="message in paperChat.messages"
+            v-for="(message, messageIndex) in paperChat.messages"
             :key="message.id"
             :class="['paper-chat-message', message.role, { 'has-figure': message.figure }]"
           >
@@ -812,6 +817,14 @@
 
               <div v-if="message.role === 'assistant'" class="message-text markdown-rendered" v-html="renderMarkdown(message.content)"></div>
               <p v-else class="message-text">{{ message.content }}</p>
+              <div v-if="message.role === 'assistant'" class="paper-chat-message-actions">
+                <button type="button" title="重新生成" @click="retryPaperChatMessage(messageIndex)">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+                </button>
+                <button type="button" title="复制回答" @click="copyPaperChatMessage(message)">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+              </div>
             </div>
           </article>
 
@@ -1590,11 +1603,22 @@ const paperMetaTranslation = reactive({
   paperId: "",
 });
 const translationProviders = ref([
+  { id: "google-web", label: "Google 网页翻译", configured: true },
   { id: "google", label: "谷歌翻译", configured: true },
+  { id: "google-api", label: "Google(API)", configured: false },
+  { id: "bing", label: "必应翻译", configured: false },
+  { id: "cnki", label: "CNKI 翻译", configured: false },
+  { id: "deeplx", label: "DeepLX", configured: false },
   { id: "baidu", label: "百度翻译", configured: true },
   { id: "youdao", label: "有道翻译", configured: true },
+  { id: "huoshan-web", label: "火山网页翻译", configured: false },
+  { id: "tencent-transmart", label: "腾讯 TranSmart", configured: false },
+  { id: "haici", label: "海词翻译", configured: false },
+  { id: "libretranslate", label: "LibreTranslate", configured: false },
+  { id: "mtranserver", label: "MTranServer", configured: false },
   { id: "microsoft", label: "微软翻译", configured: false },
-  { id: "tencent", label: "腾讯翻译", configured: false }
+  { id: "tencent", label: "腾讯翻译", configured: false },
+  { id: "deepl", label: "DeepL", configured: false }
 ]);
 const selectionReady = ref(false);
 const selectedRange = shallowRef(null);
@@ -1664,13 +1688,13 @@ const paperChatWindow = reactive({
 });
 const paperChatPanelStyle = computed(() => ({
   "--paper-chat-x": `${paperChatWindow.x ?? 0}px`,
-  "--paper-chat-y": `${paperChatWindow.y ?? 68}px`,
+  "--paper-chat-y": `${paperChatWindow.y ?? 92}px`,
   "--paper-chat-w": `${paperChatWindow.width || Math.min(1320, Math.max(360, window.innerWidth - 48))}px`,
-  "--paper-chat-h": `${paperChatWindow.height || Math.min(920, Math.max(480, window.innerHeight - 78))}px`,
+  "--paper-chat-h": `${paperChatWindow.height || Math.min(920, Math.max(480, window.innerHeight - 116))}px`,
   left: `${paperChatWindow.x ?? 0}px`,
-  top: `${paperChatWindow.y ?? 68}px`,
+  top: `${paperChatWindow.y ?? 92}px`,
   width: `${paperChatWindow.width || Math.min(1320, Math.max(360, window.innerWidth - 48))}px`,
-  height: `${paperChatWindow.height || Math.min(920, Math.max(480, window.innerHeight - 78))}px`,
+  height: `${paperChatWindow.height || Math.min(920, Math.max(480, window.innerHeight - 116))}px`,
   right: "auto",
   bottom: "auto",
   transform: "none",
@@ -1821,8 +1845,33 @@ const hasAbstract = computed(() => Boolean(abstractText.value));
 const pdfSource = computed(() => {
   const paper = activePaper.value || {};
   const source = paper.pdfUrl || paper.paperUrl || "";
+  if (String(source).toLowerCase().startsWith("desktop-cache://")) return "";
   return paperpilotApi.buildPdfProxyUrl(source);
 });
+
+async function resolvePdfSourceForDocument() {
+  const id = workspaceId.value;
+  if (window.paperSolverDesktop?.getCachedPdf && id) {
+    try {
+      const cached = await window.paperSolverDesktop.getCachedPdf({ workspaceId: id });
+      if (cached?.found && cached.base64) {
+        return base64ToUint8Array(cached.base64);
+      }
+    } catch (error) {
+      console.warn("desktop pdf cache read failed", error);
+    }
+  }
+  return pdfSource.value;
+}
+
+function base64ToUint8Array(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
 
 function shortPaperTitle(title, max = 32) {
   const value = String(title || "未命名文献").replace(/\s+/g, " ").trim();
@@ -2722,9 +2771,14 @@ function providerLabel(providerId) {
 
 function providerShortLabel(providerId) {
   const label = providerLabel(providerId);
+  if (providerId === "google-web") return "Google 网页";
+  if (providerId === "google-api") return "Google API";
   if (providerId === "microsoft") return "微软翻译";
   if (providerId === "tencent") return "腾讯翻译";
+  if (providerId === "tencent-transmart") return "腾讯 TranSmart";
+  if (providerId === "huoshan-web") return "火山网页";
   if (providerId === "youdao") return "有道翻译";
+  if (providerId === "deeplx") return "DeepLX";
   if (providerId === "deepl") return "DeepL";
   if (providerId === "ai") return "AI 翻译";
   return label;
@@ -2963,7 +3017,7 @@ function syncHierarchicalNoteToLibrary(markdown) {
 
 function preferredPaperChatRect() {
   const marginX = 24;
-  const marginTop = 54;
+  const marginTop = 92;
   const marginBottom = 24;
   const width = Math.min(1320, Math.max(360, window.innerWidth - marginX * 2));
   const height = Math.min(920, Math.max(480, window.innerHeight - marginTop - marginBottom));
@@ -3026,7 +3080,7 @@ function movePaperChatDrag(event) {
   event.preventDefault();
   const width = paperChatWindow.width || Math.min(1180, window.innerWidth - 92);
   const height = paperChatWindow.height || Math.min(880, window.innerHeight - 104);
-  const minTop = 48;
+  const minTop = 84;
   const nextX = event.clientX - paperChatWindow.offsetX;
   const nextY = event.clientY - paperChatWindow.offsetY;
   paperChatWindow.x = Math.min(Math.max(12, nextX), Math.max(12, window.innerWidth - width - 12));
@@ -3097,15 +3151,60 @@ function insertQuickPrompt(text) {
   askPaperChat();
 }
 
-async function askPaperChat() {
+function findPreviousPaperChatPrompt(messageIndex) {
+  for (let index = messageIndex - 1; index >= 0; index -= 1) {
+    const message = paperChat.messages[index];
+    if (message?.role === "user" && String(message.content || "").trim()) {
+      return String(message.content || "").trim();
+    }
+  }
+  return "";
+}
+
+async function retryPaperChatMessage(messageIndex) {
+  if (paperChat.loading) return;
+  const question = findPreviousPaperChatPrompt(messageIndex);
+  if (!question) {
+    showReaderToast("这条欢迎语没有可重新分析的问题");
+    return;
+  }
+  paperChat.messages.splice(messageIndex, 1);
+  paperChat.question = question;
+  await askPaperChat({ appendUserMessage: false });
+}
+
+async function copyPaperChatMessage(message) {
+  const text = String(message?.content || "").trim();
+  if (!text) return;
+  try {
+    await navigator.clipboard?.writeText(text);
+    showReaderToast("已复制 AI 回答");
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+    showReaderToast("已复制 AI 回答");
+  }
+}
+
+async function askPaperChat(options = {}) {
+  const { appendUserMessage = true } = options;
   const question = paperChat.question.trim();
   if (!question || paperChat.loading) return;
-  paperChat.messages.push({ id: paperChat.nextId++, role: "user", content: question });
+  if (appendUserMessage) {
+    paperChat.messages.push({ id: paperChat.nextId++, role: "user", content: question });
+  }
   paperChat.question = "";
   paperChat.loading = true;
   try {
     const result = await paperpilotApi.askPaperSelection(workspaceId.value, {
       question,
+      paragraph: currentReaderContextForChat(),
     });
     const answer = cleanChatAnswer(result?.answer) || "本次没有返回回答，请重试。";
     paperChat.messages.push({ id: paperChat.nextId++, role: "assistant", content: answer });
@@ -3123,6 +3222,19 @@ async function askPaperChat() {
       if (container) container.scrollTop = container.scrollHeight;
     });
   }
+}
+
+function currentReaderContextForChat() {
+  const chunks = [];
+  for (const page of pages) {
+    const text = (page.blocks || [])
+      .map(block => String(block.text || "").trim())
+      .filter(Boolean)
+      .join("\n");
+    if (text) chunks.push(`第 ${page.pageNumber} 页\n${text}`);
+    if (chunks.join("\n\n").length > 12000) break;
+  }
+  return chunks.join("\n\n").slice(0, 14000);
 }
 
 function cleanChatAnswer(value) {
@@ -3571,13 +3683,14 @@ async function loadPdf() {
   loadingPdf.value = true;
   loadError.value = "";
   try {
-    if (!pdfSource.value) throw new Error("当前文献尚未关联 PDF");
     const [pdfjs, workerModule] = await Promise.all([
       import("pdfjs-dist"),
       import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
     ]);
     pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
-    const loadingTask = pdfjs.getDocument(pdfSource.value);
+    const documentSource = await resolvePdfSourceForDocument();
+    if (!documentSource) throw new Error("当前文献尚未关联 PDF，或本机缓存不存在");
+    const loadingTask = pdfjs.getDocument(documentSource);
     pdfDocument = await loadingTask.promise;
     totalPages.value = pdfDocument.numPages;
 
@@ -4151,7 +4264,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 100%;
   height: 100%;
-  padding: 0 16px;
+  min-width: 0;
+  padding: 0 12px;
   box-sizing: border-box;
 }
 
@@ -4165,6 +4279,9 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: visible;
   padding: 3px 8px;
   border-radius: 999px;
   background: rgba(241, 245, 249, 0.9);
@@ -4175,6 +4292,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 3px;
+  flex: 0 0 auto;
   background: #ffffff;
   padding: 2px 4px;
   border-radius: 999px;
@@ -4229,6 +4347,7 @@ onBeforeUnmount(() => {
   position: relative;
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
 }
 
 .dock-color-more-btn {
@@ -4535,6 +4654,7 @@ onBeforeUnmount(() => {
 }
 
 .dock-divider {
+  flex: 0 0 auto;
   width: 1px;
   height: 16px;
   background: rgba(203, 213, 225, 0.8);
@@ -4545,6 +4665,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex: 0 0 auto;
 }
 
 /* ⚡ 即时 0 延迟浮动解释提示框 (Instant Zero-Delay Tooltips) */
@@ -4583,6 +4704,7 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  flex: 0 0 auto;
   height: 28px;
   padding: 0 11px;
   border: none;
@@ -4593,6 +4715,43 @@ onBeforeUnmount(() => {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reader-toolbar-row.right-notes-open .toolbar-center-dock,
+.reader-toolbar-row.assistant-wide .toolbar-center-dock {
+  gap: 2px;
+  padding-inline: 6px;
+}
+
+.reader-toolbar-row.right-notes-open .dock-tool-btn,
+.reader-toolbar-row.assistant-wide .dock-tool-btn {
+  width: 30px;
+  justify-content: center;
+  gap: 0;
+  padding-inline: 0;
+}
+
+.reader-toolbar-row.right-notes-open .dock-tool-btn > span:not(.mark-letter),
+.reader-toolbar-row.assistant-wide .dock-tool-btn > span:not(.mark-letter) {
+  display: none;
+}
+
+.reader-toolbar-row.right-notes-open .translate-pill-btn,
+.reader-toolbar-row.assistant-wide .translate-pill-btn {
+  width: 34px;
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.reader-toolbar-row.right-notes-open .translate-pill-btn span:not(.lang-mark),
+.reader-toolbar-row.assistant-wide .translate-pill-btn span:not(.lang-mark) {
+  display: none;
+}
+
+.reader-toolbar-row.right-notes-open .dock-color-swatches,
+.reader-toolbar-row.assistant-wide .dock-color-swatches {
+  gap: 4px;
+  padding-inline: 3px;
 }
 
 .dock-tool-btn:hover {
@@ -4651,6 +4810,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 5px;
+  flex: 0 0 auto;
   padding: 0 4px 0 6px;
 }
 
@@ -6444,14 +6604,51 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 0 16px;
-  border: 1px solid rgba(148, 163, 184, .28);
+  border: 1px solid rgba(124, 58, 237, .24);
   border-radius: 999px;
-  color: #2563eb;
-  background: rgba(255, 255, 255, .92);
-  box-shadow: 0 16px 34px rgba(30, 41, 59, .16);
+  color: #ffffff;
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 48%, #4f46e5 100%);
+  box-shadow: 0 16px 34px rgba(109, 40, 217, .28), 0 0 0 1px rgba(255, 255, 255, .22) inset;
   backdrop-filter: blur(14px);
   cursor: pointer;
-  transition: right 200ms cubic-bezier(.22, 1, .36, 1);
+  transition: right 200ms cubic-bezier(.22, 1, .36, 1), transform 160ms ease, box-shadow 160ms ease;
+}
+
+.apple-ai-launcher:hover,
+.paper-chat-launcher:hover {
+  color: #ffffff;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 52%, #5b21b6 100%);
+  box-shadow: 0 18px 38px rgba(109, 40, 217, .34), 0 0 0 1px rgba(255, 255, 255, .26) inset;
+  transform: translateY(-1px);
+}
+
+.apple-ai-launcher.expanded,
+.paper-chat-launcher.open {
+  color: #ffffff;
+  background: linear-gradient(135deg, #5b21b6 0%, #6d28d9 54%, #4338ca 100%);
+}
+
+.ai-sparkle-halo {
+  position: absolute;
+  inset: -10px;
+  z-index: -1;
+  border-radius: inherit;
+  background: rgba(124, 58, 237, .18);
+  filter: blur(18px);
+  pointer-events: none;
+}
+
+.ai-sparkle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-label-text {
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .01em;
 }
 
 .apple-ai-launcher.right-notes-open,
@@ -6463,19 +6660,17 @@ onBeforeUnmount(() => {
 .paper-chat-launcher.right-notes-closed {
   right: 60px;
 }
-.paper-chat-launcher:hover { color: #1d4ed8; background: #fff; transform: translateY(-1px); }
-.paper-chat-launcher.open { color: #fff; background: #263a5c; }
 .paper-chat-launcher svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .paper-chat-launcher > span { font-size: 26px; font-weight: 300; line-height: 1; }
 .paper-chat-panel {
   position: fixed;
   left: 50%;
   right: auto;
-  top: 78px;
+  top: 92px;
   bottom: auto;
   z-index: 81;
   width: min(1040px, calc(100vw - 96px));
-  height: min(820px, calc(100vh - 112px));
+  height: min(820px, calc(100vh - 120px));
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
@@ -6516,6 +6711,33 @@ onBeforeUnmount(() => {
 .paper-chat-message.user { width: min(860px, 100%); margin-inline: auto; }
 .paper-chat-message > span { width: 28px; height: 28px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 10px; color: #2563eb; background: rgba(59,130,246,0.1); font-size: 11px; font-weight: 800; }
 .paper-chat-message p { max-width: min(760px, 92%); margin: 0; padding: 12px 16px; border: 1px solid rgba(226, 232, 240, 0.8); border-radius: 16px; border-top-left-radius: 4px; color: #334155; background: rgba(255,255,255,0.7); font-size: 13px; line-height: 1.6; white-space: pre-wrap; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+.paper-chat-message-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.paper-chat-message-actions button {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(99, 102, 241, .16);
+  border-radius: 9px;
+  color: #6366f1;
+  background: rgba(99, 102, 241, .08);
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.paper-chat-message-actions button:hover {
+  color: #ffffff;
+  background: #6d28d9;
+  transform: translateY(-1px);
+}
+
 .paper-chat-message.user { justify-content: flex-end; }
 .paper-chat-message.user p { color: #fff; border-color: transparent; border-radius: 16px; border-top-right-radius: 4px; background: linear-gradient(135deg, #2563eb, #4f46e5); box-shadow: 0 4px 12px rgba(37,99,235,0.2); }
 .paper-chat-thinking { display: flex; gap: 5px; align-items: center; min-height: 20px; }
@@ -6540,18 +6762,14 @@ onBeforeUnmount(() => {
 :root[data-theme="dark"] .paper-chat-launcher {
   border-color: rgba(192, 132, 252, 0.3);
   color: #f6f3ff;
-  background:
-    linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(168, 85, 247, 0.16)),
-    rgba(20, 14, 38, 0.88);
-  box-shadow: 0 18px 42px rgba(5, 3, 12, 0.42), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 48%, #4f46e5 100%);
+  box-shadow: 0 18px 42px rgba(5, 3, 12, 0.42), 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
 }
 
 :root[data-theme="dark"] .apple-ai-launcher:hover,
 :root[data-theme="dark"] .paper-chat-launcher:hover {
   color: #ffffff;
-  background:
-    linear-gradient(135deg, rgba(139, 92, 246, 0.36), rgba(217, 70, 239, 0.22)),
-    rgba(26, 19, 48, 0.95);
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 52%, #5b21b6 100%);
   transform: translateY(-1px);
 }
 
@@ -6617,6 +6835,17 @@ onBeforeUnmount(() => {
   color: #eee8ff;
   background: rgba(24, 18, 43, 0.72);
   box-shadow: 0 10px 28px rgba(5, 3, 12, 0.22);
+}
+
+:root[data-theme="dark"] .paper-chat-message-actions button {
+  border-color: rgba(192, 132, 252, .22);
+  color: #c4b5fd;
+  background: rgba(139, 92, 246, .12);
+}
+
+:root[data-theme="dark"] .paper-chat-message-actions button:hover {
+  color: #ffffff;
+  background: #7c3aed;
 }
 
 :root[data-theme="dark"] .paper-chat-message.user p {
@@ -6760,6 +6989,22 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1100px) {
+  .reader-toolbar-row,
+  .reader-toolbar-row.right-notes-closed,
+  .reader-toolbar-row.assistant-wide,
+  .reader-toolbar-row.assistant-wide.right-notes-closed {
+    grid-template-columns: 260px minmax(0, 1fr) 190px;
+  }
+
+  .reader-toolbar-row.assistant-collapsed,
+  .reader-toolbar-row.assistant-collapsed.right-notes-closed {
+    grid-template-columns: 46px minmax(0, 1fr) 190px;
+  }
+
+  .toolbar-stage-area {
+    padding-inline: 8px;
+  }
+
   .reader-toolbar { grid-template-columns: minmax(180px, 1fr) auto auto; gap: 8px; padding-inline: 8px; }
   .reader-document-source { display: none; }
   .reader-status-item small { display: none; }
@@ -6772,6 +7017,25 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 820px) {
+  .reader-toolbar-row,
+  .reader-toolbar-row.assistant-collapsed,
+  .reader-toolbar-row.assistant-wide,
+  .reader-toolbar-row.right-notes-closed,
+  .reader-toolbar-row.assistant-collapsed.right-notes-closed,
+  .reader-toolbar-row.assistant-wide.right-notes-closed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .toolbar-sidebar-spacer,
+  .toolbar-notes-spacer {
+    display: none;
+  }
+
+  .toolbar-center-dock {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
   .reader-toolbar { grid-template-columns: minmax(0, 1fr) auto auto; }
   .reader-document-title { font-size: 12px; }
   .reader-status { display: none; }
@@ -6807,7 +7071,11 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 560px) {
-  .reader-workbench { --reader-toolbar-height: 56px; }
+  .reader-workbench { --reader-toolbar-height: 62px; }
+  .reader-toolbar-row {
+    height: 42px;
+  }
+
   .reader-toolbar { gap: 4px; padding-inline: 6px; }
   .reader-toolbar-start { gap: 6px; }
   .reader-back { width: 32px; height: 32px; }
@@ -6828,8 +7096,16 @@ onBeforeUnmount(() => {
   }
   .block-annotation-note::before { width: 34px; }
   .block-annotation-note p { display: block; }
-  .paper-chat-launcher { right: 14px; bottom: 14px; width: 48px; height: 48px; }
-  .paper-chat-panel { left: 50%; right: auto; top: 70px; bottom: auto; width: calc(100vw - 16px); height: min(680px, calc(100vh - 82px)); transform: translateX(-50%); }
+  .apple-ai-launcher,
+  .paper-chat-launcher {
+    right: 14px !important;
+    bottom: 14px;
+    min-width: 48px;
+    height: 48px;
+    padding-inline: 14px;
+  }
+
+  .paper-chat-panel { left: 50%; right: auto; top: 92px; bottom: auto; width: calc(100vw - 16px); height: min(680px, calc(100vh - 104px)); transform: translateX(-50%); }
   .reader-tour-card { bottom: 18px; width: calc(100vw - 20px); box-sizing: border-box; }
 }
 .reader-tour-card h2 {

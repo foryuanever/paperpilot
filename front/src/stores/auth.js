@@ -37,6 +37,24 @@ export const useAuthStore = defineStore("auth", () => {
 
   function persist() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    syncDesktopCaptureSession();
+  }
+
+  function syncDesktopCaptureSession() {
+    if (!window.paperSolverDesktop?.setCaptureSession) return;
+    if (!session.isAuthenticated || !session.user?.userId) {
+      window.paperSolverDesktop.setCaptureSession(null).catch(() => {});
+      return;
+    }
+    window.paperSolverDesktop.setCaptureSession({
+      userId: session.user.userId,
+      userName: session.user.name || "",
+      email: session.user.email || "",
+    }).catch(() => {});
+  }
+
+  if (window.paperSolverDesktop?.isDesktop) {
+    setTimeout(() => syncDesktopCaptureSession(), 0);
   }
 
   async function updateProfileFields(payload) {
@@ -115,7 +133,7 @@ export const useAuthStore = defineStore("auth", () => {
       const user = await paperpilotApi.login({ email, password });
       applySession(user);
     } catch (error) {
-      if (error?.message === "Network Error" || error?.code === "ECONNABORTED") {
+      if (shouldUseDemoFallback(error)) {
         applySession(createDemoUser({ email }));
         addNotification({
           title: "已进入本地演示模式",
@@ -140,7 +158,7 @@ export const useAuthStore = defineStore("auth", () => {
       });
       applySession(user);
     } catch (error) {
-      if (error?.message === "Network Error" || error?.code === "ECONNABORTED") {
+      if (shouldUseDemoFallback(error)) {
         applySession(createDemoUser({ name, email, role }));
         addNotification({
           title: "已进入本地演示模式",
@@ -150,6 +168,11 @@ export const useAuthStore = defineStore("auth", () => {
       }
       throw error;
     }
+  }
+
+  function shouldUseDemoFallback(error) {
+    if (window.paperSolverDesktop?.isDesktop) return false;
+    return error?.message === "Network Error" || error?.code === "ECONNABORTED";
   }
 
   function logout() {

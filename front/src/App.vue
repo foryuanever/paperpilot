@@ -1,7 +1,17 @@
 <template>
   <div :class="rootClass">
     <header v-if="showNav" class="spatial-nav-float">
-      <router-link class="spatial-nav-brand" to="/library">
+      <button
+        v-if="isDesktopApp"
+        type="button"
+        class="spatial-nav-brand spatial-nav-brand-button"
+        title="刷新当前页面"
+        @click="handleBrandRefresh"
+      >
+        <img class="spatial-nav-mark" src="/brand/papersolver-mark-v2.png" alt="" />
+        <strong>PaperSolver</strong>
+      </button>
+      <router-link v-else class="spatial-nav-brand" to="/library">
         <img class="spatial-nav-mark" src="/brand/papersolver-mark-v2.png" alt="" />
         <strong>PaperSolver</strong>
       </router-link>
@@ -115,10 +125,19 @@
       </div>
     </header>
 
+    <Transition name="desktop-refresh-fade">
+      <div v-if="desktopRefreshing" class="desktop-refresh-overlay" aria-live="polite">
+        <div class="desktop-refresh-card">
+          <span class="desktop-refresh-ring"></span>
+          <strong>正在刷新 PaperSolver</strong>
+        </div>
+      </div>
+    </Transition>
+
     <main :class="mainClass" @click="uiStore.closeOverlays">
       <router-view v-slot="{ Component, route: viewRoute }">
         <Transition name="workspace-route" mode="out-in">
-          <component :is="Component" :key="viewRoute.path" />
+          <component :is="Component" :key="`${viewRoute.fullPath}:${desktopRefreshKey}`" />
         </Transition>
       </router-view>
     </main>
@@ -333,6 +352,9 @@ const navItems = computed(() => {
 const isLanding = computed(() => route.path === "/" || route.path === "/register");
 const isReader = computed(() => route.path.startsWith("/reader"));
 const isAdmin = computed(() => route.path === "/admin");
+const isDesktopApp = Boolean(window.paperSolverDesktop?.isDesktop);
+const desktopRefreshKey = ref(0);
+const desktopRefreshing = ref(false);
 const showNav = computed(() => !isLanding.value && !isReader.value);
 
 const rootClass = computed(() => {
@@ -381,6 +403,20 @@ function applyTheme(theme) {
 
 function toggleTheme() {
   applyTheme(currentTheme.value === "dark" ? "light" : "dark");
+}
+
+function handleBrandRefresh() {
+  if (!isDesktopApp) {
+    router.push("/library");
+    return;
+  }
+  if (desktopRefreshing.value) return;
+  desktopRefreshing.value = true;
+  desktopRefreshKey.value += 1;
+  window.dispatchEvent(new CustomEvent("papersolver:soft-refresh", { detail: { path: route.fullPath } }));
+  window.setTimeout(() => {
+    desktopRefreshing.value = false;
+  }, 760);
 }
 
 async function refreshMessageUnread() {
@@ -952,9 +988,22 @@ async function submitPasswordChange() {
 }
 
 .spatial-nav-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+}
+
+.spatial-nav-brand-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
 }
 
 .spatial-nav-brand .spatial-nav-mark {
@@ -1050,6 +1099,59 @@ async function submitPasswordChange() {
 .theme-toggle-btn:hover {
   background: rgba(255, 255, 255, .15);
   color: #fff;
+}
+
+.desktop-refresh-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 520;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: radial-gradient(circle at center, rgba(37, 99, 235, .10), transparent 34%);
+}
+
+.desktop-refresh-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  min-width: 220px;
+  padding: 18px 24px;
+  border: 1px solid rgba(96, 165, 250, .24);
+  border-radius: 20px;
+  background: rgba(15, 23, 42, .92);
+  color: #f8fbff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .28), 0 0 0 1px rgba(255, 255, 255, .06) inset;
+  backdrop-filter: blur(18px);
+}
+
+.desktop-refresh-card strong {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.desktop-refresh-ring {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 3px solid rgba(147, 197, 253, .22);
+  border-top-color: #60a5fa;
+  animation: desktop-refresh-spin .72s linear infinite;
+}
+
+.desktop-refresh-fade-enter-active,
+.desktop-refresh-fade-leave-active {
+  transition: opacity .2s ease;
+}
+
+.desktop-refresh-fade-enter-from,
+.desktop-refresh-fade-leave-to {
+  opacity: 0;
+}
+
+@keyframes desktop-refresh-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ── Dark Mode Adaptations for Global Topbar ── */

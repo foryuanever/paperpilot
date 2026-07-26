@@ -198,14 +198,15 @@ onUnmounted(() => {
 <style scoped>
 .reader-multi-tab-bar {
   width: 100%;
-  height: 38px;
+  height: 40px;
   background: transparent;
   user-select: none;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
   box-sizing: border-box;
   position: relative;
   z-index: 30;
-  padding: 4px 8px 2px;
+  padding: 4px 10px 3px;
+  overflow: hidden;
 }
 
 .tab-bar-container {
@@ -213,6 +214,7 @@ onUnmounted(() => {
   align-items: center;
   height: 100%;
   gap: 6px;
+  min-width: 0;
 }
 
 /* 无框自然胶囊标签基类 */
@@ -275,9 +277,11 @@ onUnmounted(() => {
   align-items: center;
   overflow-x: auto;
   scrollbar-width: none;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   height: 100%;
   gap: 4px;
+  min-width: 0;
+  overscroll-behavior-x: contain;
 }
 
 .open-tabs-scroll::-webkit-scrollbar {
@@ -285,9 +289,10 @@ onUnmounted(() => {
 }
 
 .paper-tab {
-  max-width: 210px;
-  min-width: 110px;
-  flex-shrink: 0;
+  width: clamp(150px, 18vw, 260px);
+  min-width: 150px;
+  max-width: 260px;
+  flex: 0 0 auto;
   justify-content: space-between;
 }
 
@@ -368,6 +373,51 @@ onUnmounted(() => {
 .tab-dropdown-trigger.active {
   background: rgba(99, 102, 241, 0.1);
   color: #4f46e5;
+}
+
+@media (max-width: 920px) {
+  .reader-multi-tab-bar {
+    padding-inline: 6px;
+  }
+
+  .tab-item {
+    height: 30px;
+    padding-inline: 10px;
+  }
+
+  .paper-tab {
+    width: 170px;
+    min-width: 170px;
+    max-width: 170px;
+  }
+
+  .home-tab {
+    gap: 5px;
+    padding-inline: 9px;
+  }
+}
+
+@media (max-width: 560px) {
+  .paper-tab {
+    width: 148px;
+    min-width: 148px;
+    max-width: 148px;
+  }
+
+  .home-tab span {
+    display: none;
+  }
+
+  .home-tab {
+    width: 34px;
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .tab-dropdown-popover {
+    right: -4px;
+    width: min(320px, calc(100vw - 16px));
+  }
 }
 
 /* 下拉弹出层 */

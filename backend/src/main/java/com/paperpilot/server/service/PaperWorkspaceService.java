@@ -98,13 +98,14 @@ public class PaperWorkspaceService {
             ? "暂无摘要，可在阅读时补充。"
             : abstractText);
         boolean pdfCached = isLocalCachedPdf(cachedPaperUrl);
-        entity.setProgress(pdfCached ? "1%" : "0%");
+        boolean desktopCached = isDesktopCachedPdf(cachedPaperUrl);
+        entity.setProgress((pdfCached || desktopCached) ? "1%" : "0%");
         entity.setImportance(initialImportance(enriched, request));
-        entity.setNote(pdfCached ? "PDF 已缓存，可进入阅读解析。" : "已导入元数据，但 PDF 未缓存成功，请关联可访问 PDF。");
+        entity.setNote(desktopCached ? "PDF 已保存到桌面端本机，可进入阅读解析。" : pdfCached ? "PDF 已缓存，可进入阅读解析。" : "已导入元数据，但 PDF 未缓存成功，请关联可访问 PDF。");
         String articleType = firstNonBlank(enriched == null ? "" : enriched.getArticleType(), request.getArticleType());
         entity.setVenueType(inferVenueType(src, articleType));
         entity.setVenueRanking(inferVenueRanking(src, entity.getVenueType(), enriched));
-        entity.setJournalTags(String.join(",", buildTags(enriched, request, importSource, pdfCached)));
+        entity.setJournalTags(String.join(",", buildTags(enriched, request, importSource, pdfCached || desktopCached)));
         String publishYear = firstNonBlank(enriched == null ? "" : enriched.getYear(), request.getPublishYear());
         entity.setPublishYear(publishYear == null || publishYear.isBlank()
             ? String.valueOf(LocalDate.now().getYear())
@@ -154,13 +155,14 @@ public class PaperWorkspaceService {
             entity.setSourceUrl(firstNonBlank(enriched.getSourceUrl(), entity.getSourceUrl(), request.getSourceUrl()));
             entity.setImportSource(firstNonBlank(hostLabel(entity.getSourceUrl()), entity.getImportSource(), request.getImportSource()));
             String candidatePaperUrl = importPdfCandidate(enriched, request.getPaperUrl(), entity.getPaperUrl());
-            if (!isLocalCachedPdf(entity.getPaperUrl()) && !candidatePaperUrl.isBlank()) {
+            if (!isReadableCachedPdf(entity.getPaperUrl()) && !candidatePaperUrl.isBlank()) {
                 entity.setPaperUrl(cacheImportedPdf(entity.getWorkspaceId(), candidatePaperUrl));
             }
             boolean pdfCached = isLocalCachedPdf(entity.getPaperUrl());
-            entity.setProgress(pdfCached ? "1%" : firstNonBlank(entity.getProgress(), "0%"));
-            entity.setNote(pdfCached ? "PDF 已缓存，可进入阅读器解析正文。" : "已更新元数据，但 PDF 未缓存成功，请关联可访问 PDF。");
-            entity.setJournalTags(String.join(",", buildTags(enriched, request, entity.getImportSource(), pdfCached)));
+            boolean desktopCached = isDesktopCachedPdf(entity.getPaperUrl());
+            entity.setProgress((pdfCached || desktopCached) ? "1%" : firstNonBlank(entity.getProgress(), "0%"));
+            entity.setNote(desktopCached ? "PDF 已保存到桌面端本机，可进入阅读器解析正文。" : pdfCached ? "PDF 已缓存，可进入阅读器解析正文。" : "已更新元数据，但 PDF 未缓存成功，请关联可访问 PDF。");
+            entity.setJournalTags(String.join(",", buildTags(enriched, request, entity.getImportSource(), pdfCached || desktopCached)));
             entity.setVenueType(inferVenueType(entity.getSource(), enriched.getArticleType()));
             entity.setVenueRanking(inferVenueRanking(entity.getSource(), entity.getVenueType(), enriched));
             return;
@@ -175,16 +177,17 @@ public class PaperWorkspaceService {
             }
         }
         String requestPaperUrl = firstNonBlank(request.getPaperUrl());
-        if (!isLocalCachedPdf(entity.getPaperUrl()) && !requestPaperUrl.isBlank()) {
+        if (!isReadableCachedPdf(entity.getPaperUrl()) && !requestPaperUrl.isBlank()) {
             entity.setPaperUrl(cacheImportedPdf(entity.getWorkspaceId(), requestPaperUrl));
             boolean pdfCached = isLocalCachedPdf(entity.getPaperUrl());
-            entity.setProgress(pdfCached ? "1%" : firstNonBlank(entity.getProgress(), "0%"));
-            entity.setNote(pdfCached ? "PDF 已缓存，可进入阅读器解析正文。" : firstNonBlank(entity.getNote(), "已更新元数据，但 PDF 未缓存成功，请关联可访问 PDF。"));
+            boolean desktopCached = isDesktopCachedPdf(entity.getPaperUrl());
+            entity.setProgress((pdfCached || desktopCached) ? "1%" : firstNonBlank(entity.getProgress(), "0%"));
+            entity.setNote(desktopCached ? "PDF 已保存到桌面端本机，可进入阅读器解析正文。" : pdfCached ? "PDF 已缓存，可进入阅读器解析正文。" : firstNonBlank(entity.getNote(), "已更新元数据，但 PDF 未缓存成功，请关联可访问 PDF。"));
         }
     }
 
     private PaperWorkspaceVO toWorkspace(PaperEntity entity) {
-        boolean pdfCached = isLocalCachedPdf(entity.getPaperUrl());
+        boolean pdfCached = isReadableCachedPdf(entity.getPaperUrl());
         return new PaperWorkspaceVO(
             entity.getWorkspaceId(),
             entity.getSource(),
@@ -459,6 +462,14 @@ public class PaperWorkspaceService {
 
     private boolean isLocalCachedPdf(String url) {
         return firstNonBlank(url).startsWith("/api/papers/uploads/");
+    }
+
+    private boolean isDesktopCachedPdf(String url) {
+        return firstNonBlank(url).startsWith("desktop-cache://");
+    }
+
+    private boolean isReadableCachedPdf(String url) {
+        return isLocalCachedPdf(url) || isDesktopCachedPdf(url);
     }
 
     private String initialImportance(SearchPaperVO enriched, PaperImportRequest request) {

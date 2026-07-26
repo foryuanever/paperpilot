@@ -77,7 +77,8 @@ public class PdfMathTranslateService {
                 "lang_in", "en",
                 "lang_out", "zh",
                 "service", service == null || service.isBlank() ? "google" : service,
-                "thread", 8
+                "thread", 8,
+                "skip_subset_fonts", true
             ));
             byte[] body = multipartBody(boundary, pdf, safeFileName(paper.getTitle()), data);
             HttpRequest request = HttpRequest.newBuilder(endpoint("/v1/translate"))
@@ -87,7 +88,7 @@ public class PdfMathTranslateService {
                 .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 400) {
-                throw unavailable("双栏翻译任务提交失败（HTTP " + response.statusCode() + "）");
+                throw unavailable("对照翻译任务提交失败（HTTP " + response.statusCode() + "）：" + serviceErrorBody(response.body()));
             }
             Map<String, Object> payload = objectMapper.readValue(response.body(), new TypeReference<>() {});
             String taskId = String.valueOf(payload.getOrDefault("id", ""));
@@ -98,7 +99,7 @@ public class PdfMathTranslateService {
         } catch (ResponseStatusException error) {
             throw error;
         } catch (Exception error) {
-            throw unavailable("无法连接双栏翻译服务");
+            throw unavailable("无法连接对照翻译开源服务。请确认 PDFMathTranslate/pdf2zh 服务已在 11008 端口启动；如果服务正在下载或加载开源模型，请等待完成后重试。");
         }
     }
 
@@ -121,18 +122,23 @@ public class PdfMathTranslateService {
                 .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 400) {
-                throw unavailable("双栏翻译状态查询失败");
+                throw unavailable("对照翻译状态查询失败（HTTP " + response.statusCode() + "）：" + serviceErrorBody(response.body()));
             }
             Map<String, Object> payload = objectMapper.readValue(response.body(), new TypeReference<>() {});
             payload.put("taskId", taskId);
             String state = String.valueOf(payload.getOrDefault("state", payload.getOrDefault("status", "RUNNING")));
-            int progress = "SUCCESS".equalsIgnoreCase(state) ? 100 : ("FAILURE".equalsIgnoreCase(state) ? 100 : 50);
+            if ("FAILURE".equalsIgnoreCase(state)) {
+                String message = serviceErrorBody(String.valueOf(payload.getOrDefault("error", payload.getOrDefault("message", ""))));
+                if (message.isBlank()) message = "PDFMathTranslate/pdf2zh 任务失败。常见原因是开源服务处理该 PDF 的字体表或页面结构失败；系统已默认跳过字体子集化来规避 PyMuPDF bad value 问题，请重新发起对照翻译。";
+                payload.put("message", message);
+            }
+            int progress = progressFromPayload(payload, state);
             backendJobService.externalTask("PDF_MATH_TRANSLATE", userId, workspaceId, taskId, state.toUpperCase(), progress, "双栏翻译状态：" + state);
             return payload;
         } catch (ResponseStatusException error) {
             throw error;
         } catch (Exception error) {
-            throw unavailable("双栏翻译状态服务暂不可用");
+            throw unavailable("对照翻译状态服务暂不可用。请确认 PDFMathTranslate/pdf2zh 服务仍在运行。");
         }
     }
 
@@ -155,7 +161,7 @@ public class PdfMathTranslateService {
                 .build();
             HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
             if (response.statusCode() >= 400 || response.body().length < 4) {
-                throw unavailable("双栏 PDF 尚未生成");
+                throw unavailable("对照翻译 PDF 尚未生成，请等待任务完成后再打开。");
             }
             Files.createDirectories(cacheDir);
             Files.write(cached, response.body());
@@ -164,7 +170,7 @@ public class PdfMathTranslateService {
         } catch (ResponseStatusException error) {
             throw error;
         } catch (Exception error) {
-            throw unavailable("下载双栏 PDF 失败");
+            throw unavailable("下载对照翻译 PDF 失败，请检查开源翻译服务是否仍在运行。");
         }
     }
 
@@ -257,5 +263,36 @@ public class PdfMathTranslateService {
 
     private ResponseStatusException unavailable(String message) {
         return new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, message);
+    }
+
+    private String serviceErrorBody(String body) {
+        String text = body == null ? "" : body.replaceAll("\\s+", " ").trim();
+        if (text.length() > 220) text = text.substring(0, 220) + "…";
+        return text;
+    }
+
+    @SuppressWarnings("unchecked")
+    private int progressFromPayload(Map<String, Object> payload, String state) {
+        if ("SUCCESS".equalsIgnoreCase(state)) return 100;
+        if ("FAILURE".equalsIgnoreCase(state) || "REVOKED".equalsIgnoreCase(state)) return 100;
+        Object info = payload.get("info");
+        if (info instanceof Map<?, ?> rawInfo) {
+            double n = numericValue(rawInfo.get("n"));
+            double total = numericValue(rawInfo.get("total"));
+            if (total > 0 && n >= 0) {
+                int value = (int) Math.round(Math.min(95, Math.max(8, (n / total) * 95)));
+                return value;
+            }
+        }
+        return 50;
+    }
+
+    private double numericValue(Object value) {
+        if (value instanceof Number number) return number.doubleValue();
+        try {
+            return Double.parseDouble(String.valueOf(value));
+        } catch (Exception ignored) {
+            return 0;
+        }
     }
 }

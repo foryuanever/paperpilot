@@ -1,5 +1,5 @@
 <template>
-  <div class="tutorial-page spatial-page">
+  <div class="tutorial-page">
     <section class="tutorial-shell">
       <aside class="tutorial-rail">
         <div class="rail-head">
@@ -53,13 +53,15 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import MarkdownIt from "markdown-it";
 import { paperpilotApi } from "../services/paperpilotApi";
 
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
+const route = useRoute();
 const articles = ref([]);
 const activeId = ref(null);
-const query = ref("");
+const query = ref(String(route.query.q || ""));
 const loading = ref(false);
 
 const filteredArticles = computed(() => {
@@ -113,115 +115,72 @@ function formatDate(value) {
 
 <style scoped>
 
-/* ═══ TutorialsView — Premium Dual-Theme ═══ */
-.tutorials-page, [class*="tutorial"] {
-  --c-bg:      #f4f5f8;
-  --c-surface: #ffffff;
-  --c-border:  rgba(15,23,42,.08);
-  --c-text:    #0f172a;
-  --c-muted:   #64748b;
-  --c-accent:  #6366f1;
-  --c-accent2: #a855f7;
-  --sh-sm: 0 2px 8px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.04);
-  --r: 16px; --r-sm: 10px; --r-pill: 999px;
-  min-height: 100vh;
-  background: var(--c-bg);
-  color: var(--c-text);
-  font-family: Inter, "PingFang SC", system-ui, sans-serif;
-  transition: background .3s, color .3s;
-}
-:root[data-theme="dark"] .tutorials-page,
-:root[data-theme="dark"] [class*="tutorial"] {
-  --c-bg:      #09090e;
-  --c-surface: rgba(18,24,40,.88);
-  --c-border:  rgba(255,255,255,.07);
-  --c-text:    #f1f5f9;
-  --c-muted:   #94a3b8;
-}
-.tutorials-page h1, .tutorials-page h2, .tutorials-page h3 { color: var(--c-text) !important; }
-.tutorials-page p, .tutorials-page li { color: var(--c-muted) !important; }
-.tutorials-page .tutorial-card, .tutorials-page .step-card, .tutorials-page article {
-  background: var(--c-surface) !important;
-  border: 1px solid var(--c-border) !important;
-  border-radius: var(--r) !important;
-  box-shadow: var(--sh-sm) !important;
-  backdrop-filter: blur(16px);
-  color: var(--c-text) !important;
-  transition: all .25s cubic-bezier(.16,1,.3,1);
-}
-.tutorials-page .tutorial-card:hover, .tutorials-page article:hover {
-  transform: translateY(-3px);
-  border-color: rgba(99,102,241,.25) !important;
-  box-shadow: 0 8px 28px rgba(15,23,42,.1) !important;
-}
-.tutorials-page .step-number {
-  width: 32px; height: 32px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
-  color: #fff;
-  font-size: 14px;
-  font-weight: 900;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-}
-.tutorials-page .tag-chip {
-  padding: 3px 10px;
-  border-radius: var(--r-pill);
-  background: rgba(99,102,241,.1);
-  color: var(--c-accent);
-  font-size: 11.5px;
-  font-weight: 750;
-  border: 1px solid rgba(99,102,241,.15);
-}
-
+/* ═══ TutorialsView — readable dual theme ═══ */
 .tutorial-page {
+  --guide-bg: #eef4fb;
+  --guide-shell: #ffffff;
+  --guide-rail: #f7faff;
+  --guide-rail-strong: #edf5ff;
+  --guide-border: #d6e1ef;
+  --guide-text: #142033;
+  --guide-heading: #0f172a;
+  --guide-muted: #5f6f85;
+  --guide-soft: #eef5ff;
+  --guide-accent: #2563eb;
+  --guide-accent-2: #0f766e;
   min-height: 100vh;
-  padding: 104px clamp(22px, 5vw, 72px) 56px;
-  color: #142033;
+  padding: 82px clamp(18px, 4vw, 54px) 46px;
+  color: var(--guide-text);
   background:
-    linear-gradient(90deg, rgba(230, 238, 250, .72), rgba(249, 251, 255, .96) 32%, rgba(246, 250, 255, .92)),
-    #f5f8fc;
+    linear-gradient(90deg, rgba(226, 235, 247, .96), rgba(248, 251, 255, 1) 34%, rgba(241, 247, 255, .98)),
+    var(--guide-bg);
+  font-family: Inter, "PingFang SC", system-ui, sans-serif;
+  transition: background .2s ease, color .2s ease;
+  opacity: 1 !important;
 }
 
 .tutorial-shell {
-  width: min(1420px, 100%);
-  min-height: calc(100vh - 168px);
+  width: min(1500px, 100%);
+  min-height: calc(100vh - 128px);
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
   gap: 0;
   margin: 0 auto;
   overflow: hidden;
-  border: 1px solid #dce6f4;
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 18px 50px rgba(27, 45, 79, .08);
+  border: 1px solid var(--guide-border);
+  border-radius: 14px;
+  background: var(--guide-shell);
+  box-shadow: none;
+  opacity: 1 !important;
 }
 
 .tutorial-rail {
   min-height: 0;
-  padding: 34px 24px;
-  border-right: 1px solid #e3eaf4;
-  background: linear-gradient(180deg, #f7faff, #eef5ff);
+  padding: 30px 24px;
+  border-right: 1px solid var(--guide-border);
+  background: linear-gradient(180deg, var(--guide-rail), var(--guide-rail-strong));
+  opacity: 1 !important;
 }
 
 .rail-head span {
-  color: #2563eb;
+  color: var(--guide-accent);
   font-size: 12px;
   font-weight: 850;
 }
 
 .rail-head h1 {
   margin: 10px 0 10px;
-  font-size: 32px;
+  color: var(--guide-heading);
+  font-size: 28px;
   letter-spacing: 0;
 }
 
 .rail-head p {
   margin: 0;
-  color: #5d6a7f;
+  color: var(--guide-muted);
   font-size: 14px;
   line-height: 1.7;
+  opacity: 1;
 }
 
 .tutorial-filter input {
@@ -230,12 +189,13 @@ function formatDate(value) {
   box-sizing: border-box;
   margin: 24px 0 18px;
   padding: 0 14px;
-  border: 1px solid #d6e0ed;
+  border: 1px solid var(--guide-border);
   border-radius: 10px;
-  color: #142033;
-  background: rgba(255,255,255,.82);
+  color: var(--guide-text);
+  background: var(--guide-shell);
   font: inherit;
   outline: none;
+  opacity: 1;
 }
 
 .tutorial-list {
@@ -248,100 +208,119 @@ function formatDate(value) {
   padding: 14px;
   border: 1px solid transparent;
   border-radius: 12px;
-  color: #31415a;
+  color: var(--guide-text);
   background: transparent;
   text-align: left;
   cursor: pointer;
+  opacity: 1;
 }
 
 .tutorial-list button.active,
 .tutorial-list button:hover {
-  border-color: #cddcf2;
-  background: #fff;
+  border-color: color-mix(in srgb, var(--guide-accent) 24%, var(--guide-border));
+  background: #ffffff;
 }
 
 .tutorial-list small,
 .tutorial-list span {
   display: block;
-  color: #718096;
+  color: var(--guide-muted);
   font-size: 12px;
+  opacity: 1;
 }
 
 .tutorial-list strong {
   display: block;
   margin: 4px 0 7px;
-  color: #142033;
+  color: var(--guide-heading);
   font-size: 15px;
   line-height: 1.45;
+  opacity: 1;
 }
 
 .tutorial-doc {
   min-width: 0;
   overflow: auto;
-  padding: clamp(34px, 5vw, 72px);
-  background: #fff;
+  padding: clamp(36px, 5vw, 68px);
+  background: var(--guide-shell);
+  opacity: 1 !important;
 }
 
 .doc-paper {
-  max-width: 820px;
+  max-width: 940px;
+  color: var(--guide-text);
+  opacity: 1 !important;
 }
 
 .doc-paper header {
   margin-bottom: 34px;
   padding-bottom: 24px;
-  border-bottom: 1px solid #e6edf6;
+  border-bottom: 1px solid var(--guide-border);
 }
 
 .doc-paper header span {
-  color: #2563eb;
+  color: var(--guide-accent);
   font-size: 13px;
   font-weight: 850;
 }
 
 .doc-paper h2 {
   margin: 12px 0;
-  color: #111827;
-  font-size: clamp(32px, 4vw, 54px);
-  line-height: 1.12;
-  letter-spacing: -0.02em;
+  color: var(--guide-heading);
+  font-size: 42px;
+  line-height: 1.18;
+  letter-spacing: 0;
   text-wrap: balance;
+  opacity: 1;
 }
 
 .doc-paper time {
-  color: #6b778c;
+  color: var(--guide-muted);
   font-size: 13px;
+  opacity: 1;
 }
 
 .doc-content {
-  color: #202b3d;
-  font-size: 16px;
+  color: var(--guide-text);
+  font-size: 16.5px;
   line-height: 1.85;
+  opacity: 1 !important;
 }
 
 .doc-content :deep(h1),
 .doc-content :deep(h2),
 .doc-content :deep(h3) {
-  margin: 32px 0 12px;
-  color: #111827;
+  margin: 34px 0 12px;
+  color: var(--guide-heading);
   letter-spacing: 0;
+  opacity: 1;
 }
 
-.doc-content :deep(p) { margin: 0 0 18px; }
+.doc-content :deep(p) {
+  margin: 0 0 18px;
+  color: var(--guide-text);
+  opacity: 1;
+}
+.doc-content :deep(li) {
+  color: var(--guide-text);
+  opacity: 1;
+}
 .doc-content :deep(ul),
 .doc-content :deep(ol) { padding-left: 24px; margin: 10px 0 20px; }
 .doc-content :deep(blockquote) {
   margin: 24px 0;
   padding: 18px 20px;
-  border: 1px solid #dce6f4;
+  border: 1px solid var(--guide-border);
   border-radius: 12px;
-  color: #32415a;
-  background: #f6f9fe;
+  color: var(--guide-text);
+  background: var(--guide-soft);
+  opacity: 1;
 }
 .doc-content :deep(code) {
   padding: 2px 6px;
   border-radius: 6px;
-  color: #0f5bd7;
-  background: #edf4ff;
+  color: var(--guide-accent);
+  background: color-mix(in srgb, var(--guide-accent) 12%, var(--guide-shell));
 }
 .doc-content :deep(pre) {
   overflow: auto;
@@ -351,10 +330,20 @@ function formatDate(value) {
   background: #111827;
 }
 .doc-content :deep(a) { color: #075ee5; font-weight: 800; text-decoration: none; }
+.doc-content :deep(img) {
+  display: block;
+  width: min(840px, 100%);
+  height: auto;
+  margin: 18px 0 28px;
+  border: 1px solid var(--guide-border);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, .1);
+}
 .doc-content :deep(table) { width: 100%; border-collapse: collapse; margin: 18px 0; }
 .doc-content :deep(th),
-.doc-content :deep(td) { padding: 10px 12px; border: 1px solid #dfe7f2; text-align: left; }
-.doc-content :deep(th) { background: #f4f7fb; }
+.doc-content :deep(td) { padding: 10px 12px; border: 1px solid var(--guide-border); text-align: left; }
+.doc-content :deep(th) { background: var(--guide-soft); color: var(--guide-heading); }
 
 .tutorial-state,
 .tutorial-empty {
@@ -362,17 +351,17 @@ function formatDate(value) {
   display: grid;
   align-content: center;
   justify-items: start;
-  color: #667085;
+  color: var(--guide-muted);
 }
 
 .tutorial-empty span {
-  color: #2563eb;
+  color: var(--guide-accent);
   font-weight: 850;
 }
 
 .tutorial-empty h2 {
   margin: 12px 0 8px;
-  color: #142033;
+  color: var(--guide-heading);
   font-size: 30px;
 }
 
@@ -386,5 +375,118 @@ function formatDate(value) {
   .tutorial-shell { grid-template-columns: minmax(0, 1fr); }
   .tutorial-rail { border-right: 0; border-bottom: 1px solid #e3eaf4; }
   .tutorial-doc { padding: 28px 22px; }
+}
+
+:global(:root[data-theme="dark"]) .tutorial-page {
+  --guide-bg: #070b14;
+  --guide-shell: #0f1726;
+  --guide-rail: #111b2b;
+  --guide-rail-strong: #0b1220;
+  --guide-border: rgba(148, 163, 184, .2);
+  --guide-text: #dbe7f7;
+  --guide-heading: #f6f8fb;
+  --guide-muted: #9ba9bd;
+  --guide-soft: rgba(30, 41, 59, .72);
+  --guide-accent: #60a5fa;
+  --guide-accent-2: #2dd4bf;
+  background:
+    radial-gradient(circle at 16% 10%, rgba(37, 99, 235, .2), transparent 28%),
+    linear-gradient(90deg, #07101f, #0b1020 42%, #05070d);
+}
+
+:global(:root[data-theme="dark"]) .tutorial-shell {
+  box-shadow: none;
+}
+
+:global(:root[data-theme="dark"]) .tutorial-filter input::placeholder {
+  color: #7f8da3;
+}
+
+:global(:root[data-theme="dark"]) .tutorial-list button.active,
+:global(:root[data-theme="dark"]) .tutorial-list button:hover {
+  background: rgba(96, 165, 250, .11);
+}
+
+:global(:root[data-theme="dark"]) .doc-content :deep(img) {
+  background: #111827;
+  box-shadow: 0 16px 38px rgba(0, 0, 0, .34);
+}
+
+:global(:root[data-theme="dark"]) .doc-content :deep(a) {
+  color: #7dd3fc;
+}
+
+:global(:root[data-theme="dark"]) .doc-content :deep(code) {
+  color: #93c5fd;
+  background: rgba(37, 99, 235, .16);
+}
+</style>
+
+<style>
+.app-tutorial-root {
+  min-height: 100vh;
+  color: #142033;
+  background: #eef4fb;
+}
+
+:root[data-theme="dark"] .app-tutorial-root {
+  color: #e5edf8;
+  background: #070b14;
+}
+
+.app-tutorial-main {
+  min-height: 100vh;
+  padding: 0;
+}
+
+.app-tutorial-root .tutorial-page,
+.app-tutorial-root .tutorial-page * {
+  opacity: 1;
+}
+
+.app-tutorial-root .tutorial-page .rail-head h1,
+.app-tutorial-root .tutorial-page .doc-paper h2,
+.app-tutorial-root .tutorial-page .doc-content h1,
+.app-tutorial-root .tutorial-page .doc-content h2,
+.app-tutorial-root .tutorial-page .doc-content h3,
+.app-tutorial-root .tutorial-page .tutorial-list strong {
+  color: #0f172a !important;
+}
+
+.app-tutorial-root .tutorial-page,
+.app-tutorial-root .tutorial-page .doc-content,
+.app-tutorial-root .tutorial-page .doc-content p,
+.app-tutorial-root .tutorial-page .doc-content li,
+.app-tutorial-root .tutorial-page .rail-head p {
+  color: #142033 !important;
+}
+
+.app-tutorial-root .tutorial-page .tutorial-list small,
+.app-tutorial-root .tutorial-page .tutorial-list span,
+.app-tutorial-root .tutorial-page .doc-paper time {
+  color: #5f6f85 !important;
+}
+
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page .rail-head h1,
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page .doc-paper h2,
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page .doc-content h1,
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page .doc-content h2,
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page .doc-content h3,
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page .tutorial-list strong {
+  color: #f6f8fb !important;
+}
+
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page,
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page .doc-content,
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page .doc-content p,
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page .doc-content li,
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page .rail-head p {
+  color: #dbe7f7 !important;
+}
+
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page .tutorial-list small,
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page .tutorial-list span,
+:root[data-theme="dark"] .app-tutorial-root .tutorial-page .doc-paper time {
+  color: #9ba9bd !important;
 }
 </style>

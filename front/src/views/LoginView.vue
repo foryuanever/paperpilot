@@ -346,6 +346,11 @@
                 <a href="#" @click.prevent="authMode='register'">没有账号？去注册</a>
                 <a href="#" @click.prevent="authMode='forgot_password'" class="dim">忘记密码</a>
               </div>
+              <div v-if="isDesktopApp" class="desktop-connection-card">
+                <span>后端服务</span>
+                <strong>{{ desktopApiBase }}</strong>
+                <button type="button" @click="openDesktopSettings">连接设置</button>
+              </div>
             </div>
           </div>
           <!-- REGISTER -->
@@ -387,6 +392,11 @@
               <div v-if="errorText" class="auth-err">{{ errorText }}</div>
               <button class="auth-submit" :disabled="loading" @click="submitRegister">{{ loading ? '创建中…' : '创建账号并进入' }}</button>
               <div class="auth-links"><a href="#" @click.prevent="authMode='login'">已有账号？登录</a></div>
+              <div v-if="isDesktopApp" class="desktop-connection-card">
+                <span>后端服务</span>
+                <strong>{{ desktopApiBase }}</strong>
+                <button type="button" @click="openDesktopSettings">连接设置</button>
+              </div>
             </div>
           </div>
           <!-- FORGOT -->
@@ -410,7 +420,151 @@
               <div v-if="errorText" class="auth-err">{{ errorText }}</div>
               <button class="auth-submit" :disabled="loading" @click="submitResetPassword">{{ loading ? '重置中…' : '确认重置' }}</button>
               <div class="auth-links"><a href="#" @click.prevent="authMode='login'">返回登录</a></div>
+              <div v-if="isDesktopApp" class="desktop-connection-card">
+                <span>后端服务</span>
+                <strong>{{ desktopApiBase }}</strong>
+                <button type="button" @click="openDesktopSettings">连接设置</button>
+              </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="mfade">
+      <div v-if="desktopSettingsOpen" class="modal-mask desktop-settings-mask" @click="closeDesktopSettings">
+        <div class="modal-box desktop-settings-box" @click.stop>
+          <button class="modal-x" @click="closeDesktopSettings">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+          <div class="auth-pane">
+            <div class="auth-label">DESKTOP SERVER</div>
+            <h3 class="auth-title">后端连接设置</h3>
+            <p class="desktop-settings-desc">内测可用本机地址；正式分发时填写你的线上 HTTPS 后端域名。</p>
+            <div class="auth-form">
+              <label>后端 API 地址</label>
+              <input v-model="desktopApiDraft" type="url" placeholder="https://api.papersolver.cn" />
+              <div class="desktop-settings-section desktop-pdf-section">
+                <div class="desktop-settings-section-head">
+                  <span>PDF 保存目录</span>
+                  <small>首次使用先配置</small>
+                </div>
+                <p>导入、Zotero 同步和手动上传的 PDF 会保存到用户电脑这个目录；后端只记录文献信息和本机缓存标记。</p>
+                <div class="desktop-pdf-dir-row">
+                  <input v-model="desktopPdfDirDraft" type="text" readonly placeholder="请选择 PDF 保存目录" />
+                  <button type="button" :disabled="desktopSettingsSaving" @click="chooseDesktopPdfDir">选择目录</button>
+                </div>
+              </div>
+              <div class="desktop-settings-section">
+                <div class="desktop-settings-section-head">
+                  <span>本机翻译服务</span>
+                  <small>可选，填写后启用</small>
+                </div>
+                <label>DeepLX 地址</label>
+                <div class="desktop-translation-row">
+                  <input v-model="desktopTranslationDraft.deeplxEndpoint" type="url" placeholder="http://127.0.0.1:1188" />
+                  <button type="button" :disabled="desktopTranslationTesting.deeplx" @click="testDesktopTranslationProvider('deeplx')">
+                    {{ desktopTranslationTesting.deeplx ? '检测中' : '检测' }}
+                  </button>
+                </div>
+                <div v-if="desktopTranslationStatus.deeplx" :class="['desktop-translation-status', desktopTranslationStatus.deeplx.ok ? 'ok' : 'bad']">
+                  {{ desktopTranslationStatus.deeplx.message }}
+                </div>
+                <label>LibreTranslate 地址</label>
+                <div class="desktop-translation-row">
+                  <input v-model="desktopTranslationDraft.libreTranslateEndpoint" type="url" placeholder="http://127.0.0.1:5000" />
+                  <button type="button" :disabled="desktopTranslationTesting.libretranslate" @click="testDesktopTranslationProvider('libretranslate')">
+                    {{ desktopTranslationTesting.libretranslate ? '检测中' : '检测' }}
+                  </button>
+                </div>
+                <div v-if="desktopTranslationStatus.libretranslate" :class="['desktop-translation-status', desktopTranslationStatus.libretranslate.ok ? 'ok' : 'bad']">
+                  {{ desktopTranslationStatus.libretranslate.message }}
+                </div>
+                <label>MTranServer 地址</label>
+                <div class="desktop-translation-row">
+                  <input v-model="desktopTranslationDraft.mtranServerEndpoint" type="url" placeholder="http://127.0.0.1:8989" />
+                  <button type="button" :disabled="desktopTranslationTesting.mtranserver" @click="testDesktopTranslationProvider('mtranserver')">
+                    {{ desktopTranslationTesting.mtranserver ? '检测中' : '检测' }}
+                  </button>
+                </div>
+                <div v-if="desktopTranslationStatus.mtranserver" :class="['desktop-translation-status', desktopTranslationStatus.mtranserver.ok ? 'ok' : 'bad']">
+                  {{ desktopTranslationStatus.mtranserver.message }}
+                </div>
+                <p>这些地址只保存在本机。切换翻译引擎时，桌面端会直接请求用户电脑上的服务。</p>
+              </div>
+              <div class="desktop-settings-section desktop-cache-section">
+                <div class="desktop-settings-section-head">
+                  <span>本机 PDF 缓存</span>
+                  <small>{{ desktopCacheInfo.label || '未统计' }}</small>
+                </div>
+                <p>
+                  已缓存 {{ desktopCacheInfo.pdfs || 0 }} 份 PDF，共 {{ desktopCacheInfo.files || 0 }} 个文件。
+                  阅读器会优先读取本机缓存，清理后不会删除云端文献记录。
+                </p>
+                <div v-if="desktopCacheMessage" :class="['desktop-translation-status', desktopCacheMessage.ok ? 'ok' : 'bad']">
+                  {{ desktopCacheMessage.text }}
+                </div>
+                <div class="desktop-cache-actions">
+                  <button type="button" :disabled="desktopCacheLoading" @click="refreshDesktopCacheInfo">
+                    {{ desktopCacheLoading ? '统计中' : '刷新占用' }}
+                  </button>
+                  <button type="button" :disabled="desktopCacheLoading" @click="openDesktopCacheDir">打开目录</button>
+                  <button type="button" class="danger" :disabled="desktopCacheLoading" @click="clearDesktopPdfCache">清理缓存</button>
+                </div>
+              </div>
+              <div v-if="desktopSettingsMessage" class="auth-ok">{{ desktopSettingsMessage }}</div>
+              <div v-if="desktopSettingsError" class="auth-err">{{ desktopSettingsError }}</div>
+              <div class="desktop-settings-actions">
+                <button class="desktop-test-btn" type="button" :disabled="desktopSettingsSaving || desktopTesting" @click="testDesktopConnection">
+                  {{ desktopTesting ? '测试中…' : '测试连接' }}
+                </button>
+                <button class="auth-submit" :disabled="desktopSettingsSaving || desktopTesting" @click="saveDesktopSettings">
+                  {{ desktopSettingsSaving ? '保存中…' : '保存并切换' }}
+                </button>
+              </div>
+              <button class="desktop-reset-btn" type="button" :disabled="desktopSettingsSaving || desktopTesting" @click="resetDesktopSettings">
+                恢复默认地址
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="mfade">
+      <div v-if="desktopGuideOpen" class="modal-mask desktop-guide-mask" @click="closeDesktopGuide">
+        <div class="modal-box desktop-guide-box" @click.stop>
+          <button class="modal-x" @click="closeDesktopGuide">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+          <div class="desktop-guide-kicker">PAPERSOLVER DESKTOP</div>
+          <h3>桌面端首次设置</h3>
+          <p class="desktop-guide-desc">先确认这几件事，PDF 本机保存、Zotero 和本机翻译会顺很多。</p>
+          <div class="desktop-guide-grid">
+            <div class="desktop-guide-card">
+              <span>01</span>
+              <strong>PDF 保存目录</strong>
+              <p>先选择一个固定文件夹。导入的 PDF 会留在用户电脑本地，不会堆到服务器。</p>
+            </div>
+            <div class="desktop-guide-card">
+              <span>02</span>
+              <strong>后端连接</strong>
+              <p>登录、聊天大厅、AI 研读和管理员后台仍需要连接你的后端服务。</p>
+            </div>
+            <div class="desktop-guide-card">
+              <span>03</span>
+              <strong>Zotero 本机通信</strong>
+              <p>打开 Zotero 设置，在高级里允许本机其他应用通讯，地址为 127.0.0.1:23119。</p>
+            </div>
+            <div class="desktop-guide-card">
+              <span>04</span>
+              <strong>本机翻译服务</strong>
+              <p>DeepLX、LibreTranslate、MTranServer 需要用户电脑或自部署服务先运行，再填入地址检测。</p>
+            </div>
+          </div>
+          <div class="desktop-guide-actions">
+            <button type="button" class="desktop-test-btn" @click="openDesktopSettingsFromGuide">配置保存目录</button>
+            <button type="button" class="auth-submit" @click="closeDesktopGuide">知道了</button>
           </div>
         </div>
       </div>
@@ -419,11 +573,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { billingPlans } from '../constants/pages'
 import { paperpilotApi } from '../services/paperpilotApi'
+import { getCurrentApiBaseUrl, normalizeApiBaseUrl, setApiBaseUrl, testApiBaseUrl } from '../services/apiClient'
 
 const authStore = useAuthStore()
 const router    = useRouter()
@@ -513,6 +668,41 @@ const forgotNewPassword  = ref('')
 const sendingCode        = ref(false)
 const forgotSuccessText  = ref('')
 const showPassword       = ref(false)
+const isDesktopApp       = Boolean(window.paperSolverDesktop?.isDesktop)
+const desktopApiBase     = ref(getCurrentApiBaseUrl())
+const desktopApiDraft    = ref(desktopApiBase.value)
+const desktopPdfDirDraft = ref('')
+const desktopSettingsOpen= ref(false)
+const desktopSettingsSaving = ref(false)
+const desktopTesting = ref(false)
+const desktopSettingsError = ref('')
+const desktopSettingsMessage = ref('')
+const desktopGuideOpen = ref(false)
+const desktopCacheLoading = ref(false)
+const desktopCacheMessage = ref(null)
+const desktopCacheInfo = reactive({
+  label: '',
+  bytes: 0,
+  files: 0,
+  pdfs: 0,
+  path: '',
+})
+const desktopTranslationDraft = reactive({
+  deeplxEndpoint: '',
+  libreTranslateEndpoint: '',
+  mtranServerEndpoint: '',
+})
+const desktopTranslationTesting = reactive({
+  deeplx: false,
+  libretranslate: false,
+  mtranserver: false,
+})
+const desktopTranslationStatus = reactive({
+  deeplx: null,
+  libretranslate: null,
+  mtranserver: null,
+})
+const DESKTOP_GUIDE_KEY = 'papersolver_desktop_first_setup_seen'
 let rcTimer = null
 
 const eyeIcon    = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
@@ -561,10 +751,223 @@ function openModal(mode) {
   showAuthModal.value = true
 }
 function closeModal() { showAuthModal.value = false; showPassword.value = false; errorText.value = '' }
+async function loadDesktopBackendConfig() {
+  if (!window.paperSolverDesktop?.getBackendConfig) return
+  try {
+    const config = await window.paperSolverDesktop.getBackendConfig()
+    const nextUrl = normalizeApiBaseUrl(config?.apiBaseUrl) || getCurrentApiBaseUrl()
+    applyDesktopTranslationConfig(config?.translationEndpoints)
+    desktopPdfDirDraft.value = config?.pdfStorageDir || ''
+    desktopApiBase.value = nextUrl
+    desktopApiDraft.value = nextUrl
+    setApiBaseUrl(nextUrl, { persist: true })
+  } catch {
+    desktopApiBase.value = getCurrentApiBaseUrl()
+    desktopApiDraft.value = desktopApiBase.value
+  }
+}
+function openDesktopSettings() {
+  desktopApiDraft.value = desktopApiBase.value || getCurrentApiBaseUrl()
+  desktopSettingsError.value = ''
+  desktopSettingsMessage.value = ''
+  desktopSettingsOpen.value = true
+  refreshDesktopCacheInfo()
+}
+async function chooseDesktopPdfDir() {
+  if (!window.paperSolverDesktop?.selectPdfStorageDir) {
+    desktopSettingsError.value = '当前桌面壳不支持选择保存目录，请重启或更新桌面端。'
+    return
+  }
+  desktopSettingsError.value = ''
+  desktopSettingsMessage.value = ''
+  try {
+    const result = await window.paperSolverDesktop.selectPdfStorageDir()
+    if (!result?.canceled && result?.path) {
+      desktopPdfDirDraft.value = result.path
+      applyDesktopCacheInfo({ ...desktopCacheInfo, path: result.path })
+      desktopSettingsMessage.value = 'PDF 保存目录已更新。'
+      refreshDesktopCacheInfo()
+    }
+  } catch (err) {
+    desktopSettingsError.value = err?.message || '选择目录失败'
+  }
+}
+function closeDesktopSettings() {
+  desktopSettingsOpen.value = false
+  desktopSettingsError.value = ''
+}
+function closeDesktopGuide() {
+  desktopGuideOpen.value = false
+  try { localStorage.setItem(DESKTOP_GUIDE_KEY, '1') } catch {}
+}
+function openDesktopSettingsFromGuide() {
+  closeDesktopGuide()
+  openDesktopSettings()
+}
+async function testDesktopConnection() {
+  const apiBaseUrl = normalizeApiBaseUrl(desktopApiDraft.value)
+  if (!apiBaseUrl) {
+    desktopSettingsError.value = '请输入有效地址，例如 https://api.papersolver.cn'
+    return
+  }
+  desktopTesting.value = true
+  desktopSettingsError.value = ''
+  desktopSettingsMessage.value = ''
+  try {
+    await testApiBaseUrl(apiBaseUrl)
+    desktopSettingsMessage.value = '连接成功，可以保存并登录。'
+  } catch (err) {
+    desktopSettingsError.value = err?.message || '连接失败'
+  } finally {
+    desktopTesting.value = false
+  }
+}
+async function testDesktopTranslationProvider(provider) {
+  if (!window.paperSolverDesktop?.testTranslationProvider) {
+    desktopTranslationStatus[provider] = { ok: false, message: '当前桌面壳不支持本机翻译检测，请重启应用。' }
+    return
+  }
+  const endpoints = normalizedDesktopTranslationDraft()
+  const endpointByProvider = {
+    deeplx: endpoints.deeplxEndpoint,
+    libretranslate: endpoints.libreTranslateEndpoint,
+    mtranserver: endpoints.mtranServerEndpoint,
+  }
+  if (!endpointByProvider[provider]) {
+    desktopTranslationStatus[provider] = { ok: false, message: '请先填写有效的 http:// 或 https:// 地址。' }
+    return
+  }
+  desktopTranslationTesting[provider] = true
+  desktopTranslationStatus[provider] = null
+  try {
+    const result = await window.paperSolverDesktop.testTranslationProvider({
+      provider,
+      translationEndpoints: endpoints,
+    })
+    desktopTranslationStatus[provider] = {
+      ok: true,
+      message: `连接正常，测试译文：${String(result?.translatedText || '').slice(0, 28) || '已返回结果'}`
+    }
+  } catch (err) {
+    desktopTranslationStatus[provider] = {
+      ok: false,
+      message: err?.message || '检测失败，请确认本机服务已启动。'
+    }
+  } finally {
+    desktopTranslationTesting[provider] = false
+  }
+}
+async function refreshDesktopCacheInfo() {
+  if (!window.paperSolverDesktop?.getCacheInfo) return
+  desktopCacheLoading.value = true
+  desktopCacheMessage.value = null
+  try {
+    const info = await window.paperSolverDesktop.getCacheInfo()
+    applyDesktopCacheInfo(info)
+  } catch (err) {
+    desktopCacheMessage.value = { ok: false, text: err?.message || '缓存统计失败' }
+  } finally {
+    desktopCacheLoading.value = false
+  }
+}
+async function openDesktopCacheDir() {
+  if (!window.paperSolverDesktop?.openCacheDir) return
+  desktopCacheLoading.value = true
+  desktopCacheMessage.value = null
+  try {
+    await window.paperSolverDesktop.openCacheDir()
+    desktopCacheMessage.value = { ok: true, text: '已打开本机缓存目录。' }
+  } catch (err) {
+    desktopCacheMessage.value = { ok: false, text: err?.message || '打开缓存目录失败' }
+  } finally {
+    desktopCacheLoading.value = false
+  }
+}
+async function clearDesktopPdfCache() {
+  if (!window.paperSolverDesktop?.clearPdfCache) return
+  desktopCacheLoading.value = true
+  desktopCacheMessage.value = null
+  try {
+    const result = await window.paperSolverDesktop.clearPdfCache()
+    applyDesktopCacheInfo({ bytes: 0, files: 0, pdfs: 0, label: '0 B', path: result?.path || desktopCacheInfo.path })
+    desktopCacheMessage.value = { ok: true, text: `已清理 ${result?.label || '缓存'}。` }
+  } catch (err) {
+    desktopCacheMessage.value = { ok: false, text: err?.message || '清理缓存失败' }
+  } finally {
+    desktopCacheLoading.value = false
+  }
+}
+function applyDesktopCacheInfo(info = {}) {
+  desktopCacheInfo.label = info.label || '0 B'
+  desktopCacheInfo.bytes = Number(info.bytes) || 0
+  desktopCacheInfo.files = Number(info.files) || 0
+  desktopCacheInfo.pdfs = Number(info.pdfs) || 0
+  desktopCacheInfo.path = info.path || ''
+}
+async function saveDesktopSettings() {
+  const apiBaseUrl = normalizeApiBaseUrl(desktopApiDraft.value)
+  if (!apiBaseUrl) {
+    desktopSettingsError.value = '请输入有效地址，例如 https://api.papersolver.cn'
+    return
+  }
+  desktopSettingsSaving.value = true
+  desktopSettingsError.value = ''
+  desktopSettingsMessage.value = ''
+  try {
+    if (window.paperSolverDesktop?.setBackendConfig) {
+      await window.paperSolverDesktop.setBackendConfig({
+        apiBaseUrl,
+        pdfStorageDir: desktopPdfDirDraft.value,
+        translationEndpoints: normalizedDesktopTranslationDraft(),
+      })
+    }
+    setApiBaseUrl(apiBaseUrl, { persist: true })
+    desktopApiBase.value = apiBaseUrl
+    desktopSettingsMessage.value = '已保存后端连接和本机翻译配置。'
+    setTimeout(() => { desktopSettingsOpen.value = false }, 900)
+  } catch (err) {
+    desktopSettingsError.value = err?.message || '保存失败'
+  } finally {
+    desktopSettingsSaving.value = false
+  }
+}
+async function resetDesktopSettings() {
+  desktopSettingsSaving.value = true
+  desktopSettingsError.value = ''
+  desktopSettingsMessage.value = ''
+  try {
+    const config = window.paperSolverDesktop?.resetBackendConfig
+      ? await window.paperSolverDesktop.resetBackendConfig()
+      : { apiBaseUrl: 'http://127.0.0.1:8080' }
+    const nextUrl = normalizeApiBaseUrl(config?.apiBaseUrl) || 'http://127.0.0.1:8080'
+    applyDesktopTranslationConfig(config?.translationEndpoints)
+    desktopPdfDirDraft.value = config?.pdfStorageDir || ''
+    setApiBaseUrl(nextUrl, { persist: true })
+    desktopApiBase.value = nextUrl
+    desktopApiDraft.value = nextUrl
+    desktopSettingsMessage.value = '已恢复默认地址，并清空本机翻译配置。'
+  } catch (err) {
+    desktopSettingsError.value = err?.message || '恢复失败'
+  } finally {
+    desktopSettingsSaving.value = false
+  }
+}
+function applyDesktopTranslationConfig(endpoints = {}) {
+  desktopTranslationDraft.deeplxEndpoint = endpoints.deeplxEndpoint || ''
+  desktopTranslationDraft.libreTranslateEndpoint = endpoints.libreTranslateEndpoint || ''
+  desktopTranslationDraft.mtranServerEndpoint = endpoints.mtranServerEndpoint || ''
+}
+function normalizedDesktopTranslationDraft() {
+  return {
+    deeplxEndpoint: normalizeApiBaseUrl(desktopTranslationDraft.deeplxEndpoint) || '',
+    libreTranslateEndpoint: normalizeApiBaseUrl(desktopTranslationDraft.libreTranslateEndpoint) || '',
+    mtranServerEndpoint: normalizeApiBaseUrl(desktopTranslationDraft.mtranServerEndpoint) || '',
+  }
+}
 async function submitLogin() {
   loading.value = true; errorText.value = ''
   try { await authStore.login({ email: email.value, password: password.value }); router.push(authStore.session.role === '管理员' ? '/admin' : '/library') }
-  catch (err) { errorText.value = err.response?.data?.message || err.message }
+  catch (err) { errorText.value = authErrorMessage(err) }
   finally { loading.value = false }
 }
 async function submitRegister() {
@@ -572,8 +975,15 @@ async function submitRegister() {
   if (!verificationCode.value || verificationCode.value.length !== 6) { errorText.value = '请输入 6 位验证码'; return }
   loading.value = true; errorText.value = ''
   try { await authStore.register({ inviteCode: inviteCode.value, name: name.value, email: email.value, password: password.value, role: role.value, mentorInviteCode: mentorInviteCode.value, verificationCode: verificationCode.value }); router.push(authStore.session.role === '管理员' ? '/admin' : '/library') }
-  catch (err) { errorText.value = err.response?.data?.message || err.message }
+  catch (err) { errorText.value = authErrorMessage(err) }
   finally { loading.value = false }
+}
+
+function authErrorMessage(err) {
+  if (isDesktopApp && (err?.message === 'Network Error' || err?.code === 'ECONNABORTED' || !err?.response)) {
+    return '后端连接失败。请点击下方“连接设置”，先测试后端地址是否可用。'
+  }
+  return err?.response?.data?.message || err?.message || '请求失败，请稍后重试'
 }
 
 /* ── Static data ── */
@@ -678,6 +1088,16 @@ onMounted(() => {
   setTimeout(() => { heroIn.value = true }, 80)
   setTimeout(initIO, 200)
   setTimeout(resetWfAuto, 1200)
+  loadDesktopBackendConfig()
+  if (isDesktopApp) {
+    try {
+      if (localStorage.getItem(DESKTOP_GUIDE_KEY) !== '1') {
+        setTimeout(() => { desktopGuideOpen.value = true }, 650)
+      }
+    } catch {
+      setTimeout(() => { desktopGuideOpen.value = true }, 650)
+    }
+  }
   if (route.query.auth === 'register' || route.query.show === 'register') openModal('register')
   else if (route.query.auth === 'login'  || route.query.show === 'login')  openModal('login')
 })
@@ -1116,6 +1536,321 @@ onUnmounted(() => {
 .auth-links a { font-size: .78rem; color: #71717a; text-decoration: none; transition: color .2s; }
 .auth-links a:hover { color: #a1a1aa; }
 .auth-links a.dim { color: #3f3f46; }
+.desktop-connection-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  align-items: center;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(96, 165, 250, .14);
+  border-radius: 12px;
+  background: rgba(37, 99, 235, .08);
+}
+.desktop-connection-card span {
+  color: #818cf8;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.desktop-connection-card strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #c7d2fe;
+  font-family: 'Geist Mono', monospace;
+  font-size: .72rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.desktop-connection-card button {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  border: 1px solid rgba(129, 140, 248, .24);
+  border-radius: 9px;
+  padding: 7px 10px;
+  color: #e0e7ff;
+  background: rgba(129, 140, 248, .14);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .72rem;
+  font-weight: 800;
+}
+.desktop-connection-card button:hover {
+  border-color: rgba(129, 140, 248, .42);
+  background: rgba(129, 140, 248, .22);
+}
+.desktop-settings-mask {
+  z-index: 560;
+}
+.desktop-settings-box {
+  max-width: 540px;
+}
+.desktop-settings-desc {
+  margin: -6px 0 18px;
+  color: #71717a;
+  font-size: .82rem;
+  line-height: 1.65;
+}
+.desktop-settings-actions {
+  display: grid;
+  grid-template-columns: .9fr 1.1fr;
+  gap: 10px;
+}
+.desktop-settings-section {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 2px;
+  padding: 14px;
+  border: 1px solid rgba(129, 140, 248, .16);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, .08), rgba(14, 165, 233, .035)),
+    rgba(255, 255, 255, .025);
+}
+.desktop-settings-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.desktop-settings-section-head span {
+  color: #e5e7eb;
+  font-size: .9rem;
+  font-weight: 850;
+}
+.desktop-settings-section-head small {
+  color: #93c5fd;
+  font-size: .72rem;
+  font-weight: 800;
+}
+.desktop-settings-section p {
+  margin: 0;
+  color: #71717a;
+  font-size: .76rem;
+  line-height: 1.6;
+}
+.desktop-translation-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  gap: 8px;
+}
+.desktop-pdf-dir-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  gap: 8px;
+}
+.desktop-pdf-dir-row input {
+  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .75rem;
+}
+.desktop-pdf-dir-row button {
+  border: 1px solid rgba(20, 184, 166, .28);
+  border-radius: 10px;
+  color: #ccfbf1;
+  background: rgba(20, 184, 166, .14);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .78rem;
+  font-weight: 850;
+}
+.desktop-pdf-dir-row button:hover:not(:disabled) {
+  border-color: rgba(20, 184, 166, .5);
+  background: rgba(20, 184, 166, .22);
+}
+.desktop-pdf-dir-row button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.desktop-translation-row button {
+  border: 1px solid rgba(96, 165, 250, .2);
+  border-radius: 10px;
+  color: #dbeafe;
+  background: rgba(37, 99, 235, .12);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+}
+.desktop-translation-row button:hover:not(:disabled) {
+  border-color: rgba(96, 165, 250, .42);
+  background: rgba(37, 99, 235, .22);
+}
+.desktop-translation-row button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.desktop-translation-status {
+  margin-top: -4px;
+  border-radius: 9px;
+  padding: 7px 9px;
+  font-size: .74rem;
+  line-height: 1.45;
+}
+.desktop-translation-status.ok {
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, .1);
+  border: 1px solid rgba(34, 197, 94, .18);
+}
+.desktop-translation-status.bad {
+  color: #fecaca;
+  background: rgba(239, 68, 68, .1);
+  border: 1px solid rgba(239, 68, 68, .18);
+}
+.desktop-cache-section p {
+  color: #94a3b8;
+}
+.desktop-cache-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.desktop-cache-actions button {
+  border: 1px solid rgba(96, 165, 250, .18);
+  border-radius: 10px;
+  padding: 10px 8px;
+  color: #dbeafe;
+  background: rgba(37, 99, 235, .1);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+}
+.desktop-cache-actions button:hover:not(:disabled) {
+  border-color: rgba(96, 165, 250, .38);
+  background: rgba(37, 99, 235, .18);
+}
+.desktop-cache-actions button.danger {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, .2);
+  background: rgba(239, 68, 68, .09);
+}
+.desktop-cache-actions button.danger:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, .42);
+  background: rgba(239, 68, 68, .15);
+}
+.desktop-cache-actions button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.desktop-settings-actions .auth-submit {
+  margin-top: 0;
+}
+.desktop-test-btn {
+  border: 1px solid rgba(96, 165, 250, .22);
+  border-radius: 10px;
+  padding: 12px;
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, .12);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .86rem;
+  font-weight: 800;
+}
+.desktop-test-btn:hover:not(:disabled) {
+  border-color: rgba(96, 165, 250, .42);
+  color: #eff6ff;
+  background: rgba(37, 99, 235, .2);
+}
+.desktop-test-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.desktop-reset-btn {
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px;
+  padding: 12px;
+  color: #a1a1aa;
+  background: rgba(255,255,255,.03);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .86rem;
+  font-weight: 700;
+}
+.desktop-reset-btn:hover:not(:disabled) {
+  border-color: rgba(255,255,255,.2);
+  color: #e4e4e7;
+}
+.desktop-reset-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.desktop-guide-mask {
+  z-index: 555;
+}
+.desktop-guide-box {
+  max-width: 760px;
+  padding: 30px;
+  background:
+    radial-gradient(circle at 12% 10%, rgba(59, 130, 246, .18), transparent 32%),
+    linear-gradient(135deg, rgba(15, 23, 42, .98), rgba(9, 9, 15, .98));
+  border-color: rgba(129, 140, 248, .2);
+}
+.desktop-guide-kicker {
+  color: #60a5fa;
+  font-family: 'Geist Mono', monospace;
+  font-size: .72rem;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+.desktop-guide-box h3 {
+  margin: 8px 0 8px;
+  color: #f8fafc;
+  font-size: 1.45rem;
+  font-weight: 850;
+}
+.desktop-guide-desc {
+  margin: 0 0 18px;
+  color: #94a3b8;
+  font-size: .9rem;
+  line-height: 1.7;
+}
+.desktop-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.desktop-guide-card {
+  min-height: 168px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, .14);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, .66);
+}
+.desktop-guide-card span {
+  display: inline-flex;
+  color: #38bdf8;
+  font-family: 'Geist Mono', monospace;
+  font-size: .72rem;
+  font-weight: 900;
+  margin-bottom: 18px;
+}
+.desktop-guide-card strong {
+  display: block;
+  color: #e2e8f0;
+  font-size: .95rem;
+  font-weight: 850;
+  margin-bottom: 8px;
+}
+.desktop-guide-card p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: .8rem;
+  line-height: 1.65;
+}
+.desktop-guide-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+.desktop-guide-actions .desktop-test-btn,
+.desktop-guide-actions .auth-submit {
+  width: auto;
+  min-width: 132px;
+  margin-top: 0;
+}
 
 /* ══ RESPONSIVE ══ */
 @media (max-width: 1000px) {
@@ -1127,6 +1862,7 @@ onUnmounted(() => {
   .full-slide-media { padding-right: 0; margin-bottom: 24px; }
   .full-slide-info { padding-left: 0; }
   .info-title { font-size: 1.5rem; }
+  .desktop-guide-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
   .feat-grid { grid-template-columns: 1fr; }

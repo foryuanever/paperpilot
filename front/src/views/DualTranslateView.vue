@@ -663,12 +663,14 @@ function persistDrawingStrokes() {
 const paper = computed(() => libraryStore.activeDocument);
 const workspaceId = computed(() => String(paper.value?.workspaceId || paper.value?.id || ""));
 const stateTitle = computed(() => {
+  if (state.value === "NATIVE") return "正在打开内置对照阅读";
   if (state.value === "PROGRESS") return "正在生成对照译文";
   if (state.value === "SUCCESS") return "译文已生成，正在排版";
   return "正在准备对照翻译";
 });
 const stateDescription = computed(() => {
   if (state.value === "PROGRESS") return "首次生成需要分析页面结构；完成后再次打开会直接读取缓存。";
+  if (state.value === "NATIVE") return "开源对照翻译服务暂不可用，当前使用内置 PDF 阅读和段落翻译备用模式。";
   return "正在读取论文并建立原文与译文的页面对照关系。";
 });
 
@@ -747,8 +749,37 @@ function zoomDualOut() {
 
 function openOriginalPdf() {
   const paperObj = paper.value || {};
-  const url = paperpilotApi.buildPdfProxyUrl(paperObj.pdfUrl || paperObj.paperUrl || "");
+  const source = paperObj.pdfUrl || paperObj.paperUrl || "";
+  if (String(source).toLowerCase().startsWith("desktop-cache://")) return;
+  const url = paperpilotApi.buildPdfProxyUrl(source);
   if (url) window.open(url, "_blank", "noopener,noreferrer");
+}
+
+async function resolveDualPdfSource() {
+  const id = workspaceId.value;
+  if (window.paperSolverDesktop?.getCachedPdf && id) {
+    try {
+      const cached = await window.paperSolverDesktop.getCachedPdf({ workspaceId: id });
+      if (cached?.found && cached.base64) {
+        return base64ToUint8Array(cached.base64);
+      }
+    } catch (error) {
+      console.warn("desktop dual pdf cache read failed", error);
+    }
+  }
+  const paperObj = paper.value || {};
+  const source = paperObj.pdfUrl || paperObj.paperUrl || "";
+  if (String(source).toLowerCase().startsWith("desktop-cache://")) return "";
+  return paperpilotApi.buildPdfProxyUrl(source);
+}
+
+function base64ToUint8Array(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
 }
 
 async function translateAllPageBlocks() {
@@ -773,23 +804,23 @@ async function translateAllPageBlocks() {
   });
 }
 
-async function loadNativePdfDualView() {
+async function loadNativePdfDualView(reason = "") {
   try {
-    state.value = "PROGRESS";
+    state.value = "NATIVE";
     generationProgress.value = 30;
     readingProgress.value = 0;
     isDualPdfMode.value = false;
+    error.value = "";
 
-    const paperObj = paper.value || {};
-    const pdfUrl = paperpilotApi.buildPdfProxyUrl(paperObj.pdfUrl || paperObj.paperUrl || "");
-    if (!pdfUrl) throw new Error("缺失论文 PDF 资源");
+    const documentSource = await resolveDualPdfSource();
+    if (!documentSource) throw new Error("缺失论文 PDF 资源，或本机缓存不存在");
 
     const [pdfjs, workerModule] = await Promise.all([
       import("pdfjs-dist"),
       import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
     ]);
     pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
-    const loadingTask = pdfjs.getDocument(pdfUrl);
+    const loadingTask = pdfjs.getDocument(documentSource);
     pdfDocument = await loadingTask.promise;
 
     // 获取 Mineru 结构化页面段落数据
@@ -832,7 +863,10 @@ async function loadNativePdfDualView() {
     translateAllPageBlocks();
   } catch (err) {
     console.warn("native pdf dual view fallback failed", err);
-    error.value = "对照翻译暂不可用，请确保论文已上传 PDF。";
+    const fallbackReason = friendlyError(err, "内置对照阅读也无法打开 PDF");
+    error.value = reason
+      ? `${reason}；备用模式也失败：${fallbackReason}`
+      : `对照翻译暂不可用：${fallbackReason}`;
   }
 }
 
@@ -859,7 +893,7 @@ async function startTranslation() {
     pollTimer = setInterval(refreshStatus, 1200);
   } catch (requestError) {
     console.warn("pdfmath translation server offline, switching to native dual reader", requestError);
-    await loadNativePdfDualView();
+    await loadNativePdfDualView(friendlyError(requestError, "开源对照翻译服务未启动或模型加载失败"));
   }
 }
 
@@ -880,11 +914,11 @@ async function refreshStatus() {
       await loadTranslatedPdf();
     } else if (state.value === "FAILURE") {
       clearInterval(pollTimer);
-      await loadNativePdfDualView();
+      await loadNativePdfDualView(String(result?.message || "开源对照翻译任务失败，已尝试切换备用模式"));
     }
   } catch (requestError) {
     clearInterval(pollTimer);
-    await loadNativePdfDualView();
+    await loadNativePdfDualView(friendlyError(requestError, "开源对照翻译状态服务暂不可用"));
   }
 }
 

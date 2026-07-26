@@ -1,0 +1,63 @@
+{
+  "name": "papersolver-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PaperSolver desktop shell",
+  "main": "src/main.cjs",
+  "scripts": {
+    "dev": "node scripts/build-front.mjs && electron .",
+    "start": "electron .",
+    "build:front": "node scripts/build-front.mjs",
+    "pack": "node scripts/build-front.mjs && electron-builder --dir",
+    "dist": "node scripts/build-front.mjs && electron-builder",
+    "dist:mac": "node scripts/build-front.mjs && electron-builder --mac dmg",
+    "dist:win": "node scripts/build-front.mjs && electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.clingy.papersolver",
+    "productName": "PaperSolver",
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../front/dist",
+        "to": "front-dist",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.education",
+      "target": [
+        "dmg"
+      ],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PaperSolver"
+    }
+  }
+}
