@@ -6,14 +6,46 @@
     return;
   }
 
+  let lastDetectionSignature = "";
+  let dismissedDetectionSignature = "";
+  let mutationTimer = null;
+
   checkPendingPdfCapture().then((handled) => {
     if (handled) return;
+    runDetection();
+    [700, 1800, 3600, 6500].forEach((delay) => {
+      window.setTimeout(runDetection, delay);
+    });
+    observePageForResults();
+  });
+
+  function runDetection() {
     const paper = detectPaper();
     const detectedCount = Array.isArray(paper?.pdfCandidates) ? paper.pdfCandidates.length : 0;
     notifyPageDetected(detectedCount);
     if (!shouldOfferCapture(paper)) return;
-    showPrompt(paper);
-  });
+    const signature = detectionSignature(paper);
+    if (!signature || signature === lastDetectionSignature || signature === dismissedDetectionSignature) return;
+    lastDetectionSignature = signature;
+    showPrompt(paper, signature);
+  }
+
+  function observePageForResults() {
+    const observer = new MutationObserver(() => {
+      window.clearTimeout(mutationTimer);
+      mutationTimer = window.setTimeout(runDetection, 320);
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    window.setTimeout(() => observer.disconnect(), 45000);
+  }
+
+  function detectionSignature(paper) {
+    const candidates = Array.isArray(paper?.pdfCandidates) ? paper.pdfCandidates : [];
+    if (candidates.length) {
+      return candidates.map((item) => item.sourceUrl || item.url || item.title || item.label).filter(Boolean).join("|");
+    }
+    return paper?.doi || paper?.pdfUrl || paper?.title || "";
+  }
 
   function isPaperSolverAppHost() {
     return /^(127\.0\.0\.1|localhost)$/i.test(location.hostname);
@@ -50,7 +82,9 @@
     const pii = extractScienceDirectPii(url);
     const scienceDirectDetailUrl = pii ? `https://www.sciencedirect.com/science/article/pii/${pii}` : "";
     const paperCandidates = collectPaperCandidates({ jsonLd, doi, pii, title });
-    const pdfCandidates = paperCandidates.length ? paperCandidates : collectPdfCandidates({ jsonLd, doi, pii, title });
+    const pdfCandidates = paperCandidates.length
+      ? paperCandidates
+      : (shouldBlockGenericPdfFallback() ? [] : collectPdfCandidates({ jsonLd, doi, pii, title }));
     const pdfUrl = pdfCandidates[0]?.url || "";
     const abstractText = firstMeta([
       "citation_abstract",
@@ -109,7 +143,7 @@
     }).filter(Boolean).join(", ");
   }
 
-  function showPrompt(paper) {
+  function showPrompt(paper, signature = "") {
     const existing = document.getElementById("papersolver-capture-root");
     if (existing) existing.remove();
     const pdfCandidates = Array.isArray(paper.pdfCandidates) ? paper.pdfCandidates : [];
@@ -150,7 +184,10 @@
       </div>
     `;
     document.documentElement.appendChild(root);
-    root.querySelector(".ps-close").addEventListener("click", () => root.remove());
+    root.querySelector(".ps-close").addEventListener("click", () => {
+      dismissedDetectionSignature = signature || detectionSignature(paper);
+      root.remove();
+    });
     root.querySelector(".ps-import").addEventListener("click", async () => {
       const checked = Array.from(root.querySelectorAll(".ps-candidate-check:checked"))
         .map((input) => Number(input.dataset.pdfIndex))
@@ -477,8 +514,20 @@
   function collectPaperCandidates(context = {}) {
     const candidates = [];
     const seen = new Set();
+    if (isScienceDirectArticleDetailPage()) {
+      return collectScienceDirectCurrentArticleCandidate(context);
+    }
+    if (isCnkiArticleDetailPage()) {
+      return collectCnkiCurrentArticleCandidate(context);
+    }
+    if (isCnkiHost()) {
+      return [];
+    }
+
     const scienceDirectList = collectScienceDirectListCandidates();
-    if (scienceDirectList.length >= 2) return scienceDirectList;
+    if (scienceDirectList.length) {
+      return scienceDirectList;
+    }
 
     const pdfAnchors = Array.from(document.querySelectorAll("a[href]")).filter((anchor) => isPdfDownloadAnchor(anchor));
     for (const pdfLink of pdfAnchors) {
@@ -557,21 +606,23 @@
     if (!/(^|\.)sciencedirect\.com$/i.test(location.hostname)) return [];
     const seen = new Set();
     const candidates = [];
-    const articleLinks = Array.from(document.querySelectorAll("a[href*='/science/article/pii/']"));
+    const pdfLinks = Array.from(document.querySelectorAll("a[href], button, [role='button']"))
+      .filter(isScienceDirectFullPdfControl);
 
-    for (const link of articleLinks) {
-      const pii = extractScienceDirectPii(link.href);
+    for (const pdfLink of pdfLinks) {
+      const href = pdfLink.href || pdfLink.getAttribute?.("href") || "";
+      const container = bestScienceDirectResultContainer(pdfLink);
+      const pii = extractScienceDirectPii(href) || extractScienceDirectPii(container?.innerHTML || "") || extractScienceDirectPii(location.href);
       if (!pii || seen.has(pii)) continue;
-      const container = bestScienceDirectResultContainer(link);
-      const title = extractScienceDirectListTitle(container, link);
+      const title = extractScienceDirectListTitle(container, pdfLink) || clean(contextTitleFallback());
       if (!title) continue;
       const sourceUrl = `https://www.sciencedirect.com/science/article/pii/${pii}`;
       seen.add(pii);
       candidates.push({
-        url: `${sourceUrl}/pdfft`,
+        url: normalizePdfImportUrl(href || sourceUrl),
         label: title,
         title,
-        reason: "ScienceDirect 搜索结果",
+        reason: isScienceDirectArticleDetailPage() ? "ScienceDirect PDF 全文" : "ScienceDirect 列表 PDF",
         sourceUrl,
         authors: container ? extractAuthorsFromContainer(container) : "",
         year: container ? extractYear(container.textContent || "") : "",
@@ -583,16 +634,56 @@
     return candidates.slice(0, 50);
   }
 
+  function collectScienceDirectCurrentArticleCandidate(context = {}) {
+    const pii = extractScienceDirectPii(location.href);
+    if (!pii) return [];
+    const hasCurrentPdf = Array.from(document.querySelectorAll("a[href], button, [role='button']"))
+      .some((node) => isScienceDirectFullPdfControl(node));
+    if (!hasCurrentPdf) return [];
+    const sourceUrl = `https://www.sciencedirect.com/science/article/pii/${pii}`;
+    const title = clean(context.title || firstMeta(["citation_title", "dc.Title", "dc.title"]) || contextTitleFallback());
+    return [{
+      url: `${sourceUrl}/pdfft`,
+      label: title,
+      title,
+      reason: "ScienceDirect PDF 全文",
+      sourceUrl,
+      authors: allMeta("citation_author").join(", "),
+      year: firstMeta(["citation_publication_date", "citation_online_date", "dc.date"]).replace(/^(\d{4}).*$/, "$1"),
+      priority: 1
+    }];
+  }
+
+  function isScienceDirectFullPdfControl(node) {
+    const text = clean(node?.textContent || node?.getAttribute?.("aria-label") || node?.getAttribute?.("title") || "");
+    const href = String(node?.href || node?.getAttribute?.("href") || "");
+    if (!text || isRejectedPdfActionText(`${text} ${href}`) || isSupplementaryPdfText(`${text} ${href}`)) return false;
+    if (!/^(view|download|open|read)\s*(article\s*)?pdf$|^pdf\s*(全文|下载|文件)$|^查看\s*pdf$|^下载\s*pdf$/i.test(text)) return false;
+    if (/full\s*issue|issue|book|chapter/i.test(text)) return false;
+    if (href && !/(\/science\/article\/pii\/|\/pdfft|pdf|reader|download)/i.test(href)) return false;
+    return true;
+  }
+
   function bestScienceDirectResultContainer(anchor) {
-    const preferred = anchor.closest("li, article, [data-testid*='result'], [class*='result'], [class*='SearchResult'], [class*='ResultItem']");
+    const preferred = anchor.closest([
+      "li.SearchResult",
+      "li[class*='Result']",
+      "article",
+      "[data-testid*='result']",
+      "[class*='search-result']",
+      "[class*='SearchResult']",
+      "[class*='ResultItem']",
+      "[class*='result-item']"
+    ].join(","));
     if (preferred) return preferred;
     let current = anchor;
-    for (let depth = 0; current && depth < 7; depth += 1) {
+    for (let depth = 0; current && depth < 10; depth += 1) {
       current = current.parentElement;
       if (!current) break;
       const text = clean(current.textContent || "");
       const piiLinks = new Set(Array.from(current.querySelectorAll("a[href*='/science/article/pii/']")).map((node) => extractScienceDirectPii(node.href)).filter(Boolean));
-      if (text.length > 80 && text.length < 1800 && piiLinks.size <= 2) return current;
+      const titleCount = Array.from(current.querySelectorAll("a[href*='/science/article/pii/'], h2, h3")).filter((node) => looksLikePaperTitle(node.textContent || "")).length;
+      if (text.length > 60 && text.length < 2600 && piiLinks.size <= 3 && titleCount >= 1) return current;
     }
     return anchor.parentElement;
   }
@@ -605,6 +696,9 @@
       "h2 a[href*='/science/article/pii/']",
       "h3 a[href*='/science/article/pii/']",
       "h4 a[href*='/science/article/pii/']",
+      "a[href*='/science/article/pii/'] span",
+      "[class*='result-list-title'] a",
+      "[class*='ResultItem'] a",
       "a.anchor",
       "a[class*='title']",
       "a[href*='/science/article/pii/']"
@@ -613,7 +707,32 @@
       .map((node) => clean(node.textContent || ""))
       .filter((text) => looksLikePaperTitle(text) && !/^(view|download)\s+pdf$/i.test(text))
       .sort((a, b) => b.length - a.length);
-    return titles[0] || "";
+    if (titles[0]) return titles[0];
+    return extractScienceDirectTitleNearLink(link);
+  }
+
+  function extractScienceDirectTitleNearLink(link) {
+    const allTextLinks = Array.from(document.querySelectorAll("a[href]"))
+      .filter((node) => {
+        const href = String(node.href || "");
+        if (/pdf|download|signin|account|help/i.test(href)) return false;
+        return looksLikePaperTitle(node.textContent || "");
+      })
+      .map((node) => ({
+        node,
+        text: clean(node.textContent || ""),
+        distance: Math.abs((node.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING) ? 1 : -1)
+      }));
+    const samePii = allTextLinks.find((item) => extractScienceDirectPii(item.node.href) === extractScienceDirectPii(link.href));
+    if (samePii?.text) return samePii.text;
+    const previous = [];
+    let cursor = link;
+    for (let index = 0; cursor && index < 24; index += 1) {
+      cursor = cursor.previousElementSibling || cursor.parentElement?.previousElementSibling;
+      const text = clean(cursor?.textContent || "");
+      if (looksLikePaperTitle(text)) previous.push(text);
+    }
+    return previous.sort((a, b) => b.length - a.length)[0] || "";
   }
 
   function findPdfAnchorIn(container) {
@@ -625,6 +744,9 @@
     const text = clean(anchor?.textContent || anchor?.getAttribute?.("aria-label") || anchor?.getAttribute?.("title") || "");
     const href = String(anchor?.href || "");
     if (!href || isSupplementaryPdf(anchor)) return false;
+    if (isRejectedPdfActionText(`${text} ${href}`)) return false;
+    if (/(^|\.)sciencedirect\.com$/i.test(location.hostname) && !isScienceDirectFullPdfControl(anchor)) return false;
+    if (/(^|\.)cnki\.net$/i.test(location.hostname)) return false;
     if (isPdfUrl(href)) return true;
     if (isScienceDirectArticleUrl(href) && /pdf/i.test(text)) return true;
     return /(pdf|download\s*pdf|article\s*pdf|view\s*pdf|下载全文|全文下载|PDF下载|下载PDF)/i.test(text)
@@ -661,6 +783,72 @@
     } catch {
       return false;
     }
+  }
+
+  function isScienceDirectArticleDetailPage() {
+    return /(^|\.)sciencedirect\.com$/i.test(location.hostname)
+      && /\/science\/article\/pii\/[^/?#]+/i.test(location.pathname);
+  }
+
+  function isCnkiArticleDetailPage() {
+    return isCnkiHost()
+      && /(\/kcms\/detail\/|\/kns8?s?\/detail\/|\/detail\/detail\.aspx|\/kcms2\/article\/abstract)/i.test(location.pathname + location.search);
+  }
+
+  function isCnkiHost() {
+    return /(^|\.)cnki\.net$/i.test(location.hostname);
+  }
+
+  function shouldBlockGenericPdfFallback() {
+    return isCnkiHost() || /(^|\.)sciencedirect\.com$/i.test(location.hostname);
+  }
+
+  function collectCnkiCurrentArticleCandidate(context = {}) {
+    const control = findCnkiMainPdfControl();
+    if (!control) return [];
+    const title = clean(context.title || firstMeta(["citation_title", "dc.Title", "dc.title"]) || findCnkiTitle() || contextTitleFallback());
+    const href = control.href || control.getAttribute?.("href") || location.href;
+    return [{
+      url: normalizeUrl(href),
+      label: title,
+      title,
+      reason: clean(control.textContent || "").includes("CAJ") ? "CNKI CAJ 全文" : "CNKI PDF 全文",
+      sourceUrl: location.href,
+      authors: allMeta("citation_author").join(", ") || findCnkiAuthors(),
+      year: firstMeta(["citation_publication_date", "citation_online_date", "dc.date"]) || extractYear(document.body?.innerText || ""),
+      priority: 1,
+      probable: true
+    }];
+  }
+
+  function findCnkiMainPdfControl() {
+    const controls = Array.from(document.querySelectorAll("a[href], button, [role='button']"));
+    return controls.find((node) => {
+      const text = clean(node.textContent || node.getAttribute?.("aria-label") || node.getAttribute?.("title") || "");
+      const href = String(node.href || node.getAttribute?.("href") || "");
+      if (!/^(PDF下载|PDF|CAJ下载|原版阅读|整本下载|下载全文)$/i.test(text)) return false;
+      if (isRejectedPdfActionText(`${text} ${href}`) || isSupplementaryPdfText(`${text} ${href}`)) return false;
+      if (/(recommended|recommend|book|service|ad|banner|right|side|card|swiper|carousel|相关|推荐|服务|广告|图书)/i.test(node.closest("aside, [class*='right'], [class*='side'], [class*='recommend'], [class*='service'], [class*='book'], [class*='ad'], [class*='banner'], [class*='swiper'], [class*='carousel']")?.className || "")) return false;
+      return /(download|pdf|caj|kcms|kns|read|Detail|dbcode|filename|FileName|FileName=)/i.test(href + " " + text) || !href;
+    });
+  }
+
+  function findCnkiTitle() {
+    const selectors = ["h1", ".wx-tit h1", ".brief h1", ".doc-top h1", "[class*='title'] h1"];
+    for (const selector of selectors) {
+      const text = clean(document.querySelector(selector)?.textContent || "");
+      if (text.length >= 6) return text;
+    }
+    return "";
+  }
+
+  function findCnkiAuthors() {
+    const selectors = [".author", ".authors", ".wx-tit .author", "[class*='author']"];
+    for (const selector of selectors) {
+      const text = clean(document.querySelector(selector)?.textContent || "");
+      if (text.length >= 2 && text.length < 220) return text;
+    }
+    return "";
   }
 
   function extractPaperTitleFromContainer(container, pdfLink) {
@@ -733,6 +921,7 @@
       const normalized = normalizePdfImportUrl(url);
       if (!normalized || (!isPdfUrl(normalized) && !probable)) return;
       if (isSupplementaryPdfText(`${label} ${normalized}`)) return;
+      if (isRejectedPdfActionText(`${label} ${url} ${normalized}`)) return;
       const existing = candidates.find((item) => item.url === normalized);
       if (existing) {
         existing.priority = Math.min(existing.priority, priority);
@@ -768,6 +957,7 @@
       const around = clean(anchor.closest("article, li, tr, section, div")?.textContent || "");
       const label = text || around.slice(0, 80) || filenameFromUrl(href) || `PDF ${index + 1}`;
       if (isSupplementaryPdf(anchor)) return;
+      if (isRejectedPdfActionText(`${text} ${href}`)) return;
       if (isPdfUrl(href)) {
         add(href, label, "页面下载链接", 10);
         return;
@@ -793,6 +983,7 @@
       const text = clean(a.textContent || a.getAttribute("aria-label") || a.getAttribute("title") || "");
       const href = String(a.href || "");
       if (isSupplementaryPdf(a)) return false;
+      if (isRejectedPdfActionText(`${text} ${href}`)) return false;
       return /(pdf|full\s*text|download\s*pdf|article\s*pdf|view\s*pdf|下载全文|全文下载|PDF下载)/i.test(text)
         && /(pdf|download|article|content|full|doi|pdfdirect|pdfft)/i.test(href);
     });
@@ -843,26 +1034,15 @@
     return /(supplement|supporting|appendix|附件|补充材料|附录)/i.test(text || "");
   }
 
+  function isRejectedPdfActionText(text) {
+    const value = clean(text).toLowerCase();
+    return /(purchase|buy|checkout|cart|access through|access-through|institution|organization|login|sign in|subscribe|subscription|rights and content|get rights|permissions?|license|rent|preview|mendeley|cite|citation|share|recommended articles?|special issue|view issue|help|account|购买|付费|采购|订阅|机构访问|权限|版权|引用|分享|推荐文章|专刊)/i.test(value);
+  }
+
   function shouldOfferCapture(paper) {
     if (!paper || isPaperSolverAppHost()) return false;
     const pdfCount = Array.isArray(paper.pdfCandidates) ? paper.pdfCandidates.length : 0;
-    if (pdfCount >= 2) return true;
-    if (pdfCount > 0 && (isAcademicHost() || hasCitationMeta() || isCurrentPdfDocument())) return true;
-    if (shouldSilenceForThisUrl()) return false;
-    const title = clean(paper.title);
-    const academicHost = isAcademicHost();
-    const hasUsefulTitle = title.length >= 18 && !/^(home|search|login|sign in|settings|dashboard|results|文献搜索|学术搜索)$/i.test(title);
-    const obviousArticlePath = /\/(science\/article\/pii|article|articles|document|abs|paper|pubmed|doi|content\/pdf)\//i.test(location.pathname)
-      || location.search.includes("arnumber=");
-    let score = 0;
-    if (academicHost) score += 1;
-    if (hasCitationMeta()) score += 3;
-    if (paper.doi && (/^10\.\d{4,9}\//i.test(paper.doi) || /^S[A-Z0-9]{15,30}$/i.test(paper.doi))) score += 3;
-    if (paper.pdfUrl || isCurrentPdfDocument()) score += 2;
-    if (paper.abstractText) score += 1;
-    if (hasUsefulTitle) score += 1;
-    if (obviousArticlePath) score += 1;
-    return score >= 4 && (academicHost || hasCitationMeta() || isCurrentPdfDocument());
+    return pdfCount > 0;
   }
 
   function shouldSilenceForThisUrl() {

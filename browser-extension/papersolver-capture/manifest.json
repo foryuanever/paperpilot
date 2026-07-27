@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PaperSolver Capture",
-  "version": "0.3.0",
+  "version": "0.3.8",
   "description": "在论文官网、数据库详情页和 PDF 页面识别文献信息，并一键导入 PaperSolver。",
   "icons": {
     "128": "icon-active-128.png"

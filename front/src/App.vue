@@ -128,7 +128,10 @@
     <Transition name="desktop-refresh-fade">
       <div v-if="desktopRefreshing" class="desktop-refresh-overlay" aria-live="polite">
         <div class="desktop-refresh-card">
-          <span class="desktop-refresh-ring"></span>
+          <span class="desktop-refresh-logo">
+            <img src="/brand/papersolver-mark-v2.png" alt="" />
+            <i class="desktop-refresh-ring"></i>
+          </span>
           <strong>正在刷新 PaperSolver</strong>
         </div>
       </div>
@@ -1131,9 +1134,25 @@ async function submitPasswordChange() {
   font-weight: 900;
 }
 
+.desktop-refresh-logo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+}
+
+.desktop-refresh-logo img {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  object-fit: cover;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, .25);
+}
+
 .desktop-refresh-ring {
-  width: 28px;
-  height: 28px;
+  position: absolute;
+  inset: 0;
   border-radius: 999px;
   border: 3px solid rgba(147, 197, 253, .22);
   border-top-color: #60a5fa;

@@ -24,6 +24,13 @@ function appIndexPath() {
   return path.join(__dirname, "..", "..", "front", "dist", "index.html");
 }
 
+function appIconPath() {
+  if (isPackaged) {
+    return path.join(process.resourcesPath, "icon.png");
+  }
+  return path.join(__dirname, "..", "build", "icon.png");
+}
+
 function createMainWindow() {
   const window = new BrowserWindow({
     width: 1440,
@@ -31,6 +38,7 @@ function createMainWindow() {
     minWidth: 1180,
     minHeight: 760,
     title: "PaperSolver",
+    icon: appIconPath(),
     backgroundColor: "#0f172a",
     show: false,
     webPreferences: {
