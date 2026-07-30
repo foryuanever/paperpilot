@@ -32,12 +32,12 @@
                   <span v-if="post.banned" class="state-badge ban-badge">已封禁</span>
                   <time>{{ post.time }}</time>
                 </div>
-                <button v-if="post.authorUserId" class="message-author" @click="messageAuthor">私信作者</button>
+                <button v-if="post.authorUserId" class="message-author" @click="openAuthorCard">联系作者</button>
               </div>
             </div>
 
             <h1>{{ post.title }}</h1>
-            <div class="article-content markdown-rendered" v-html="renderMarkdown(post.content)"></div>
+            <div class="article-content markdown-rendered" v-html="renderMarkdown(post.content)" @click="handleMarkdownImageClick"></div>
 
             <div v-if="post.images?.length" class="article-images">
               <button v-for="image in post.images" :key="image.name" @click="previewImage = image.data">
@@ -72,8 +72,8 @@
 
             <footer class="article-actions">
               <button class="like-action" :class="{ active: post.hasLiked, burst: likeBurst }" @click="likePostWithBurst">
-                <span class="like-flame">🔥</span>
-                赞同 {{ post.likes }}
+                <svg class="like-thumb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3Z"/><path d="M7 10 11.2 2.8a1.7 1.7 0 0 1 3.1 1.2l-.8 4H19a3 3 0 0 1 2.9 3.7l-1.6 6.5A4 4 0 0 1 16.4 21H7V10Z"/></svg>
+                点赞 {{ post.likes }}
               </button>
               <button class="report-action" @click="openReportModal">举报</button>
               <span>{{ post.replies.length }} 条评论</span>
@@ -94,13 +94,64 @@
                 正在回复 {{ replyTarget.author }}
                 <button @click="replyTarget = null">取消</button>
               </div>
-              <textarea
-                v-model="replyContent"
-                rows="4"
-                placeholder="提供数据线索、方法建议或可验证的研究观点；可直接粘贴图片"
-                @paste="handleReplyPaste"
-              ></textarea>
-              <div>
+
+              <div class="reply-markdown-editor markdown-editor">
+                <div class="markdown-tabbar">
+                  <button type="button" :class="{ active: replyMarkdownMode === 'edit' }" title="只显示回复编辑区" @click="replyMarkdownMode = 'edit'">内容</button>
+                  <button type="button" :class="{ active: replyMarkdownMode === 'preview' }" title="只显示发布后的预览效果" @click="replyMarkdownMode = 'preview'">预览</button>
+                  <button type="button" :class="{ active: replyMarkdownMode === 'split' }" title="左边编辑，右边实时预览" @click="replyMarkdownMode = 'split'">对照</button>
+                </div>
+
+                <div class="markdown-toolbar">
+                  <button type="button" title="加粗：**文字**" @click="insertReplyMarkdown('**', '**')">B</button>
+                  <button type="button" title="标题：# 标题" @click="insertReplyMarkdown('# ', '')">H</button>
+                  <button type="button" title="无序列表" @click="insertReplyMarkdown('- ', '')">•</button>
+                  <button type="button" title="引用块，适合放重点说明" @click="insertReplyMarkdown('> ', '')">“</button>
+                  <button type="button" title="插入链接" @click="insertReplyMarkdown('[链接文字](', ')')">链接</button>
+                  <button type="button" title="插入回复模板" @click="insertReplyTemplate">模板</button>
+                  <button type="button" title="清空回复内容" @click="clearReplyContent">清空</button>
+                </div>
+
+                <div v-if="replyMarkdownMode === 'edit'" class="markdown-body">
+                  <div class="markdown-line-number">
+                    <span v-for="line in replyEditorLineNumbers" :key="line">{{ line }}</span>
+                  </div>
+                  <textarea
+                    ref="replyEditorRef"
+                    v-model="replyContent"
+                    rows="7"
+                    placeholder="提供数据线索、方法建议或可验证的研究观点；支持 Markdown 语法；可直接粘贴图片"
+                    @paste="handleReplyPaste"
+                  ></textarea>
+                </div>
+
+                <div v-else-if="replyMarkdownMode === 'split'" class="markdown-split">
+                  <div class="markdown-body">
+                    <div class="markdown-line-number">
+                      <span v-for="line in replyEditorLineNumbers" :key="line">{{ line }}</span>
+                    </div>
+                    <textarea
+                      ref="replyEditorRef"
+                      v-model="replyContent"
+                      rows="7"
+                      placeholder="提供数据线索、方法建议或可验证的研究观点。"
+                      @paste="handleReplyPaste"
+                    ></textarea>
+                  </div>
+                  <div class="markdown-rendered reply-preview-box" v-html="renderMarkdown(replyContent)"></div>
+                </div>
+
+                <div v-else class="markdown-rendered reply-preview-box" v-html="renderMarkdown(replyContent)"></div>
+
+                <div class="markdown-hints">
+                  <span>{{ replyContent.length }} 字符 · {{ replyEditorLineNumbers.length }} 行</span>
+                  <button type="button" @click="replyMarkdownMode = replyMarkdownMode === 'preview' ? 'split' : 'preview'">
+                    {{ replyMarkdownMode === "preview" ? "对照编辑" : "预览回复" }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="reply-submit-row">
                 <span>{{ replyPasteHint || `以 ${authStore.profile.name} 身份回复` }}</span>
                 <button :disabled="!replyContent.trim() || submitting" @click="submitReply">
                   {{ submitting ? "发表中..." : "发表评论" }}
@@ -116,11 +167,14 @@
                   <header>
                     <strong class="member-name" :class="membershipClass(reply.authorMembershipPlan)">{{ reply.author }}</strong>
                     <time>{{ reply.time }}</time>
-                    <button :class="{ active: reply.hasLiked }" @click="forumStore.likeReply(post.id, reply.id)">赞同 {{ reply.likes }}</button>
+                    <button :class="{ active: reply.hasLiked }" @click="forumStore.likeReply(post.id, reply.id)">
+                      <svg class="comment-like-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3Z"/><path d="M7 10 11.2 2.8a1.7 1.7 0 0 1 3.1 1.2l-.8 4H19a3 3 0 0 1 2.9 3.7l-1.6 6.5A4 4 0 0 1 16.4 21H7V10Z"/></svg>
+                      点赞 {{ reply.likes }}
+                    </button>
                     <button @click="setReplyTarget(reply)">回复</button>
                   </header>
                   <small v-if="reply.replyToAuthor" class="reply-to-note">回复 {{ reply.replyToAuthor }}</small>
-                  <div class="comment-content markdown-rendered" v-html="renderMarkdown(reply.content)"></div>
+                  <div class="comment-content markdown-rendered" v-html="renderMarkdown(reply.content)" @click="handleMarkdownImageClick"></div>
                 </div>
               </article>
             </div>
@@ -154,6 +208,7 @@
 
     <div v-if="showReportModal" class="preview-overlay report-overlay" @click="closeReportModal">
       <section class="report-card" @click.stop>
+        <button class="report-close" type="button" aria-label="关闭举报弹窗" @click="closeReportModal">×</button>
         <header>
           <span>REPORT TOPIC</span>
           <h3>举报帖子</h3>
@@ -164,6 +219,24 @@
           <textarea v-model.trim="reportDetail" rows="5" maxlength="800" placeholder="请描述违规原因，例如：广告引流、辱骂攻击、虚假资源、违法内容等。"></textarea>
           <small>{{ reportDetail.length }}/800，至少 6 个字。</small>
         </label>
+
+        <div class="report-upload-section" style="margin-top: 16px;">
+          <span style="font-size: 13px; font-weight: 600; color: var(--c-text); display: block; margin-bottom: 8px; text-align: left;">附上截图证据 (可选)</span>
+          <div class="report-upload-row" style="display: flex; flex-direction: column; gap: 8px;">
+            <label class="report-upload-box" style="position: relative; display: flex; align-items: center; justify-content: center; height: 100px; border: 2px dashed var(--c-border); border-radius: 8px; cursor: pointer; overflow: hidden; background: var(--c-bg); transition: all 0.2s;">
+              <input type="file" accept="image/*" @change="handleReportScreenshotUpload" style="display: none;" />
+              <div v-if="!reportScreenshot" class="upload-placeholder" style="display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--c-muted);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                <span style="font-size: 12px;">点击上传屏幕截图</span>
+              </div>
+              <div v-else class="upload-preview" style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+                <img :src="reportScreenshot" alt="举报截图预览" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                <button class="remove-preview-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; border: none; border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer;" @click.stop.prevent="reportScreenshot = ''">删除</button>
+              </div>
+            </label>
+            <small v-if="reportUploadError" class="upload-error" style="color: #ef4444; font-size: 11px; text-align: left;">{{ reportUploadError }}</small>
+          </div>
+        </div>
         <footer>
           <button @click="closeReportModal">取消</button>
           <button :disabled="reporting || reportDetail.length < 6" @click="submitReport">
@@ -176,16 +249,18 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import MarkdownIt from "markdown-it";
 import { useAuthStore } from "../stores/auth";
 import { useForumStore } from "../stores/forum";
+import { useUserCardStore } from "../stores/userCard";
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const forumStore = useForumStore();
+const userCardStore = useUserCardStore();
 const replyContent = ref("");
 const submitting = ref(false);
 const previewImage = ref("");
@@ -193,8 +268,49 @@ const replyTarget = ref(null);
 const likeBurst = ref(false);
 const showReportModal = ref(false);
 const reportDetail = ref("");
+const reportScreenshot = ref("");
+const reportUploadError = ref("");
 const reporting = ref(false);
 const replyPasteHint = ref("");
+const replyMarkdownMode = ref("split");
+const replyEditorRef = ref(null);
+const replyEditorLineNumbers = computed(() => {
+  const lines = String(replyContent.value || "").split("\n").length;
+  return Array.from({ length: Math.max(1, lines) }, (_, index) => index + 1);
+});
+
+async function insertReplyMarkdown(before, after = "") {
+  const textarea = replyEditorRef.value;
+  if (!textarea) {
+    replyContent.value += `${before}${after}`;
+    return;
+  }
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const selected = replyContent.value.slice(start, end);
+  replyContent.value = `${replyContent.value.slice(0, start)}${before}${selected}${after}${replyContent.value.slice(end)}`;
+  await nextTick();
+  textarea.focus();
+  textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
+}
+
+async function insertReplyTemplate() {
+  const template = `一句话写清楚这次分享、求助或讨论的核心信息。\n\n补充背景：这里写你已经确认的信息、限制条件、适用范围或当前进展。\n\n官网 / 资料：[链接文字](https://example.com)\n\n> 重点一：用引用块承载价格、步骤、实验条件或关键结论。\n> 重点二：多行内容会保持成一个视觉块，发布后更接近公告式排版。\n\n## 社群 / 补充\n\n这里放联系方式、数据说明、复现实验条件或后续更新。`;
+  if (replyContent.value.trim()) {
+    await insertReplyMarkdown(`\n\n${template}`, "");
+  } else {
+    replyContent.value = template;
+    await nextTick();
+    replyEditorRef.value?.focus();
+  }
+}
+
+function clearReplyContent() {
+  if (confirm("确定清空回复内容吗？")) {
+    replyContent.value = "";
+  }
+}
+
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
 const defaultValidateLink = markdown.validateLink;
 markdown.validateLink = (url) => /^data:(image|application|text)\//i.test(url) || defaultValidateLink(url);
@@ -222,11 +338,23 @@ function normalizeLink(value) {
 }
 
 function renderMarkdown(value) {
-  return markdown.render(String(value || "").trim() || "_暂无内容_");
+  let cleaned = String(value || "")
+    .replace(/<!--\s*(?:图片|附件)\s*[:：]\s*.*?-->/gi, "")
+    .replace(/(?:图片|附件)\s*[:：]\s*[^\n\r]+/gi, "")
+    .trim();
+  return markdown.render(cleaned || "_暂无内容_");
 }
 
-function messageAuthor() {
-  router.push({ path: "/messages", query: { contact: post.value.authorUserId } });
+function handleMarkdownImageClick(event) {
+  const target = event.target;
+  if (target instanceof HTMLImageElement && target.src) {
+    previewImage.value = target.currentSrc || target.src;
+  }
+}
+
+function openAuthorCard() {
+  if (!post.value?.authorUserId) return;
+  userCardStore.open(post.value.authorUserId);
 }
 
 async function likePostWithBurst() {
@@ -252,6 +380,7 @@ async function submitReply() {
     });
     replyContent.value = "";
     replyTarget.value = null;
+    replyMarkdownMode.value = "split";
   } finally {
     submitting.value = false;
   }
@@ -260,18 +389,46 @@ async function submitReply() {
 function openReportModal() {
   showReportModal.value = true;
   reportDetail.value = "";
+  reportScreenshot.value = "";
+  reportUploadError.value = "";
 }
 
 function closeReportModal() {
   showReportModal.value = false;
   reportDetail.value = "";
+  reportScreenshot.value = "";
+  reportUploadError.value = "";
+}
+
+async function handleReportScreenshotUpload(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  if (!file.type?.startsWith("image/")) {
+    reportUploadError.value = "请上传图片格式的截图。";
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    reportUploadError.value = "截图图片不能超过 5MB。";
+    return;
+  }
+  try {
+    const dataUrl = await fileToDataUrl(file);
+    reportScreenshot.value = dataUrl;
+    reportUploadError.value = "";
+  } catch (e) {
+    reportUploadError.value = "文件读取失败";
+  }
 }
 
 async function submitReport() {
   if (!post.value || reportDetail.value.length < 6 || reporting.value) return;
   reporting.value = true;
   try {
-    await forumStore.reportPost(post.value.id, { detail: reportDetail.value });
+    await forumStore.reportPost(post.value.id, {
+      detail: reportDetail.value,
+      screenshot: reportScreenshot.value
+    });
     closeReportModal();
   } finally {
     reporting.value = false;
@@ -317,7 +474,11 @@ function avatarUrlFor(postOrReply) {
 }
 
 function membershipClass(plan) {
-  return `member-${plan || "free"}`;
+  return `member-${normalizeMembershipPlan(plan)}`;
+}
+
+function normalizeMembershipPlan(plan) {
+  return ({ light: "lite", study: "plus", lab: "pro", team: "team_plus" })[plan] || plan || "free";
 }
 
 </script>
@@ -437,9 +598,22 @@ button, textarea { font: inherit; cursor: pointer; }
 
 .member-name { font-size: 14px; font-weight: 800; color: var(--c-text); }
 .member-free  { color: var(--c-muted); }
-.member-light { color: #10b981; }
-.member-study { color: #3b82f6; }
-.member-lab   { color: #7c3aed; }
+.member-light,
+.member-lite { color: #10b981; }
+.member-study,
+.member-plus {
+  color: #8b5cf6;
+  text-shadow: 0 0 14px rgba(139, 92, 246, .2);
+}
+.member-lab,
+.member-pro {
+  color: #5b6dff;
+  background: linear-gradient(100deg, #8b5cf6 0%, #3b82f6 48%, #14b8a6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 16px rgba(59, 130, 246, .18);
+}
 .member-team  { color: #f97316; }
 .member-team_plus { color: #a855f7; }
 
@@ -551,14 +725,37 @@ button, textarea { font: inherit; cursor: pointer; }
 .markdown-rendered :deep(a) { color: var(--c-accent); font-weight: 750; text-decoration: none; }
 .markdown-rendered :deep(a:hover) { text-decoration: underline; }
 .markdown-rendered :deep(img) { max-width: min(400px,100%); display: block; margin: 18px 0; border: 1px solid var(--c-border); border-radius: var(--r-sm); }
+.comment-content :deep(img) {
+  max-width: min(260px, 100%);
+  max-height: 170px;
+  object-fit: contain;
+  margin: 10px 0;
+  cursor: zoom-in;
+  background: var(--c-surface);
+}
 .markdown-rendered :deep(table) { width: 100%; margin: 12px 0; border-collapse: collapse; font-size: 13px; }
 .markdown-rendered :deep(th),
 .markdown-rendered :deep(td) { padding: 9px 12px; border: 1px solid var(--c-border); text-align: left; }
 .markdown-rendered :deep(th) { background: var(--c-bg); font-weight: 800; color: var(--c-text); }
 
 /* Images, attachments */
-.article-images { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 10px; margin-bottom: 18px; }
-.article-images button { padding: 0; overflow: hidden; aspect-ratio: 4/3; border: 1px solid var(--c-border); border-radius: var(--r-sm); background: var(--c-bg); cursor: zoom-in; }
+.article-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.article-images button {
+  flex: 0 0 220px;
+  max-width: 100%;
+  height: 165px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: var(--c-bg);
+  cursor: zoom-in;
+}
 .article-images img { width: 100%; height: 100%; object-fit: cover; transition: transform .2s; }
 .article-images button:hover img { transform: scale(1.03); }
 
@@ -641,14 +838,25 @@ button, textarea { font: inherit; cursor: pointer; }
 
 /* Like burst */
 .like-action { position: relative; overflow: visible; }
-.like-flame { display: inline-block; transform-origin: 50% 70%; }
-.like-action.burst .like-flame { animation: like-flame-pop .48s cubic-bezier(.2,.9,.2,1.25); }
+.like-thumb,
+.comment-like-icon {
+  width: 15px;
+  height: 15px;
+  display: inline-block;
+  flex-shrink: 0;
+  transform-origin: 50% 70%;
+}
+.comment-like-icon {
+  width: 13px;
+  height: 13px;
+}
+.like-action.burst .like-thumb { animation: like-thumb-pop .48s cubic-bezier(.2,.9,.2,1.25); }
 .like-action.burst::after {
   content: "+1"; position: absolute; top: -18px; right: 8px;
   color: #f43f5e; font-size: 12px; font-weight: 900;
   animation: like-count-float .5s ease-out forwards;
 }
-@keyframes like-flame-pop {
+@keyframes like-thumb-pop {
   0% { transform: scale(.82) rotate(-8deg); }
   45% { transform: scale(1.38) rotate(7deg); }
   100% { transform: scale(1) rotate(0); }
@@ -698,10 +906,10 @@ button, textarea { font: inherit; cursor: pointer; }
 
 /* Comment editor */
 .comment-editor {
-  padding: 14px;
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-sm);
-  background: var(--c-bg);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   margin-bottom: 18px;
 }
 .reply-target-bar {
@@ -730,7 +938,7 @@ button, textarea { font: inherit; cursor: pointer; }
   min-height: 90px;
 }
 .comment-editor textarea::placeholder { color: var(--c-subtle); }
-.comment-editor > div {
+.reply-submit-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -738,8 +946,8 @@ button, textarea { font: inherit; cursor: pointer; }
   border-top: 1px solid var(--c-border);
   margin-top: 8px;
 }
-.comment-editor > div > span { font-size: 12px; color: var(--c-subtle); }
-.comment-editor button {
+.reply-submit-row > span { font-size: 12px; color: var(--c-subtle); }
+.reply-submit-row button {
   height: 36px;
   padding: 0 18px;
   border-radius: var(--r-pill);
@@ -751,8 +959,161 @@ button, textarea { font: inherit; cursor: pointer; }
   box-shadow: 0 3px 10px rgba(99,102,241,.28);
   transition: all .2s;
 }
-.comment-editor button:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(99,102,241,.38); }
-.comment-editor button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.reply-submit-row button:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(99,102,241,.38); }
+.reply-submit-row button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+
+.reply-markdown-editor {
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  background: var(--c-surface);
+}
+
+.markdown-tabbar {
+  display: flex;
+  gap: 2px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-bg);
+}
+
+.markdown-tabbar button,
+.markdown-toolbar button,
+.markdown-hints button {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--c-subtle);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.markdown-tabbar button {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 0;
+}
+
+.markdown-tabbar button.active {
+  color: var(--c-accent);
+  background: rgba(99,102,241,.1);
+  box-shadow: inset 0 -2px 0 var(--c-accent);
+}
+
+.markdown-toolbar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-bg);
+}
+
+.markdown-toolbar button {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  background: transparent;
+  color: var(--c-text);
+}
+
+.markdown-toolbar button:hover,
+.markdown-hints button:hover {
+  color: var(--c-accent);
+  border-color: rgba(99,102,241,.35);
+  background: rgba(99,102,241,.08);
+}
+
+.markdown-body {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: 310px;
+  background: var(--c-surface);
+}
+
+.markdown-line-number {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
+  padding: 13px 9px 13px 0;
+  border-right: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-subtle);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  user-select: none;
+}
+
+.reply-markdown-editor textarea {
+  width: 100%;
+  min-height: 310px;
+  padding: 15px 16px;
+  border: 0;
+  outline: none;
+  resize: vertical;
+  box-sizing: border-box;
+  background: transparent;
+  color: var(--c-text);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.markdown-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 340px;
+}
+
+.markdown-split .markdown-rendered {
+  min-height: 340px;
+  max-height: 480px;
+  overflow: auto;
+  padding: 24px 28px;
+  border-left: 1px solid var(--c-border);
+  background: var(--c-bg);
+}
+
+.reply-preview-box {
+  min-height: 310px;
+  max-height: 480px;
+  overflow: auto;
+  padding: 24px 28px;
+  background: var(--c-bg);
+}
+
+.markdown-hints {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--c-border);
+  color: var(--c-subtle);
+  font-size: 12px;
+}
+
+.markdown-hints button {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  color: var(--c-accent);
+  background: transparent;
+}
+
+@media (max-width: 820px) {
+  .markdown-split {
+    grid-template-columns: 1fr;
+  }
+
+  .markdown-split .markdown-rendered {
+    border-left: 0;
+    border-top: 1px solid var(--c-border);
+  }
+}
 
 /* Comment list */
 .comment-list { display: flex; flex-direction: column; gap: 12px; }
@@ -904,6 +1265,7 @@ aside {
 
 .report-overlay { background: rgba(15,23,42,.6); backdrop-filter: blur(6px); }
 .report-card {
+  position: relative;
   width: min(500px, calc(100vw - 32px));
   padding: 28px 30px;
   border-radius: var(--r);
@@ -911,6 +1273,25 @@ aside {
   border: 1px solid var(--c-border);
   box-shadow: 0 24px 70px rgba(0,0,0,.25);
   color: var(--c-text);
+}
+.report-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: var(--c-bg);
+  color: var(--c-muted);
+  font-size: 22px;
+  line-height: 1;
+}
+.report-close:hover {
+  color: var(--c-text);
+  background: rgba(99, 102, 241, .12);
 }
 .report-card header span { display: block; font-size: 10.5px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; color: #f43f5e; margin-bottom: 3px; }
 .report-card h3 { margin: 0 0 4px; font-size: 18px; font-weight: 900; }
@@ -943,6 +1324,42 @@ aside {
 .report-card footer button:first-child { background: var(--c-bg); color: var(--c-muted); border: 1px solid var(--c-border); }
 .report-card footer button:last-child  { background: #be123c; color: #fff; }
 .report-card footer button:disabled { opacity: .45; cursor: not-allowed; }
+
+:root[data-theme="dark"] .report-overlay {
+  background: rgba(3, 7, 18, .72);
+}
+:root[data-theme="dark"] .report-card {
+  background: #111827;
+  border-color: rgba(148, 163, 184, .16);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .62);
+  color: #f8fafc;
+}
+:root[data-theme="dark"] .report-card h3 {
+  color: #f8fafc;
+}
+:root[data-theme="dark"] .report-card p,
+:root[data-theme="dark"] .report-card label,
+:root[data-theme="dark"] .report-card small {
+  color: #94a3b8;
+}
+:root[data-theme="dark"] .report-card textarea,
+:root[data-theme="dark"] .report-upload-box {
+  background: #0b1220 !important;
+  border-color: rgba(148, 163, 184, .2) !important;
+  color: #e2e8f0 !important;
+}
+:root[data-theme="dark"] .report-card textarea::placeholder {
+  color: #64748b;
+}
+:root[data-theme="dark"] .report-close,
+:root[data-theme="dark"] .report-card footer button:first-child {
+  background: #1e293b;
+  color: #cbd5e1;
+  border-color: rgba(148, 163, 184, .18);
+}
+:root[data-theme="dark"] .report-card footer button:last-child {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
 
 @media (max-width: 640px) {
   .post-detail-page { padding-inline: 14px; }

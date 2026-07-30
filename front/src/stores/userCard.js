@@ -44,14 +44,20 @@ export const useUserCardStore = defineStore("user-card", () => {
     state.open = false;
   }
 
-  async function addFriend() {
+  async function requestContact() {
     if (!state.user?.userId) return;
     const result = await paperpilotApi.sendFriendRequest(state.user.userId, {
-      message: "希望与你建立站内科研联系",
+      message: "希望获取你的联系方式，便于后续科研交流",
     });
+    if (result.status === "friends") {
+      state.user = await paperpilotApi.getUserCard(state.user.userId);
+      window.dispatchEvent(new CustomEvent("paperpilot:contact-requests-changed"));
+      return;
+    }
     state.user.friendshipStatus = result.status;
-    window.dispatchEvent(new CustomEvent("paperpilot:friend-requests-changed"));
+    state.user.contactStatus = result.status;
+    window.dispatchEvent(new CustomEvent("paperpilot:contact-requests-changed"));
   }
 
-  return { state, open, openByEmail, close, addFriend };
+  return { state, open, openByEmail, close, requestContact };
 });

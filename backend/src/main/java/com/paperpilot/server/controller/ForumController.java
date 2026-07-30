@@ -69,9 +69,15 @@ public class ForumController {
         AppUserEntity currentUser = currentUserService.getOrCreateDefaultUser();
         return forumPostRepository.findAllByOrderByCreatedAtDesc().stream()
             .filter(post -> !post.isBanned() || isAdmin(currentUser) || isOwner(post, currentUser))
+            .filter(post -> canViewPost(post, currentUser))
             .map(post -> toMap(post, currentUser))
             .sorted((a, b) -> Boolean.compare(Boolean.TRUE.equals(b.get("pinned")), Boolean.TRUE.equals(a.get("pinned"))))
             .toList();
+    }
+
+    @GetMapping("/stats")
+    public Map<String, Object> getForumStats() {
+        return Map.of("registeredUserCount", appUserRepository.count());
     }
 
     @GetMapping("/active-users")
@@ -156,12 +162,13 @@ public class ForumController {
     public void likePost(@PathVariable String id) {
         AppUserEntity actor = currentUserService.getOrCreateDefaultUser();
         ForumPostEntity post = findPost(id);
+        ensureCanView(post, actor);
         post.setHasLiked(!post.isHasLiked());
         post.setLikes(Math.max(0, value(post.getLikes()) + (post.isHasLiked() ? 1 : -1)));
         forumPostRepository.save(post);
         if (post.isHasLiked()) {
             notificationService.create(post.getUserId(), actor.getId(), "forum_like", post.getId(),
-                "你的帖子收到了赞同", actor.getUsername() + " 赞同了《" + post.getTitle() + "》");
+                "你的帖子收到了点赞", actor.getUsername() + " 点赞了《" + post.getTitle() + "》");
         }
     }
 
@@ -170,6 +177,7 @@ public class ForumController {
     public Map<String, Object> viewPost(@PathVariable String id) {
         AppUserEntity actor = currentUserService.getOrCreateDefaultUser();
         ForumPostEntity post = findPost(id);
+        ensureCanView(post, actor);
         boolean counted = false;
         if (actor.getId() != null && !forumPostViewRepository.existsByPostIdAndUserId(post.getId(), actor.getId())) {
             ForumPostViewEntity view = new ForumPostViewEntity();
@@ -191,6 +199,7 @@ public class ForumController {
     public void bookmarkPost(@PathVariable String id) {
         AppUserEntity actor = currentUserService.getOrCreateDefaultUser();
         ForumPostEntity post = findPost(id);
+        ensureCanView(post, actor);
         post.setHasBookmarked(!post.isHasBookmarked());
         post.setBookmarks(Math.max(0, value(post.getBookmarks()) + (post.isHasBookmarked() ? 1 : -1)));
         forumPostRepository.save(post);
@@ -204,7 +213,9 @@ public class ForumController {
     public Map<String, Object> reportPost(@PathVariable String id, @RequestBody Map<String, Object> body) {
         AppUserEntity actor = currentUserService.getOrCreateDefaultUser();
         ForumPostEntity post = findPost(id);
+        ensureCanView(post, actor);
         String detail = text(body, "detail");
+        String screenshot = text(body, "screenshot");
         if (!StringUtils.hasText(detail) || detail.length() < 6) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写至少 6 个字的违规详情");
         }
@@ -216,16 +227,44 @@ public class ForumController {
         report.setReporterId(actor.getId());
         report.setReporterName(actor.getUsername());
         report.setDetail(detail);
+        report.setScreenshot(screenshot);
         forumPostReportRepository.save(report);
         notificationService.createSystemNotice(actor.getId(), null, "forum_report_submitted", post.getId(),
             "举报已提交", "你对《" + post.getTitle() + "》的举报已进入管理员处理队列。");
         return Map.of("message", "举报已提交");
     }
 
+    @PostMapping("/users/{reportedUserId}/report")
+    public Map<String, Object> reportUser(@PathVariable Long reportedUserId, @RequestBody Map<String, Object> body) {
+        AppUserEntity actor = currentUserService.getOrCreateDefaultUser();
+        AppUserEntity reportedUser = appUserRepository.findById(reportedUserId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "被举报用户不存在"));
+        String detail = text(body, "detail");
+        String screenshot = text(body, "screenshot");
+        if (!StringUtils.hasText(detail) || detail.length() < 6) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写至少 6 个字的违规详情");
+        }
+        if (detail.length() > 800) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "举报详情不能超过 800 字");
+        }
+        ForumPostReportEntity report = new ForumPostReportEntity();
+        report.setPostId(0L);
+        report.setReporterId(actor.getId());
+        report.setReporterName(actor.getUsername());
+        report.setDetail("【被举报用户: " + reportedUser.getUsername() + " (ID: " + reportedUser.getId() + ")】\n" + detail);
+        report.setScreenshot(screenshot);
+        forumPostReportRepository.save(report);
+
+        notificationService.createSystemNotice(actor.getId(), null, "user_report_submitted", 0L,
+            "举报已提交", "你对用户 " + reportedUser.getUsername() + " 的举报已进入管理员处理队列。");
+        return Map.of("message", "用户举报已提交");
+    }
+
     @PostMapping("/posts/{id}/reply")
     public Map<String, Object> replyPost(@PathVariable String id, @RequestBody Map<String, Object> body) {
         AppUserEntity actor = currentUserService.getOrCreateDefaultUser();
         ForumPostEntity post = findPost(id);
+        ensureCanView(post, actor);
         String content = text(body, "content");
         if (content.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "回复内容不能为空");
         ForumReplyEntity reply = new ForumReplyEntity();
@@ -295,7 +334,7 @@ public class ForumController {
         forumReplyRepository.save(reply);
         if (reply.isHasLiked()) {
             notificationService.create(reply.getUserId(), actor.getId(), "forum_reply_like", reply.getId(),
-                "你的评论收到了赞同", actor.getUsername() + " 赞同了你的评论");
+                "你的评论收到了点赞", actor.getUsername() + " 点赞了你的评论");
         }
     }
 
@@ -312,6 +351,8 @@ public class ForumController {
         map.put("authorSchoolName", authorSchoolName(authorUserId));
         String postType = fallback(post.getPostType(), inferPostType(post));
         map.put("postType", postType);
+        map.put("visibility", normalizeVisibility(post.getVisibility()));
+        map.put("visibilityLabel", visibilityLabel(post.getVisibility()));
         map.put("direction", fallback(post.getResearchArea(), ""));
         map.put("discipline", fallback(post.getDiscipline(), "计算机科学"));
         map.put("researchArea", fallback(post.getResearchArea(), ""));
@@ -368,6 +409,12 @@ public class ForumController {
         post.setContent(content);
         String postType = defaultText(body, "postType", "研究讨论");
         post.setPostType(postType);
+        String visibility = normalizeVisibility(text(body, "visibility"));
+        AppUserEntity currentUser = currentUserService.getOrCreateDefaultUser();
+        if ("campus".equals(visibility) && !currentUser.isCampusVerified()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "校园圈帖子需要先完成校园认证");
+        }
+        post.setVisibility(visibility);
         String direction = text(body, "direction");
         if (direction.length() > 10) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "方向标签不能超过 10 个字");
@@ -394,6 +441,26 @@ public class ForumController {
     private boolean isOwner(ForumPostEntity post, AppUserEntity currentUser) {
         return Objects.equals(post.getUserId(), currentUser.getId())
             || (post.getUserId() == null && Objects.equals(post.getAuthor(), currentUser.getUsername()));
+    }
+
+    private boolean canViewPost(ForumPostEntity post, AppUserEntity currentUser) {
+        if (isAdmin(currentUser) || isOwner(post, currentUser)) return true;
+        String visibility = normalizeVisibility(post.getVisibility());
+        if ("private".equals(visibility)) return false;
+        if ("campus".equals(visibility)) {
+            if (currentUser == null || !currentUser.isCampusVerified()) return false;
+            Long authorUserId = resolveUserId(post.getUserId(), post.getAuthor());
+            String authorSchool = authorSchoolName(authorUserId);
+            return StringUtils.hasText(authorSchool)
+                && Objects.equals(authorSchool, currentUser.getSchoolName());
+        }
+        return true;
+    }
+
+    private void ensureCanView(ForumPostEntity post, AppUserEntity currentUser) {
+        if (!canViewPost(post, currentUser)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "没有权限查看该帖子");
+        }
     }
 
     private boolean isAdmin(AppUserEntity user) {
@@ -472,6 +539,23 @@ public class ForumController {
     private String text(Map<String, Object> body, String key) { return body.get(key) == null ? "" : String.valueOf(body.get(key)).trim(); }
     private String defaultText(Map<String, Object> body, String key, String fallback) { return fallback(text(body, key), fallback); }
     private String avatar(String value, String author) { return fallback(value, !StringUtils.hasText(author) ? "U" : author.substring(0, 1).toUpperCase()); }
+
+    private String normalizeVisibility(String value) {
+        String normalized = StringUtils.hasText(value) ? value.trim().toLowerCase(Locale.ROOT) : "public";
+        return switch (normalized) {
+            case "private" -> "private";
+            case "campus", "school" -> "campus";
+            default -> "public";
+        };
+    }
+
+    private String visibilityLabel(String value) {
+        return switch (normalizeVisibility(value)) {
+            case "private" -> "私有";
+            case "campus" -> "校园圈";
+            default -> "公开";
+        };
+    }
 
     private void addFruitScore(Long userId, int delta) {
         if (userId == null || delta <= 0) return;

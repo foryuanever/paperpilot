@@ -11,6 +11,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -39,9 +40,13 @@ public class FriendController {
     public Map<String, Object> profile(@PathVariable Long userId) {
         AppUserEntity current = currentUserService.getOrCreateDefaultUser();
         AppUserEntity user = requireUser(userId);
-        Map<String, Object> result = userMap(user);
+        Optional<FriendRequestEntity> acceptedRequest = requestRepository.findAccepted(current.getId(), userId);
+        String status = relationshipStatus(current.getId(), userId);
+        boolean revealContact = Objects.equals(current.getId(), userId) || "friends".equals(status);
+        Map<String, Object> result = userMap(user, revealContact, acceptedRequest.map(FriendRequestEntity::getContactInfo).orElse(""));
         result.put("isSelf", Objects.equals(current.getId(), userId));
-        result.put("friendshipStatus", relationshipStatus(current.getId(), userId));
+        result.put("friendshipStatus", status);
+        result.put("contactStatus", status);
         return result;
     }
 
@@ -57,9 +62,11 @@ public class FriendController {
         Long userId = currentUserService.getOrCreateDefaultUserId();
         List<Map<String, Object>> incoming = requestRepository
             .findByRecipientIdAndStatusOrderByCreatedAtDesc(userId, "pending").stream()
+            .filter(request -> !isExpiredPending(request))
             .map(request -> requestMap(request, request.getRequesterId())).toList();
         List<Map<String, Object>> outgoing = requestRepository
             .findByRequesterIdAndStatusOrderByCreatedAtDesc(userId, "pending").stream()
+            .filter(request -> !isExpiredPending(request))
             .map(request -> requestMap(request, request.getRecipientId())).toList();
         return Map.of("incoming", incoming, "outgoing", outgoing, "pendingCount", incoming.size());
     }
@@ -69,7 +76,7 @@ public class FriendController {
         AppUserEntity requester = currentUserService.getOrCreateDefaultUser();
         AppUserEntity recipient = requireUser(recipientId);
         if (Objects.equals(requester.getId(), recipientId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不能添加自己为好友");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不能申请自己的联系方式");
         }
         if (requestRepository.findAccepted(requester.getId(), recipientId).isPresent()) {
             return Map.of("status", "friends");
@@ -77,34 +84,57 @@ public class FriendController {
         List<FriendRequestEntity> existing = requestRepository.findRelationship(requester.getId(), recipientId);
         FriendRequestEntity request = existing.isEmpty() ? new FriendRequestEntity() : existing.get(0);
         if ("pending".equals(request.getStatus()) && Objects.equals(request.getRecipientId(), requester.getId())) {
-            request.setStatus("accepted");
-            requestRepository.save(request);
-            return Map.of("status", "friends");
+            if (!isExpiredPending(request)) {
+                return Map.of("status", "incoming_pending");
+            }
+        }
+        if ("pending".equals(request.getStatus()) && !isExpiredPending(request)) {
+            return Map.of("status", "outgoing_pending", "id", request.getId());
         }
         request.setRequesterId(requester.getId());
         request.setRecipientId(recipientId);
         request.setStatus("pending");
+        request.setContactInfo("");
         request.setMessage(body == null ? "" : text(body.get("message")));
         FriendRequestEntity saved = requestRepository.save(request);
-        notificationService.create(recipientId, requester.getId(), "friend_request", saved.getId(),
-            "收到好友申请", requester.getUsername() + " 申请添加你为好友");
+        notificationService.create(recipientId, requester.getId(), "contact_request", saved.getId(),
+            "收到联系方式申请", requester.getUsername() + " 希望获取你的联系方式");
         return Map.of("status", "outgoing_pending", "id", saved.getId());
     }
 
     @PatchMapping("/requests/{requestId}")
-    public void handle(@PathVariable Long requestId, @RequestBody Map<String, Object> body) {
+    public Map<String, Object> handle(@PathVariable Long requestId, @RequestBody Map<String, Object> body) {
         Long userId = currentUserService.getOrCreateDefaultUserId();
         FriendRequestEntity request = requestRepository.findById(requestId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "好友申请不存在"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "联系方式申请不存在"));
         if (!Objects.equals(request.getRecipientId(), userId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权处理此好友申请");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权处理此联系方式申请");
         }
         String action = text(body.get("action"));
-        request.setStatus("accept".equals(action) ? "accepted" : "rejected");
+        if ("accept".equals(action)) {
+            String contactInfo = text(body.get("contactInfo"));
+            if (!StringUtils.hasText(contactInfo)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "同意前请填写微信或 QQ 联系方式");
+            }
+            request.setContactInfo(limit(contactInfo, 120));
+            request.setStatus("accepted");
+        } else {
+            request.setStatus("rejected");
+            request.setContactInfo("");
+        }
         requestRepository.save(request);
         AppUserEntity actor = requireUser(userId);
-        notificationService.create(request.getRequesterId(), userId, "friend_request_result", request.getId(),
-            "好友申请已处理", actor.getUsername() + ("accepted".equals(request.getStatus()) ? " 已同意你的好友申请" : " 已拒绝你的好友申请"));
+        String contactInfo = text(request.getContactInfo());
+        boolean accepted = "accepted".equals(request.getStatus());
+        String acceptedDescription = actor.getUsername() + " 已同意向你展示联系方式，微信/QQ：" + contactInfo;
+        notificationService.create(request.getRequesterId(), userId, "contact_request_result", request.getId(),
+            accepted ? "联系方式申请已通过" : "联系方式申请已拒绝",
+            accepted ? acceptedDescription : actor.getUsername() + " 已拒绝展示联系方式，你可以稍后再次申请");
+        return Map.of(
+            "status", request.getStatus(),
+            "requestId", request.getId(),
+            "contactInfo", accepted ? contactInfo : ""
+        );
     }
 
     private String relationshipStatus(Long userId, Long otherId) {
@@ -114,12 +144,21 @@ public class FriendController {
         FriendRequestEntity request = relationships.get(0);
         if ("accepted".equals(request.getStatus())) return "friends";
         if (!"pending".equals(request.getStatus())) return "none";
+        if (isExpiredPending(request)) return "none";
         return Objects.equals(request.getRequesterId(), userId) ? "outgoing_pending" : "incoming_pending";
+    }
+
+    private boolean isExpiredPending(FriendRequestEntity request) {
+        return request != null
+            && "pending".equals(request.getStatus())
+            && request.getCreatedAt() != null
+            && request.getCreatedAt().isBefore(LocalDateTime.now().minusHours(24));
     }
 
     private Map<String, Object> requestMap(FriendRequestEntity request, Long otherId) {
         AppUserEntity user = requireUser(otherId);
-        Map<String, Object> map = userMap(user);
+        boolean accepted = "accepted".equals(request.getStatus());
+        Map<String, Object> map = userMap(user, accepted, request.getContactInfo());
         map.put("requestId", request.getId());
         map.put("message", request.getMessage());
         map.put("time", request.getCreatedAt().format(FORMATTER));
@@ -127,17 +166,20 @@ public class FriendController {
     }
 
     private Map<String, Object> userMap(AppUserEntity user) {
+        return userMap(user, true, "");
+    }
+
+    private Map<String, Object> userMap(AppUserEntity user, boolean revealContact, String contactInfo) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("userId", user.getId());
         map.put("name", user.getUsername());
-        map.put("email", user.getEmail());
+        map.put("contactInfo", revealContact ? text(contactInfo) : "");
         map.put("role", user.getRole());
+        map.put("membershipPlan", user.getMembershipPlan());
+        map.put("fruitScore", user.getFruitScore() == null ? 0 : user.getFruitScore());
         map.put("avatar", avatar(user.getUsername()));
         map.put("avatarUrl", user.getAvatarUrl());
         map.put("backgroundUrl", user.getBackgroundUrl());
-        map.put("registerTime", user.getCreatedAt() == null ? "" : user.getCreatedAt().toLocalDate().toString());
-        map.put("activeTime", user.getActiveTime() == null ? 0 : user.getActiveTime());
-        map.put("teamId", user.getTeamId());
         return map;
     }
 
@@ -146,5 +188,6 @@ public class FriendController {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
     }
     private String text(Object value) { return value == null ? "" : String.valueOf(value).trim(); }
+    private String limit(String value, int max) { return value.length() <= max ? value : value.substring(0, max); }
     private String avatar(String value) { return StringUtils.hasText(value) ? value.trim().substring(0, 1).toUpperCase() : "U"; }
 }

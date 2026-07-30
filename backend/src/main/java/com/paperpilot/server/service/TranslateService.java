@@ -22,6 +22,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -30,15 +32,15 @@ public class TranslateService {
 
     private static final int MAX_CHUNK_SIZE = 4500;
     private static final Map<String, String> PROVIDER_LABELS = new LinkedHashMap<>() {{
-        put("google-web", "Google 网页翻译");
+        put("google-web", "谷歌翻译");
         put("google", "谷歌翻译");
         put("google-api", "Google(API)");
-        put("bing", "必应翻译");
+        put("bing", "微软翻译");
         put("cnki", "CNKI 翻译");
         put("deeplx", "DeepLX");
         put("baidu", "百度翻译");
         put("youdao", "有道翻译");
-        put("huoshan-web", "火山网页翻译");
+        put("huoshan-web", "火山翻译");
         put("tencent-transmart", "腾讯 TranSmart");
         put("haici", "海词翻译");
         put("libretranslate", "LibreTranslate");
@@ -50,6 +52,8 @@ public class TranslateService {
 
     private final TranslationRecordRepository translationRecordRepository;
     private final CurrentUserService currentUserService;
+    private final Semaphore baiduLimiter = new Semaphore(1, true);
+    private final AtomicLong lastBaiduCallAt = new AtomicLong(0);
 
     public TranslateService(
         TranslationRecordRepository translationRecordRepository,
@@ -112,47 +116,77 @@ public class TranslateService {
         }
 
         long startTime = System.currentTimeMillis();
-        boolean success = false;
         long charCount = text.length();
+        Exception firstError = null;
 
         try {
-            String translated = switch (provider) {
-                case "google-web" -> translateWithGoogle(text, sourceLang, targetLang);
-                case "google" -> translateWithGoogle(text, sourceLang, targetLang);
-                case "google-api" -> translateWithGoogleApi(text, sourceLang, targetLang);
-                case "youdao" -> translateWithYoudao(text, sourceLang, targetLang);
-                case "deeplx" -> translateWithDeepLX(text, sourceLang, targetLang);
-                case "libretranslate" -> translateWithLibreTranslate(text, sourceLang, targetLang);
-                case "mtranserver" -> translateWithMTranServer(text, sourceLang, targetLang);
-                case "deepl" -> translateWithDeepL(text, sourceLang, targetLang);
-                case "baidu" -> translateWithBaidu(text, sourceLang, targetLang);
-                case "microsoft" -> translateWithMicrosoft(text, sourceLang, targetLang);
-                case "tencent" -> translateWithTencent(text, sourceLang, targetLang);
-                case "bing", "cnki", "huoshan-web", "tencent-transmart", "haici" ->
-                    throw new IllegalStateException("该网页引擎需要桌面端本机插件模式，当前后端暂不可用");
-                default -> throw new IllegalArgumentException("不支持的翻译引擎: " + provider);
-            };
-
-            success = true;
+            String translated = translateWithProvider(provider, text, sourceLang, targetLang);
             long duration = System.currentTimeMillis() - startTime;
             saveRecord(provider, charCount, duration, true);
-
-            TranslateResultVO result = new TranslateResultVO();
-            result.setProvider(provider);
-            result.setProviderLabel(PROVIDER_LABELS.getOrDefault(provider, provider));
-            result.setSourceLang(sourceLang);
-            result.setTargetLang(targetLang);
-            result.setTranslatedText(translated);
-            result.setFallback(false);
-            return result;
+            return result(provider, sourceLang, targetLang, translated, false);
         } catch (Exception error) {
+            firstError = error;
             long duration = System.currentTimeMillis() - startTime;
             saveRecord(provider, charCount, duration, false);
-            throw new IllegalStateException(
-                PROVIDER_LABELS.getOrDefault(provider, provider) + "失败: " + error.getMessage(),
-                error
-            );
         }
+
+        for (String fallbackProvider : fallbackProviders(provider)) {
+            long fallbackStart = System.currentTimeMillis();
+            try {
+                String translated = translateWithProvider(fallbackProvider, text, sourceLang, targetLang);
+                saveRecord(fallbackProvider, charCount, System.currentTimeMillis() - fallbackStart, true);
+                return result(fallbackProvider, sourceLang, targetLang, translated, true);
+            } catch (Exception error) {
+                saveRecord(fallbackProvider, charCount, System.currentTimeMillis() - fallbackStart, false);
+            }
+        }
+
+        throw new IllegalStateException(
+            PROVIDER_LABELS.getOrDefault(provider, provider) + "失败: " + firstError.getMessage(),
+            firstError
+        );
+    }
+
+    private TranslateResultVO result(String provider, String sourceLang, String targetLang, String translated, boolean fallback) {
+        TranslateResultVO result = new TranslateResultVO();
+        result.setProvider(provider);
+        result.setProviderLabel(PROVIDER_LABELS.getOrDefault(provider, provider));
+        result.setSourceLang(sourceLang);
+        result.setTargetLang(targetLang);
+        result.setTranslatedText(translated);
+        result.setFallback(fallback);
+        return result;
+    }
+
+    private List<String> fallbackProviders(String provider) {
+        List<String> preferred = List.of("youdao", "google", "bing", "baidu");
+        List<String> providers = new ArrayList<>();
+        for (String item : preferred) {
+            if (!item.equals(provider) && isProviderConfigured(item)) {
+                providers.add(item);
+            }
+        }
+        return providers;
+    }
+
+    private String translateWithProvider(String provider, String text, String sourceLang, String targetLang) throws Exception {
+        return switch (provider) {
+            case "google-web" -> translateWithGoogle(text, sourceLang, targetLang);
+            case "google" -> translateWithGoogle(text, sourceLang, targetLang);
+            case "google-api" -> translateWithGoogleApi(text, sourceLang, targetLang);
+            case "youdao" -> translateWithYoudao(text, sourceLang, targetLang);
+            case "bing" -> translateWithBing(text, sourceLang, targetLang);
+            case "deeplx" -> translateWithDeepLX(text, sourceLang, targetLang);
+            case "libretranslate" -> translateWithLibreTranslate(text, sourceLang, targetLang);
+            case "mtranserver" -> translateWithMTranServer(text, sourceLang, targetLang);
+            case "deepl" -> translateWithDeepL(text, sourceLang, targetLang);
+            case "baidu" -> translateWithBaiduRateLimited(text, sourceLang, targetLang);
+            case "microsoft" -> translateWithMicrosoft(text, sourceLang, targetLang);
+            case "tencent" -> translateWithTencent(text, sourceLang, targetLang);
+            case "cnki", "huoshan-web", "tencent-transmart", "haici" ->
+                throw new IllegalStateException("该网页引擎需要桌面端本机插件模式，当前后端暂不可用");
+            default -> throw new IllegalArgumentException("不支持的翻译引擎: " + provider);
+        };
     }
 
     private void saveRecord(String provider, long charCount, long latencyMs, boolean success) {
@@ -172,10 +206,16 @@ public class TranslateService {
     public List<Map<String, String>> listProviders() {
         List<Map<String, String>> providers = new ArrayList<>();
         for (Map.Entry<String, String> entry : PROVIDER_LABELS.entrySet()) {
+            if ("google-web".equals(entry.getKey())) {
+                continue;
+            }
+            if (!isProviderConfigured(entry.getKey())) {
+                continue;
+            }
             providers.add(Map.of(
                 "id", entry.getKey(),
                 "label", entry.getValue(),
-                "configured", String.valueOf(isProviderConfigured(entry.getKey()))
+                "configured", "true"
             ));
         }
         return providers;
@@ -186,7 +226,8 @@ public class TranslateService {
             case "google-web" -> true;
             case "google" -> true;
             case "google-api" -> StringUtils.hasText(googleApiKey);
-            case "youdao" -> false;
+            case "youdao" -> true;
+            case "bing" -> true;
             case "deeplx" -> StringUtils.hasText(deeplxEndpoint);
             case "libretranslate" -> StringUtils.hasText(libreTranslateEndpoint);
             case "mtranserver" -> StringUtils.hasText(mtranServerEndpoint);
@@ -204,6 +245,7 @@ public class TranslateService {
         }
         String normalized = provider.trim().toLowerCase(Locale.ROOT);
         if ("googleapi".equals(normalized)) return "google-api";
+        if ("microsoft-edge".equals(normalized)) return "bing";
         if ("deeplcustom".equals(normalized) || "deeplx-api".equals(normalized)) return "deeplx";
         if ("huoshanweb".equals(normalized)) return "huoshan-web";
         if ("tencenttransmart".equals(normalized) || "transmart".equals(normalized)) return "tencent-transmart";
@@ -387,42 +429,87 @@ public class TranslateService {
     }
 
     private String translateWithYoudao(String text, String sourceLang, String targetLang) throws Exception {
-        String langType = mapYoudaoLangType(sourceLang, targetLang);
-        String body = "q=" + URLEncoder.encode(text, StandardCharsets.UTF_8)
-            + "&langType=" + URLEncoder.encode(langType, StandardCharsets.UTF_8);
-        HttpRequest request = HttpRequest.newBuilder(URI.create("https://aidemo.youdao.com/translate"))
-            .timeout(Duration.ofSeconds(20))
-            .header("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() >= 400) {
-            throw new IllegalStateException("HTTP " + response.statusCode());
-        }
-        JsonNode root = objectMapper.readTree(response.body());
-        if (root.has("errorCode") && !"0".equals(root.get("errorCode").asText())) {
-            throw new IllegalStateException("有道返回错误码 " + root.get("errorCode").asText());
-        }
-        JsonNode translateResult = root.get("translateResult");
-        if (translateResult == null || !translateResult.isArray()) {
-            throw new IllegalStateException("有道返回格式异常");
-        }
+        List<String> chunks = splitText(text);
         StringBuilder builder = new StringBuilder();
-        for (JsonNode line : translateResult) {
-            if (!line.isArray()) {
-                continue;
+        for (String chunk : chunks) {
+            String url = "https://dict.youdao.com/jsonapi_s?doctype=json&jsonversion=4&q="
+                + URLEncoder.encode(chunk, StandardCharsets.UTF_8);
+            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(20))
+                .header("Accept", "application/json,text/plain,*/*")
+                .GET()
+                .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400) {
+                throw new IllegalStateException("HTTP " + response.statusCode());
             }
-            for (JsonNode segment : line) {
-                if (segment.has("tgt")) {
-                    if (!builder.isEmpty()) {
-                        builder.append("\n");
-                    }
-                    builder.append(segment.get("tgt").asText(""));
-                }
+            JsonNode root = objectMapper.readTree(response.body());
+            String translated = root.path("fanyi").path("tran").asText("");
+            if (!StringUtils.hasText(translated)) {
+                translated = firstJsonText(root, "tran", "translation", "translatedText", "value");
+            }
+            if (StringUtils.hasText(translated)) {
+                if (!builder.isEmpty()) builder.append("\n\n");
+                builder.append(translated.trim());
             }
         }
         if (builder.isEmpty()) {
             throw new IllegalStateException("未获取到有道译文");
+        }
+        return builder.toString();
+    }
+
+    private String translateWithBing(String text, String sourceLang, String targetLang) throws Exception {
+        HttpRequest tokenRequest = HttpRequest.newBuilder(URI.create("https://edge.microsoft.com/translate/auth"))
+            .timeout(Duration.ofSeconds(15))
+            .header("Accept", "text/plain,*/*")
+            .header("User-Agent", "Mozilla/5.0 PaperSolver")
+            .GET()
+            .build();
+        HttpResponse<String> tokenResponse = httpClient.send(tokenRequest, HttpResponse.BodyHandlers.ofString());
+        if (tokenResponse.statusCode() >= 400) {
+            throw new IllegalStateException("授权 HTTP " + tokenResponse.statusCode());
+        }
+        String token = tokenResponse.body() == null ? "" : tokenResponse.body().trim();
+        if (!StringUtils.hasText(token)) {
+            throw new IllegalStateException("未获取到授权信息");
+        }
+
+        List<String> chunks = splitText(text);
+        StringBuilder builder = new StringBuilder();
+        for (String chunk : chunks) {
+            String from = mapMicrosoftEdgeLang(sourceLang);
+            String to = mapMicrosoftEdgeLang(targetLang);
+            String endpoint = "https://api-edge.cognitive.microsofttranslator.com/translate?api-version=3.0"
+                + ("auto".equalsIgnoreCase(from) ? "" : "&from=" + URLEncoder.encode(from, StandardCharsets.UTF_8))
+                + "&to=" + URLEncoder.encode(to, StandardCharsets.UTF_8);
+            String payload = objectMapper.writeValueAsString(List.of(Map.of("Text", chunk)));
+            HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint))
+                .timeout(Duration.ofSeconds(20))
+                .header("Accept", "application/json,text/plain,*/*")
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "Mozilla/5.0 PaperSolver")
+                .POST(HttpRequest.BodyPublishers.ofString(payload))
+                .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400) {
+                throw new IllegalStateException("HTTP " + response.statusCode());
+            }
+            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode translations = root.isArray() && !root.isEmpty()
+                ? root.get(0).path("translations")
+                : root.path("translations");
+            if (translations.isArray() && !translations.isEmpty()) {
+                String translated = translations.get(0).path("text").asText("");
+                if (StringUtils.hasText(translated)) {
+                    if (!builder.isEmpty()) builder.append("\n\n");
+                    builder.append(translated.trim());
+                }
+            }
+        }
+        if (builder.isEmpty()) {
+            throw new IllegalStateException("未获取到微软译文");
         }
         return builder.toString();
     }
@@ -455,6 +542,24 @@ public class TranslateService {
             throw new IllegalStateException("DeepL 返回为空");
         }
         return translations.get(0).path("text").asText("");
+    }
+
+    private String translateWithBaiduRateLimited(String text, String sourceLang, String targetLang) throws Exception {
+        if (!baiduLimiter.tryAcquire()) {
+            throw new IllegalStateException("百度翻译正在限速保护中");
+        }
+        try {
+            long now = System.currentTimeMillis();
+            long elapsed = now - lastBaiduCallAt.get();
+            if (elapsed < 1_100) {
+                Thread.sleep(1_100 - elapsed);
+            }
+            String translated = translateWithBaidu(text, sourceLang, targetLang);
+            lastBaiduCallAt.set(System.currentTimeMillis());
+            return translated;
+        } finally {
+            baiduLimiter.release();
+        }
     }
 
     private String translateWithBaidu(String text, String sourceLang, String targetLang) throws Exception {
@@ -643,6 +748,20 @@ public class TranslateService {
         if ("auto".equalsIgnoreCase(lang)) return "auto";
         if ("zh-CN".equalsIgnoreCase(lang) || "zh".equalsIgnoreCase(lang)) return "zh";
         if ("zh-TW".equalsIgnoreCase(lang)) return "zt";
+        if ("ja".equalsIgnoreCase(lang) || "jp".equalsIgnoreCase(lang)) return "ja";
+        if ("ko".equalsIgnoreCase(lang) || "kor".equalsIgnoreCase(lang)) return "ko";
+        if ("en".equalsIgnoreCase(lang)) return "en";
+        if ("fr".equalsIgnoreCase(lang)) return "fr";
+        if ("de".equalsIgnoreCase(lang)) return "de";
+        if ("es".equalsIgnoreCase(lang)) return "es";
+        if ("ru".equalsIgnoreCase(lang)) return "ru";
+        return lang;
+    }
+
+    private String mapMicrosoftEdgeLang(String lang) {
+        if ("auto".equalsIgnoreCase(lang)) return "auto";
+        if ("zh-CN".equalsIgnoreCase(lang) || "zh".equalsIgnoreCase(lang)) return "zh-Hans";
+        if ("zh-TW".equalsIgnoreCase(lang)) return "zh-Hant";
         if ("ja".equalsIgnoreCase(lang) || "jp".equalsIgnoreCase(lang)) return "ja";
         if ("ko".equalsIgnoreCase(lang) || "kor".equalsIgnoreCase(lang)) return "ko";
         if ("en".equalsIgnoreCase(lang)) return "en";

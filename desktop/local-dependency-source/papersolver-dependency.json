@@ -1,0 +1,16 @@
+{
+  "name": "PaperSolver Local Dependency",
+  "version": "0.1.0",
+  "services": [
+    {
+      "id": "pdfmath",
+      "command": "bin/start-papersolver-dependency",
+      "args": [],
+      "cwd": ".",
+      "healthUrl": "http://127.0.0.1:11008"
+    }
+  ],
+  "structuredParser": {
+    "command": "bin/mineru"
+  }
+}

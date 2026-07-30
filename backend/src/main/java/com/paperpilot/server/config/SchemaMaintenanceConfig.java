@@ -31,6 +31,11 @@ public class SchemaMaintenanceConfig {
             } catch (Exception ignored) {
                 // Existing databases may already have a large enough content column.
             }
+            try {
+                jdbcTemplate.execute("ALTER TABLE friend_request ADD COLUMN contact_info VARCHAR(255)");
+            } catch (Exception ignored) {
+                // Column already exists or table is not ready yet.
+            }
         };
     }
 }

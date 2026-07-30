@@ -24,7 +24,7 @@
           <a href="#features">功能</a>
           <a href="#workflow">使用流程</a>
           <a href="#why">为什么选我们</a>
-          <a href="#pricing">价格</a>
+
         </nav>
         <div class="nav-ctas">
           <button class="btn-ghost" @click="openModal('login')">登录</button>
@@ -75,21 +75,19 @@
 
         <!-- Social proof -->
         <div class="hero-proof">
-          <div class="proof-avatars">
-            <span v-for="c in ['#3b82f6','#8b5cf6','#ec4899','#f59e0b','#10b981']" :key="c" :style="{ background: c }"></span>
-          </div>
-          <span>已有 <strong>10,000+</strong> 科研学者在用 · 北大、清华、浙大校园认证用户已加入</span>
+          <svg class="proof-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: #10b981; flex-shrink: 0;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span><strong>本地优先架构</strong> · 文献 PDF 绝不上传服务器，仅同步轻量笔记与对话记录，保障数据隐私</span>
         </div>
 
         <!-- Stats bar -->
         <div class="hero-stats">
-          <div class="stat"><strong>10,000+</strong><span>活跃用户</span></div>
+          <div class="stat"><strong>本地存储</strong><span>PDF 文献安全留存本地</span></div>
           <div class="stat-div"></div>
-          <div class="stat"><strong>6 大</strong><span>核心工作模块</span></div>
+          <div class="stat"><strong>轻量同步</strong><span>云端仅同步笔记与对话</span></div>
           <div class="stat-div"></div>
-          <div class="stat"><strong>3 秒</strong><span>快速提炼综述</span></div>
+          <div class="stat"><strong>AI 精读</strong><span>深度提炼方法与局限</span></div>
           <div class="stat-div"></div>
-          <div class="stat"><strong>永久免费</strong><span>基础功能</span></div>
+          <div class="stat"><strong>一键汇报</strong><span>快速生成组会 PPT</span></div>
         </div>
 
       </div>
@@ -245,66 +243,48 @@
     </section>
 
     <!-- ═══ COMPARISON ═══ -->
-    <section class="section section-alt" ref="cmpRef">
+    <section class="section section-alt" id="comparison" ref="cmpRef">
       <div class="section-wrap">
         <div class="s-head" :class="{ in: cmpIn }">
           <span class="eyebrow"><i class="ew-dot"></i>横向对比</span>
-          <h2>少掉的，是整理材料的那段时间</h2>
-          <p>让你把时间花在真正重要的地方，而不是在工具之间反复搬运</p>
+          <h2>全方位对比，看清真正的技术底色</h2>
+          <p>对比行业常见竞品，我们坚持在数据隐私安全、核心文献精读与高质量成果产出上做深做透</p>
         </div>
-        <div class="cmp-table" :class="{ in: cmpIn }">
+        <div class="cmp-table" :class="{ in: cmpIn }" style="overflow-x: auto;">
           <div class="cmp-header">
-            <span>你在意的</span>
-            <span class="cmp-bad-h">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              以前的方式
-            </span>
+            <span>对比维度</span>
+            <span>云端翻译/阅读器 (A 类竞品)</span>
+            <span>传统文献管理工具 (B 类竞品)</span>
+            <span>重度云端 AI 助手 (C 类竞品)</span>
             <span class="cmp-good-h">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
-              PaperSlover
+              我们的产品 (PaperPilot)
             </span>
           </div>
           <div v-for="row in comparisons" :key="row.feature" class="cmp-row">
             <b>{{ row.feature }}</b>
             <span class="cmp-bad">
               <span class="ci bad"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
-              {{ row.before }}
+              {{ row.a }}
+            </span>
+            <span class="cmp-bad">
+              <span class="ci bad"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+              {{ row.b }}
+            </span>
+            <span class="cmp-bad">
+              <span class="ci bad"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+              {{ row.c }}
             </span>
             <span class="cmp-good">
               <span class="ci good"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span>
-              {{ row.after }}
+              {{ row.our }}
             </span>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ═══ PRICING ═══ -->
-    <section id="pricing" class="section" ref="priceRef">
-      <div class="section-wrap">
-        <div class="s-head" :class="{ in: priceIn }">
-          <span class="eyebrow"><i class="ew-dot"></i>价格方案</span>
-          <h2>基础功能永久免费，高消耗任务按套餐</h2>
-          <p>导入和阅读不计费；综述生成、组会 PPT、深度解析这些重量级操作按套餐使用</p>
-        </div>
-        <div class="price-grid" :class="{ in: priceIn }">
-          <div v-for="plan in billingPlans" :key="plan.id" class="price-card" :class="{ featured: plan.highlight }">
-            <div v-if="plan.highlight" class="price-badge">最受欢迎</div>
-            <div class="price-type">{{ plan.oneTime ? '加量包' : '订阅方案' }}</div>
-            <div class="price-name">{{ plan.name }}</div>
-            <div class="price-amount"><strong>{{ plan.price }}</strong><small>{{ plan.period }}</small></div>
-            <ul class="price-list">
-              <li v-for="f in plan.features.slice(0, 4)" :key="f">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>{{ f }}
-              </li>
-            </ul>
-            <button class="price-btn" :class="{ 'feat-btn': plan.highlight }" @click="openModal('register')">
-              {{ plan.oneTime ? '购买加量包' : '开始使用' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
+
 
     <!-- ═══ FOOTER ═══ -->
     <footer class="home-footer">
@@ -314,7 +294,9 @@
           <a href="#features">功能</a>
           <a href="#workflow">流程</a>
           <a href="#why">为什么选我们</a>
-          <a href="#pricing">价格</a>
+          <router-link to="/terms">用户协议</router-link>
+          <router-link to="/privacy">隐私政策</router-link>
+          <router-link to="/disclaimer">免责声明</router-link>
           <a href="#" @click.prevent="openModal('login')">登录</a>
         </div>
         <p class="footer-copy">© 2026 PaperSlover · 为每一位科研人设计</p>
@@ -444,6 +426,21 @@
             <div class="auth-form">
               <label>后端 API 地址</label>
               <input v-model="desktopApiDraft" type="url" placeholder="https://api.papersolver.cn" />
+              <div class="desktop-settings-section desktop-update-section">
+                <div class="desktop-settings-section-head">
+                  <span>客户端版本</span>
+                  <small>{{ desktopRuntime.version ? `v${desktopRuntime.version}` : '读取中' }}</small>
+                </div>
+                <p>{{ desktopUpdateMessage }}</p>
+                <div class="desktop-update-row">
+                  <span :class="['desktop-update-badge', desktopUpdateStatus.updateAvailable ? 'available' : 'stable']">
+                    {{ desktopUpdateStatus.updateAvailable ? '发现更新' : 'Beta 通道' }}
+                  </span>
+                  <button type="button" :disabled="desktopUpdateChecking" @click="checkDesktopUpdate">
+                    {{ desktopUpdateChecking ? '检测中…' : '检测更新' }}
+                  </button>
+                </div>
+              </div>
               <div class="desktop-settings-section desktop-pdf-section">
                 <div class="desktop-settings-section-head">
                   <span>PDF 保存目录</span>
@@ -596,7 +593,7 @@ const featRef    = ref(null); const featIn    = ref(false)
 const wfHeadRef  = ref(null); const wfHeadIn  = ref(false)
 const whyRef     = ref(null); const whyIn     = ref(false)
 const cmpRef     = ref(null); const cmpIn     = ref(false)
-const priceRef   = ref(null); const priceIn   = ref(false)
+
 
 let io
 function initIO() {
@@ -607,10 +604,10 @@ function initIO() {
       if (e.target === wfHeadRef.value) wfHeadIn.value = true
       if (e.target === whyRef.value)    whyIn.value    = true
       if (e.target === cmpRef.value)    cmpIn.value    = true
-      if (e.target === priceRef.value)  priceIn.value  = true
+
     })
   }, { threshold: 0.1 })
-  ;[featRef, wfHeadRef, whyRef, cmpRef, priceRef].forEach(r => r.value && io.observe(r.value))
+  ;[featRef, wfHeadRef, whyRef, cmpRef].forEach(r => r.value && io.observe(r.value))
 }
 
 /* ── Workflow full-slide carousel ── */
@@ -680,6 +677,16 @@ const desktopSettingsMessage = ref('')
 const desktopGuideOpen = ref(false)
 const desktopCacheLoading = ref(false)
 const desktopCacheMessage = ref(null)
+const desktopUpdateChecking = ref(false)
+const desktopRuntime = reactive({
+  version: '',
+  channel: 'beta',
+})
+const desktopUpdateStatus = reactive({
+  updateAvailable: false,
+  latestVersion: '',
+  message: '',
+})
 const desktopCacheInfo = reactive({
   label: '',
   bytes: 0,
@@ -754,6 +761,7 @@ function closeModal() { showAuthModal.value = false; showPassword.value = false;
 async function loadDesktopBackendConfig() {
   if (!window.paperSolverDesktop?.getBackendConfig) return
   try {
+    await loadDesktopRuntimeInfo()
     const config = await window.paperSolverDesktop.getBackendConfig()
     const nextUrl = normalizeApiBaseUrl(config?.apiBaseUrl) || getCurrentApiBaseUrl()
     applyDesktopTranslationConfig(config?.translationEndpoints)
@@ -764,6 +772,42 @@ async function loadDesktopBackendConfig() {
   } catch {
     desktopApiBase.value = getCurrentApiBaseUrl()
     desktopApiDraft.value = desktopApiBase.value
+  }
+}
+async function loadDesktopRuntimeInfo() {
+  if (!window.paperSolverDesktop?.getRuntimeInfo) return
+  try {
+    const info = await window.paperSolverDesktop.getRuntimeInfo()
+    desktopRuntime.version = info?.version || ''
+    desktopRuntime.channel = info?.channel || 'beta'
+    desktopUpdateStatus.message = info?.updatePolicy?.message || ''
+  } catch {
+    desktopRuntime.version = ''
+  }
+}
+const desktopUpdateMessage = computed(() => {
+  if (desktopUpdateStatus.message) return desktopUpdateStatus.message
+  return desktopRuntime.version
+    ? `当前客户端版本 v${desktopRuntime.version}，正式分发后支持检测更新、下载并重启安装。`
+    : '正在读取客户端版本信息。'
+})
+async function checkDesktopUpdate() {
+  if (!window.paperSolverDesktop?.checkUpdate) {
+    desktopUpdateStatus.message = '当前桌面壳不支持检测更新，请安装新版客户端。'
+    return
+  }
+  desktopUpdateChecking.value = true
+  desktopUpdateStatus.message = ''
+  try {
+    const result = await window.paperSolverDesktop.checkUpdate()
+    desktopUpdateStatus.updateAvailable = Boolean(result?.updateAvailable)
+    desktopUpdateStatus.latestVersion = result?.latestVersion || ''
+    desktopUpdateStatus.message = result?.message || '检测完成。'
+  } catch (err) {
+    desktopUpdateStatus.updateAvailable = false
+    desktopUpdateStatus.message = err?.message || '更新检测失败，请稍后重试。'
+  } finally {
+    desktopUpdateChecking.value = false
   }
 }
 function openDesktopSettings() {
@@ -988,12 +1032,12 @@ function authErrorMessage(err) {
 
 /* ── Static data ── */
 const features = [
-  { title:'文献库',   desc:'上传 PDF、批量导入 Zotero，补全元数据，在同一个地方统一管理所有论文，进度和标签永不丢失。',  vb:'0 0 24 24', path:'<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="13" y2="11"/>',  color:'#3b82f6', chips:['PDF 上传','Zotero 导入','标签筛选'] },
-  { title:'逐段精读', desc:'左侧原文、右侧翻译，选中句子保存批注，背景、方法、局限分开展开。批注落在选区，不会把整段都涂乱。', vb:'0 0 24 24', path:'<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',                                                             color:'#8b5cf6', chips:['全文翻译','精确标注','内容拆解'] },
-  { title:'论文综述', desc:'研究问题、主要发现、汇报价值分段生成，数字和英文关键词重点标出，保存后可直接导入组会使用。',     vb:'0 0 24 24', path:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/>', color:'#10b981', chips:['分段整理','重点标红','一键导入'] },
-  { title:'组会汇报', desc:'最多三篇文献合并成一条主线，生成组会讲稿、导师建议，并输出完整 PPT。单篇同样支持。',             vb:'0 0 24 24', path:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m7 10 3 3 5-5"/>',                                                                                                   color:'#f59e0b', chips:['多篇融合','讲稿生成','PPT 导出'] },
-  { title:'校园论坛', desc:'学校认证后按学校筛选帖子，发帖先过内容检查，回复和通知推送到站内消息，不需要守着群聊。',           vb:'0 0 24 24', path:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="13" y2="14"/>',                               color:'#ec4899', chips:['学校认证','帖子筛选','站内消息'] },
-  { title:'额度管理', desc:'不同操作走不同配置：生成 PPT 用高配，综述和检查可选低成本，按使用量计费，剩余次数随时查。',       vb:'0 0 24 24', path:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',                                                                                                                                    color:'#06b6d4', chips:['按量计费','模型配置','套餐方案'] },
+  { title:'文献库',   desc:'本地 PDF 文献管理与 Zotero 题录极速双向同步。自动补全元数据，文献全文均安全留存于个人本地电脑，严防隐私泄露。',  vb:'0 0 24 24', path:'<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="13" y2="11"/>',  color:'#3b82f6', chips:['本地物理留存','Zotero 极速同步','元数据智能补全'] },
+  { title:'多维翻译', desc:'双栏对照与沉浸式翻译。支持句子级精准划线与选区批注。内置自研大模型，选中任何不懂的专业词汇或复杂段落，可一键提问深度解析。', vb:'0 0 24 24', path:'<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',                                                             color:'#8b5cf6', chips:['双栏对照与沉浸翻译','自研模型智能提问','选区划线精准批注'] },
+  { title:'论文综述', desc:'一键智能提炼研究背景、发现亮点与汇报价值。自动高亮核心数字指标与关键英文术语，为组会分享提供标准输出。',     vb:'0 0 24 24', path:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/>', color:'#10b981', chips:['核心要点智能提炼','关键数字自动高亮','组会综述大纲生成'] },
+  { title:'调研广场', desc:'一键开启深度学术调研。智能生成定制研究选题卡，系统性梳理代表性文献，并精准捕捉现有工作的关键研究空白。',       vb:'0 0 24 24', path:'<circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>',                                                                                                                                    color:'#06b6d4', chips:['深度选题卡生成','代表论文梳理','研究空白敏锐捕捉'] },
+  { title:'组会汇报', desc:'支持将最多三篇文献深度串联融汇。采用原生 PPTmaster 引擎制作，高保真还原精美排版，一键生成完整的宣讲讲稿与导师问答建议。',             vb:'0 0 24 24', path:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m7 10 3 3 5-5"/>',                                                                                                   color:'#f59e0b', chips:['原生 PPTmaster 制作','多文献深度串联','宣讲讲稿自动生成'] },
+  { title:'学术论坛', desc:'高校邮箱实名认证的学术互助社区。支持同校专属帖子精确筛选，内置 AI 发帖规范性审查，学术交流更合规更纯粹。',           vb:'0 0 24 24', path:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="13" y2="14"/>',                               color:'#ec4899', chips:['邮箱实名认证','AI 发帖规范审查','同校学术圈筛选'] },
 ]
 
 const workflowSteps = [
@@ -1076,11 +1120,48 @@ const whyBadges = [
 ]
 
 const comparisons = [
-  { feature:'文献到产出',  before:'阅读、总结、PPT 分散在多个工具，每步都要重新开始',        after:'导入、阅读、综述、汇报衔接同一份文献，结果自然流入下一步'    },
-  { feature:'标注与批注',  before:'很多工具只给整段摘要，标注和正文容易对不上',              after:'选区精确到句子，批注可单独删除，也可以全局清空'                },
-  { feature:'组会准备',    before:'需要手动把多篇论文拼成讲稿，再去做 PPT',                  after:'最多三篇文献融合成主线，讲稿和 PPT 一起生成'                  },
-  { feature:'校园交流',    before:'讨论在群里丢失，发的东西没人管，也找不回来',              after:'学校认证 + 按校筛选 + 站内通知全面替代群聊'                   },
-  { feature:'使用成本',    before:'不清楚每个功能消耗多少，月底账单看不懂',                  after:'不同操作按实际消耗计费，剩余次数随时查，不超出预期'           },
+  {
+    feature: '数据存储与隐私安全',
+    a: '云端强制上传文件，有严重泄露学术成果和机密的风险',
+    b: '完全本地单机，无云端同步和任何 AI 深度大模型协同',
+    c: 'PDF 全文托管在第三方云服务器，学术成果受制于平台',
+    our: '100% 本地物理留存，云端仅加密同步轻量级笔记与对话，无隐私泄露风险'
+  },
+  {
+    feature: '文献对照翻译体验',
+    a: '覆盖原排版的粗糙机翻，排版极易错乱，且中英对照割裂',
+    b: '需自行配置外部插件，速度慢且无选区智能对照',
+    c: '翻译需每次重复上传文件并反复产生计费，加载排版受限',
+    our: '双栏高保真对照翻译，选区精准批注，流畅沉浸且永不破版'
+  },
+  {
+    feature: '大模型对话提问交互',
+    a: '仅支持简单的全局聊天，无法针对选区特定词句定向追问',
+    b: '完全不支持任何 AI 提问或学术问答功能',
+    c: '限制使用云端固定大模型，调用按次收费非常昂贵',
+    our: '支持选区一键定向提问，内置自研大模型，支持极低成本自主配置'
+  },
+  {
+    feature: '组会汇报与幻灯片输出',
+    a: '仅生成纯文本综述大纲，无法辅助排版设计和输出 PPT',
+    b: '完全不支持，需用户全程手动翻阅文献并自己手写 PPT',
+    c: '套用通用模板转换，内容逻辑较平，排版呆板且后期难修改',
+    our: '深度融合多篇文献主线，采用原生 PPTmaster 制作，自动输出高美感幻灯片'
+  },
+  {
+    feature: '选题调研与空白敏锐捕捉',
+    a: '无相关功能，无法进行深度的选题开拓',
+    b: '无相关功能，仅能依靠人工逐一阅读整理',
+    c: '提供极高价格且数据源受限的文献脉络分析图',
+    our: '独创“调研广场”，全自动提炼代表作、生成选题卡并寻找现有工作空白'
+  },
+  {
+    feature: '托管与私有化部署成本',
+    a: '云端闭源平台，无法在个人或团队服务器独立部署',
+    b: '本地单机版，没有多端同步和团队共享云端后台',
+    c: '依赖昂贵的大显存 GPU 云服务器，部署与维护成本高昂',
+    our: '核心极度轻量化，完美适配 2核4G 的低配服务器独立自主部署运行'
+  }
 ]
 
 onMounted(() => {
@@ -1455,10 +1536,10 @@ onUnmounted(() => {
 /* ══ COMPARISON ══ */
 .cmp-table { border: 1px solid rgba(255,255,255,.07); border-radius: 18px; overflow: hidden; opacity: 0; transform: translateY(18px); transition: opacity .65s ease .1s, transform .65s ease .1s; }
 .cmp-table.in { opacity: 1; transform: translateY(0); }
-.cmp-header { display: grid; grid-template-columns: 1fr 1.4fr 1.4fr; padding: 13px 24px; background: rgba(255,255,255,.022); border-bottom: 1px solid rgba(255,255,255,.055); font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; align-items: center; color: #3f3f46; }
+.cmp-header { display: grid; grid-template-columns: 1.2fr 1.2fr 1.2fr 1.2fr 1.6fr; padding: 13px 24px; background: rgba(255,255,255,.022); border-bottom: 1px solid rgba(255,255,255,.055); font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; align-items: center; color: #a1a1aa; }
 .cmp-bad-h  { display: flex; align-items: center; gap: 6px; color: #f87171; }
 .cmp-good-h { display: flex; align-items: center; gap: 6px; color: #4ade80; }
-.cmp-row { display: grid; grid-template-columns: 1fr 1.4fr 1.4fr; padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,.038); align-items: start; transition: background .2s; }
+.cmp-row { display: grid; grid-template-columns: 1.2fr 1.2fr 1.2fr 1.2fr 1.6fr; padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,.038); align-items: start; transition: background .2s; }
 .cmp-row:last-child { border-bottom: none; }
 .cmp-row:hover { background: rgba(255,255,255,.014); }
 .cmp-row b { font-size: .87rem; font-weight: 600; color: #d4d4d8; }
@@ -1468,25 +1549,6 @@ onUnmounted(() => {
 .ci { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
 .ci.bad  { background: rgba(239,68,68,.12);  color: #f87171; border: 1px solid rgba(239,68,68,.22); }
 .ci.good { background: rgba(34,197,94,.1);   color: #4ade80; border: 1px solid rgba(34,197,94,.22); }
-
-/* ══ PRICING ══ */
-.price-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(230px,1fr)); gap: 14px; opacity: 0; transform: translateY(18px); transition: opacity .65s ease .1s, transform .65s ease .1s; }
-.price-grid.in { opacity: 1; transform: translateY(0); }
-.price-card { background: rgba(14,14,20,.8); border: 1px solid rgba(255,255,255,.07); border-radius: 20px; padding: 26px 22px; position: relative; transition: border-color .25s, transform .25s; }
-.price-card:hover { border-color: rgba(255,255,255,.12); transform: translateY(-3px); }
-.price-card.featured { border-color: rgba(59,130,246,.35); box-shadow: 0 0 0 1px rgba(59,130,246,.18), 0 18px 60px rgba(59,130,246,.1); }
-.price-badge { position: absolute; top: -11px; left: 50%; transform: translateX(-50%); background: linear-gradient(120deg,#2563eb,#7c3aed); color: #fff; font-size: .68rem; font-weight: 700; padding: 3px 13px; border-radius: 99px; white-space: nowrap; }
-.price-type   { font-size: .65rem; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: #3f3f46; margin-bottom: 10px; }
-.price-name   { font-size: 1.15rem; font-weight: 700; color: #f0f0f4; margin-bottom: 14px; }
-.price-amount { display: flex; align-items: baseline; gap: 5px; margin-bottom: 6px; }
-.price-amount strong { font-size: 2rem; font-weight: 800; color: #f0f0f4; letter-spacing: -.04em; }
-.price-amount small  { font-size: .78rem; color: #52525b; }
-.price-list { list-style: none; display: flex; flex-direction: column; gap: 9px; margin: 14px 0 22px; }
-.price-list li { display: flex; align-items: flex-start; gap: 8px; font-size: .82rem; color: #71717a; line-height: 1.4; }
-.price-btn { width: 100%; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); color: #d4d4d8; font-size: .875rem; font-weight: 600; padding: 11px; border-radius: 10px; cursor: pointer; font-family: inherit; transition: background .2s, color .2s; }
-.price-btn:hover { background: rgba(255,255,255,.09); color: #fff; }
-.feat-btn { background: linear-gradient(120deg,#2563eb,#7c3aed); border-color: transparent; color: #fff; box-shadow: 0 4px 20px rgba(59,130,246,.28); }
-.feat-btn:hover { background: linear-gradient(120deg,#3b82f6,#8b5cf6); }
 
 /* ══ FOOTER ══ */
 .home-footer { border-top: 1px solid rgba(255,255,255,.05); padding: 44px 28px; }
@@ -1630,6 +1692,57 @@ onUnmounted(() => {
   color: #71717a;
   font-size: .76rem;
   line-height: 1.6;
+}
+.desktop-update-section {
+  border-color: rgba(99, 102, 241, .24);
+  background:
+    linear-gradient(135deg, rgba(79, 70, 229, .14), rgba(14, 165, 233, .05)),
+    rgba(15, 23, 42, .26);
+}
+.desktop-update-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.desktop-update-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 900;
+}
+.desktop-update-badge.stable {
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, .16);
+  border: 1px solid rgba(96, 165, 250, .24);
+}
+.desktop-update-badge.available {
+  color: #fef3c7;
+  background: rgba(245, 158, 11, .16);
+  border: 1px solid rgba(245, 158, 11, .28);
+}
+.desktop-update-row button {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid rgba(96, 165, 250, .28);
+  border-radius: 10px;
+  color: #dbeafe;
+  background: rgba(37, 99, 235, .12);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .76rem;
+  font-weight: 850;
+}
+.desktop-update-row button:hover:not(:disabled) {
+  border-color: rgba(96, 165, 250, .5);
+  background: rgba(37, 99, 235, .22);
+}
+.desktop-update-row button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
 }
 .desktop-translation-row {
   display: grid;

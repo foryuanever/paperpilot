@@ -679,12 +679,11 @@ public class ModelRelayResearchService {
 
     private List<Map<String, Object>> membershipPlan() {
         return List.of(
-            Map.of("name", "个人 Lite", "price", "¥9.9/月", "review", 3, "qa", 60, "ppt", 0, "positioning", "低门槛试用，适合文献阅读用户。"),
-            Map.of("name", "个人 Plus", "price", "¥19.9/月", "review", 10, "qa", 180, "ppt", 1, "positioning", "主推个人套餐，有一次 PPT 体验但控制成本。"),
-            Map.of("name", "个人 Pro", "price", "¥39.9/月", "review", 25, "qa", 500, "ppt", 4, "positioning", "毕业论文和组会高频用户，毛利空间更稳。"),
-            Map.of("name", "个人 Max", "price", "¥69.9/月", "review", 60, "qa", 1200, "ppt", 10, "positioning", "个人满配套餐，适合密集论文综述和组会输出。"),
-            Map.of("name", "团队 Plus", "price", "¥129/月", "review", 120, "qa", 2600, "ppt", 16, "positioning", "8 席团队共享，适合导师/实验室。"),
-            Map.of("name", "团队 Pro", "price", "¥229/月", "review", 260, "qa", 6000, "ppt", 36, "positioning", "15 席共享，PPT 额度单独限速，防止被刷爆。")
+            Map.of("name", "个人 Lite", "price", "¥9.9/月", "review", 15, "qa", 30, "ppt", 2, "positioning", "一杯瑞幸咖啡价，适合文献阅读与基础综述。"),
+            Map.of("name", "个人 Plus", "price", "¥19.9/月", "review", 30, "qa", 60, "ppt", 4, "positioning", "课程论文与周会准备，高频论文问答。"),
+            Map.of("name", "个人 Pro", "price", "¥29.9/月", "review", 60, "qa", 120, "ppt", 6, "positioning", "高压课题推进，享受发帖置顶与高峰优先。"),
+            Map.of("name", "课题组团队 Plus", "price", "¥17.91/人/月", "review", 30, "qa", 60, "ppt", 4, "positioning", "导师按需购买统一分配，全队 9 折与共享席位。"),
+            Map.of("name", "课题组团队 Pro", "price", "¥26.91/人/月", "review", 60, "qa", 120, "ppt", 6, "positioning", "实验室全员极速旗舰，顶配额度与全特权。")
         );
     }
 

@@ -158,7 +158,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="paper in filteredDocuments" :key="paper.id">
+              <tr v-for="paper in paginatedDocuments" :key="paper.id">
                 <td class="doc-title-cell">
                   <div
                     class="doc-title-main"
@@ -184,11 +184,11 @@
                   <div class="journal-metric-row journal-metric-row-editable" @click="openJournalTagEditor(paper)" :title="journalTagsSummary(paper)">
                     <span
                       v-for="metric in journalMetricTags(paper)"
-                      :key="metric.label"
+                      :key="`${metric.type}-${metric.label}`"
                       class="journal-metric-badge"
                       :class="metric.type"
                     >
-                      {{ metric.label }}
+                      {{ journalMetricDisplayLabel(metric) }}
                     </span>
                     <span v-if="!journalMetricTags(paper).length" class="journal-metric-empty">点击设置</span>
                   </div>
@@ -242,7 +242,7 @@
                 </td>
                 <td class="doc-note-cell">
                   <button class="note-edit-btn" type="button" @click="openNoteEditor(paper)">
-                    {{ paper.note ? "展示笔记" : "添加笔记" }}
+                    {{ paper.note ? "查看笔记" : "添加笔记" }}
                   </button>
                 </td>
               </tr>
@@ -251,10 +251,24 @@
         </div>
         <div class="pagination-bar">
           <span class="muted">共 {{ filteredDocuments.length }} 条</span>
-          <button class="pagination-btn">‹</button>
-          <span class="page-number-pill active">1</span>
-          <button class="pagination-btn">›</button>
-          <span class="page-size-pill">20 条/页</span>
+          <span class="pagination-summary">第 {{ currentPage }} / {{ totalPages }} 页</span>
+          <button class="pagination-btn" type="button" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">‹</button>
+          <button
+            v-for="page in visiblePageNumbers"
+            :key="page"
+            class="page-number-pill"
+            type="button"
+            :class="{ active: page === currentPage }"
+            @click="goToPage(page)"
+          >
+            {{ page }}
+          </button>
+          <button class="pagination-btn" type="button" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">›</button>
+          <label class="page-size-control">
+            <select v-model.number="pageSize" aria-label="每页显示文献数量" :title="`${pageSize} 条/页`">
+              <option v-for="size in pageSizeOptions" :key="size" :value="size">{{ size }} 条/页</option>
+            </select>
+          </label>
         </div>
       </div>
       </template>
@@ -426,20 +440,93 @@
     </Transition>
 
     <div v-if="noteEditor.open" class="note-modal-backdrop" @click.self="closeNoteEditor">
-      <section class="note-modal">
+      <section class="note-modal note-modal-wide">
         <header>
           <div>
-            <span>{{ noteEditor.paper?.note ? "已同步阅读页 Markdown" : "尚未添加笔记" }}</span>
-            <h3>{{ noteEditor.paper?.title || "我的笔记" }}</h3>
+            <span>{{ noteEditor.loading ? "正在同步阅读页笔记" : noteEditor.text ? "已同步阅读页笔记" : "阅读页右侧暂无笔记" }}</span>
+            <h3>{{ noteEditor.paper?.title || "查看笔记" }}</h3>
           </div>
           <button type="button" @click="closeNoteEditor">×</button>
         </header>
-        <p class="note-paper-title">{{ noteEditor.paper?.title }}</p>
-        <textarea
-          v-model="noteEditor.text"
-          class="note-modal-editor"
-          placeholder="这里保存的是阅读页右侧层级笔记导出的 Markdown。可补充阅读结论、正文页码、实验结果、组会问题、导师建议..."
-        ></textarea>
+        <div class="note-mode-bar">
+          <button type="button" :class="{ active: noteEditor.mode === 'tree' }" @click="noteEditor.mode = 'tree'">层级笔记</button>
+          <button type="button" :class="{ active: noteEditor.mode === 'markdown' }" @click="noteEditor.mode = 'markdown'">Markdown</button>
+          <span>{{ noteEditor.loading ? "同步中..." : "与文献阅读右侧笔记同步" }}</span>
+        </div>
+        <div v-if="noteEditor.mode === 'tree'" class="library-note-tree-panel">
+          <div v-if="noteEditor.loading" class="library-note-loading">
+            <span class="library-note-spinner"></span>
+            <strong>正在读取最新层级笔记</strong>
+          </div>
+          <div v-else-if="parsedNoteTree.length" class="library-note-tree">
+            <article v-for="section in parsedNoteTree" :key="section.id" class="library-note-section" :class="`note-level-${section.level || 1}`">
+              <div class="library-note-section-head">
+                <span class="library-note-section-index">{{ section.index }}</span>
+                <div>
+                  <strong>{{ section.title }}</strong>
+                </div>
+                <small class="library-note-section-count">{{ section.children.length || section.content.length }} 点</small>
+              </div>
+              <p v-for="line in section.content" :key="`${section.id}-${line}`" class="library-note-section-text">{{ line }}</p>
+              <div v-if="section.children.length" class="library-note-child-list">
+                <div v-for="child in section.children" :key="child.id" class="library-note-child" :class="`note-level-${child.level || 2}`">
+                  <span>{{ child.index }}</span>
+                  <div>
+                    <strong>{{ child.title }}</strong>
+                    <p v-for="line in child.content" :key="`${child.id}-${line}`">{{ line }}</p>
+                    <div v-if="child.children?.length" class="library-note-grandchild-list">
+                      <div v-for="grandchild in child.children" :key="grandchild.id" class="library-note-grandchild note-level-3">
+                        <span>{{ grandchild.index }}</span>
+                        <div>
+                          <strong>{{ grandchild.title }}</strong>
+                          <p v-for="line in grandchild.content" :key="`${grandchild.id}-${line}`">{{ line }}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+          <div v-else class="library-note-empty">
+            <strong>暂无层级笔记</strong>
+            <p>在文献阅读页面右侧的“文献层级笔记”中新增或编辑节点后，这里会同步展示同一份内容。</p>
+          </div>
+        </div>
+        <div v-else class="library-note-markdown-view">
+          <div v-if="noteEditor.loading" class="library-note-loading">
+            <span class="library-note-spinner"></span>
+            <strong>正在读取最新 Markdown 笔记</strong>
+          </div>
+          <div v-else-if="parsedNoteTree.length" class="library-note-markdown-outline">
+            <template v-for="section in parsedNoteTree" :key="`md-${section.id}`">
+              <div class="library-note-markdown-line note-level-1">
+                <span>{{ section.index }}</span>
+                <strong>{{ section.title }}</strong>
+                <em>{{ section.children.length || section.content.length }} 点</em>
+              </div>
+              <p v-for="line in section.content" :key="`md-${section.id}-${line}`" class="library-note-markdown-text note-level-1">{{ line }}</p>
+              <template v-for="child in section.children" :key="`md-${child.id}`">
+                <div class="library-note-markdown-line note-level-2">
+                  <span>{{ child.index }}</span>
+                  <strong>{{ child.title }}</strong>
+                </div>
+                <p v-for="line in child.content" :key="`md-${child.id}-${line}`" class="library-note-markdown-text note-level-2">{{ line }}</p>
+                <template v-for="grandchild in child.children || []" :key="`md-${grandchild.id}`">
+                  <div class="library-note-markdown-line note-level-3">
+                    <span>{{ grandchild.index }}</span>
+                    <strong>{{ grandchild.title }}</strong>
+                  </div>
+                  <p v-for="line in grandchild.content" :key="`md-${grandchild.id}-${line}`" class="library-note-markdown-text note-level-3">{{ line }}</p>
+                </template>
+              </template>
+            </template>
+          </div>
+          <div v-else class="library-note-empty">
+            <strong>暂无 Markdown 笔记</strong>
+            <p>这里会同步展示文献阅读右侧笔记，并自动去掉 Markdown 符号。</p>
+          </div>
+        </div>
         <footer>
           <button type="button" class="spatial-btn spatial-btn-ghost" @click="closeNoteEditor">取消</button>
           <button type="button" class="spatial-btn spatial-btn-accent" :disabled="noteEditor.saving" @click="saveNoteEditor">
@@ -547,6 +634,9 @@ const dialogStore = useDialogStore();
 const isDesktopApp = Boolean(window.paperSolverDesktop?.isDesktop);
 const keyword = ref("");
 const openFilter = ref("");
+const pageSizeOptions = [5, 10, 20, 50, 100];
+const pageSize = ref(Number(localStorage.getItem("papersolver-library-page-size")) || 20);
+const currentPage = ref(1);
 const filterButtonRefs = ref({});
 function registerFilterButton(key, el) {
   if (el) {
@@ -581,8 +671,11 @@ const filterDefs = reactive([
 const noteEditor = ref({
   open: false,
   saving: false,
+  loading: false,
   paper: null,
   text: "",
+  plainText: "",
+  mode: "tree",
 });
 const pdfLinkEditor = ref({
   open: false,
@@ -607,8 +700,8 @@ const journalTagGroups = [
   { name: "中科院分区", tags: ["中科院1区", "中科院2区", "中科院3区", "中科院4区"] },
   { name: "CCF 等级", tags: ["CCF A", "CCF B", "CCF C", "CCF 其他"] },
   { name: "影响因子", tags: ["IF 高", "IF 中", "IF 低", "IF 待查"] },
+  { name: "索引收录", tags: ["SCI", "SSCI", "EI", "Scopus", "PubMed", "ESCI", "DOAJ"] },
 ];
-const JOURNAL_LEVEL_TAGS = new Set(journalTagGroups.flatMap((group) => group.tags));
 const toastMessage = ref("");
 const libraryTabs = [
   { id: "papers", label: "全部文献", description: "阅读、翻译与分析" },
@@ -654,7 +747,7 @@ function matchesFilter(paper) {
     if (filter.key === "venueType") {
       values = [String(paper.venueType || "待分类")];
     } else if (filter.key === "journalTag") {
-      values = cleanJournalTags(paper.journalTags);
+      values = journalFilterTags(paper);
     } else if (filter.key === "importSource") {
       values = [String(paper.importSource || sourceHost(paper.sourceUrl) || "未记录")];
     } else if (filter.key === "publishYear") {
@@ -687,13 +780,33 @@ const filteredDocuments = computed(() => {
   return documents;
 });
 
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredDocuments.value.length / pageSize.value)));
+const paginatedDocuments = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return filteredDocuments.value.slice(start, start + pageSize.value);
+});
+const visiblePageNumbers = computed(() => {
+  const total = totalPages.value;
+  const current = currentPage.value;
+  const start = Math.max(1, Math.min(current - 2, total - 4));
+  const end = Math.min(total, start + 4);
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+});
+const filterSignature = computed(() =>
+  filterDefs.map((filter) => `${filter.key}:${filter.selected.join("|")}`).join(";"),
+);
+
+function goToPage(page) {
+  currentPage.value = Math.min(totalPages.value, Math.max(1, Number(page) || 1));
+}
+
 function refreshFilterOptions() {
   const docs = libraryStore.state.documents;
   const tagSet = new Set();
   const importSet = new Set();
   const yearSet = new Set();
   for (const paper of docs) {
-    cleanJournalTags(paper.journalTags).forEach((t) => tagSet.add(t));
+    journalFilterTags(paper).forEach((t) => tagSet.add(t));
     importSet.add(String(paper.importSource || sourceHost(paper.sourceUrl) || "未记录"));
     yearSet.add(String(paper.publishYear || "待补充"));
   }
@@ -711,6 +824,15 @@ function refreshFilterOptions() {
     return bn - an;
   });
 }
+
+watch([keyword, filterSignature, pageSize], () => {
+  currentPage.value = 1;
+  localStorage.setItem("papersolver-library-page-size", String(pageSize.value));
+});
+
+watch(totalPages, (pages) => {
+  if (currentPage.value > pages) currentPage.value = pages;
+});
 
 function toggleFilter(key) {
   openFilter.value = openFilter.value === key ? "" : key;
@@ -758,69 +880,130 @@ function venueTypeClass(type) {
   return "journal";
 }
 
-function rankingClass(ranking) {
-  const text = String(ranking || "").toUpperCase();
-  if (text.includes("Q1") || text.includes("CCF A")) return "top";
-  if (text.includes("Q2") || text.includes("CCF B")) return "strong";
-  return "normal";
-}
-
 const JOURNAL_METRIC_PRESETS = [
-  { key: "iscience", tags: [["IF 4.1", "if"], ["JCRQ1", "jcr"], ["中科院2区", "cas"]] },
-  { key: "international dental journal", tags: [["IF 3.4", "if"], ["JCRQ1", "jcr"], ["中科院2区", "cas"]] },
-  { key: "procedia computer science", tags: [["IF -", "if muted"], ["Scopus", "jcr"], ["会议论文集", "cas conference"]] },
-  { key: "findings of the association for computational linguistics", tags: [["ACL Findings", "if conference"], ["CCF A", "jcr top"], ["会议论文", "cas conference"]] },
-  { key: "association for computational linguistics", tags: [["ACL", "if conference"], ["CCF A", "jcr top"], ["会议论文", "cas conference"]] },
-  { key: "arxiv", tags: [["IF -", "if muted"], ["预印本", "jcr muted"], ["非期刊", "cas muted"]] },
-  { key: "nature", tags: [["IF 高", "if top"], ["JCRQ1", "jcr top"], ["中科院1区", "cas top"]] },
-  { key: "science", tags: [["IF 高", "if top"], ["JCRQ1", "jcr top"], ["中科院1区", "cas top"]] },
+  { key: "iscience", tags: ["IF 4.1", "JCR Q1", "中科院2区", "SCI"] },
+  { key: "international dental journal", tags: ["IF 3.4", "JCR Q1", "中科院2区", "SCI"] },
+  { key: "procedia computer science", tags: ["Scopus"] },
+  { key: "findings of the association for computational linguistics", tags: ["ACL Findings", "CCF A"] },
+  { key: "association for computational linguistics", tags: ["ACL", "CCF A"] },
+  { key: "arxiv", tags: [] },
+  { key: "nature", tags: ["IF 高", "JCR Q1", "中科院1区", "SCI"] },
+  { key: "science", tags: ["IF 高", "JCR Q1", "中科院1区", "SCI"] },
 ];
 
-function makeMetricTags(rows) {
-  return rows.map(([label, type]) => ({ label, type }));
+function normalizeJournalTagLabel(tag) {
+  let text = String(tag || "").trim().replace(/\(补充\)$/u, "").replace(/\s+/g, " ");
+  if (!text) return "";
+  if (/^(preprint|pre-print)$/i.test(text)) return "预印本";
+  if (/^(research article|article)$/i.test(text)) return "研究论文";
+  if (/^(conference proceedings|proceedings)$/i.test(text)) return "会议论文集";
+  text = text
+    .replace(/^JCR\s*Q([1-4])$/i, "JCR Q$1")
+    .replace(/^JCRQ([1-4])$/i, "JCR Q$1")
+    .replace(/^Q([1-4])$/i, "JCR Q$1")
+    .replace(/^CAS\s*([1-4])$/i, "中科院$1区")
+    .replace(/^中科院\s*([1-4])\s*区$/u, "中科院$1区")
+    .replace(/^CCF\s*([ABC])$/i, (_, level) => `CCF ${level.toUpperCase()}`)
+    .replace(/^IF[:：]?\s*(\d+(?:\.\d+)?)$/i, "IF $1");
+  const upper = text.toUpperCase();
+  if (["SCI", "SSCI", "EI", "ESCI", "DOAJ"].includes(upper)) return upper;
+  if (upper === "SCOPUS") return "Scopus";
+  if (upper === "PUBMED" || upper === "MEDLINE") return upper === "MEDLINE" ? "MEDLINE" : "PubMed";
+  return text;
 }
 
-function tagClassForLabel(label) {
-  const text = String(label || "").replace(/\(补充\)$/u, "");
-  if (text.startsWith("JCR Q")) return "jcr";
-  if (text.startsWith("中科院")) return "cas";
-  if (text.startsWith("CCF")) return "jcr top";
-  if (text.startsWith("IF")) return "if";
-  if (["期刊", "会议", "预印本", "综述"].includes(text)) return "cas";
-  return "cas muted";
+function isIgnoredJournalTag(tag) {
+  const text = String(tag || "").trim().toLowerCase();
+  return !text
+    || /^(doi\.org|pdf|pdf已缓存|待关联pdf|已导入元数据|研究论文|article|research article)$/i.test(text)
+    || /^https?:\/\//i.test(text)
+    || /\.(com|cn|org|net|edu)(\/|$)/i.test(text);
+}
+
+function classifyJournalTag(tag) {
+  const text = normalizeJournalTagLabel(tag);
+  if (!text || isIgnoredJournalTag(text) || /^(IF|JCR|中科院)\s*--?$/i.test(text)) return null;
+  if (/^(期刊|会议|预印本|会议论文|会议论文集|综述|review|proceedings|conference proceedings)$/iu.test(text)) return null;
+  const ifMatch = text.match(/^IF\s*(高|中|低|待查|-|--|\d+(?:\.\d+)?)$/i);
+  if (ifMatch) {
+    const value = ifMatch[1].replace(/^--?$/, "--");
+    const numeric = Number(value);
+    const strength = value === "高" || numeric >= 10 ? "top" : value === "中" || numeric >= 5 ? "strong" : "";
+    return { label: value, prefix: "IF", type: `if ${strength}`.trim() };
+  }
+  const jcrMatch = text.match(/^JCR\s*Q([1-4])$/i);
+  if (jcrMatch) {
+    const value = `Q${jcrMatch[1]}`;
+    const strength = value === "Q1" ? "top" : value === "Q2" ? "strong" : "";
+    return { label: value, prefix: "JCR", type: `jcr ${strength}`.trim() };
+  }
+  const casMatch = text.match(/^中科院([1-4])区$/u);
+  if (casMatch) {
+    const value = `${casMatch[1]}区`;
+    const strength = value === "1区" ? "top" : value === "2区" ? "strong" : "";
+    return { label: value, prefix: "中科院", type: `cas ${strength}`.trim() };
+  }
+  const ccfMatch = text.match(/^CCF\s*(A|B|C|其他)$/i);
+  if (ccfMatch) {
+    const value = ccfMatch[1].toUpperCase();
+    const strength = value === "A" ? "top" : value === "B" ? "strong" : "";
+    return { label: value, prefix: "CCF", type: `ccf ${strength}`.trim() };
+  }
+  if (/^(SCI|SSCI|EI|ESCI|DOAJ|Scopus|PubMed|MEDLINE)$/i.test(text)) {
+    return { label: text, prefix: "索引", type: "index" };
+  }
+  if (/journal/i.test(text)) return null;
+  if (/会议|ACL|NeurIPS|ICML|ICLR|AAAI|IJCAI|CVPR|ICCV|ECCV|SIGGRAPH|WWW|SIGIR|KDD|CHI|EMNLP|NAACL/i.test(text)) {
+    return { label: text, prefix: "会议", type: "conference" };
+  }
+  return null;
 }
 
 function cleanJournalTags(tags) {
   return Array.from(new Set((Array.isArray(tags) ? tags : [])
-    .map((tag) => String(tag || "").trim().replace(/\(补充\)$/u, ""))
-    .filter((tag) => JOURNAL_LEVEL_TAGS.has(tag))));
+    .map(normalizeJournalTagLabel)
+    .filter((tag) => tag && tag.length <= 32 && classifyJournalTag(tag))));
 }
 
 function journalMetricTags(paper) {
   const manual = cleanJournalTags(paper?.journalTags);
-  if (manual.length) {
-    return manual.map((label) => {
-      const display = String(label).includes("(补充)") ? String(label) : `${label}(补充)`;
-      return { label: display, type: tagClassForLabel(label) };
-    });
-  }
+  const tags = [...manual];
   const source = String(paper?.source || "").trim().toLowerCase();
   const ranking = String(paper?.venueRanking || "").trim().replace(/待核验|待自动核验|待补充|待查|待补/g, "");
-  const type = String(paper?.venueType || "").trim();
   const preset = JOURNAL_METRIC_PRESETS.find((item) => source.includes(item.key));
-  if (preset) return makeMetricTags(preset.tags);
-  if (type === "会议" || ranking.includes("CCF")) {
-    return [
-      { label: ranking || "会议来源", type: rankingClass(ranking) },
-      { label: "会议论文", type: "jcr conference" },
-      { label: paper?.publishYear || "年份 --", type: "cas muted" },
-    ];
+  if (preset) tags.push(...preset.tags);
+  if (ranking) {
+    tags.push(...String(ranking).split(/[、,，/|]+/u).map((item) => item.trim()));
   }
-  return [
-    { label: "IF --", type: "if muted" },
-    { label: ranking || "JCR --", type: "jcr muted" },
-    { label: "中科院 --", type: "cas muted" },
-  ];
+  const classified = [];
+  const seen = new Set();
+  for (const tag of tags) {
+    const item = classifyJournalTag(tag);
+    if (!item) continue;
+    const key = `${item.prefix}:${item.label}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    classified.push(item);
+  }
+  if (classified.length) return classified.slice(0, 5);
+  return [{ label: "待核验", prefix: "标签", type: "muted" }];
+}
+
+function journalFilterTags(paper) {
+  return journalMetricTags(paper)
+    .map(journalMetricFullLabel)
+    .map(normalizeJournalTagLabel)
+    .filter((tag) => tag && tag !== "--");
+}
+
+function journalMetricFullLabel(metric) {
+  if (!metric?.label || metric.label === "--") return metric?.label || "";
+  if (["IF", "JCR", "中科院", "CCF"].includes(metric.prefix)) return `${metric.prefix} ${metric.label}`;
+  return metric.label;
+}
+
+function journalMetricDisplayLabel(metric) {
+  return journalMetricFullLabel(metric);
 }
 
 function publishTimeLabel(paper) {
@@ -998,7 +1181,9 @@ async function savePdfLinkEditor() {
 
 function journalTagsSummary(paper) {
   const tags = journalMetricTags(paper);
-  return tags.length ? tags.map((t) => t.label).join("、") : "点击设置期刊标签";
+  return tags.length
+    ? tags.map(journalMetricFullLabel).join("、")
+    : "点击设置期刊标签";
 }
 
 function openJournalTagEditor(paper) {
@@ -1033,7 +1218,8 @@ function journalTagChipClass(tag) {
   if (tag.startsWith("中科院")) return "chip-cas";
   if (tag.startsWith("CCF")) return "chip-ccf";
   if (tag.startsWith("IF")) return "chip-if";
-  if (["期刊", "会议", "预印本", "综述"].includes(tag)) return "chip-type";
+  if (["SCI", "SSCI", "EI", "Scopus", "PubMed", "ESCI", "DOAJ"].includes(tag)) return "chip-index";
+  if (["期刊", "会议", "会议论文集", "预印本", "综述"].includes(tag)) return "chip-type";
   return "chip-other";
 }
 
@@ -1311,13 +1497,39 @@ async function uploadReplacementPdf(paper, event) {
   }
 }
 
-function openNoteEditor(paper) {
+async function openNoteEditor(paper) {
+  const initialNote = readMirroredHierarchicalNote(paper) || paper.note || "";
   noteEditor.value = {
     open: true,
     saving: false,
+    loading: Boolean(paper.workspaceId),
     paper,
-    text: paper.note || "",
+    text: initialNote,
+    plainText: markdownToReadableNoteText(initialNote),
+    mode: "tree",
   };
+  if (!paper.workspaceId) return;
+  try {
+    const latest = await paperpilotApi.getLibraryPaper(paper.workspaceId);
+    const latestNote = String(latest?.note || "");
+    libraryStore.updateDocument(paper.id, {
+      note: latestNote,
+      paperUrl: latest?.paperUrl ?? paper.paperUrl,
+      sourceUrl: latest?.sourceUrl ?? paper.sourceUrl,
+    });
+    if (noteEditor.value.paper?.id === paper.id) {
+      noteEditor.value.paper = { ...paper, ...latest, id: paper.id, workspaceId: paper.workspaceId };
+      noteEditor.value.text = readMirroredHierarchicalNote(paper) || latestNote;
+      noteEditor.value.plainText = markdownToReadableNoteText(noteEditor.value.text);
+    }
+  } catch (error) {
+    console.warn("Failed to fetch latest library note", error);
+    showToast("读取最新笔记失败，已显示本地同步内容");
+  } finally {
+    if (noteEditor.value.paper?.id === paper.id) {
+      noteEditor.value.loading = false;
+    }
+  }
 }
 
 function closeNoteEditor() {
@@ -1330,7 +1542,12 @@ async function saveNoteEditor() {
   if (!paper) return;
   noteEditor.value.saving = true;
   try {
-    await libraryStore.persistDocumentPatch(paper.id, { note: noteEditor.value.text });
+    const note = noteEditor.value.mode === "markdown"
+      ? markdownToReadableNoteText(noteEditor.value.plainText)
+      : markdownToReadableNoteText(noteEditor.value.text);
+    await libraryStore.persistDocumentPatch(paper.id, { note });
+    noteEditor.value.text = note;
+    noteEditor.value.plainText = note;
     showToast("笔记已保存");
     noteEditor.value.open = false;
   } catch (error) {
@@ -1339,6 +1556,130 @@ async function saveNoteEditor() {
   } finally {
     noteEditor.value.saving = false;
   }
+}
+
+function readMirroredHierarchicalNote(paper) {
+  const key = String(paper?.workspaceId || paper?.id || "");
+  if (!key || typeof localStorage === "undefined") return "";
+  return String(localStorage.getItem(`paperpilot_hierarchical_notes_${key}_markdown_mirror`) || "").trim();
+}
+
+const parsedNoteTree = computed(() => parseLibraryNoteTree(noteEditor.value.text, noteEditor.value.paper?.title || ""));
+
+function parseLibraryNoteTree(markdown, paperTitle = "") {
+  const source = String(markdown || "").replace(/\r\n/g, "\n").trim();
+  if (!source) return [];
+  const normalizedPaperTitle = normalizeNoteTitle(paperTitle);
+  const roots = [];
+  const stack = [];
+  let autoId = 0;
+  const pushContent = (text) => {
+    const cleaned = cleanReadableNoteLine(text);
+    if (!cleaned) return;
+    const target = stack[stack.length - 1];
+    if (!target) {
+      roots.push({
+        id: `note-auto-${autoId++}`,
+        title: "阅读笔记",
+        level: 1,
+        content: [cleaned],
+        children: [],
+      });
+      stack[0] = roots[roots.length - 1];
+      return;
+    }
+    target.content.push(cleaned);
+  };
+
+  for (const rawLine of source.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const heading = line.match(/^(#{1,6})\s+(.+)$/u);
+    if (heading) {
+      const title = cleanReadableNoteLine(heading[2]);
+      if (heading[1].length === 1 && normalizeNoteTitle(title) === normalizedPaperTitle) continue;
+      const node = {
+        id: `note-heading-${autoId++}`,
+        title,
+        level: Math.min(heading[1].length, 3),
+        content: [],
+        children: [],
+      };
+      while (stack.length && stack[stack.length - 1].level >= node.level) stack.pop();
+      if (stack.length) stack[stack.length - 1].children.push(node);
+      else roots.push(node);
+      stack.push(node);
+      continue;
+    }
+    const indentedTitle = line.match(/^(\s*)(?:[一二三四五六七八九十]+[、.．]|[0-9]+(?:\.[0-9]+)*[、.．]?)\s*(.+)$/u);
+    if (indentedTitle && indentedTitle[1].length <= 2 && !/[。！？；：:]$/u.test(indentedTitle[2])) {
+      const node = {
+        id: `note-heading-${autoId++}`,
+        title: cleanReadableNoteLine(line),
+        level: indentedTitle[1].length ? 2 : 1,
+        content: [],
+        children: [],
+      };
+      while (stack.length && stack[stack.length - 1].level >= node.level) stack.pop();
+      if (stack.length) stack[stack.length - 1].children.push(node);
+      else roots.push(node);
+      stack.push(node);
+      continue;
+    }
+    const bullet = line.match(/^([-*+]|\d+[.)])\s+(.+)$/u);
+    if (bullet) {
+      const bulletText = cleanReadableNoteLine(bullet[2]);
+      if (/^[^。！？；:：]{2,32}$/u.test(bulletText)) {
+        const node = {
+          id: `note-heading-${autoId++}`,
+          title: bulletText,
+          level: Math.min((stack[stack.length - 1]?.level || 1) + 1, 3),
+          content: [],
+          children: [],
+        };
+        while (stack.length && stack[stack.length - 1].level >= node.level) stack.pop();
+        if (stack.length) stack[stack.length - 1].children.push(node);
+        else roots.push(node);
+        stack.push(node);
+        continue;
+      }
+      pushContent(bullet[2]);
+      continue;
+    }
+    pushContent(line);
+  }
+
+  return roots.map((section, index) => numberLibraryNoteNode(section, `${index + 1}`));
+}
+
+function normalizeNoteTitle(text) {
+  return String(text || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function numberLibraryNoteNode(node, index) {
+  return {
+    ...node,
+    index,
+    children: (node.children || []).map((child, childIndex) => numberLibraryNoteNode(child, `${index}.${childIndex + 1}`)),
+  };
+}
+
+function cleanReadableNoteLine(text) {
+  return String(text || "")
+    .replace(/^>\s?/, "")
+    .replace(/^\s*[-•·○◦▪▫]+\s*/u, "")
+    .replace(/[#*_`~]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function markdownToReadableNoteText(text) {
+  return String(text || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map(cleanReadableNoteLine)
+    .filter(Boolean)
+    .join("\n");
 }
 
 async function refreshLibraryFromBackend() {
@@ -2527,13 +2868,30 @@ onUnmounted(() => {
 
 .venue-type-badge {
   min-width: 52px;
-  padding: 6px 10px;
+  min-height: 28px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   font-size: 11px;
+  font-weight: 850;
   word-break: keep-all;
+  letter-spacing: 0;
 }
-.venue-type-badge.journal { color: #075fcf; background: #eaf2ff; }
-.venue-type-badge.conference { color: #7c3aed; background: #f2eaff; }
-.venue-type-badge.preprint { color: #64748b; background: #eef1f5; }
+.venue-type-badge.journal {
+  color: #0b5cad;
+  border-color: #b7d7ff;
+  background: #eef7ff;
+}
+.venue-type-badge.conference {
+  color: #7a3d00;
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+.venue-type-badge.preprint {
+  color: #475569;
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
 
 .venue-ranking-badge { padding: 7px 11px; font-size: 11px; }
 .venue-ranking-badge.top { color: #fff; background: #0f9f67; box-shadow: 0 4px 12px rgba(15,159,103,.18); }
@@ -2545,7 +2903,7 @@ onUnmounted(() => {
 .journal-metric-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 7px;
 }
 
 .journal-metric-row {
@@ -2555,35 +2913,54 @@ onUnmounted(() => {
 
 .journal-metric-badge {
   min-height: 28px;
-  padding: 0 9px;
+  padding: 0 11px;
+  border: 1px solid transparent;
   font-size: 12px;
   line-height: 1;
+  font-weight: 850;
+  letter-spacing: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .44);
 }
 
 .journal-metric-badge.if {
-  color: #2563eb;
-  background: #eaf2ff;
+  color: #063f9e;
+  border-color: #82b7ff;
+  background: #dcebff;
 }
 
 .journal-metric-badge.jcr {
-  color: #1f7a38;
-  background: #e8f6e8;
+  color: #006b45;
+  border-color: #5fd69f;
+  background: #d8faea;
 }
 
 .journal-metric-badge.cas {
-  color: #b7791f;
-  background: #fff0cf;
+  color: #8a4200;
+  border-color: #f2b64e;
+  background: #ffedbf;
 }
 
-.journal-metric-badge.pending {
-  color: #667085;
-  background: #f1f4f8;
+.journal-metric-badge.ccf {
+  color: #6515a3;
+  border-color: #b69bff;
+  background: #eadfff;
+}
+
+.journal-metric-badge.index {
+  color: #006a78;
+  border-color: #5fd2df;
+  background: #d9f8fc;
+}
+
+.journal-metric-badge.top {
+  font-weight: 850;
 }
 
 .journal-metric-badge.muted,
 .journal-metric-badge.conference {
-  color: #526074;
-  background: #eef2f7;
+  color: #3d4b5f;
+  border-color: #c7d0dc;
+  background: #edf2f8;
 }
 
 .publish-time-cell {
@@ -2662,17 +3039,31 @@ onUnmounted(() => {
 
 .note-modal {
   width: min(720px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--spatial-line);
   border-radius: 16px;
   background: var(--spatial-surface);
   box-shadow: 0 30px 80px rgba(15, 23, 42, .18);
 }
 
+.note-modal-wide {
+  width: min(1080px, 100%);
+}
+
 .note-modal header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   padding: 22px 24px 12px;
+}
+
+.note-modal header > div {
+  min-width: 0;
 }
 
 .note-modal header span {
@@ -2688,9 +3079,11 @@ onUnmounted(() => {
   color: var(--spatial-graphite);
   font-size: 18px;
   line-height: 1.45;
+  word-break: break-word;
 }
 
 .note-modal header button {
+  flex: 0 0 auto;
   width: 36px;
   height: 36px;
   border: 0;
@@ -2699,6 +3092,343 @@ onUnmounted(() => {
   background: var(--spatial-warm-2);
   font-size: 24px;
   cursor: pointer;
+}
+
+.note-mode-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 24px 14px;
+  padding: 5px;
+  border: 1px solid var(--spatial-line);
+  border-radius: 10px;
+  background: var(--spatial-surface-2);
+}
+
+.note-mode-bar button {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--spatial-gray);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.note-mode-bar button:hover {
+  color: var(--spatial-graphite);
+  background: var(--spatial-warm-2);
+}
+
+.note-mode-bar button.active {
+  color: #fff;
+  background: #0969f7;
+  border-color: #0969f7;
+}
+
+.note-mode-bar span {
+  margin-left: auto;
+  color: var(--spatial-gray);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.library-note-tree-panel,
+.library-note-markdown-view {
+  min-height: min(460px, calc(100vh - 280px));
+  max-height: calc(100vh - 280px);
+  overflow: auto;
+  margin: 0 24px;
+  padding: 4px 2px 10px;
+}
+
+.library-note-markdown-view {
+  padding: 8px 2px 12px;
+}
+
+.library-note-tree {
+  display: grid;
+  gap: 12px;
+}
+
+.library-note-section {
+  padding: 16px 16px 14px;
+  border: 1px solid rgba(99, 102, 241, 0.24);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(248, 250, 255, 0.96), rgba(255, 255, 255, 0.98));
+}
+
+.library-note-section.note-level-1 {
+  border-color: rgba(37, 99, 235, 0.28);
+}
+
+.library-note-section.note-level-2 {
+  border-color: rgba(14, 165, 233, 0.24);
+}
+
+.library-note-section.note-level-3 {
+  border-color: rgba(124, 58, 237, 0.24);
+}
+
+.library-note-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.library-note-section-head > div {
+  min-width: 0;
+}
+
+.library-note-section-index {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 50%;
+  color: #2563eb;
+  background: rgba(239, 246, 255, 0.95);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.library-note-section-head strong {
+  display: block;
+  color: var(--spatial-graphite);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.library-note-section.note-level-1 .library-note-section-head strong {
+  color: #1d4ed8;
+}
+
+.library-note-section.note-level-2 .library-note-section-head strong,
+.library-note-child.note-level-2 strong {
+  color: #0369a1;
+}
+
+.library-note-section.note-level-3 .library-note-section-head strong,
+.library-note-child.note-level-3 strong,
+.library-note-grandchild.note-level-3 strong {
+  color: #6d28d9;
+}
+
+.library-note-section-head small {
+  margin-left: auto;
+  white-space: nowrap;
+  color: var(--spatial-gray);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.library-note-section-text,
+.library-note-child p {
+  margin: 7px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.library-note-child-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.library-note-grandchild-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.library-note-child,
+.library-note-grandchild {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(241, 245, 249, 0.78);
+}
+
+.library-note-grandchild {
+  padding: 8px 10px;
+  background: rgba(245, 243, 255, 0.72);
+}
+
+.library-note-child > span,
+.library-note-grandchild > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  border-radius: 999px;
+  color: #0369a1;
+  background: rgba(224, 242, 254, 0.92);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.library-note-grandchild > span {
+  color: #6d28d9;
+  background: rgba(237, 233, 254, 0.92);
+}
+
+.library-note-child strong,
+.library-note-grandchild strong {
+  display: block;
+  color: #1e293b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.library-note-child.note-level-2 strong {
+  color: #0369a1;
+}
+
+.library-note-child.note-level-3 strong,
+.library-note-grandchild.note-level-3 strong {
+  color: #6d28d9;
+}
+
+.library-note-markdown-outline {
+  display: grid;
+  gap: 8px;
+}
+
+.library-note-markdown-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.74);
+}
+
+.library-note-markdown-line.note-level-2 {
+  margin-left: 28px;
+  background: rgba(240, 249, 255, 0.78);
+}
+
+.library-note-markdown-line.note-level-3 {
+  margin-left: 56px;
+  background: rgba(245, 243, 255, 0.72);
+}
+
+.library-note-markdown-line span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.library-note-markdown-line.note-level-1 span {
+  color: #1d4ed8;
+  background: rgba(219, 234, 254, 0.9);
+}
+
+.library-note-markdown-line.note-level-2 span {
+  color: #0369a1;
+  background: rgba(224, 242, 254, 0.92);
+}
+
+.library-note-markdown-line.note-level-3 span {
+  color: #6d28d9;
+  background: rgba(237, 233, 254, 0.92);
+}
+
+.library-note-markdown-line strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #1d4ed8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.library-note-markdown-line.note-level-2 strong {
+  color: #0369a1;
+}
+
+.library-note-markdown-line.note-level-3 strong {
+  color: #6d28d9;
+}
+
+.library-note-markdown-line em {
+  color: var(--spatial-gray);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.library-note-markdown-text {
+  margin: -2px 0 4px 49px;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.library-note-markdown-text.note-level-2 {
+  margin-left: 77px;
+}
+
+.library-note-markdown-text.note-level-3 {
+  margin-left: 105px;
+}
+
+.library-note-empty,
+.library-note-loading {
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  border: 1px dashed rgba(148, 163, 184, 0.42);
+  border-radius: 14px;
+  color: var(--spatial-gray);
+  background: rgba(248, 250, 252, 0.76);
+  text-align: center;
+}
+
+.library-note-empty strong,
+.library-note-loading strong {
+  color: var(--spatial-graphite);
+  font-size: 15px;
+}
+
+.library-note-empty p {
+  max-width: 48ch;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.library-note-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(37, 99, 235, 0.18);
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: library-note-spin 0.8s linear infinite;
+}
+
+@keyframes library-note-spin {
+  to { transform: rotate(360deg); }
 }
 
 .note-paper-title {
@@ -2710,11 +3440,25 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
+.note-editor-grid {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, .9fr);
+  gap: 14px;
+  margin: 0 24px;
+}
+
+.note-editor-grid.plain-mode {
+  grid-template-columns: 1fr;
+}
+
 .note-modal-editor {
   display: block;
-  width: calc(100% - 48px);
-  min-height: 300px;
-  margin: 0 24px;
+  width: 100%;
+  min-height: min(380px, calc(100vh - 300px));
+  max-height: calc(100vh - 300px);
+  margin: 0;
   padding: 14px;
   box-sizing: border-box;
   resize: vertical;
@@ -2727,6 +3471,57 @@ onUnmounted(() => {
 }
 
 .note-modal-editor:focus { border-color: #7fb1ff; box-shadow: 0 0 0 3px rgba(9,105,247,.08); }
+
+.note-markdown-preview {
+  min-height: min(380px, calc(100vh - 300px));
+  max-height: calc(100vh - 300px);
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--spatial-line);
+  border-radius: 14px;
+  color: var(--spatial-graphite);
+  background: var(--spatial-surface);
+  font-size: 13.5px;
+  line-height: 1.75;
+}
+
+.note-markdown-preview :deep(h1),
+.note-markdown-preview :deep(h2),
+.note-markdown-preview :deep(h3) {
+  margin: 0 0 10px;
+  color: var(--spatial-graphite);
+  font-size: 15px;
+}
+
+.note-markdown-preview :deep(p) {
+  margin: 0 0 10px;
+}
+
+.note-markdown-preview :deep(ul),
+.note-markdown-preview :deep(ol) {
+  margin: 0 0 12px 18px;
+  padding: 0;
+}
+
+.note-markdown-preview :deep(blockquote) {
+  margin: 10px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: #315a8a;
+  background: #f3f7fc;
+}
+
+.note-markdown-preview :deep(code) {
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: var(--spatial-warm-2);
+  font-size: 12px;
+}
+
+.note-preview-empty {
+  margin: 0;
+  color: var(--spatial-gray);
+}
 
 .pdf-link-modal {
   width: min(780px, 100%);
@@ -2910,9 +3705,21 @@ onUnmounted(() => {
   .journal-tag-tabs { gap: 4px; }
   .journal-tag-tabs button { padding: 6px 10px; font-size: 11px; }
   .journal-tag-panel { padding: 12px; gap: 8px; }
+  .note-editor-grid {
+    grid-template-columns: 1fr;
+  }
+  .note-mode-bar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+  .note-mode-bar span {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
 .note-modal footer {
+  flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -3045,6 +3852,14 @@ onUnmounted(() => {
   }
 
   .library-head-stat { padding: 0 12px; }
+
+  .pagination-bar {
+    justify-content: flex-start;
+  }
+
+  .page-size-control {
+    order: 10;
+  }
 }
 
 /* ── PAGINATION BAR BASE STYLES ── */
@@ -3052,6 +3867,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 14px 20px;
   font-size: 13px;
@@ -3073,9 +3889,20 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all .2s ease;
 }
+
+.pagination-btn:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
 .pagination-btn:hover {
   color: var(--spatial-graphite);
   background: var(--spatial-warm-2);
+}
+
+.pagination-btn:disabled:hover {
+  color: var(--spatial-gray);
+  background: var(--spatial-surface);
 }
 
 .page-number-pill {
@@ -3093,6 +3920,7 @@ onUnmounted(() => {
   font-weight: 700;
   font-family: 'Geist Mono', monospace, sans-serif;
   transition: all .2s ease;
+  cursor: pointer;
 }
 
 .page-number-pill.active {
@@ -3101,18 +3929,54 @@ onUnmounted(() => {
   color: #ffffff;
 }
 
-.page-size-pill {
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  color: var(--spatial-gray);
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.page-size-control {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   height: 32px;
-  padding: 0 14px;
+  min-width: 96px;
+  padding: 0;
   border: 1px solid var(--spatial-line);
   border-radius: 8px;
   color: var(--spatial-gray);
   background: var(--spatial-surface);
   font-size: 12.5px;
   font-weight: 600;
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+.page-size-control select {
+  width: 100%;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  appearance: menulist;
+  color: var(--spatial-graphite);
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
+  line-height: 1;
+  outline: none;
+  cursor: pointer;
+}
+
+.page-size-control select:focus-visible {
+  border-color: #7fb1ff;
+  box-shadow: 0 0 0 3px rgba(9, 105, 247, .1);
 }
 
 /* ── DARK MODE ADAPTATIONS FOR LIBRARY VIEW PANELS & CARDS ── */
@@ -3133,6 +3997,11 @@ onUnmounted(() => {
   color: #ffffff !important;
 }
 
+:root[data-theme="dark"] .pagination-btn:disabled:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #cbd5e1 !important;
+}
+
 :root[data-theme="dark"] .page-number-pill {
   background: rgba(255, 255, 255, 0.06) !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
@@ -3146,10 +4015,79 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px rgba(99, 102, 241, 0.25) !important;
 }
 
-:root[data-theme="dark"] .page-size-pill {
+:root[data-theme="dark"] .page-size-control {
   background: rgba(255, 255, 255, 0.06) !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   color: #cbd5e1 !important;
+}
+
+:root[data-theme="dark"] .page-size-control select {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: #eef4ff !important;
+}
+
+:root[data-theme="dark"] .journal-metric-badge small {
+  background: rgba(2, 6, 23, .42);
+  color: inherit;
+  opacity: .96;
+}
+
+:root[data-theme="dark"] .journal-metric-badge.if {
+  color: #dbeafe;
+  border-color: rgba(96, 165, 250, .56);
+  background: rgba(37, 99, 235, .24);
+}
+
+:root[data-theme="dark"] .journal-metric-badge.jcr {
+  color: #dcfce7;
+  border-color: rgba(34, 197, 94, .54);
+  background: rgba(22, 163, 74, .22);
+}
+
+:root[data-theme="dark"] .journal-metric-badge.cas {
+  color: #fef3c7;
+  border-color: rgba(245, 158, 11, .55);
+  background: rgba(180, 83, 9, .22);
+}
+
+:root[data-theme="dark"] .journal-metric-badge.ccf {
+  color: #ede9fe;
+  border-color: rgba(168, 85, 247, .56);
+  background: rgba(126, 34, 206, .24);
+}
+
+:root[data-theme="dark"] .journal-metric-badge.index {
+  color: #ccfbf1;
+  border-color: rgba(20, 184, 166, .54);
+  background: rgba(13, 148, 136, .22);
+}
+
+:root[data-theme="dark"] .journal-metric-badge.review,
+:root[data-theme="dark"] .journal-metric-badge.proceedings,
+:root[data-theme="dark"] .journal-metric-badge.muted,
+:root[data-theme="dark"] .journal-metric-badge.conference {
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, .34);
+  background: rgba(71, 85, 105, .26);
+}
+
+:root[data-theme="dark"] .venue-type-badge.journal {
+  color: #dbeafe;
+  border-color: rgba(96, 165, 250, .48);
+  background: rgba(30, 64, 175, .22);
+}
+
+:root[data-theme="dark"] .venue-type-badge.conference {
+  color: #ffedd5;
+  border-color: rgba(251, 146, 60, .48);
+  background: rgba(154, 52, 18, .24);
+}
+
+:root[data-theme="dark"] .venue-type-badge.preprint {
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, .38);
+  background: rgba(51, 65, 85, .28);
 }
 
 :root[data-theme="dark"] .library-management-panel {
@@ -3385,5 +4323,180 @@ onUnmounted(() => {
 
 :root[data-theme="dark"] .note-paper-title {
   color: #a8b3c7 !important;
+}
+
+:root[data-theme="dark"] .note-mode-bar,
+:root[data-theme="dark"] .note-modal-editor,
+:root[data-theme="dark"] .note-markdown-preview,
+:root[data-theme="dark"] .note-markdown-preview :deep(blockquote),
+:root[data-theme="dark"] .note-markdown-preview :deep(code) {
+  background: rgba(15, 23, 42, 0.72) !important;
+  border-color: rgba(148, 163, 184, 0.22) !important;
+}
+
+:root[data-theme="dark"] .note-mode-bar button {
+  color: #cbd5e1 !important;
+}
+
+:root[data-theme="dark"] .note-mode-bar button:hover {
+  color: #f8fbff !important;
+  background: rgba(148, 163, 184, 0.12) !important;
+}
+
+:root[data-theme="dark"] .note-mode-bar button.active {
+  color: #ffffff !important;
+  background: #2563eb !important;
+  border-color: #3b82f6 !important;
+}
+
+:root[data-theme="dark"] .note-mode-bar span,
+:root[data-theme="dark"] .note-preview-empty {
+  color: #94a3b8 !important;
+}
+
+:root[data-theme="dark"] .note-modal-editor,
+:root[data-theme="dark"] .note-markdown-preview {
+  color: #eef4ff !important;
+}
+
+:root[data-theme="dark"] .note-modal-editor::placeholder {
+  color: #8795aa !important;
+}
+
+:root[data-theme="dark"] .note-markdown-preview :deep(h1),
+:root[data-theme="dark"] .note-markdown-preview :deep(h2),
+:root[data-theme="dark"] .note-markdown-preview :deep(h3) {
+  color: #f8fbff !important;
+}
+
+:root[data-theme="dark"] .note-markdown-preview :deep(blockquote) {
+  color: #c7d2fe !important;
+}
+
+:root[data-theme="dark"] .library-note-tree-panel,
+:root[data-theme="dark"] .library-note-markdown-view {
+  scrollbar-color: rgba(148, 163, 184, 0.38) transparent;
+}
+
+:root[data-theme="dark"] .library-note-section {
+  border-color: rgba(99, 102, 241, 0.34) !important;
+  background: linear-gradient(180deg, rgba(18, 27, 44, 0.94), rgba(12, 18, 31, 0.96)) !important;
+}
+
+:root[data-theme="dark"] .library-note-section-index {
+  color: #93c5fd !important;
+  border-color: rgba(96, 165, 250, 0.45) !important;
+  background: rgba(37, 99, 235, 0.18) !important;
+}
+
+:root[data-theme="dark"] .library-note-section.note-level-1 {
+  border-color: rgba(96, 165, 250, 0.38) !important;
+}
+
+:root[data-theme="dark"] .library-note-section.note-level-2 {
+  border-color: rgba(56, 189, 248, 0.32) !important;
+}
+
+:root[data-theme="dark"] .library-note-section.note-level-3 {
+  border-color: rgba(167, 139, 250, 0.32) !important;
+}
+
+:root[data-theme="dark"] .library-note-section-head strong,
+:root[data-theme="dark"] .library-note-child strong,
+:root[data-theme="dark"] .library-note-empty strong,
+:root[data-theme="dark"] .library-note-loading strong {
+  color: #f8fbff !important;
+}
+
+:root[data-theme="dark"] .library-note-section.note-level-1 .library-note-section-head strong {
+  color: #bfdbfe !important;
+}
+
+:root[data-theme="dark"] .library-note-section.note-level-2 .library-note-section-head strong,
+:root[data-theme="dark"] .library-note-child.note-level-2 strong {
+  color: #bae6fd !important;
+}
+
+:root[data-theme="dark"] .library-note-section.note-level-3 .library-note-section-head strong,
+:root[data-theme="dark"] .library-note-child.note-level-3 strong,
+:root[data-theme="dark"] .library-note-grandchild.note-level-3 strong {
+  color: #c4b5fd !important;
+}
+
+:root[data-theme="dark"] .library-note-section-head small,
+:root[data-theme="dark"] .library-note-section-text,
+:root[data-theme="dark"] .library-note-child p,
+:root[data-theme="dark"] .library-note-empty {
+  color: #cbd5e1 !important;
+}
+
+:root[data-theme="dark"] .library-note-child,
+:root[data-theme="dark"] .library-note-grandchild {
+  background: rgba(15, 23, 42, 0.78) !important;
+}
+
+:root[data-theme="dark"] .library-note-child > span {
+  color: #bae6fd !important;
+  background: rgba(14, 165, 233, 0.17) !important;
+}
+
+:root[data-theme="dark"] .library-note-grandchild > span {
+  color: #c4b5fd !important;
+  background: rgba(124, 58, 237, 0.18) !important;
+}
+
+:root[data-theme="dark"] .library-note-empty,
+:root[data-theme="dark"] .library-note-loading {
+  border-color: rgba(148, 163, 184, 0.24) !important;
+  background: rgba(15, 23, 42, 0.62) !important;
+}
+
+:root[data-theme="dark"] .library-note-spinner {
+  border-color: rgba(103, 232, 249, 0.2) !important;
+  border-top-color: #67e8f9 !important;
+}
+
+:root[data-theme="dark"] .library-note-markdown-line {
+  background: rgba(15, 23, 42, 0.74) !important;
+}
+
+:root[data-theme="dark"] .library-note-markdown-line.note-level-2 {
+  background: rgba(8, 47, 73, 0.36) !important;
+}
+
+:root[data-theme="dark"] .library-note-markdown-line.note-level-3 {
+  background: rgba(46, 16, 101, 0.26) !important;
+}
+
+:root[data-theme="dark"] .library-note-markdown-line.note-level-1 span {
+  color: #93c5fd !important;
+  background: rgba(37, 99, 235, 0.18) !important;
+}
+
+:root[data-theme="dark"] .library-note-markdown-line.note-level-2 span {
+  color: #bae6fd !important;
+  background: rgba(14, 165, 233, 0.17) !important;
+}
+
+:root[data-theme="dark"] .library-note-markdown-line.note-level-3 span {
+  color: #c4b5fd !important;
+  background: rgba(124, 58, 237, 0.18) !important;
+}
+
+:root[data-theme="dark"] .library-note-markdown-line.note-level-1 strong {
+  color: #bfdbfe !important;
+}
+
+:root[data-theme="dark"] .library-note-markdown-line.note-level-2 strong {
+  color: #bae6fd !important;
+}
+
+:root[data-theme="dark"] .library-note-markdown-line.note-level-3 strong {
+  color: #c4b5fd !important;
+}
+
+:root[data-theme="dark"] .library-note-markdown-line em,
+:root[data-theme="dark"] .library-note-markdown-text {
+  color: #cbd5e1 !important;
 }
 </style>

@@ -55,7 +55,7 @@ export async function testApiBaseUrl(url) {
     throw new Error("请输入有效地址，例如 https://api.papersolver.cn");
   }
   try {
-    const { data } = await axios.get(`${apiBaseUrl}/api/tutorials`, {
+    const { data } = await axios.get(`${apiBaseUrl}/api/health`, {
       timeout: 6000,
       headers: {
         "Accept": "application/json",
@@ -64,14 +64,34 @@ export async function testApiBaseUrl(url) {
     return {
       ok: true,
       apiBaseUrl,
-      count: Array.isArray(data) ? data.length : 0,
+      service: data?.service || "PaperSolver Backend",
     };
   } catch (error) {
+    if (error?.response?.status === 404) {
+      try {
+        const { data } = await axios.get(`${apiBaseUrl}/api/tutorials`, {
+          timeout: 6000,
+          headers: {
+            "Accept": "application/json",
+          },
+        });
+        return {
+          ok: true,
+          apiBaseUrl,
+          count: Array.isArray(data) ? data.length : 0,
+        };
+      } catch (fallbackError) {
+        error = fallbackError;
+      }
+    }
     if (error?.response?.status) {
       throw new Error(`后端已响应，但接口返回 ${error.response.status}`);
     }
     if (error?.code === "ECONNABORTED") {
       throw new Error("连接超时，请检查后端是否启动或服务器安全组是否放行。");
+    }
+    if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(apiBaseUrl)) {
+      throw new Error("本地后端未启动：请先启动后端服务，或把地址改成线上 API。");
     }
     throw new Error("连接失败，请检查后端地址、HTTPS 配置或服务器是否在线。");
   }

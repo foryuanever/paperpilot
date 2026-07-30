@@ -29,6 +29,9 @@ public class ForumPostEntity {
     @Column(name = "post_type", length = 32)
     private String postType;
 
+    @Column(length = 24)
+    private String visibility = "public";
+
     @Column(length = 64)
     private String discipline;
 
@@ -90,6 +93,7 @@ public class ForumPostEntity {
     void onCreate() {
         if (createdAt == null) createdAt = LocalDateTime.now();
         if (postType == null || postType.isBlank()) postType = "研究讨论";
+        if (visibility == null || visibility.isBlank()) visibility = "public";
         if (discipline == null || discipline.isBlank()) discipline = "计算机科学";
         if (researchArea == null || researchArea.isBlank()) researchArea = "通用研究";
         if (tags == null) tags = "";
@@ -108,6 +112,8 @@ public class ForumPostEntity {
     public void setUserId(Long userId) { this.userId = userId; }
     public String getPostType() { return postType; }
     public void setPostType(String postType) { this.postType = postType; }
+    public String getVisibility() { return visibility; }
+    public void setVisibility(String visibility) { this.visibility = visibility; }
     public String getDiscipline() { return discipline; }
     public void setDiscipline(String discipline) { this.discipline = discipline; }
     public String getResearchArea() { return researchArea; }

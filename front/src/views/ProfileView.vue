@@ -202,6 +202,42 @@
             </form>
           </article>
 
+          <article class="panel contact-request-panel">
+            <div class="panel-head">
+              <div>
+                <span class="panel-eyebrow">Contact Access</span>
+                <h2>联系方式申请</h2>
+                <p>对方申请后，只有你同意并填写微信或 QQ，才会向对方展示联系方式。</p>
+              </div>
+              <button class="apple-link contact-refresh" :disabled="contactRequestsLoading" @click="loadContactRequests">
+                {{ contactRequestsLoading ? "刷新中" : "刷新" }}
+              </button>
+            </div>
+
+            <div v-if="contactRequests.incoming.length" class="contact-request-list">
+              <article v-for="request in contactRequests.incoming" :key="request.requestId" class="contact-request-card">
+                <span class="request-avatar">{{ request.avatar }}</span>
+                <div>
+                  <strong>{{ request.name }}</strong>
+                  <small>{{ request.role }} · {{ request.message || "希望获取你的联系方式" }}</small>
+                  <time>{{ request.time }}</time>
+                </div>
+                <footer>
+                  <button class="ghost" @click="handleContactRequest(request.requestId, 'reject')">拒绝</button>
+                  <button @click="handleContactRequest(request.requestId, 'accept')">同意展示</button>
+                </footer>
+              </article>
+            </div>
+            <div v-else class="contact-request-empty">暂无待处理的联系方式申请。</div>
+
+            <div v-if="contactRequests.outgoing.length" class="contact-outgoing">
+              <strong>我发出的申请</strong>
+              <span v-for="request in contactRequests.outgoing" :key="request.requestId">
+                {{ request.name }} · 等待对方确认
+              </span>
+            </div>
+          </article>
+
           <article class="panel contribution-panel">
             <div class="panel-head contribution-head">
               <div>
@@ -351,6 +387,8 @@ const passwordSuccess = ref("");
 const isSubmittingPassword = ref(false);
 const editingPost = ref(null);
 const savingPost = ref(false);
+const contactRequestsLoading = ref(false);
+const contactRequests = ref({ incoming: [], outgoing: [], pendingCount: 0 });
 const contributionYear = ref(new Date().getFullYear());
 const checkinHistory = ref([]);
 const contributionYears = computed(() => [new Date().getFullYear(), new Date().getFullYear() - 1]);
@@ -447,6 +485,7 @@ const currentCheckinStreak = computed(() => {
 onMounted(() => {
   tempName.value = authStore.profile.name;
   loadCheckinHistory();
+  loadContactRequests();
 });
 
 watch(contributionYear, loadCheckinHistory);
@@ -615,6 +654,34 @@ async function loadCheckinHistory() {
   }
 
   checkinHistory.value = Array.from(mergedMap.values());
+}
+
+async function loadContactRequests() {
+  contactRequestsLoading.value = true;
+  try {
+    contactRequests.value = await paperpilotApi.getFriendRequests();
+  } catch {
+    contactRequests.value = { incoming: [], outgoing: [], pendingCount: 0 };
+  } finally {
+    contactRequestsLoading.value = false;
+  }
+}
+
+async function handleContactRequest(requestId, action) {
+  let contactInfo = "";
+  if (action === "accept") {
+    const input = await dialogStore.prompt("请输入你愿意展示给对方的微信或 QQ。系统不会默认展示邮箱。", {
+      title: "同意联系方式申请",
+      confirmText: "同意并展示",
+      placeholder: "例如：微信 paper_solver / QQ 123456",
+    });
+    contactInfo = String(input || "").trim();
+    if (!contactInfo) return;
+  }
+  await paperpilotApi.handleFriendRequest(requestId, action, action === "accept" ? { contactInfo } : {});
+  await loadContactRequests();
+  window.dispatchEvent(new CustomEvent("paperpilot:contact-requests-changed"));
+  flash(profileSuccess, action === "accept" ? "已同意展示联系方式" : "已拒绝联系方式申请");
 }
 
 function formatActiveTime(seconds) {
@@ -946,6 +1013,141 @@ button, input, select, textarea { font: inherit; cursor: pointer; }
   transition: background .18s;
 }
 .apple-link:hover { background: rgba(99,102,241,.06); }
+
+.contact-refresh {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  border-top: 0;
+}
+
+.contact-request-panel .panel-head p {
+  max-width: 58ch;
+  margin: 6px 0 0;
+  color: var(--c-muted);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.contact-request-list {
+  display: grid;
+  gap: 10px;
+  padding: 0 20px 18px;
+}
+
+.contact-request-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--c-bg) 72%, transparent);
+}
+
+.contact-request-card > div {
+  min-width: 0;
+}
+
+.request-avatar {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  font-weight: 900;
+}
+
+.contact-request-card strong,
+.contact-outgoing strong {
+  display: block;
+  color: var(--c-text);
+  font-size: 13.5px;
+}
+
+.contact-request-card small,
+.contact-request-card time,
+.contact-outgoing span,
+.contact-request-empty {
+  display: block;
+  margin-top: 3px;
+  color: var(--c-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.contact-request-card footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.contact-request-card footer button {
+  min-height: 34px;
+  min-width: 64px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.contact-request-card footer button.ghost {
+  color: var(--c-muted);
+  background: color-mix(in srgb, var(--c-bg) 82%, transparent);
+  border: 1px solid var(--c-border);
+}
+
+.contact-request-empty {
+  margin: 0 20px 18px;
+  padding: 14px;
+  border: 1px dashed var(--c-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--c-bg) 74%, transparent);
+}
+
+.contact-outgoing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 20px 20px;
+}
+
+.contact-outgoing strong {
+  width: 100%;
+}
+
+.contact-outgoing span {
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-bg) 76%, transparent);
+  border: 1px solid var(--c-border);
+}
+
+@media (max-width: 720px) {
+  .contact-request-card {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .contact-request-card footer {
+    grid-column: 1 / -1;
+  }
+}
 
 /* ── Settings form ───────────────────────────────────────── */
 .settings-panel .panel-head,

@@ -126,7 +126,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { paperpilotApi } from "../services/paperpilotApi";
 
 const props = defineProps({
@@ -232,8 +232,9 @@ const hasReviewContent = computed(() =>
 function cleanLine(line) {
   return String(line || "")
     .replace(/\\[rnt]/g, " ")
-    .replace(/^[\-•·○◦▪▫\d.、\s]+/, "")
+    .replace(/^[\-•·○◦▪▫\d.、:：；;\s]+/, "")
     .replace(/^(?:[（(]\d+[）)]\s*)?(?:领域现状|研究缺口|研究目标|研究对象|方法设计|评价指标|结果表现|对比证据|机制解释|主要创新|研究意义|适用场景|研究局限|应用风险|未来方向)\s*[：:]\s*(?=\S)/, "")
+    .replace(/^(?:待核对|待补充)\s*[：:]\s*(?=\S)/, "待核对：")
     .replace(/(?:在)?汇报时可(?:以)?[^。！？；]*[。！？；]?/g, "")
     .replace(/[{}"“”]+/g, "")
     .replace(/\s{2,}/g, " ")
@@ -243,10 +244,31 @@ function cleanLine(line) {
 function isMeaningfulLine(line) {
   const value = cleanLine(line);
   if (value.length <= 4) return false;
+  if (isWeakPlaceholderLine(value)) return false;
+  if (isMostlyEnglishLine(value)) return false;
   if (/^(?:要点|概述|总结|分析|论文定位|发表信息|发布信息|汇报价值|研究背景|研究问题|研究方法与数据|实验与结论|创新点与启示|局限性|核心要点|主要贡献|关键问题|本文思想|关键贡献|整体框架|关键模块|实现流程|主要发现|对比结果|研究结论|现有不足|未来展望|数据来源|数据设置|评测指标)\s*[：:]?$/.test(value)) {
     return false;
   }
+  if (/^(?:本文|该文|该论文)?(?:采用|使用|运用|包括|包含)?(?:了)?以下(?:方法|指标|内容|方面|步骤)\s*[：:；;。]?$/.test(value)) return false;
+  if (/^(?:本文|该文|该论文)?(?:采用|使用|运用)(?:了)?(?:以下|如下)(?:方法|指标|内容|方面|步骤)/.test(value) && value.length < 24) return false;
+  if (/^(?:临床研究数据共享面临挑战|当前研究多聚焦|本文的评价指标包括|本文研究的主要对象是)\s*[，,：:]?$/.test(value)) return false;
   return !/^[\u4e00-\u9fa5A-Za-z0-9与及、\s]{2,20}[：:]$/.test(value);
+}
+
+function isWeakPlaceholderLine(value) {
+  const text = String(value || "").trim();
+  if (/^(?:待核对|待补充|需核对|需回到|需要查阅|建议查看|摘要未明确|正文片段未明确|原文未明确)[：:，,]/.test(text)) return true;
+  if (/^(?:当前材料|当前摘要|摘要|正文片段)(?:尚不足|不足以|未能|未明确)/.test(text)) return true;
+  if (/需(?:要)?(?:回到|查阅|查看).{0,18}(?:章节|原文|正文)(?:确认|核对)/.test(text) && text.length < 46) return true;
+  return false;
+}
+
+function isMostlyEnglishLine(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  const letters = (text.match(/[A-Za-z]/g) || []).length;
+  const chinese = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+  return letters >= 28 && chinese < Math.max(8, letters * 0.25);
 }
 
 function sectionLines(key) {
@@ -399,6 +421,19 @@ function applyReport(data = {}) {
   noteDraft.value = data.paper?.note ?? noteDraft.value;
 }
 
+function resetReportState() {
+  stopPolling();
+  busy.value = false;
+  progress.value = 0;
+  progressMessage.value = "";
+  report.paper = { ...(props.paper || {}) };
+  report.sections = Object.fromEntries(backendSectionKeys.map(key => [key, ""]));
+  report.synthesisText = "";
+  report.generated = false;
+  report.modelName = "";
+  noteDraft.value = props.paper?.note || "";
+}
+
 function formatReportSections(sections) {
   return Object.fromEntries(Object.entries(sections).map(([key, value]) => [key, formatReportParagraphs(value)]));
 }
@@ -512,6 +547,24 @@ async function savePaperNote() {
     savingNote.value = false;
   }
 }
+
+watch(
+  () => props.workspaceId,
+  async (next, previous) => {
+    if (next === previous) return;
+    resetReportState();
+    if (next) await loadReport();
+  },
+);
+
+watch(
+  () => props.paper,
+  (paper) => {
+    if (!paper || props.workspaceId) return;
+    applyReport({ paper });
+  },
+  { deep: true },
+);
 
 onMounted(loadReport);
 onUnmounted(() => {

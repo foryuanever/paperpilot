@@ -464,7 +464,7 @@ public class AiUsageService {
         row.put("username", username);
         row.put("userEmail", email);
         row.put("scene", blankTo(record.getScene(), "analyze"));
-        row.put("sceneLabel", sceneLabel(record.getScene()));
+        row.put("sceneLabel", sceneLabel(record.getScene(), record.getAction()));
         row.put("action", normalizeAction(record.getAction()));
         row.put("rawAction", blankTo(record.getAction(), ""));
         row.put("model", blankTo(record.getModelName(), "unknown-model"));
@@ -520,21 +520,29 @@ public class AiUsageService {
         if (value.contains("PPT") || value.contains("Agent")) return "组会PPT Agent执行";
         if (value.contains("审核")) return "AI发帖审核";
         if (value.contains("选题")) return "选题调研";
-        if (value.contains("综述") || value.contains("汇报") || value.contains("组会")) return "论文综述生成";
+        if (value.contains("组会")) return "论文综述生成";
         if (value.contains("翻译")) return "论文翻译";
-        return "AI文章对话";
+        return "AI研读对话";
     }
 
-    private String sceneLabel(String scene) {
-        return switch (blankTo(scene, "")) {
-            case ModelConfigService.SCENE_PAPER_REVIEW, "summary", "report" -> "论文综述";
-            case ModelConfigService.SCENE_PAPER_QA, "qa", "analyze" -> "AI论文问答";
-            case ModelConfigService.SCENE_TOPIC_RESEARCH -> "选题大厅";
-            case ModelConfigService.SCENE_MEETING_DECK -> "PPT生成";
-            case ModelConfigService.SCENE_FORUM_MODERATION -> "AI发帖审核";
-            case "translate" -> "全文翻译";
-            default -> blankTo(scene, "未知模块");
-        };
+    private String sceneLabel(String scene, String action) {
+        String act = blankTo(action, "");
+        if (act.contains("组会")) {
+            return "论文综述";
+        }
+        if ("translate".equalsIgnoreCase(scene)) {
+            return "全文翻译";
+        }
+        if (ModelConfigService.SCENE_TOPIC_RESEARCH.equalsIgnoreCase(scene)) {
+            return "选题大厅";
+        }
+        if (ModelConfigService.SCENE_MEETING_DECK.equalsIgnoreCase(scene)) {
+            return "PPT生成";
+        }
+        if (ModelConfigService.SCENE_FORUM_MODERATION.equalsIgnoreCase(scene)) {
+            return "AI发帖审核";
+        }
+        return "AI研读对话";
     }
 
     private String displayPaperTitle(String paperTitle, String fallback) {

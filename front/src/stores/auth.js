@@ -23,6 +23,14 @@ export const useAuthStore = defineStore("auth", () => {
     }),
   );
 
+  if (window.paperSolverDesktop?.isDesktop && !sessionStorage.getItem("papersolver-desktop-session-active")) {
+    sessionStorage.setItem("papersolver-desktop-session-active", "1");
+    session.isAuthenticated = false;
+    session.user = null;
+    session.notifications = [];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  }
+
   if (session.isAuthenticated && !session.user?.userId) {
     session.isAuthenticated = false;
     session.user = null;

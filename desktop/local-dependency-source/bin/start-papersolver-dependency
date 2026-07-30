@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+set -eu
+
+ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+PORT="${PAPER_SOLVER_PORT:-11008}"
+
+if [ -x "$ROOT_DIR/services/pdf/start" ]; then
+  exec "$ROOT_DIR/services/pdf/start" "$PORT"
+fi
+
+if [ -x "$ROOT_DIR/runtime/bin/python" ] && [ -f "$ROOT_DIR/services/pdf/server.py" ]; then
+  export PAPER_SOLVER_MODELS_DIR="$ROOT_DIR/models"
+  exec "$ROOT_DIR/runtime/bin/python" "$ROOT_DIR/services/pdf/server.py" --host 127.0.0.1 --port "$PORT"
+fi
+
+echo "PaperSolver local dependency package is incomplete: missing services/pdf/start or services/pdf/server.py" >&2
+exit 1

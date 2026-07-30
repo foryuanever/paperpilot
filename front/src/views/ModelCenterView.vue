@@ -77,24 +77,35 @@
           <div v-for="item in benefitItems" :key="item.key" class="linear-row">
             <div class="row-left">
               <span class="homepage-icon-box" :class="benefitBoxClass(item.key)">
-                <svg v-if="item.key === 'translation'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                <svg v-if="item.key === 'import'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <svg v-else-if="item.key === 'translation'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                <svg v-else-if="item.key === 'immersive'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                 <svg v-else-if="item.key === 'review'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="13" y2="11"/></svg>
-                <svg v-else-if="item.key === 'ppt'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="3"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><path d="M7 12l3-3 3 3 4-4"/></svg>
                 <svg v-else-if="item.key === 'chat'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <svg v-else-if="item.key === 'ppt'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="3"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><path d="M7 12l3-3 3 3 4-4"/></svg>
+                <svg v-else-if="item.key === 'forumBadge'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <svg v-else-if="item.key === 'forumTop'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                <svg v-else-if="item.key === 'peakPriority'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                 <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </span>
               <div class="row-title-block">
                 <strong>{{ item.label }}</strong>
-                <small v-if="!item.unlimited">当期额度 {{ item.quota }} 次</small>
-                <small v-else>全量开放免扣减</small>
+                <small v-if="item.unlimited">全量开放免扣减</small>
+                <small v-else-if="item.isFeature">{{ item.included ? '已开通特权' : '当期未包含' }}</small>
+                <small v-else-if="item.isTeam && !item.quota">个人套餐未开通</small>
+                <small v-else>当期额度 {{ item.quota }} {{ item.unit }}</small>
               </div>
             </div>
 
             <div class="row-center-meter">
-              <div v-if="!item.unlimited" class="linear-meter-track">
+              <div v-if="!item.unlimited && !item.isFeature && item.quota > 0" class="linear-meter-track">
                 <b :style="{ width: `${quotaPercent(item)}%` }"></b>
               </div>
-              <span v-else class="linear-unlimited-label">✓ 不限次数</span>
+              <span v-else-if="item.unlimited" class="linear-unlimited-label">✓ 不限次数</span>
+              <span v-else-if="item.isFeature" class="linear-feature-badge" :class="{ active: item.included }">
+                {{ item.included ? '✓ ' + (item.value || '包含') : '× 未包含' }}
+              </span>
+              <span v-else-if="item.isTeam && !item.quota" class="linear-disabled-label">未开放</span>
             </div>
 
             <div class="row-right">
@@ -145,9 +156,37 @@
                 <span class="plan-icon-badge">{{ planBadge(plan.id) }}</span>
               </header>
 
-              <div class="price-line">
+              <div v-if="isSeckillActive(plan)" class="plan-sale-strip">
+                <span>{{ plan.seckillLabel || "限时秒杀" }}</span>
+                <strong>{{ formatSeckillCountdown(plan) }}</strong>
+              </div>
+              <div class="price-line" :class="{ sale: isSeckillActive(plan) }">
+                <span v-if="isSeckillActive(plan)" class="origin-price">¥{{ originalPlanPrice(plan) }}</span>
                 <strong>¥{{ planPrice(plan) }}</strong>
-                <span>/ {{ cycleLabel(selectedCycle) }}</span>
+                <span>/ {{ cycleLabel(selectedCycle) }}{{ plan.teamShared ? ` (${teamMemberCount}人总计)` : '' }}</span>
+                <span v-if="plan.id === 'lite'" class="luckin-tag">
+                  <img :src="luckinLogo" alt="瑞幸" class="luckin-icon" />
+                  相当于一个月一杯瑞幸咖啡～
+                </span>
+              </div>
+
+              <div v-if="plan.teamShared" class="team-seats-selector" @click.stop>
+                <span class="seats-label">团队人数</span>
+                <div class="seats-counter">
+                  <button type="button" class="counter-btn" :disabled="teamMemberCount <= 2" @click="teamMemberCount = Math.max(2, teamMemberCount - 1)">-</button>
+                  <div class="counter-value-box">
+                    <input
+                      type="text"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      :value="teamMemberCount"
+                      @input="onTeamCountInput"
+                      class="counter-input"
+                    />
+                    <span class="counter-unit">人</span>
+                  </div>
+                  <button type="button" class="counter-btn" :disabled="teamMemberCount >= 100" @click="teamMemberCount = Math.min(100, teamMemberCount + 1)">+</button>
+                </div>
               </div>
 
               <ul class="center-plan-features">
@@ -161,8 +200,8 @@
               </ul>
               <p class="settlement-note">每个重置周期用量独立计算，次月重置或续费后自动充沛额度。</p>
 
-              <button class="plan-buy-button" @click.stop="selectAndCheckout(plan.id)">
-                开通该套餐
+              <button class="plan-buy-button" :class="{ 'free-button': plan.id === 'free' }" :disabled="plan.id === 'free'" @click.stop="selectAndCheckout(plan.id)">
+                {{ plan.id === 'free' ? '免费版使用中' : '开通该套餐' }}
               </button>
             </article>
           </div>
@@ -232,10 +271,11 @@
 <script setup>
 import { useScrollReveal } from "../composables/useScrollReveal";
 useScrollReveal(".model-center-page");
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useUsageStore } from "../stores/usage";
 import { paperpilotApi } from "../services/paperpilotApi";
 import goldCardReference from "../assets/membership/gold-card-cropped.jpg";
+import luckinLogo from "../assets/luckin-logo.png";
 
 const usageStore = useUsageStore();
 const loading = ref(false);
@@ -249,41 +289,61 @@ const paymentMessage = ref("");
 const ticketDialog = ref(null);
 const ticketSubmitting = ref(false);
 const ticketError = ref("");
+const nowTick = ref(Date.now());
+let saleTimer = null;
 const ticket = ref({ orderNo: "", type: "support", subject: "", detail: "" });
+const teamMemberCount = ref(5);
+
+function onTeamCountInput(e) {
+  const raw = String(e.target.value).replace(/\D/g, "");
+  if (!raw) return;
+  const val = parseInt(raw, 10);
+  if (!isNaN(val)) {
+    teamMemberCount.value = Math.min(100, Math.max(2, val));
+  }
+}
 
 const cycles = [
   { id: "monthly", label: "月付" },
-  { id: "quarterly", label: "季付", badge: "9 折" },
-  { id: "yearly", label: "年付", badge: "75 折" },
 ];
 
 const defaultPlans = [
-  { id: "lite", name: "个人 Lite", monthlyPrice: 9.9, reviewQuota: 3, pptQuota: 0, chatQuota: 60, teamSeats: 0, teamShared: false },
-  { id: "plus", name: "个人 Plus", monthlyPrice: 19.9, reviewQuota: 10, pptQuota: 1, chatQuota: 180, teamSeats: 0, teamShared: false },
-  { id: "pro", name: "个人 Pro", monthlyPrice: 39.9, reviewQuota: 25, pptQuota: 4, chatQuota: 500, teamSeats: 0, teamShared: false },
-  { id: "max", name: "个人 Max", monthlyPrice: 69.9, reviewQuota: 60, pptQuota: 10, chatQuota: 1200, teamSeats: 0, teamShared: false },
-  { id: "team_plus", name: "团队 Plus", monthlyPrice: 129, reviewQuota: 120, pptQuota: 16, chatQuota: 2600, teamSeats: 8, teamShared: true },
-  { id: "team_pro", name: "团队 Pro", monthlyPrice: 229, reviewQuota: 260, pptQuota: 36, chatQuota: 6000, teamSeats: 15, teamShared: true },
+  { id: "free", name: "个人 Free", subtitle: "永久免费版", monthlyPrice: 0, reviewQuotaDaily: 3, pptQuotaMonthly: 0, chatQuotaDaily: 5, translateQuotaDaily: 5, immersiveQuotaDaily: 3, forumSpecial: false, forumTopDaily: 0, peakPriority: false, teamShared: false },
+  { id: "lite", name: "个人 Lite", subtitle: "一杯瑞幸咖啡价", monthlyPrice: 9.9, reviewQuotaDaily: 15, pptQuotaMonthly: 2, chatQuotaDaily: 30, translateQuotaDaily: 10, immersiveQuotaDaily: 10, forumSpecial: false, forumTopDaily: 0, peakPriority: false, teamShared: false },
+  { id: "plus", name: "个人 Plus", subtitle: "热销推荐", monthlyPrice: 19.9, reviewQuotaDaily: 30, pptQuotaMonthly: 4, chatQuotaDaily: 60, translateQuotaDaily: 20, immersiveQuotaDaily: 20, forumSpecial: true, forumTopDaily: 0, peakPriority: false, teamShared: false },
+  { id: "pro", name: "个人 Pro", subtitle: "极速进阶", monthlyPrice: 29.9, reviewQuotaDaily: 60, pptQuotaMonthly: 6, chatQuotaDaily: 120, translateQuotaDaily: 50, immersiveQuotaDaily: 50, forumSpecial: true, forumTopDaily: 1, peakPriority: true, teamShared: false },
+  { id: "team_plus", name: "课题组团队 Plus", subtitle: "导师购买分配 (9折)", monthlyPrice: 17.91, perUserPrice: 19.9, reviewQuotaDaily: 30, pptQuotaMonthly: 4, chatQuotaDaily: 60, translateQuotaDaily: 20, immersiveQuotaDaily: 20, forumSpecial: true, forumTopDaily: 0, peakPriority: true, teamShared: true, teamSeats: 10 },
+  { id: "team_pro", name: "课题组团队 Pro", subtitle: "实验室旗舰 (9折)", monthlyPrice: 26.91, perUserPrice: 29.9, reviewQuotaDaily: 60, pptQuotaMonthly: 6, chatQuotaDaily: 120, translateQuotaDaily: 50, immersiveQuotaDaily: 50, forumSpecial: true, forumTopDaily: 1, peakPriority: true, teamShared: true, teamSeats: 20 },
 ];
 
 const plans = computed(() => usageStore.state.plans || []);
-const planOrder = ["lite", "plus", "pro", "max", "team_plus", "team_pro"];
+const planOrder = ["free", "lite", "plus", "pro", "team_plus", "team_pro"];
 const displayPlans = computed(() => {
   const byId = new Map(defaultPlans.map((plan) => [plan.id, plan]));
-  return planOrder.map((id) => byId.get(id)).filter(Boolean);
+  (plans.value || []).forEach((plan) => {
+    const id = normalizePlanId(plan.id);
+    byId.set(id, { ...(byId.get(id) || {}), ...plan, id });
+  });
+  return Array.from(byId.values())
+    .filter((plan) => plan && plan.activeFlag !== false)
+    .sort((a, b) => {
+      const ia = planOrder.includes(a.id) ? planOrder.indexOf(a.id) : Number(a.sortOrder ?? 99);
+      const ib = planOrder.includes(b.id) ? planOrder.indexOf(b.id) : Number(b.sortOrder ?? 99);
+      return ia === ib ? String(a.name || "").localeCompare(String(b.name || ""), "zh-CN") : ia - ib;
+    });
 });
 const planGroups = computed(() => [
   {
     key: "personal",
     label: "个人套餐",
-    description: "适合个人论文阅读、综述、问答与组会 PPT。",
-    plans: displayPlans.value.filter((item) => ["lite", "plus", "pro", "max"].includes(item.id)),
+    description: "包含永久免费版、基础版、热销版与进阶版，满足不同阶段科研需求。",
+    plans: displayPlans.value.filter((item) => !item.teamShared),
   },
   {
     key: "team",
-    label: "团队套餐",
-    description: "导师开通，全队共享额度与团队席位。",
-    plans: displayPlans.value.filter((item) => ["team_plus", "team_pro"].includes(item.id)),
+    label: "课题组团队套餐",
+    description: "导师购买按人数计费（享 9 折），包含团队分配与全员特权。",
+    plans: displayPlans.value.filter((item) => item.teamShared),
   },
 ]);
 const membership = computed(() => usageStore.state.membership || { id: "free", name: "未开通会员", benefits: {} });
@@ -313,35 +373,60 @@ function benefitIcon(key) {
 
 function benefitBoxClass(key) {
   return {
+    import: "box-blue",
     translation: "box-blue",
+    immersive: "box-cyan",
     review: "box-purple",
-    ppt: "box-emerald",
     chat: "box-amber",
-    team_seats: "box-blue"
+    ppt: "box-emerald",
+    forumBadge: "box-purple",
+    forumTop: "box-amber",
+    peakPriority: "box-emerald",
+    teamSeats: "box-blue",
   }[key] || "box-purple";
 }
 
 const benefitItems = computed(() => {
   const benefits = membership.value.benefits || {};
-  const row = (key, label) => ({ key, label, ...(benefits[key] || { quota: 0, used: 0, remaining: 0 }) });
+  const currentPlanId = normalizePlanId(membership.value.id || "free");
+  const planInfo = displayPlans.value.find((p) => p.id === currentPlanId) || defaultPlans[0];
+
   return [
-    { key: "translation", label: "导入/翻译", unlimited: true },
-    row("review", "论文综述"),
-    row("ppt", "组会 PPT"),
-    row("chat", "AI 对话"),
-    { key: "teamSeats", label: "团队席位", ...(benefits.teamSeats || { quota: 8, shared: false }) },
+    { key: "import", label: "论文插件导入", unlimited: true },
+    { key: "translation", label: "对照翻译", unlimited: false, quota: planInfo.translateQuotaDaily || 5, used: benefits.translation?.used || 0, unit: "篇/天" },
+    { key: "immersive", label: "沉浸翻译", unlimited: false, quota: planInfo.immersiveQuotaDaily || 3, used: benefits.immersive?.used || 0, unit: "篇/天" },
+    { key: "review", label: "AI 论文综述", unlimited: false, quota: planInfo.reviewQuotaDaily || 3, used: benefits.review?.used || 0, unit: "次/天" },
+    { key: "chat", label: "研读对话", unlimited: false, quota: planInfo.chatQuotaDaily || 5, used: benefits.chat?.used || 0, unit: "次/天" },
+    { key: "ppt", label: "组会 PPT", unlimited: false, quota: planInfo.pptQuotaMonthly || 0, used: benefits.ppt?.used || 0, unit: "次/月" },
+    { key: "forumBadge", label: "论坛会员标识", isFeature: true, included: planInfo.forumSpecial },
+    { key: "forumTop", label: "发帖置顶", isFeature: true, included: Number(planInfo.forumTopDaily || 0) > 0, value: planInfo.forumTopDaily ? `${planInfo.forumTopDaily} 次/天` : "未包含" },
+    { key: "peakPriority", label: "高峰期优先通道", isFeature: true, included: planInfo.peakPriority, value: planInfo.peakPriority ? "优先通道" : "标准通道" },
+    { key: "teamSeats", label: "团队席位", unlimited: false, quota: planInfo.teamSeats || (benefits.teamSeats?.quota || 0), used: benefits.teamSeats?.used || 0, unit: "席", isTeam: true },
   ];
 });
-const checkoutDescription = computed(() => [
-  `论文综述 ${selectedPlanInfo.value.reviewQuota || 0} 次`,
-  `组会 PPT ${selectedPlanInfo.value.pptQuota || 0} 次`,
-  `AI 文章对话 ${selectedPlanInfo.value.chatQuota || 0} 次`,
-  selectedPlanInfo.value.teamShared ? `团队共享 ${selectedPlanInfo.value.teamSeats || 20} 席` : "",
-].filter(Boolean).join(" · "));
+
+const checkoutDescription = computed(() => {
+  const plan = selectedPlanInfo.value;
+  const count = plan.teamShared ? teamMemberCount.value : 0;
+  return [
+    `对照 ${plan.translateQuotaDaily || 10} 篇/天`,
+    `沉浸 ${plan.immersiveQuotaDaily || 10} 篇/天`,
+    `综述 ${plan.reviewQuotaDaily || 15} 次/天`,
+    `PPT ${plan.pptQuotaMonthly || 2} 次/月`,
+    plan.teamShared ? `团队 ${count} 人席位` : "",
+  ].filter(Boolean).join(" · ");
+});
 
 onMounted(() => {
+  saleTimer = window.setInterval(() => {
+    nowTick.value = Date.now();
+  }, 1000);
   load();
   loadOrders();
+});
+
+onBeforeUnmount(() => {
+  if (saleTimer) window.clearInterval(saleTimer);
 });
 
 async function load() {
@@ -365,25 +450,63 @@ async function loadOrders() {
 }
 
 function planPrice(plan) {
+  const monthly = isSeckillActive(plan) ? Number(plan.seckillPrice ?? plan.effectiveMonthlyPrice ?? plan.monthlyPrice ?? 0) : Number(plan.effectiveMonthlyPrice ?? plan.monthlyPrice ?? 0);
+  return totalPlanPrice(monthly, plan);
+}
+
+function originalPlanPrice(plan) {
+  const monthly = Math.max(Number(plan.originalMonthlyPrice || 0), Number(plan.monthlyPrice || 0), Number(plan.effectiveMonthlyPrice || 0));
+  return totalPlanPrice(monthly, plan);
+}
+
+function totalPlanPrice(monthly, plan) {
   const factor = selectedCycle.value === "quarterly" ? 2.7 : selectedCycle.value === "yearly" ? 9 : 1;
-  return (Number(plan.monthlyPrice || 0) * factor).toFixed(2);
+  const isTeam = plan.teamShared;
+  const count = isTeam ? Math.max(1, teamMemberCount.value) : 1;
+  return (Number(monthly || 0) * factor * count).toFixed(2);
+}
+
+function isSeckillActive(plan) {
+  nowTick.value;
+  if (!plan || !plan.seckillEnabled) return false;
+  const start = parseDateValue(plan.seckillStartsAt);
+  const end = parseDateValue(plan.seckillEndsAt);
+  const now = Date.now();
+  return Number(plan.seckillPrice) >= 0 && (!start || start.getTime() <= now) && (!end || end.getTime() > now);
+}
+
+function seckillRemainingMs(plan) {
+  nowTick.value;
+  const end = parseDateValue(plan?.seckillEndsAt);
+  return end ? Math.max(0, end.getTime() - Date.now()) : 0;
+}
+
+function formatSeckillCountdown(plan) {
+  const ms = seckillRemainingMs(plan);
+  if (!ms) return "进行中";
+  const total = Math.floor(ms / 1000);
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  if (days > 0) return `${days}天 ${String(hours).padStart(2, "0")}小时 ${String(minutes).padStart(2, "0")}分 ${String(seconds).padStart(2, "0")}秒`;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function quotaPercent(item) {
-  return item.quota ? Math.max(0, Math.min(100, (item.remaining / item.quota) * 100)) : 0;
-}
-
-function benefitRemaining(item) {
   const quota = Number(item.quota || 0);
-  const remaining = Number(item.remaining);
-  if (Number.isFinite(remaining)) return Math.max(0, remaining);
-  return Math.max(0, quota - Number(item.used || 0));
+  const used = Number(item.used || 0);
+  return quota ? Math.max(0, Math.min(100, (used / quota) * 100)) : 0;
 }
 
 function benefitUsageLabel(item) {
   if (item.unlimited) return "不限次";
-  const unit = item.key === "teamSeats" ? "席" : "次";
-  return `${benefitRemaining(item)} / ${Number(item.quota || 0)} ${unit}`;
+  if (item.isFeature) return item.included ? (item.value || "包含") : "未包含";
+  if (item.isTeam && !item.quota) return "未开放";
+  const unit = item.unit || "次";
+  const quota = Number(item.quota || 0);
+  const used = Number(item.used || 0);
+  return `${used} / ${quota} ${unit}`;
 }
 
 function quotaTone(item) {
@@ -403,41 +526,103 @@ function cycleShortLabel(cycle) {
 }
 
 function planBadge(id) {
-  return ({ lite: "L", plus: "P+", pro: "P", max: "M", team_plus: "T+", team_pro: "TP" })[normalizePlanId(id)] || "M";
+  return ({ free: "F", lite: "L", plus: "P+", pro: "P", team_plus: "T+", team_pro: "TP" })[normalizePlanId(id)] || "P";
 }
 
 function planBadgeLabel(id) {
-  return ({ lite: "入门", plus: "热销", pro: "进阶", max: "满配", team_plus: "团队Plus", team_pro: "团队Pro" })[normalizePlanId(id)] || "套餐";
+  return ({ free: "永久免费", lite: "瑞幸咖啡价", plus: "热销推荐", pro: "极速进阶", team_plus: "团队 Plus (9折)", team_pro: "团队 Pro (9折)" })[normalizePlanId(id)] || "套餐";
 }
 
 function planCardTitle(id) {
-  return ({ lite: "个人 Lite", plus: "个人 Plus", pro: "个人 Pro", max: "个人 Max", team_plus: "团队 Plus", team_pro: "团队 Pro" })[normalizePlanId(id)] || "会员套餐";
+  return ({ free: "个人 Free", lite: "个人 Lite", plus: "个人 Plus", pro: "个人 Pro", team_plus: "课题组团队 Plus", team_pro: "课题组团队 Pro" })[normalizePlanId(id)] || "会员套餐";
 }
 
 function planCopy(id) {
   id = normalizePlanId(id);
   return ({
-    lite: "适合个人轻量阅读、基础问答和偶尔生成综述。",
-    plus: "适合课程论文、周会准备和稳定的论文问答。",
-    pro: "适合课题高频推进，包含更多 PPT 与论坛特权。",
-    max: "个人满配额度，适合密集综述、问答和组会输出。",
-    team_plus: "导师一人开通，全队共享 8 个席位与组会生成权益。",
-    team_pro: "面向更大的实验室团队，15 席并拥有最高次数与论坛特权。",
-  })[id] || "按任务次数使用。";
+    free: "基础科研体验，满足日常小量文献阅读与对话。",
+    lite: "一杯瑞幸咖啡的价格，轻松开启智能论文阅读与基础综述。",
+    plus: "适合课程论文、周会准备和日常科研高频问答。",
+    pro: "面向课题高压推进，高额度并享发帖置顶与高峰优先。",
+    team_plus: "导师按人数购买分配 (19.9元/人×9折)，全员特权与席位。",
+    team_pro: "实验室全员极速旗舰 (29.9元/人×9折)，顶配额度与全特权。",
+  })[id] || "按套餐次数与功能权益使用。";
 }
 
 function planRows(plan) {
   const id = normalizePlanId(plan.id);
-  const premiumForum = ["pro", "max", "team_pro"].includes(id);
-  const forumIdentity = premiumForum ? "彩色姓名 + 发帖波浪" : "未含";
-  const hasTeamSeats = Number(plan.teamSeats || 0) > 0;
+
+  if (id === "free") {
+    return [
+      { label: "论文插件导入", description: "文献一键入库与管理", value: "不限次", included: true },
+      { label: "对照翻译", description: "双栏对照翻译阅读", value: "每天 5 篇", included: true },
+      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: "每天 3 篇", included: true },
+      { label: "AI 论文综述", description: "结构化文献综述生成", value: "每天 3 次", included: true },
+      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: "每天 5 次", included: true },
+      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: "未包含", included: false },
+      { label: "论坛会员特效与标识", description: "彩色姓名与专属标识", value: "未包含", included: false },
+      { label: "高峰期优先响应", description: "高并发时段优先通道", value: "否", included: false },
+    ];
+  }
+  if (id === "lite") {
+    return [
+      { label: "论文插件导入", description: "文献一键入库与管理", value: "不限次", included: true },
+      { label: "对照翻译", description: "双栏对照翻译阅读", value: "每天 10 篇", included: true },
+      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: "每天 10 篇", included: true },
+      { label: "AI 论文综述", description: "结构化文献综述生成", value: "每天 15 次", included: true },
+      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: "每天 30 次", included: true },
+      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: "每月 2 次", included: true },
+      { label: "论坛会员特效与标识", description: "彩色姓名与专属标识", value: "未包含", included: false },
+      { label: "高峰期优先响应", description: "高并发时段优先通道", value: "否", included: false },
+    ];
+  }
+  if (id === "plus") {
+    return [
+      { label: "论文插件导入", description: "文献一键入库与管理", value: "不限次", included: true },
+      { label: "对照翻译", description: "双栏对照翻译阅读", value: "每天 20 篇", included: true },
+      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: "每天 20 篇", included: true },
+      { label: "AI 论文综述", description: "结构化文献综述生成", value: "每天 30 次", included: true },
+      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: "每天 60 次", included: true },
+      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: "每月 4 次", included: true },
+      { label: "论坛会员特效与标识", description: "彩色姓名与专属标识", value: "包含", included: true },
+      { label: "高峰期优先响应", description: "高并发时段优先通道", value: "否", included: false },
+    ];
+  }
+  if (id === "pro") {
+    return [
+      { label: "论文插件导入", description: "文献一键入库与管理", value: "不限次", included: true },
+      { label: "对照翻译", description: "双栏对照翻译阅读", value: "每天 50 篇", included: true },
+      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: "每天 50 篇", included: true },
+      { label: "AI 论文综述", description: "结构化文献综述生成", value: "每天 60 次", included: true },
+      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: "每天 120 次", included: true },
+      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: "每月 6 次", included: true },
+      { label: "论坛会员特效与标识", description: "会员特效 + 每日1次发帖置顶", value: "包含 (每日1次置顶)", included: true },
+      { label: "高峰期优先响应", description: "高并发时段优先通道", value: "优先", included: true },
+    ];
+  }
+  if (id === "team_plus") {
+    return [
+      { label: "论文插件导入", description: "全员文献入库与 PDF 管理", value: "不限次", included: true },
+      { label: "对照翻译", description: "全员双栏对照翻译阅读", value: "每人每天 20 篇", included: true },
+      { label: "沉浸翻译", description: "全员全页版式沉浸翻译", value: "每人每天 20 篇", included: true },
+      { label: "AI 论文综述", description: "全员结构化综述生成", value: "每人每天 30 次", included: true },
+      { label: "论文解析与研读对话", description: "全员学术问答与推演", value: "每人每天 60 次", included: true },
+      { label: "组会 PPT 汇报制作", description: "全员 PPT Agent 自动汇报", value: "每人每月 4 次", included: true },
+      { label: "论坛会员特效与标识", description: "全员尊享会员标识", value: "全员包含", included: true },
+      { label: "导师购买统一分配", description: "按人数结算享 9 折优惠", value: "¥17.91 / 人 / 月", included: true },
+      { label: "高峰期优先响应", description: "全员享受极速优先通道", value: "优先", included: true },
+    ];
+  }
   return [
-    { label: "论文导入与基础翻译", description: "文献入库、PDF 管理、基础翻译", value: "不限次", included: true },
-    { label: "论文综述生成", description: "规范分点综述，可保存复用", value: `${plan.reviewQuota || 0} 次`, included: Number(plan.reviewQuota || 0) > 0 },
-    { label: "组会 PPT 生成", description: "PPT Master Agent 重任务流程", value: Number(plan.pptQuota || 0) > 0 ? `${plan.pptQuota} 次` : "未包含", included: Number(plan.pptQuota || 0) > 0 },
-    { label: "AI 文章对话", description: "围绕论文内容连续追问", value: `${plan.chatQuota || 0} 次`, included: Number(plan.chatQuota || 0) > 0 },
-    { label: "论坛身份与发帖特效", description: "彩色姓名、发帖列表波浪等社区权益", value: forumIdentity, included: premiumForum },
-    { label: "团队共享席位", description: hasTeamSeats ? "导师开通，全队共享权益" : "个人套餐不开放扩展席位", value: hasTeamSeats ? `${plan.teamSeats} 席` : "未开放", included: hasTeamSeats },
+    { label: "论文插件导入", description: "全员文献入库与 PDF 管理", value: "不限次", included: true },
+    { label: "对照翻译", description: "全员双栏对照翻译阅读", value: "每人每天 50 篇", included: true },
+    { label: "沉浸翻译", description: "全员全页版式沉浸翻译", value: "每人每天 50 篇", included: true },
+    { label: "AI 论文综述", description: "全员结构化综述生成", value: "每人每天 60 次", included: true },
+    { label: "论文解析与研读对话", description: "全员学术问答与推演", value: "每人每天 120 次", included: true },
+    { label: "组会 PPT 汇报制作", description: "全员 PPT Agent 自动汇报", value: "每人每月 6 次", included: true },
+    { label: "论坛会员特效与标识", description: "全员会员标识 + 每人每日1次置顶", value: "全员包含 (每日1次置顶)", included: true },
+    { label: "导师购买统一分配", description: "按人数结算享 9 折优惠", value: "¥26.91 / 人 / 月", included: true },
+    { label: "高峰期优先响应", description: "全员享受极速优先通道", value: "优先", included: true },
   ];
 }
 
@@ -447,7 +632,7 @@ async function selectAndCheckout(planId) {
 }
 
 function normalizePlanId(id) {
-  return ({ light: "lite", study: "plus", lab: "pro", team: "team_plus" })[id] || id || "free";
+  return ({ light: "lite", study: "plus", lab: "pro", team: "team_plus", max: "pro" })[id] || id || "free";
 }
 
 function formatDate(value) {
@@ -490,7 +675,13 @@ async function checkout() {
   paying.value = true;
   paymentMessage.value = "";
   try {
-    const order = await paperpilotApi.createPaymentOrder({ planId: selectedPlan.value, planCycle: selectedCycle.value, provider: provider.value });
+    const order = await paperpilotApi.createPaymentOrder({
+      planId: selectedPlan.value,
+      planCycle: selectedCycle.value,
+      provider: provider.value,
+      quantity: teamMemberCount.value,
+      teamMemberCount: teamMemberCount.value
+    });
     paymentMessage.value = order.message || "订单已创建。";
     if (order.paymentUrl) window.open(order.paymentUrl, "_blank", "noopener,noreferrer");
     await loadOrders();
@@ -892,6 +1083,38 @@ async function submitTicket() {
   font-weight: 800;
 }
 
+.linear-feature-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 850;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+.linear-feature-badge.active {
+  background: rgba(16, 185, 129, 0.14);
+  color: #10b981;
+}
+
+.linear-disabled-label {
+  font-size: 12px;
+  color: var(--c-subtle);
+  font-weight: 700;
+}
+
+.homepage-icon-box.box-cyan {
+  background: rgba(6, 182, 212, 0.08);
+  border: 1.5px solid rgba(6, 182, 212, 0.3);
+  color: #0891b2;
+}
+:root[data-theme="dark"] .homepage-icon-box.box-cyan {
+  background: rgba(6, 182, 212, 0.12);
+  border-color: rgba(6, 182, 212, 0.4);
+  color: #22d3ee;
+}
+
 .row-right {
   text-align: right;
 }
@@ -1131,13 +1354,68 @@ async function submitTicket() {
 .price-line {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 6px 9px;
   margin-bottom: 18px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--c-border);
 }
+
+.plan-sale-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(245, 158, 11, 0.14));
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  color: #b91c1c;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+:root[data-theme="dark"] .plan-sale-strip {
+  color: #fecaca;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(245, 158, 11, 0.16));
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
+.plan-sale-strip strong {
+  flex-shrink: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #ef4444;
+  font-size: 10.5px;
+  letter-spacing: 0;
+}
+
+:root[data-theme="dark"] .plan-sale-strip strong {
+  color: #fbbf24;
+}
+
+.price-line.sale {
+  align-items: baseline;
+}
+
+.price-line .origin-price {
+  color: var(--c-muted);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.price-line.sale strong {
+  color: #ef4444;
+}
+
+:root[data-theme="dark"] .price-line.sale strong {
+  color: #fb7185;
+}
+
 .price-line strong {
-  font-size: 32px;
+  font-size: clamp(28px, 2.5vw, 32px);
   font-weight: 950;
   color: var(--c-text);
   font-family: tabular-nums;
@@ -1147,6 +1425,86 @@ async function submitTicket() {
   font-size: 12px;
   color: var(--c-muted);
   font-weight: 700;
+}
+
+.team-seats-selector {
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(129, 140, 248, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.seats-label {
+  font-size: 13px;
+  font-weight: 850;
+  color: var(--c-text);
+  white-space: nowrap;
+}
+.seats-counter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.counter-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  background: rgba(99, 102, 241, 0.14);
+  color: var(--c-text);
+  font-size: 16px;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+.counter-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.counter-btn:not(:disabled):hover {
+  background: rgba(99, 102, 241, 0.28);
+  border-color: rgba(129, 140, 248, 0.6);
+  transform: scale(1.05);
+}
+
+.counter-value-box {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(129, 140, 248, 0.35);
+}
+:root[data-theme="light"] .counter-value-box {
+  background: #ffffff;
+}
+
+.counter-input {
+  width: 36px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--c-text);
+  text-align: center;
+  font-size: 15px;
+  font-weight: 900;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+}
+.counter-unit {
+  font-size: 13px;
+  font-weight: 850;
+  color: #818cf8;
 }
 
 /* Feature list */
@@ -1164,12 +1522,12 @@ async function submitTicket() {
   gap: 10px;
 }
 .feature-check {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: rgba(16, 185, 129, 0.12);
+  background: rgba(16, 185, 129, 0.16);
   color: #10b981;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   display: grid;
   place-items: center;
@@ -1177,8 +1535,33 @@ async function submitTicket() {
   margin-top: 1px;
 }
 .feature-check.excluded {
-  background: rgba(148, 163, 184, 0.12);
-  color: var(--c-subtle);
+  background: rgba(239, 68, 68, 0.16);
+  color: #ef4444;
+}
+
+.luckin-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  flex: 0 0 100%;
+  margin-top: 6px;
+  padding: 3px 11px 3px 5px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 850;
+  color: #a5b4fc;
+  background: rgba(49, 46, 129, 0.45);
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  white-space: normal;
+}
+.luckin-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
 }
 .center-plan-features li div strong {
   display: block;

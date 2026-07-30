@@ -66,6 +66,7 @@ public class TopicResearchService {
         String q = text(keyword).toLowerCase();
         return topicResearchRepository.findAllByOrderByCreatedAtDesc().stream()
             .filter(this::isDisplayableTopic)
+            .filter(topic -> canViewTopic(topic, user.getId()))
             .filter(topic -> !savedOnly || isSaved(topic, user.getId()))
             .filter(topic -> !StringUtils.hasText(q) || searchable(topic).toLowerCase().contains(q))
             .filter(topic -> !StringUtils.hasText(discipline) || text(topic.getDiscipline()).equals(discipline))
@@ -146,6 +147,7 @@ public class TopicResearchService {
         String seedPapers = text(body.get("seedPapers"));
         List<String> constraints = stringList(body.get("constraints"));
         String note = text(body.get("note"));
+        boolean publicShare = officialPublish || truthy(body.get("publicShare"));
         int maxTopics = Math.max(1, Math.min(officialPublish ? 3 : 1, intValue(body.get("maxTopics"), officialPublish ? 3 : 1)));
         String searchQuery = String.join(" ", direction, researchObject, sampleType, keywords, seedPapers).trim();
         List<Map<String, Object>> evidencePapers = searchAcademicEvidence(searchQuery, discipline, goal);
@@ -174,7 +176,7 @@ public class TopicResearchService {
             researchContext.put("maxTopics", maxTopics);
             researchContext.put("academic_search_results", evidencePapers);
             AiChatService.ChatResult result = aiChatService.chatJsonWithModelFallback(
-                "你是 deep-research 选题调研 agent。只输出 JSON，不要 Markdown。必须基于 academic_search_results 中的真实检索候选做选题，不允许编造论文题名、DOI、作者或年份。任务：用户给的是研究方向大类和 research brief，你需要生成 maxTopics 张可供选择的选题卡；如果 maxTopics=1，就只输出 1 张。彼此方向必须明显不同，不允许同一套小类反复换标题。JSON 字段：topics(array)。每个 topic 包含 title, summary, discipline, stage, goal,tags(array), themeClusters(array), researchQuestion, researchGap, methodRoute, riskNote, feasibilityScore(number), innovationScore(number), difficultyScore(number), subtopics(array), representativePapers(array of {title, source, year, reason})。每个 subtopic 必须包含 {name, recommendationScore, analysisSections, papers}。analysisSections 必须是对象，且包含 summary, method, publicationStatus, advantages, limitations, potentialPaper, representativePaper 七个字段；每个字段必须返回 3-5 条字符串数组，每条 70-140 个中文字符，不要只写一两句。每条都要从候选论文 title/abstract/reason 中抽具体事实：研究对象、数据/样本、基线或对照、指标、失败边界、可写论文角度。每条不要以“利用/通过/研究/探讨/分析”这种空动词开头，必须写出具体对象或方法名。每张卡必须推荐 3 个具体研究方向，最多 5 个。小方向名称必须像“主动轮廓少样本分割”“PETCT少样本U-Net”“低剂量CT域偏移校准”这种可直接开题的切口；禁止写“可靠性提升方法”“诊断可靠性”“数据与样本”“方法路线”“评价指标”“研究问题”这类宽泛栏目名。每个 subtopic.papers 必须从 academic_search_results 里选择 1-3 篇精准对应的真实候选论文，title 必须逐字使用候选 title。subtopic.name 和 method 字段里的方法名必须能在对应论文 title/abstract/reason 中找到依据；例如没有 GAN/adversarial/generative 证据时禁止写“生成对抗网络”。representativePaper 字段必须解释这些论文为什么支撑当前小方向。若候选论文支撑不了某个小方向，就换成候选论文能支撑的方向，不能硬编。禁用句式：探索、提升、优化、相关研究较少、需要更多实证支持、应用广泛、逐渐受到关注、设计新的网络架构、验证模型有效性、提高鲁棒性、结合多模态数据和临床反馈。必须避开 avoidRoutes，优先满足 constraints、evaluationFocus 和 expectedContribution。",
+                "你是 deep-research 选题调研 agent。只输出 JSON，不要 Markdown。必须基于 academic_search_results 中的真实检索候选做选题，不允许编造论文题名、DOI、作者或年份。任务：用户给的是研究方向大类和 research brief，你需要生成 maxTopics 张可供选择的选题卡；如果 maxTopics=1，就只输出 1 张。彼此方向必须明显不同，不允许同一套小类反复换标题。JSON 字段：topics(array)。每个 topic 包含 title, summary, discipline, stage, goal,tags(array), themeClusters(array), researchQuestion, researchGap, methodRoute, riskNote, feasibilityScore(number), innovationScore(number), difficultyScore(number), subtopics(array), representativePapers(array of {title, source, year, reason})。每个 subtopic 必须包含 {name, recommendationScore, analysisSections, papers}。analysisSections 必须是对象，且包含 summary, method, publicationStatus, advantages, limitations, potentialPaper, representativePaper 七个字段；每个字段必须返回 1-5 条字符串数组，按真实信息量决定条数，不能为了凑数拆句。每个字段内部的条目必须是同一维度的并列分点：summary 写研究对象/问题定义，method 写方法组件，publicationStatus 写数据来源/发文证据，advantages 写可验证优势，limitations 写风险边界，potentialPaper 写可开题角度，representativePaper 写论文证据。禁止在条目前重复字段标题，禁止写“方法包括：”“本文采用以下方法：”“待核对：”“首先/其次/然后/随着/本文目的”等伪分点，禁止输出冒号开头或标题式短语。每条都要从候选论文 title/abstract/reason 中抽具体事实：研究对象、数据/样本、基线或对照、指标、失败边界、可写论文角度。每条不要以“利用/通过/研究/探讨/分析”这种空动词开头，必须写出具体对象或方法名。每张卡必须推荐 3 个具体研究方向，最多 5 个。小方向名称必须像“主动轮廓少样本分割”“PETCT少样本U-Net”“低剂量CT域偏移校准”这种可直接开题的切口；禁止写“可靠性提升方法”“诊断可靠性”“数据与样本”“方法路线”“评价指标”“研究问题”这类宽泛栏目名。每个 subtopic.papers 必须从 academic_search_results 里选择 1-3 篇精准对应的真实候选论文，title 必须逐字使用候选 title。subtopic.name 和 method 字段里的方法名必须能在对应论文 title/abstract/reason 中找到依据；例如没有 GAN/adversarial/generative 证据时禁止写“生成对抗网络”。representativePaper 字段必须解释这些论文为什么支撑当前小方向。若候选论文支撑不了某个小方向，就换成候选论文能支撑的方向，不能硬编。禁用句式：探索、提升、优化、相关研究较少、需要更多实证支持、应用广泛、逐渐受到关注、设计新的网络架构、验证模型有效性、提高鲁棒性、结合多模态数据和临床反馈。必须避开 avoidRoutes，优先满足 constraints、evaluationFocus 和 expectedContribution。",
                 objectMapper.writeValueAsString(researchContext),
                 10000,
                 TOPIC_FALLBACK_MODELS
@@ -183,7 +185,6 @@ public class TopicResearchService {
             for (TopicResearchEntity entity : entities) {
                 if (!evidencePapers.isEmpty()) {
                     entity.setRepresentativePapersJson(objectMapper.writeValueAsString(mergeEvidencePapers(parsePapers(entity.getRepresentativePapersJson()), evidencePapers)));
-                    entity.setSource(officialPublish ? "官方" : "deep-research + academic-search");
                 }
                 if (officialPublish) entity.setModelName(firstNonBlank(entity.getModelName(), "daily-frontier"));
             }
@@ -209,6 +210,7 @@ public class TopicResearchService {
                 entity.setSavedByUserIds("");
                 if (!StringUtils.hasText(entity.getModelName())) entity.setModelName("daily-frontier");
             } else {
+                entity.setSource(publicShare ? "匿名用户提供" : "个人");
                 entity.setSavedByUserIds(userId);
             }
             saved.add(topicResearchRepository.save(entity));
@@ -242,12 +244,15 @@ public class TopicResearchService {
         LinkedHashSet<String> ids = interestedIds(topic);
         String userId = String.valueOf(user.getId());
         boolean interested = ids.contains(userId);
-        if (!interested) {
+        if (interested) {
+            ids.remove(userId);
+            interested = false;
+        } else {
             ids.add(userId);
-            topic.setInterestedByUserIds(String.join(",", ids));
-            topic.setLikes(Math.max(value(topic.getLikes()), ids.size()));
             interested = true;
         }
+        topic.setInterestedByUserIds(String.join(",", ids));
+        topic.setLikes(ids.size());
         topicResearchRepository.save(topic);
         return Map.of("id", publicId(topic), "likes", value(topic.getLikes()), "interested", interested);
     }
@@ -438,7 +443,7 @@ public class TopicResearchService {
         repairContext.put("previous_json", stripJson(previousJson));
         repairContext.put("academic_search_results", evidencePapers);
         return aiChatService.chatJsonWithModelFallbackSkipping(
-            "你是选题调研质检返工 agent。只输出 JSON，不要 Markdown。上一轮结果没有通过质量门，quality_error 已明确指出失败原因。你必须重写失败的小方向，而不是微调一句话。严格要求：1）如果 research_brief.maxTopics=1，只输出 1 张 topic；2）每张 topic 必须有 3 个 subtopics，最多 5 个，三个方向必须分别绑定不同代表论文，不许围绕同一个词换壳；3）subtopic.name 必须是具体论文切口，像“主动轮廓少样本分割”“PETCT少样本U-Net”“低剂量CT域偏移校准”，不能是栏目名，不能写“可靠性提升方法/诊断可靠性/研究问题/方法路线/数据与样本/评价指标/应用边界/小方向/现状分析”；4）每个 subtopic 必须返回 analysisSections 对象，含 summary, method, publicationStatus, advantages, limitations, potentialPaper, representativePaper 七个字段；每个字段必须是 3-5 条字符串数组，每条 70-140 个中文字符；5）每条都必须从 academic_search_results 的 title/abstract/reason 里抽取具体事实，至少写清一个方法名、数据/样本形态、指标或评价边界，不得用空泛套话补字数；6）subtopic.name 和 method 字段的方法名必须被对应 papers 的 title/abstract/reason 支撑，没有 GAN/adversarial/generative 证据时禁止写“生成对抗网络”，没有 transformer/SAM/U-Net 证据时禁止写对应方法；7）禁用句式：具有重要意义、具有潜力、至关重要、有望发表、相关研究较少、需要更多实证支持、应用广泛、逐渐受到关注、设计新的网络架构、验证模型有效性、提高鲁棒性、优化模型结构；8）每个 subtopic.papers 必须从 academic_search_results 里选择 1-3 篇精准对应的题名，title 必须逐字使用候选 title，representativePaper 字段也要点名这些论文；9）如果某个小方向找不到对应论文，就改写成候选论文能支撑的小方向；10）不得编造论文。输出 schema：{topics:[{title,summary,discipline,stage,goal,tags,themeClusters,researchQuestion,researchGap,methodRoute,riskNote,feasibilityScore,innovationScore,difficultyScore,subtopics:[{name,recommendationScore,analysisSections:{summary:[],method:[],publicationStatus:[],advantages:[],limitations:[],potentialPaper:[],representativePaper:[]},papers:[{title,source,year}]}],representativePapers}]}",
+            "你是选题调研质检返工 agent。只输出 JSON，不要 Markdown。上一轮结果没有通过质量门，quality_error 已明确指出失败原因。你必须重写失败的小方向，而不是微调一句话。严格要求：1）如果 research_brief.maxTopics=1，只输出 1 张 topic；2）每张 topic 必须有 3 个 subtopics，最多 5 个，三个方向必须分别绑定不同代表论文，不许围绕同一个词换壳；3）subtopic.name 必须是具体论文切口，像“主动轮廓少样本分割”“PETCT少样本U-Net”“低剂量CT域偏移校准”，不能是栏目名，不能写“可靠性提升方法/诊断可靠性/研究问题/方法路线/数据与样本/评价指标/应用边界/小方向/现状分析”；4）每个 subtopic 必须返回 analysisSections 对象，含 summary, method, publicationStatus, advantages, limitations, potentialPaper, representativePaper 七个字段；每个字段必须是 1-5 条字符串数组，按真实信息量决定条数，不能为了凑数拆句；5）每个字段内部的条目必须同一维度并列：summary 写对象/问题定义，method 写方法组件，publicationStatus 写数据来源/发文证据，advantages 写可验证优势，limitations 写风险边界，potentialPaper 写可开题角度，representativePaper 写论文证据；6）禁止在条目前重复字段标题，禁止写“方法包括：”“本文采用以下方法：”“待核对：”“首先/其次/然后/随着/本文目的”等伪分点，禁止输出冒号开头或标题式短语；7）每条都必须从 academic_search_results 的 title/abstract/reason 里抽取具体事实，至少写清一个方法名、数据/样本形态、指标或评价边界，不得用空泛套话补字数；8）subtopic.name 和 method 字段的方法名必须被对应 papers 的 title/abstract/reason 支撑，没有 GAN/adversarial/generative 证据时禁止写“生成对抗网络”，没有 transformer/SAM/U-Net 证据时禁止写对应方法；9）禁用句式：具有重要意义、具有潜力、至关重要、有望发表、相关研究较少、需要更多实证支持、应用广泛、逐渐受到关注、设计新的网络架构、验证模型有效性、提高鲁棒性、优化模型结构；10）每个 subtopic.papers 必须从 academic_search_results 里选择 1-3 篇精准对应的题名，title 必须逐字使用候选 title，representativePaper 字段也要点名这些论文；11）如果某个小方向找不到对应论文，就改写成候选论文能支撑的小方向；12）不得编造论文。输出 schema：{topics:[{title,summary,discipline,stage,goal,tags,themeClusters,researchQuestion,researchGap,methodRoute,riskNote,feasibilityScore,innovationScore,difficultyScore,subtopics:[{name,recommendationScore,analysisSections:{summary:[],method:[],publicationStatus:[],advantages:[],limitations:[],potentialPaper:[],representativePaper:[]},papers:[{title,source,year}]}],representativePapers}]}",
             objectMapper.writeValueAsString(repairContext),
             10000,
             TOPIC_FALLBACK_MODELS,
@@ -701,11 +706,20 @@ public class TopicResearchService {
         return true;
     }
 
+    private boolean canViewTopic(TopicResearchEntity topic, Long userId) {
+        String source = text(topic.getSource()).toLowerCase(Locale.ROOT);
+        if (!source.contains("个人")) return true;
+        return userId != null && Objects.equals(topic.getUserId(), userId);
+    }
+
     private String providerLabel(TopicResearchEntity topic) {
         String source = text(topic.getSource());
         String modelName = text(topic.getModelName());
         if (source.contains("官方") || source.contains("daily-frontier") || "seed".equals(modelName) || "daily-frontier".equals(modelName)) {
             return "官方";
+        }
+        if (source.contains("个人")) {
+            return "个人";
         }
         return "匿名用户提供";
     }
@@ -876,14 +890,26 @@ public class TopicResearchService {
             if (value.isArray()) {
                 List<String> items = new ArrayList<>();
                 value.forEach(item -> {
-                    String text = item.asText("");
+                    String text = cleanAnalysisPoint(item.asText(""));
                     if (StringUtils.hasText(text)) items.add(text.trim());
                 });
-                if (!items.isEmpty()) return String.join("\n", items);
+                if (!items.isEmpty()) return String.join("\n", items.stream().limit(5).toList());
             }
-            if (StringUtils.hasText(value.asText(""))) return value.asText("").trim();
+            String text = cleanAnalysisPoint(value.asText(""));
+            if (StringUtils.hasText(text)) return text;
         }
         return "";
+    }
+
+    private String cleanAnalysisPoint(String raw) {
+        String value = text(raw)
+            .replaceAll("[#*_`>]", "")
+            .replaceAll("^[\\s:：；;,.，。·•\\-—]+", "")
+            .replaceAll("^\\d+[.、)]\\s*", "")
+            .replaceAll("^(摘要|具体方法|方法|发文现状|优势|局限|风险|潜在论文|代表论文|研究背景|研究目标|研究缺口|评价指标)[:：]\\s*", "")
+            .replaceAll("^(首先|其次|然后|最后|随着|待核对|本文目的|本文采用以下方法|本文采用的方法|方法包括|评价指标包括)[:：，,\\s]*", "")
+            .trim();
+        return value.replaceAll("\\s+", " ");
     }
 
     private List<Map<String, Object>> readPaperRefArray(JsonNode node) {
@@ -1697,6 +1723,12 @@ public class TopicResearchService {
         } catch (Exception ignored) {
             return fallback;
         }
+    }
+
+    private boolean truthy(Object value) {
+        if (value instanceof Boolean bool) return bool;
+        String raw = text(value).toLowerCase(Locale.ROOT);
+        return raw.equals("true") || raw.equals("1") || raw.equals("yes") || raw.equals("公开") || raw.equals("public");
     }
 
     private String defaultText(Map<String, Object> body, String key, String fallback) {

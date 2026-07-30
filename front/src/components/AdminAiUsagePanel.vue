@@ -7,9 +7,14 @@
           <h4>AI 调用明细</h4>
           <p>记录本站用户在每个模块中调用的模型、输入 Token、输出 Token、费用估算与失败原因。</p>
         </div>
-        <button class="spatial-btn spatial-btn-accent compact-btn" :disabled="loading" @click="loadAiUsageCalls">
-          {{ loading ? "刷新中..." : "刷新账本" }}
-        </button>
+        <div class="ledger-header-actions">
+          <button class="spatial-btn spatial-btn-ghost compact-btn danger-btn" :disabled="loading || clearing" @click="clearAiUsageCalls">
+            {{ clearing ? "清空中..." : "清空调用记录" }}
+          </button>
+          <button class="spatial-btn spatial-btn-accent compact-btn" :disabled="loading" @click="loadAiUsageCalls">
+            {{ loading ? "刷新中..." : "刷新账本" }}
+          </button>
+        </div>
       </div>
 
       <div class="ledger-filters">
@@ -145,6 +150,7 @@ const rows = ref([]);
 const total = ref(0);
 const totalPages = ref(1);
 const loading = ref(false);
+const clearing = ref(false);
 const summary = ref({ inputTokens: 0, outputTokens: 0, totalTokens: 0, failed: 0, matchedCalls: 0, cost: 0 });
 
 const filters = ref({
@@ -213,6 +219,27 @@ function changePage(targetPage) {
   loadAiUsageCalls();
 }
 
+async function clearAiUsageCalls() {
+  const ok = await dialogStore.confirm("确认清空全部 AI 调用记录吗？清空后会保留本次清空动作的系统日志。", {
+    title: "清空 AI 调用记录",
+    confirmText: "清空",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok) return;
+  clearing.value = true;
+  try {
+    await paperpilotApi.clearAdminAiUsageCalls();
+    page.value = 1;
+    await loadAiUsageCalls();
+    dialogStore.alert("AI 调用记录已清空。");
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "清空 AI 调用记录失败");
+  } finally {
+    clearing.value = false;
+  }
+}
+
 function formatNumber(value) {
   return (Number(value) || 0).toLocaleString("zh-CN");
 }
@@ -263,6 +290,20 @@ onMounted(() => {
   align-items: center;
   gap: 18px;
   margin-bottom: 20px;
+}
+
+.ledger-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ledger-header-actions .danger-btn {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, .38);
+  background: rgba(127, 29, 29, .16);
 }
 
 .pool-kicker {

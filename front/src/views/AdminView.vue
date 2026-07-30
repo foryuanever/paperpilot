@@ -192,6 +192,22 @@
                     <div class="table-actions">
                       <button class="spatial-btn spatial-btn-accent compact-btn" style="min-height: 28px; padding: 0 10px; font-size: 0.75rem;" @click="editUserMembership(user)">分配会员</button>
                       <button class="spatial-btn spatial-btn-ghost compact-btn" style="min-height: 28px; padding: 0 10px; font-size: 0.75rem;" @click="toggleUserRole(user)">切角色</button>
+                      <button
+                        v-if="!user.banned"
+                        class="spatial-btn spatial-btn-ghost compact-btn"
+                        style="min-height: 28px; padding: 0 10px; font-size: 0.75rem; border-color: rgba(239,68,68,0.3); color: #ef4444; background: rgba(239,68,68,0.02);"
+                        @click="promptBanUser(user)"
+                      >
+                        封禁
+                      </button>
+                      <button
+                        v-else
+                        class="spatial-btn spatial-btn-ghost compact-btn"
+                        style="min-height: 28px; padding: 0 10px; font-size: 0.75rem; border-color: rgba(34,197,94,0.3); color: #22c55e; background: rgba(34,197,94,0.02);"
+                        @click="executeUnbanUser(user)"
+                      >
+                        解封
+                      </button>
                       <button class="spatial-btn spatial-btn-ghost compact-btn" style="min-height: 28px; padding: 0 10px; font-size: 0.75rem; border-color: rgba(239,68,68,0.2); color: #ef4444; background: rgba(239,68,68,0.02);" @click="deleteUser(user)">移除</button>
                     </div>
                   </td>
@@ -215,6 +231,115 @@
               <strong>{{ userPage }} / {{ userPageCount }}</strong>
               <button :disabled="userPage >= userPageCount" @click="userPage += 1">下一页</button>
             </div>
+          </div>
+        </div>
+
+        <div v-if="activeTab === 'membershipPlans'" class="tab-pane membership-plan-pane">
+          <div class="pane-header-row">
+            <div>
+              <h3>会员套餐管理</h3>
+              <p class="pane-description">后台实时调整套餐价格、权益额度与限时秒杀。用户购买页会自动展示原价删除线、优惠价和倒计时。</p>
+            </div>
+            <div class="membership-admin-actions">
+              <button class="spatial-btn spatial-btn-ghost compact-btn" :disabled="membershipPlansLoading" @click="loadMembershipPlans">
+                {{ membershipPlansLoading ? "同步中..." : "刷新套餐" }}
+              </button>
+              <button class="spatial-btn spatial-btn-accent compact-btn" :disabled="creatingMembershipPlan" @click="createMembershipPlan">
+                {{ creatingMembershipPlan ? "创建中..." : "+ 上架新套餐" }}
+              </button>
+            </div>
+          </div>
+
+          <div class="membership-admin-summary spatial-glass-panel">
+            <article>
+              <span>当前套餐</span>
+              <strong>{{ membershipPlans.length }}</strong>
+              <small>数据库可编辑配置</small>
+            </article>
+            <article>
+              <span>秒杀活动</span>
+              <strong>{{ activeSeckillCount }}</strong>
+              <small>正在展示倒计时</small>
+            </article>
+            <article>
+              <span>计费周期</span>
+              <strong>月付</strong>
+              <small>当前只开放单月订阅</small>
+            </article>
+          </div>
+
+          <div class="membership-plan-admin-grid">
+            <article v-for="plan in membershipPlans" :key="plan.id" class="membership-plan-admin-card spatial-glass-panel" :class="{ inactive: plan.activeFlag === false, sale: plan.seckillEnabled }">
+              <header>
+                <div>
+                  <span class="plan-admin-id">{{ plan.id }}</span>
+                  <input v-model.trim="plan.name" class="plan-admin-name" placeholder="套餐名称" />
+                  <input v-model.trim="plan.subtitle" class="plan-admin-subtitle" placeholder="套餐副标题" />
+                </div>
+                <label class="plan-admin-switch">
+                  <input v-model="plan.activeFlag" type="checkbox" :disabled="savingMembershipPlanIds.has(plan.id)" @change="toggleMembershipPlanActive(plan)" />
+                  <span>{{ plan.activeFlag === false ? "隐藏" : "上架" }}</span>
+                </label>
+              </header>
+
+              <div class="plan-admin-section">
+                <strong>价格策略</strong>
+                <div class="plan-admin-fields three">
+                  <label>月价<input v-model.number="plan.monthlyPrice" type="number" min="0" step="0.01" /></label>
+                  <label>原月价<input v-model.number="plan.originalMonthlyPrice" type="number" min="0" step="0.01" /></label>
+                  <label>排序<input v-model.number="plan.sortOrder" type="number" min="0" step="1" /></label>
+                </div>
+              </div>
+
+              <div class="plan-admin-section">
+                <strong>权益额度</strong>
+                <div class="plan-admin-fields">
+                  <label>综述总额<input v-model.number="plan.reviewQuota" type="number" min="0" /></label>
+                  <label>PPT/月<input v-model.number="plan.pptQuota" type="number" min="0" /></label>
+                  <label>AI问答总额<input v-model.number="plan.chatQuota" type="number" min="0" /></label>
+                  <label>对照/天<input v-model.number="plan.translateQuota" type="number" min="0" /></label>
+                  <label>沉浸/天<input v-model.number="plan.immersiveQuota" type="number" min="0" /></label>
+                  <label>团队席位<input v-model.number="plan.teamSeats" type="number" min="0" /></label>
+                </div>
+              </div>
+
+              <div class="plan-admin-flags">
+                <label><input v-model="plan.teamShared" type="checkbox" /> 团队共享</label>
+                <label><input v-model="plan.forumSpecial" type="checkbox" /> 论坛标识</label>
+                <label><input v-model="plan.peakPriority" type="checkbox" /> 高峰优先</label>
+                <label>发帖置顶/天 <input v-model.number="plan.forumTopDaily" type="number" min="0" /></label>
+              </div>
+
+              <div class="plan-admin-seckill">
+                <div class="seckill-head">
+                  <label><input v-model="plan.seckillEnabled" type="checkbox" /> 开启限时秒杀</label>
+                  <span v-if="plan.seckillActive" class="seckill-live">进行中 · {{ formatAdminCountdown(plan.seckillRemainingSeconds) }}</span>
+                </div>
+                <div class="plan-admin-fields">
+                  <label>秒杀标签<input v-model.trim="plan.seckillLabel" placeholder="限时秒杀" /></label>
+                  <label>秒杀月价<input v-model.number="plan.seckillPrice" type="number" min="0" step="0.01" /></label>
+                  <label>开始时间<input v-model="plan.seckillStartsAt" type="datetime-local" /></label>
+                  <label>结束时间<input v-model="plan.seckillEndsAt" type="datetime-local" /></label>
+                </div>
+              </div>
+
+              <footer>
+                <p>{{ planPreview(plan) }}</p>
+                <div class="plan-admin-footer-actions">
+                  <button
+                    v-if="canDeleteMembershipPlan(plan)"
+                    class="spatial-btn spatial-btn-ghost compact-btn danger-lite"
+                    :disabled="deletingMembershipPlanIds.has(plan.id)"
+                    @click="deleteMembershipPlan(plan)"
+                  >
+                    {{ deletingMembershipPlanIds.has(plan.id) ? "删除中..." : "删除" }}
+                  </button>
+                  <button class="spatial-btn spatial-btn-accent compact-btn" :disabled="savingMembershipPlanIds.has(plan.id)" @click="saveMembershipPlan(plan)">
+                    {{ savingMembershipPlanIds.has(plan.id) ? "保存中..." : "保存套餐" }}
+                  </button>
+                </div>
+              </footer>
+            </article>
           </div>
         </div>
 
@@ -658,6 +783,11 @@
           <AdminAiUsagePanel />
         </div>
 
+        <!-- Tab Content: Monitoring Dashboard -->
+        <div v-if="activeTab === 'monitoring'" class="tab-pane">
+          <AdminMonitoringPanel />
+        </div>
+
         <!-- Tab Content: Logs -->
         <div v-if="activeTab === 'logs'" class="tab-pane logs-pane">
           <div class="pane-header-row">
@@ -1043,11 +1173,9 @@
             <label>会员套餐</label>
             <select v-model="selectedMembershipPlan" class="admin-select">
               <option value="free">未开通</option>
-              <option value="light">轻享月卡</option>
-              <option value="study">研读会员</option>
-              <option value="lab">课题会员</option>
-              <option value="team">导师车队会员</option>
-              <option value="team_plus">团队 Plus 会员</option>
+              <option v-for="plan in assignableMembershipPlans" :key="plan.id" :value="plan.id">
+                {{ plan.name }}
+              </option>
             </select>
           </div>
           <div v-if="selectedMembershipPlan !== 'free'" class="form-group" style="margin-top: 12px;">
@@ -1276,6 +1404,12 @@
               <span>原帖内容</span>
               <p>{{ selectedForumReportDetail?.postContent || "帖子已删除或无正文" }}</p>
             </article>
+            <article v-if="selectedForumReportDetail?.screenshot">
+              <span>截图证据 (点击放大)</span>
+              <div class="report-screenshot-preview" @click="openCampusImage(selectedForumReportDetail.screenshot, '举报截图证据')">
+                <img :src="selectedForumReportDetail.screenshot" style="max-width: 100%; max-height: 150px; border-radius: 8px; cursor: pointer; border: 1px solid var(--spatial-line); object-fit: contain; margin-top: 4px; display: block;" />
+              </div>
+            </article>
           </div>
           <div class="modal-actions" style="margin-top: 24px;">
             <button class="spatial-btn spatial-btn-ghost" @click="showForumReportDetailModal = false">关闭</button>
@@ -1338,6 +1472,37 @@
               {{ submittingNewRelay ? "保存中..." : "确认添加" }}
             </button>
           </footer>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Ban User Modal -->
+    <Transition name="fade">
+      <div v-if="showBanUserModal" class="admin-modal-overlay" @click="showBanUserModal = false">
+        <div class="admin-modal-card spatial-glass-panel" @click.stop style="max-width: 400px;">
+          <h4>封禁用户账号</h4>
+          <p class="form-hint" style="margin-top: 8px;">被封禁用户：<strong>{{ selectedBanUser?.username }}</strong></p>
+
+          <div class="form-group" style="margin-top: 16px;">
+            <label style="display: block; margin-bottom: 6px; font-weight: 700; color: var(--spatial-silver);">封禁时长</label>
+            <select v-model="banUserDays" class="spatial-select" style="width: 100%;">
+              <option :value="1">1 天 (24 小时)</option>
+              <option :value="3">3 天 (72 小时)</option>
+              <option :value="-1">永久封禁</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-top: 16px;">
+            <label style="display: block; margin-bottom: 6px; font-weight: 700; color: var(--spatial-silver);">封禁原因</label>
+            <textarea v-model.trim="banUserReason" class="spatial-input" rows="3" style="width: 100%; min-height: 80px; resize: vertical; box-sizing: border-box; padding: 8px 10px;" placeholder="请输入封禁违规详情，例如：违规发布他人隐私身份信息"></textarea>
+          </div>
+
+          <div class="modal-footer" style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button class="spatial-btn spatial-btn-ghost" @click="showBanUserModal = false">取消</button>
+            <button class="spatial-btn spatial-btn-accent" style="background: #ef4444; border-color: #ef4444;" :disabled="!banUserReason" @click="submitBanUser">
+              确定封禁
+            </button>
+          </div>
         </div>
       </div>
     </Transition>
@@ -1429,7 +1594,16 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="route in scenePoolData" :key="route.id">
+                  <tr
+                    v-for="(route, index) in scenePoolData"
+                    :key="route.id"
+                    draggable="true"
+                    @dragstart="handleRouteDragStart($event, index)"
+                    @dragover.prevent="handleRouteDragOver($event, index)"
+                    @dragend="handleRouteDragEnd"
+                    @drop="handleRouteDrop($event, index)"
+                    :class="{ 'dragging-row': draggingIdx === index, 'drag-over-row': dragOverIdx === index }"
+                  >
                     <td>
                       <div class="provider-info-cell">
                         <strong>{{ route.providerName }}</strong>
@@ -1543,6 +1717,7 @@ import { useScrollReveal } from "../composables/useScrollReveal";
 import ModelConfigPanel from "../components/ModelConfigPanel.vue";
 import { useWorkspaceStore } from "../stores/workspace";
 import AdminAiUsagePanel from "../components/AdminAiUsagePanel.vue";
+import AdminMonitoringPanel from "../components/AdminMonitoringPanel.vue";
 
 const authStore = useAuthStore();
 const dialogStore = useDialogStore();
@@ -1560,10 +1735,12 @@ const updatingRelay = ref(false);
 
 const adminTabOptions = [
   { value: "users", label: "用户目录与授权", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
+  { value: "membershipPlans", label: "套餐管理", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 1 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 1 0 0-5C13 2 12 7 12 7z"/></svg>` },
   { value: "recharges", label: "充值入账记录", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>` },
   { value: "teams", label: "科研团队管理", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>` },
   { value: "models", label: "AI 路由与模型", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/></svg>` },
   { value: "aiUsage", label: "AI 调用记录", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>` },
+  { value: "monitoring", label: "管理员监控页面", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>` },
   { value: "logs", label: "系统操作日志", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>` },
   { value: "forumReports", label: "论坛举报处理", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>` },
   { value: "campusVerifications", label: "校园认证审核", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>` },
@@ -1596,6 +1773,11 @@ const tutorialPageSize = ref(5);
 const topicAdminQuery = ref("");
 const topicAdminLoading = ref(false);
 const topicAdminGenerating = ref(false);
+const membershipPlans = ref([]);
+const membershipPlansLoading = ref(false);
+const creatingMembershipPlan = ref(false);
+const savingMembershipPlanIds = ref(new Set());
+const deletingMembershipPlanIds = ref(new Set());
 
 
 // Initialize scroll reveal animations
@@ -1604,6 +1786,10 @@ useScrollReveal(".admin-page");
 // Modals
 const showMembershipModal = ref(false);
 const showAddUserModal = ref(false);
+const showBanUserModal = ref(false);
+const selectedBanUser = ref(null);
+const banUserDays = ref(1);
+const banUserReason = ref("违规发布他人隐私身份信息");
 const showAddRechargeModal = ref(false);
 const showAddTeamModal = ref(false);
 const showViewTeamModal = ref(false);
@@ -1837,6 +2023,11 @@ const modelSceneOptions = [
     label: "AI发帖审核",
     hint: "低价快模型，稳定输出 JSON",
   },
+  {
+    value: "backup",
+    label: "备用号池",
+    hint: "所有业务模块模型全部失效后的最终备选降级通道",
+  },
 ];
 const aiUsageSceneOptions = [
   { value: "paper_review", label: "论文综述" },
@@ -1844,6 +2035,7 @@ const aiUsageSceneOptions = [
   { value: "meeting_deck", label: "PPT生成" },
   { value: "forum_moderation", label: "AI发帖审核" },
   { value: "topic_research", label: "选题研究" },
+  { value: "backup", label: "备用号池" },
   { value: "translate", label: "全文翻译" },
   { value: "summary", label: "论文综述旧记录" },
   { value: "qa", label: "问答旧记录" },
@@ -1935,6 +2127,8 @@ const totalChatQuota = computed(() => systemUsers.value.reduce((sum, user) => su
 const totalChatUsed = computed(() => systemUsers.value.reduce((sum, user) => sum + (Number(user.chatUsed) || 0), 0));
 const totalBenefitQuota = computed(() => totalReviewQuota.value + totalPptQuota.value + totalChatQuota.value);
 const totalBenefitUsed = computed(() => totalReviewUsed.value + totalPptUsed.value + totalChatUsed.value);
+const activeSeckillCount = computed(() => membershipPlans.value.filter((plan) => plan.seckillActive).length);
+const assignableMembershipPlans = computed(() => membershipPlans.value.filter((plan) => plan.id !== "free" && plan.activeFlag !== false));
 const userPageCount = computed(() => getPageCount(filteredUsers.value.length, userPageSize.value));
 const ticketPageCount = computed(() => getPageCount(paymentTickets.value.length, ticketPageSize.value));
 const orderPageCount = computed(() => getPageCount(paymentOrders.value.length, orderPageSize.value));
@@ -2203,6 +2397,7 @@ async function fetchAllData() {
     const paymentsData = await paperpilotApi.getAdminPayments();
     paymentOrders.value = paymentsData.orders || [];
     paymentTickets.value = paymentsData.tickets || [];
+    await loadMembershipPlans(false);
 
     // 3. Fetch Teams
     const teamsData = await paperpilotApi.getTeams();
@@ -2245,6 +2440,182 @@ async function fetchAllData() {
   }
 }
 
+function normalizePlanDatetime(value) {
+  if (!value) return "";
+  if (Array.isArray(value)) {
+    const [year, month, day, hour = 0, minute = 0] = value;
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  }
+  const text = String(value);
+  return text.length >= 16 ? text.slice(0, 16) : text;
+}
+
+function normalizeMembershipPlan(plan) {
+  return {
+    ...plan,
+    activeFlag: plan.activeFlag !== false,
+    teamShared: Boolean(plan.teamShared),
+    forumSpecial: Boolean(plan.forumSpecial),
+    peakPriority: Boolean(plan.peakPriority),
+    seckillEnabled: Boolean(plan.seckillEnabled),
+    seckillStartsAt: normalizePlanDatetime(plan.seckillStartsAt),
+    seckillEndsAt: normalizePlanDatetime(plan.seckillEndsAt),
+  };
+}
+
+async function loadMembershipPlans(showLoading = true) {
+  if (showLoading) membershipPlansLoading.value = true;
+  try {
+    const rows = await paperpilotApi.getAdminMembershipPlans();
+    membershipPlans.value = (rows || []).map(normalizeMembershipPlan);
+  } catch (error) {
+    console.error("Failed to load membership plans:", error);
+    dialogStore.alert(error.response?.data?.message || "套餐配置加载失败");
+  } finally {
+    membershipPlansLoading.value = false;
+  }
+}
+
+async function createMembershipPlan() {
+  if (creatingMembershipPlan.value) return;
+  creatingMembershipPlan.value = true;
+  try {
+    const stamp = Date.now().toString(36);
+    const saved = await paperpilotApi.createAdminMembershipPlan({
+      id: `custom_${stamp}`,
+      name: "新会员套餐",
+      subtitle: "自定义上架套餐",
+      monthlyPrice: 19.9,
+      originalMonthlyPrice: 29.9,
+      sortOrder: (membershipPlans.value.length + 1) * 10,
+      activeFlag: true,
+    });
+    membershipPlans.value.push(normalizeMembershipPlan(saved));
+    dialogStore.alert("新套餐已上架，可继续编辑价格、权益和秒杀配置。");
+  } catch (error) {
+    console.error("Failed to create membership plan:", error);
+    dialogStore.alert(error.response?.data?.message || "新套餐创建失败");
+  } finally {
+    creatingMembershipPlan.value = false;
+  }
+}
+
+function canDeleteMembershipPlan(plan) {
+  return plan?.id && !["free", "lite", "plus", "pro", "max", "team_plus", "team_pro"].includes(plan.id);
+}
+
+async function toggleMembershipPlanActive(plan) {
+  const nextActive = plan.activeFlag !== false;
+  const rollbackActive = !nextActive;
+  const next = new Set(savingMembershipPlanIds.value);
+  next.add(plan.id);
+  savingMembershipPlanIds.value = next;
+  try {
+    const saved = await paperpilotApi.updateAdminMembershipPlan(plan.id, { activeFlag: nextActive });
+    const index = membershipPlans.value.findIndex((item) => item.id === plan.id);
+    if (index >= 0) membershipPlans.value[index] = normalizeMembershipPlan(saved);
+  } catch (error) {
+    plan.activeFlag = rollbackActive;
+    console.error("Failed to toggle membership plan:", error);
+    dialogStore.alert(error.response?.data?.message || "套餐上下架状态更新失败");
+  } finally {
+    const done = new Set(savingMembershipPlanIds.value);
+    done.delete(plan.id);
+    savingMembershipPlanIds.value = done;
+  }
+}
+
+async function deleteMembershipPlan(plan) {
+  if (!canDeleteMembershipPlan(plan)) {
+    dialogStore.alert("系统预置套餐只能隐藏，不能彻底删除。");
+    return;
+  }
+  const ok = await dialogStore.confirm(`确认彻底删除套餐「${plan.name || plan.id}」吗？删除后用户购买页将不再展示。`, {
+    title: "删除套餐",
+    confirmText: "彻底删除",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok) return;
+  const next = new Set(deletingMembershipPlanIds.value);
+  next.add(plan.id);
+  deletingMembershipPlanIds.value = next;
+  try {
+    await paperpilotApi.deleteAdminMembershipPlan(plan.id);
+    membershipPlans.value = membershipPlans.value.filter((item) => item.id !== plan.id);
+    dialogStore.alert("套餐已彻底删除。");
+  } catch (error) {
+    console.error("Failed to delete membership plan:", error);
+    dialogStore.alert(error.response?.data?.message || "套餐删除失败");
+  } finally {
+    const done = new Set(deletingMembershipPlanIds.value);
+    done.delete(plan.id);
+    deletingMembershipPlanIds.value = done;
+  }
+}
+
+async function saveMembershipPlan(plan) {
+  const ok = await dialogStore.confirm(`确认保存套餐「${plan.name || plan.id}」的价格、额度和秒杀配置吗？`, {
+    title: "保存套餐配置",
+    confirmText: "保存",
+    cancelText: "取消",
+  });
+  if (!ok) return;
+  const next = new Set(savingMembershipPlanIds.value);
+  next.add(plan.id);
+  savingMembershipPlanIds.value = next;
+  try {
+    const payload = {
+      name: plan.name,
+      subtitle: plan.subtitle,
+      monthlyPrice: Number(plan.monthlyPrice || 0),
+      originalMonthlyPrice: Number(plan.originalMonthlyPrice || plan.monthlyPrice || 0),
+      reviewQuota: Number(plan.reviewQuota || 0),
+      pptQuota: Number(plan.pptQuota || 0),
+      chatQuota: Number(plan.chatQuota || 0),
+      translateQuota: Number(plan.translateQuota || 0),
+      immersiveQuota: Number(plan.immersiveQuota || 0),
+      teamSeats: Number(plan.teamSeats || 0),
+      teamShared: Boolean(plan.teamShared),
+      forumSpecial: Boolean(plan.forumSpecial),
+      forumTopDaily: Number(plan.forumTopDaily || 0),
+      peakPriority: Boolean(plan.peakPriority),
+      activeFlag: plan.activeFlag !== false,
+      sortOrder: Number(plan.sortOrder || 99),
+      seckillEnabled: Boolean(plan.seckillEnabled),
+      seckillPrice: plan.seckillPrice === "" || plan.seckillPrice == null ? null : Number(plan.seckillPrice),
+      seckillStartsAt: plan.seckillStartsAt || null,
+      seckillEndsAt: plan.seckillEndsAt || null,
+      seckillLabel: plan.seckillLabel || "限时秒杀",
+    };
+    const saved = await paperpilotApi.updateAdminMembershipPlan(plan.id, payload);
+    const index = membershipPlans.value.findIndex((item) => item.id === plan.id);
+    if (index >= 0) membershipPlans.value[index] = normalizeMembershipPlan(saved);
+    dialogStore.alert("套餐配置已保存，会员购买页会自动同步。");
+  } catch (error) {
+    console.error("Failed to save membership plan:", error);
+    dialogStore.alert(error.response?.data?.message || "套餐保存失败");
+  } finally {
+    const done = new Set(savingMembershipPlanIds.value);
+    done.delete(plan.id);
+    savingMembershipPlanIds.value = done;
+  }
+}
+
+function formatAdminCountdown(seconds) {
+  const value = Math.max(0, Number(seconds || 0));
+  const days = Math.floor(value / 86400);
+  const hours = Math.floor((value % 86400) / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  if (days > 0) return `${days}天 ${hours}小时`;
+  return `${hours}小时 ${minutes}分`;
+}
+
+function planPreview(plan) {
+  const price = Number(plan.seckillEnabled && plan.seckillPrice != null ? plan.seckillPrice : plan.monthlyPrice || 0).toFixed(2);
+  return `展示价 ¥${price}/月 · 综述 ${plan.reviewQuota || 0} · 问答 ${plan.chatQuota || 0} · PPT ${plan.pptQuota || 0}`;
+}
+
 onMounted(() => {
   fetchAllData();
 });
@@ -2253,6 +2624,9 @@ watch(activeTab, async (value) => {
   if (value === "models") {
     await loadRelays();
     await loadAllScenePools();
+  }
+  if (value === "membershipPlans" && !membershipPlans.value.length) {
+    await loadMembershipPlans();
   }
 });
 
@@ -2317,20 +2691,29 @@ function shortText(value, max = 80) {
 async function loadRelays() {
   loadingRelays.value = true;
   try {
-    const pool = await paperpilotApi.getModelPool("general");
+    const relayScenes = ["general", ...modelSceneOptions.map(scene => scene.value)];
+    const pools = await Promise.allSettled(relayScenes.map(scene => paperpilotApi.getModelPool(scene)));
     const uniqueRelays = [];
     const seen = new Set();
-    for (const item of pool) {
-      if (item.template) continue;
-      const key = `${item.providerName.toLowerCase()}|${item.baseUrl.toLowerCase()}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        uniqueRelays.push(item);
+    for (const result of pools) {
+      if (result.status !== "fulfilled" || !Array.isArray(result.value)) continue;
+      for (const item of result.value) {
+        if (item.template) continue;
+        const key = `${item.providerName.toLowerCase()}|${item.baseUrl.toLowerCase()}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueRelays.push(item);
+        }
       }
     }
     relays.value = uniqueRelays;
-    if (uniqueRelays.length > 0 && !activeRelay.value) {
+    const activeKey = activeRelay.value
+      ? `${activeRelay.value.providerName.toLowerCase()}|${activeRelay.value.baseUrl.toLowerCase()}`
+      : "";
+    if (uniqueRelays.length > 0 && (!activeRelay.value || !seen.has(activeKey))) {
       activeRelay.value = uniqueRelays[0];
+    } else if (!uniqueRelays.length) {
+      activeRelay.value = null;
     }
   } catch (e) {
     console.error("Failed to load relays:", e);
@@ -2340,7 +2723,7 @@ async function loadRelays() {
 }
 
 async function loadAllScenePools() {
-  const scenes = ["paper_review", "paper_qa", "topic_research", "meeting_deck", "forum_moderation"];
+  const scenes = modelSceneOptions.map(scene => scene.value);
   const newMap = {};
   const newPoolData = {};
 
@@ -2612,6 +2995,46 @@ async function removeScenePoolRoute(routeId) {
   }
 }
 
+const draggingIdx = ref(-1);
+const dragOverIdx = ref(-1);
+
+function handleRouteDragStart(event, index) {
+  draggingIdx.value = index;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+  }
+}
+
+function handleRouteDragOver(event, index) {
+  dragOverIdx.value = index;
+}
+
+function handleRouteDragEnd() {
+  draggingIdx.value = -1;
+  dragOverIdx.value = -1;
+}
+
+async function handleRouteDrop(event, index) {
+  const fromIdx = draggingIdx.value;
+  const toIdx = index;
+  if (fromIdx !== -1 && fromIdx !== toIdx) {
+    const items = [...scenePoolData.value];
+    const draggedItem = items.splice(fromIdx, 1)[0];
+    items.splice(toIdx, 0, draggedItem);
+    scenePoolData.value = items;
+
+    const ids = items.map(r => r.id);
+    try {
+      await paperpilotApi.sortModelPool(ids);
+      dialogStore.toast("已更新优先级排序");
+    } catch (e) {
+      dialogStore.alert("保存排序失败：" + (e.response?.data?.message || e.message));
+    }
+  }
+  draggingIdx.value = -1;
+  dragOverIdx.value = -1;
+}
+
 watch(activeRelay, (newVal) => {
   currentPage.value = 1;
   modelSearchQuery.value = "";
@@ -2759,7 +3182,7 @@ function getModelMetadata(modelId) {
 async function openAllScenesPoolModal() {
   showAllScenesPoolModal.value = true;
   loadingAllScenesPool.value = true;
-  const scenes = ["paper_review", "paper_qa", "topic_research", "meeting_deck", "forum_moderation"];
+  const scenes = modelSceneOptions.map(scene => scene.value);
   const data = {};
   for (const scene of scenes) {
     try {
@@ -2831,6 +3254,8 @@ function getRoleClass(role) {
 }
 
 function membershipPlanName(plan) {
+  const dynamicPlan = membershipPlans.value.find((item) => item.id === plan);
+  if (dynamicPlan?.name) return dynamicPlan.name;
   const mapping = {
     free: "未开通",
     lite: "轻享月卡",
@@ -2978,6 +3403,40 @@ async function deleteUser(user) {
     } catch (error) {
       console.error("Failed to delete user:", error);
       dialogStore.alert("删除用户失败");
+    }
+  }
+}
+
+function promptBanUser(user) {
+  selectedBanUser.value = user;
+  banUserDays.value = 1;
+  banUserReason.value = "违规发布他人隐私身份信息";
+  showBanUserModal.value = true;
+}
+
+async function submitBanUser() {
+  if (!selectedBanUser.value) return;
+  try {
+    await paperpilotApi.banUser(selectedBanUser.value.id, banUserReason.value, banUserDays.value);
+    dialogStore.toast("用户已成功封禁");
+    showBanUserModal.value = false;
+    await fetchAllData();
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "封禁失败");
+  }
+}
+
+async function executeUnbanUser(user) {
+  if (await dialogStore.confirm(`确定要解封用户 ${user.username} 吗？`, {
+    title: "解封用户",
+    confirmText: "解封",
+  })) {
+    try {
+      await paperpilotApi.unbanUser(user.id);
+      dialogStore.toast("用户已解封");
+      await fetchAllData();
+    } catch (error) {
+      dialogStore.alert(error.response?.data?.message || "解封失败");
     }
   }
 }
@@ -3177,6 +3636,13 @@ function logAction(msg, level = "info") {
 }
 
 async function clearLogs() {
+  const ok = await dialogStore.confirm("确认清空系统操作日志吗？清空后只会保留本次清空动作的新日志。", {
+    title: "清空系统日志",
+    confirmText: "清空",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await paperpilotApi.clearSystemLogs();
     await fetchAllData();
@@ -6656,6 +7122,22 @@ function formatTokenCount(num) {
   background: rgba(59, 130, 246, 0.04) !important;
 }
 
+.spatial-pool-table tbody tr {
+  cursor: grab;
+  transition: transform 0.2s ease, background-color 0.2s ease, border 0.2s ease;
+}
+
+.spatial-pool-table tbody tr.dragging-row {
+  opacity: 0.4;
+  background: rgba(59, 130, 246, 0.08) !important;
+  cursor: grabbing;
+}
+
+.spatial-pool-table tbody tr.drag-over-row {
+  border-top: 2px dashed #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.05) !important;
+}
+
 .provider-info-cell {
   display: flex;
   flex-direction: column;
@@ -9054,5 +9536,216 @@ function formatTokenCount(num) {
   border-color: #6366f1;
   color: #6366f1;
   background: rgba(99, 102, 241, 0.02);
+}
+
+.membership-admin-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.membership-admin-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.membership-admin-summary article {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(20, 184, 166, 0.08));
+  border: 1px solid rgba(96, 165, 250, 0.18);
+}
+
+.membership-admin-summary span,
+.membership-admin-summary small {
+  display: block;
+  color: rgba(203, 213, 225, 0.74);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.membership-admin-summary strong {
+  display: block;
+  margin: 6px 0 4px;
+  color: #f8fafc;
+  font-size: 1.35rem;
+}
+
+.membership-plan-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 18px;
+}
+
+.membership-plan-admin-card {
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.15), transparent 34%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.86));
+  box-shadow: 0 22px 60px rgba(2, 6, 23, 0.28);
+}
+
+.membership-plan-admin-card.sale {
+  border-color: rgba(251, 191, 36, 0.35);
+  box-shadow: 0 22px 60px rgba(251, 146, 60, 0.12);
+}
+
+.membership-plan-admin-card.inactive {
+  opacity: 0.62;
+}
+
+.membership-plan-admin-card header,
+.membership-plan-admin-card footer,
+.seckill-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plan-admin-id {
+  display: inline-flex;
+  padding: 3px 8px;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.12);
+  color: #67e8f9;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.plan-admin-name,
+.plan-admin-subtitle,
+.plan-admin-fields input {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.82);
+  color: #e5eefb;
+  border-radius: 10px;
+  outline: none;
+}
+
+.plan-admin-name {
+  display: block;
+  padding: 8px 10px;
+  font-size: 1.02rem;
+  font-weight: 900;
+}
+
+.plan-admin-subtitle {
+  margin-top: 8px;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+}
+
+.plan-admin-switch,
+.plan-admin-flags label,
+.seckill-head label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(226, 232, 240, 0.86);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.plan-admin-section,
+.plan-admin-seckill {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.plan-admin-section > strong {
+  display: block;
+  margin-bottom: 10px;
+  color: #bfdbfe;
+  font-size: 0.85rem;
+}
+
+.plan-admin-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.plan-admin-fields.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.plan-admin-fields label {
+  color: rgba(203, 213, 225, 0.75);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.plan-admin-fields input {
+  margin-top: 5px;
+  padding: 9px 10px;
+}
+
+.plan-admin-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.plan-admin-flags input[type="number"] {
+  width: 58px;
+  margin-left: 4px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.82);
+  color: #e5eefb;
+}
+
+.seckill-live {
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.12);
+  color: #fde68a;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.membership-plan-admin-card footer {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.membership-plan-admin-card footer p {
+  margin: 0;
+  color: rgba(203, 213, 225, 0.72);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.plan-admin-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .membership-admin-summary,
+  .membership-plan-admin-grid,
+  .plan-admin-fields.three {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

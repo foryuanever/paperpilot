@@ -25,6 +25,9 @@ public class FriendRequestEntity {
     @Column(length = 255)
     private String message;
 
+    @Column(name = "contact_info", length = 255)
+    private String contactInfo;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -50,5 +53,7 @@ public class FriendRequestEntity {
     public void setStatus(String status) { this.status = status; }
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
+    public String getContactInfo() { return contactInfo; }
+    public void setContactInfo(String contactInfo) { this.contactInfo = contactInfo; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

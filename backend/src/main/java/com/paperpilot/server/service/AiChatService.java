@@ -99,7 +99,11 @@ public class AiChatService {
     }
 
     public ChatResult chatJson(String systemPrompt, String userPrompt, int maxOutputTokens) throws Exception {
-        ModelConfigEntity config = activeSceneConfig(inferModelConfigScene(systemPrompt, userPrompt));
+        String scene = inferModelConfigScene(systemPrompt, userPrompt);
+        ModelConfigEntity config = activeSceneConfig(scene);
+        if (config == null && shouldUseConfiguredPoolOnly(scene)) {
+            throw new IllegalStateException("当前入口未配置可用模型，请在管理员 AI 路由中为 " + scene + " 配置第三方 OpenAI 兼容中转。");
+        }
         return send(
             config == null ? "https://api.openai.com/v1" : config.getBaseUrl(),
             config == null ? "" : config.getApiKey(),
@@ -159,7 +163,7 @@ public class AiChatService {
             .filter(row -> StringUtils.hasText(row.getBaseUrl()))
             .sorted(this::comparePoolRoute)
             .toList();
-        if (pool.isEmpty() && config != null) {
+        if (pool.isEmpty() && config != null && config.isActive()) {
             pool = List.of(config);
         }
         int routeCount = 0;
@@ -180,7 +184,27 @@ public class AiChatService {
                 ));
             }
         }
-        if (routes.isEmpty() && config == null) {
+        // --- BACKUP POOL ---
+        if (!"backup".equals(scene)) {
+            List<ModelConfigEntity> backupPool = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc("backup").stream()
+                .filter(row -> StringUtils.hasText(row.getApiKey()) && StringUtils.hasText(row.getModelName()) && StringUtils.hasText(row.getBaseUrl()))
+                .sorted(this::comparePoolRoute)
+                .toList();
+            for (ModelConfigEntity row : backupPool) {
+                if (routeCount >= MAX_POOL_FALLBACK_ROUTES + 4) break;
+                routeCount++;
+                routes.add(new ModelRoute(
+                    row.getBaseUrl(),
+                    row.getApiKey(),
+                    row.getModelName(),
+                    row.getApiFormat(),
+                    row.getAuthType(),
+                    row.isFullUrl(),
+                    row.getCustomUserAgent()
+                ));
+            }
+        }
+        if (routes.isEmpty() && config == null && !shouldUseConfiguredPoolOnly(scene)) {
             routes.add(new ModelRoute("https://api.openai.com/v1", "", "gpt-4.1-mini", "openai_chat", "bearer", false, ""));
         }
         if (routes.isEmpty()) {
@@ -218,6 +242,11 @@ public class AiChatService {
     }
 
     private int comparePoolRoute(ModelConfigEntity a, ModelConfigEntity b) {
+        int orderCompare = Integer.compare(
+            a.getSortOrder() == null ? 0 : a.getSortOrder(),
+            b.getSortOrder() == null ? 0 : b.getSortOrder()
+        );
+        if (orderCompare != 0) return orderCompare;
         int status = Integer.compare(poolStatusRank(a), poolStatusRank(b));
         if (status != 0) return status;
         int latency = Long.compare(poolLatency(a), poolLatency(b));
@@ -252,7 +281,9 @@ public class AiChatService {
         List<String> fallbackModels
     ) throws Exception {
         ModelConfigEntity active = modelConfigRepository.findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK).orElse(null);
-        List<ModelConfigEntity> configs = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK);
+        List<ModelConfigEntity> configs = new ArrayList<>(modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK).stream()
+            .filter(ModelConfigEntity::isActive)
+            .toList());
         configs.sort(Comparator
             .comparing((ModelConfigEntity row) -> active != null && Objects.equals(row.getId(), active.getId()) ? 0 : 1)
             .thenComparing(row -> strongModelScore(row.getProviderName(), row.getModelName(), row.getBaseUrl())));
@@ -276,6 +307,23 @@ public class AiChatService {
                     row.getCustomUserAgent()
                 ));
             }
+        }
+        // --- BACKUP POOL ---
+        List<ModelConfigEntity> backupConfigs = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc("backup").stream()
+            .filter(ModelConfigEntity::isActive)
+            .filter(row -> StringUtils.hasText(row.getApiKey()) && StringUtils.hasText(row.getModelName()) && StringUtils.hasText(row.getBaseUrl()))
+            .sorted(this::comparePoolRoute)
+            .toList();
+        for (ModelConfigEntity row : backupConfigs) {
+            routes.add(new ModelRoute(
+                row.getBaseUrl(),
+                row.getApiKey(),
+                row.getModelName(),
+                row.getApiFormat(),
+                row.getAuthType(),
+                row.isFullUrl(),
+                row.getCustomUserAgent()
+            ));
         }
         if (routes.isEmpty()) {
             throw new IllegalStateException("PPT 生成未配置专用模型池。请到管理员模型池切换到“组会汇报 / PPT生成”，配置强模型 Key 后再生成。");
@@ -321,7 +369,9 @@ public class AiChatService {
         boolean accountUsage
     ) throws Exception {
         ModelConfigEntity active = modelConfigRepository.findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK).orElse(null);
-        List<ModelConfigEntity> configs = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK);
+        List<ModelConfigEntity> configs = new ArrayList<>(modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK).stream()
+            .filter(ModelConfigEntity::isActive)
+            .toList());
         if (active != null
             && StringUtils.hasText(active.getApiKey())
             && StringUtils.hasText(active.getBaseUrl())
@@ -349,6 +399,23 @@ public class AiChatService {
                     row.getCustomUserAgent()
                 ));
             }
+        }
+        // --- BACKUP POOL ---
+        List<ModelConfigEntity> backupConfigs = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc("backup").stream()
+            .filter(ModelConfigEntity::isActive)
+            .filter(row -> StringUtils.hasText(row.getApiKey()) && StringUtils.hasText(row.getModelName()) && StringUtils.hasText(row.getBaseUrl()))
+            .sorted(this::comparePoolRoute)
+            .toList();
+        for (ModelConfigEntity row : backupConfigs) {
+            routes.add(new ModelRoute(
+                row.getBaseUrl(),
+                row.getApiKey(),
+                row.getModelName(),
+                row.getApiFormat(),
+                row.getAuthType(),
+                row.isFullUrl(),
+                row.getCustomUserAgent()
+            ));
         }
         if (routes.isEmpty()) {
             throw new IllegalStateException("PPT 生成专用模型池未检测到强模型 Key。请在管理员模型池切换到“组会汇报 / PPT生成”，配置 GPT-5/GPT-4.1/o3/Claude Opus/Sonnet/Gemini Pro/DeepSeek R1/Qwen 235B 等强模型后再生成。");
@@ -1107,10 +1174,10 @@ public class AiChatService {
         String combined = ((systemPrompt == null ? "" : systemPrompt) + "\n" + (userPrompt == null ? "" : userPrompt)).toLowerCase();
         if (combined.contains("deep-research") || combined.contains("选题调研") || combined.contains("选题广场") || combined.contains("可执行选题") || combined.contains("topic research")) return ModelConfigService.SCENE_TOPIC_RESEARCH;
         if (combined.contains("translate") || combined.contains("翻译")) return "translate";
-        if (combined.contains("meeting report") || combined.contains("组会")) return "report";
-        if (combined.contains("question") || combined.contains("问答")) return "qa";
-        if (combined.contains("summary") || combined.contains("综述")) return "summary";
-        return "analyze";
+        if (combined.contains("meeting report") || combined.contains("组会论文综述生成") || combined.contains("deck agent")) return "report";
+        if (combined.contains("学术研读助手") || combined.contains("论文研究助手") || combined.contains("用户当前选中") || combined.contains("用户问题") || combined.contains("question") || combined.contains("问答") || combined.contains("qa")) return "qa";
+        if (combined.contains("文献综述生成") || combined.contains("生成文献综述") || combined.contains("生成综述")) return "summary";
+        return "qa";
     }
 
     private String inferModelConfigScene(String systemPrompt, String userPrompt) {
@@ -1121,13 +1188,13 @@ public class AiChatService {
         if (combined.contains("deep-research") || combined.contains("选题调研") || combined.contains("选题广场") || combined.contains("可执行选题") || combined.contains("topic research")) {
             return ModelConfigService.SCENE_TOPIC_RESEARCH;
         }
-        if (combined.contains("meeting report") || combined.contains("组会") || combined.contains("ppt")) {
+        if (combined.contains("meeting report") || combined.contains("组会论文综述生成") || combined.contains("ppt agent") || combined.contains("deck agent")) {
             return ModelConfigService.SCENE_MEETING_DECK;
         }
-        if (combined.contains("question") || combined.contains("问答") || combined.contains("qa") || combined.contains("回答用户")) {
+        if (combined.contains("学术研读助手") || combined.contains("论文研究助手") || combined.contains("用户当前选中") || combined.contains("用户问题") || combined.contains("question") || combined.contains("问答") || combined.contains("qa") || combined.contains("回答用户")) {
             return ModelConfigService.SCENE_PAPER_QA;
         }
-        if (combined.contains("summary") || combined.contains("综述") || combined.contains("文献综述")) {
+        if (combined.contains("文献综述生成") || combined.contains("生成文献综述") || combined.contains("生成综述")) {
             return ModelConfigService.SCENE_PAPER_REVIEW;
         }
         return ModelConfigService.SCENE_PAPER_QA;
@@ -1141,10 +1208,10 @@ public class AiChatService {
                 yield combined.contains("质检返工") || combined.contains("quality_error") ? "选题调研返工" : "选题调研";
             }
             case "translate" -> "PDF双栏翻译";
-            case "report" -> "组会论文内容生成";
-            case "summary" -> "综述生成";
-            case "qa" -> combined.contains("用户当前选中内容") ? "论文选区提问" : "论文问答";
-            default -> "论文解析";
+            case "report" -> "组会论文综述生成";
+            case "summary" -> "文献综述生成";
+            case "qa" -> combined.contains("用户当前选中内容") || combined.contains("选区") ? "论文选区解读与问答" : "AI研读对话";
+            default -> "AI研读对话";
         };
     }
 
@@ -1263,6 +1330,7 @@ public class AiChatService {
 
     private ModelConfigEntity activeSceneConfig(String scene) {
         ModelConfigEntity config = modelConfigRepository.findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(scene).orElse(null);
+        if (shouldUseConfiguredPoolOnly(scene)) return config;
         return config == null ? activeGeneralConfig() : config;
     }
 

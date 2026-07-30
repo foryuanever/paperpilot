@@ -5,6 +5,7 @@ import { paperpilotApi } from "../services/paperpilotApi";
 export const useForumStore = defineStore("forum", () => {
   const state = reactive({
     posts: [],
+    registeredUserCount: 0,
     loading: false,
     error: ""
   });
@@ -13,7 +14,12 @@ export const useForumStore = defineStore("forum", () => {
     if (!options.silent) state.loading = true;
     state.error = "";
     try {
-      state.posts = await paperpilotApi.getForumPosts();
+      const [posts, stats] = await Promise.all([
+        paperpilotApi.getForumPosts(),
+        paperpilotApi.getForumStats().catch(() => ({}))
+      ]);
+      state.posts = posts;
+      state.registeredUserCount = Number(stats?.registeredUserCount || 0);
     } catch (error) {
       state.error = "研究社区加载失败，请稍后重试";
       console.error("Failed to fetch forum posts:", error);

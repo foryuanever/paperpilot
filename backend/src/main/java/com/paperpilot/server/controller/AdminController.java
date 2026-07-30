@@ -34,6 +34,8 @@ import com.paperpilot.server.service.AuthService;
 import com.paperpilot.server.service.BillingService;
 import com.paperpilot.server.service.MembershipService;
 import com.paperpilot.server.service.NotificationService;
+import com.paperpilot.server.service.MonitoringSecurityService;
+import com.paperpilot.server.service.CurrentUserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -68,6 +70,8 @@ public class AdminController {
     private final TutorialArticleRepository tutorialArticleRepository;
     private final CampusVerificationRepository campusVerificationRepository;
     private final PromotionRepository promotionRepository;
+    private final MonitoringSecurityService monitoringSecurityService;
+    private final CurrentUserService currentUserService;
 
     public AdminController(
         AppUserRepository appUserRepository,
@@ -89,7 +93,9 @@ public class AdminController {
         NotificationService notificationService,
         TutorialArticleRepository tutorialArticleRepository,
         CampusVerificationRepository campusVerificationRepository,
-        PromotionRepository promotionRepository
+        PromotionRepository promotionRepository,
+        MonitoringSecurityService monitoringSecurityService,
+        CurrentUserService currentUserService
     ) {
         this.appUserRepository = appUserRepository;
         this.aiUsageRecordRepository = aiUsageRecordRepository;
@@ -111,6 +117,13 @@ public class AdminController {
         this.tutorialArticleRepository = tutorialArticleRepository;
         this.campusVerificationRepository = campusVerificationRepository;
         this.promotionRepository = promotionRepository;
+        this.monitoringSecurityService = monitoringSecurityService;
+        this.currentUserService = currentUserService;
+    }
+
+    @ModelAttribute
+    public void requireAdminAccess() {
+        currentUserService.requireAdmin();
     }
 
     // --- Dynamic Global Statistics ---
@@ -119,7 +132,7 @@ public class AdminController {
     public Map<String, Object> getGlobalStats() {
         long totalUsers = appUserRepository.count();
         List<AppUserEntity> allUsers = appUserRepository.findAll();
-        
+
         long studentCount = allUsers.stream().filter(u -> "学生".equals(u.getRole())).count();
         long tutorCount = allUsers.stream().filter(u -> "导师".equals(u.getRole())).count();
         long adminCount = allUsers.stream().filter(u -> "管理员".equals(u.getRole())).count();
@@ -159,12 +172,12 @@ public class AdminController {
         List<TranslationRecordEntity> allRecords = translationRecordRepository.findAll();
         long successfulCount = allRecords.stream().filter(TranslationRecordEntity::isSuccess).count();
         double successRate = allRecords.isEmpty() ? 100.0 : ((double) successfulCount / allRecords.size()) * 100;
-        
+
         double averageLatencyMs = allRecords.isEmpty() ? 0.0 : allRecords.stream()
             .mapToLong(TranslationRecordEntity::getLatencyMs)
             .average()
             .orElse(0.0);
-            
+
         Map<String, Long> engineStats = new java.util.HashMap<>();
         for (String p : List.of("google", "youdao", "deepl", "baidu", "microsoft", "ai")) {
             long sum = allRecords.stream()
@@ -198,8 +211,34 @@ public class AdminController {
     // --- Users CRUD ---
 
     @GetMapping("/users")
-    public List<AppUserEntity> getAllUsers() {
-        return appUserRepository.findAll();
+    public List<Map<String, Object>> getAllUsers() {
+        return appUserRepository.findAll().stream()
+            .map(user -> {
+                Map<String, Object> map = new java.util.LinkedHashMap<>();
+                map.put("id", user.getId());
+                map.put("username", user.getUsername());
+                map.put("email", user.getEmail());
+                map.put("role", user.getRole());
+                map.put("plainPassword", user.getPlainPassword());
+                map.put("tokenLimit", user.getTokenLimit());
+                map.put("tokenUsed", user.getTokenUsed());
+                map.put("balanceAmount", user.getBalanceAmount());
+                map.put("membershipPlan", user.getMembershipPlan());
+                map.put("membershipCycle", user.getMembershipCycle());
+                map.put("membershipExpiresAt", user.getMembershipExpiresAt());
+                map.put("reviewQuota", user.getReviewQuota());
+                map.put("reviewUsed", user.getReviewUsed());
+                map.put("pptQuota", user.getPptQuota());
+                map.put("pptUsed", user.getPptUsed());
+                map.put("chatQuota", user.getChatQuota());
+                map.put("chatUsed", user.getChatUsed());
+                map.put("fruitScore", user.getFruitScore());
+                map.put("lastIp", user.getLastIp());
+                map.put("createdAt", user.getCreatedAt());
+                map.put("banned", monitoringSecurityService.isUserBanned(user.getId()));
+                return map;
+            })
+            .toList();
     }
 
     @PostMapping("/users")
@@ -221,11 +260,12 @@ public class AdminController {
     }
 
     @PatchMapping("/users/{id}/membership")
-    public AppUserEntity updateUserMembership(@PathVariable("id") Long id, @RequestBody Map<String, String> body) {
+    public AppUserEntity updateUserMembership(@PathVariable("id") Long id, @RequestBody Map<String, String> body, HttpServletRequest request) {
         AppUserEntity user = appUserRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
         String planId = body.getOrDefault("planId", "free");
         String cycle = body.getOrDefault("cycle", "monthly");
+        String oldPlan = user.getMembershipPlan() == null ? "free" : user.getMembershipPlan();
         if ("free".equals(planId)) {
             user.setMembershipPlan("free");
             user.setMembershipCycle("monthly");
@@ -236,18 +276,50 @@ public class AdminController {
             user.setPptUsed(0);
             user.setChatQuota(0);
             user.setChatUsed(0);
-            return appUserRepository.save(user);
+            AppUserEntity saved = appUserRepository.save(user);
+            authService.logAction("管理员取消用户会员: " + saved.getUsername() + "，套餐 " + oldPlan + " → free", "warn", getClientIp(request));
+            return saved;
         }
         membershipService.activate(user, planId, cycle);
+        authService.logAction("管理员分配用户会员: " + user.getUsername() + "，套餐 " + oldPlan + " → " + planId, "info", getClientIp(request));
         return user;
+    }
+
+    @GetMapping("/membership-plans")
+    public List<Map<String, Object>> getMembershipPlans() {
+        return membershipService.catalog();
+    }
+
+    @PostMapping("/membership-plans")
+    public Map<String, Object> createMembershipPlan(@RequestBody Map<String, Object> body, HttpServletRequest request) {
+        Map<String, Object> saved = membershipService.createPlan(body);
+        authService.logAction("管理员上架新套餐: " + saved.getOrDefault("name", saved.get("id")), "info", getClientIp(request));
+        return saved;
+    }
+
+    @PatchMapping("/membership-plans/{id}")
+    public Map<String, Object> updateMembershipPlan(@PathVariable("id") String id, @RequestBody Map<String, Object> body, HttpServletRequest request) {
+        Map<String, Object> saved = membershipService.savePlan(id, body);
+        String action = body.size() == 1 && body.containsKey("activeFlag")
+            ? (Boolean.FALSE.equals(body.get("activeFlag")) ? "隐藏套餐" : "上架套餐")
+            : "更新套餐配置";
+        authService.logAction("管理员" + action + ": " + saved.getOrDefault("name", id), "warn", getClientIp(request));
+        return saved;
+    }
+
+    @DeleteMapping("/membership-plans/{id}")
+    public void deleteMembershipPlan(@PathVariable("id") String id, HttpServletRequest request) {
+        membershipService.deletePlan(id);
+        authService.logAction("管理员彻底删除套餐: " + id, "warn", getClientIp(request));
     }
 
     @PostMapping("/checkins/reset")
     @jakarta.transaction.Transactional
-    public Map<String, Object> resetAllCheckins() {
+    public Map<String, Object> resetAllCheckins(HttpServletRequest request) {
         long checkinCount = checkinRepository.count();
         checkinRepository.deleteAllInBatch();
         int userCount = appUserRepository.resetAllFruitScores();
+        authService.logAction("管理员重置实验室签到: 删除签到 " + checkinCount + " 条，重置用户果值 " + userCount + " 人", "warn", getClientIp(request));
         return Map.of("deletedCheckins", checkinCount, "resetFruitUsers", userCount);
     }
 
@@ -755,8 +827,10 @@ public class AdminController {
     private String normalizeBillingAction(String action) {
         String value = action == null ? "" : action;
         if (value.contains("PPT") || value.contains("Agent")) return "组会PPT Agent执行";
-        if (value.contains("综述") || value.contains("汇报") || value.contains("组会")) return "论文综述生成";
-        return "AI文章对话";
+        if (value.contains("组会论文综述") || value.contains("生成文献综述")) return "论文综述生成";
+        if (value.contains("问答") || value.contains("选区") || value.contains("研读") || value.contains("解读") || value.contains("对话") || value.contains("qa")) return "AI研读对话";
+        if (value.contains("综述生成") || value.contains("综述")) return "AI研读对话"; // Fallback for historical misclassified ones
+        return "AI研读对话";
     }
 
     private String getLevelTitle(int level) {
@@ -825,6 +899,7 @@ public class AdminController {
         row.put("adminNote", report.getAdminNote());
         row.put("createdAt", report.getCreatedAt());
         row.put("processedAt", report.getProcessedAt());
+        row.put("screenshot", report.getScreenshot());
         return row;
     }
 
@@ -869,5 +944,164 @@ public class AdminController {
     private boolean isUsablePaymentTicket(PaymentTicketEntity ticket) {
         return ticket.getDetail() != null && !ticket.getDetail().isBlank()
             && ticket.getOrderNo() != null && !ticket.getOrderNo().isBlank();
+    }
+
+    @GetMapping("/monitoring/analytics")
+    public Map<String, Object> getMonitoringAnalytics(@RequestParam(value = "date", required = false) String date) {
+        List<AiUsageRecordEntity> aiRecords = aiUsageRecordRepository.findAll();
+        List<TranslationRecordEntity> translateRecords = translationRecordRepository.findAll();
+        java.time.LocalDate selectedDate;
+        try {
+            selectedDate = (date == null || date.isBlank()) ? java.time.LocalDate.now() : java.time.LocalDate.parse(date);
+        } catch (Exception ignored) {
+            selectedDate = java.time.LocalDate.now();
+        }
+        final java.time.LocalDate queryDate = selectedDate;
+
+        List<Map<String, Object>> onlineUsers = new java.util.ArrayList<>();
+        List<Map<String, Object>> aiCalls = new java.util.ArrayList<>();
+        List<Map<String, Object>> translations = new java.util.ArrayList<>();
+
+        for (int h = 0; h < 24; h++) {
+            String timeStr = String.format("%02d:00", h);
+
+            final int hour = h;
+            long uniqueAiUsers = aiRecords.stream()
+                .filter(r -> r.getCreatedAt() != null && r.getCreatedAt().toLocalDate().equals(queryDate) && r.getCreatedAt().getHour() == hour)
+                .map(AiUsageRecordEntity::getUserId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .count();
+            long uniqueTranslateUsers = translateRecords.stream()
+                .filter(r -> r.getCreatedAt() != null && r.getCreatedAt().toLocalDate().equals(queryDate) && r.getCreatedAt().getHour() == hour)
+                .map(TranslationRecordEntity::getUserId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .count();
+            long dbActiveCount = Math.max(uniqueAiUsers, uniqueTranslateUsers);
+
+            Map<String, Object> onlineRow = new java.util.LinkedHashMap<>();
+            onlineRow.put("time", timeStr);
+            onlineRow.put("count", (int) dbActiveCount);
+            onlineUsers.add(onlineRow);
+
+            // 2. AI Calls
+            long chatCalls = aiRecords.stream()
+                .filter(r -> r.getCreatedAt() != null && r.getCreatedAt().toLocalDate().equals(queryDate) && r.getCreatedAt().getHour() == hour)
+                .filter(r -> {
+                    String scene = r.getScene() == null ? "" : r.getScene();
+                    String act = r.getAction() == null ? "" : r.getAction();
+                    return scene.contains("qa") || act.contains("问答") || act.contains("对话");
+                })
+                .count();
+            long reviewCalls = aiRecords.stream()
+                .filter(r -> r.getCreatedAt() != null && r.getCreatedAt().toLocalDate().equals(queryDate) && r.getCreatedAt().getHour() == hour)
+                .filter(r -> {
+                    String scene = r.getScene() == null ? "" : r.getScene();
+                    String act = r.getAction() == null ? "" : r.getAction();
+                    return scene.contains("review") || scene.contains("summary") || act.contains("综述") || act.contains("精读");
+                })
+                .count();
+            long pptCalls = aiRecords.stream()
+                .filter(r -> r.getCreatedAt() != null && r.getCreatedAt().toLocalDate().equals(queryDate) && r.getCreatedAt().getHour() == hour)
+                .filter(r -> {
+                    String scene = r.getScene() == null ? "" : r.getScene();
+                    String act = r.getAction() == null ? "" : r.getAction();
+                    return scene.contains("meeting") || scene.contains("deck") || act.contains("PPT") || act.contains("Agent");
+                })
+                .count();
+            long otherCalls = aiRecords.stream()
+                .filter(r -> r.getCreatedAt() != null && r.getCreatedAt().toLocalDate().equals(queryDate) && r.getCreatedAt().getHour() == hour)
+                .count() - chatCalls - reviewCalls - pptCalls;
+
+            Map<String, Object> aiRow = new java.util.LinkedHashMap<>();
+            aiRow.put("time", timeStr);
+            aiRow.put("chat", chatCalls);
+            aiRow.put("review", reviewCalls);
+            aiRow.put("ppt", pptCalls);
+            aiRow.put("other", Math.max(0, otherCalls));
+            aiRow.put("total", chatCalls + reviewCalls + pptCalls + Math.max(0, otherCalls));
+            aiCalls.add(aiRow);
+
+            // 3. Translations
+            long transRequests = translateRecords.stream()
+                .filter(r -> r.getCreatedAt() != null && r.getCreatedAt().toLocalDate().equals(queryDate) && r.getCreatedAt().getHour() == hour)
+                .count();
+            long charCount = translateRecords.stream()
+                .filter(r -> r.getCreatedAt() != null && r.getCreatedAt().toLocalDate().equals(queryDate) && r.getCreatedAt().getHour() == hour)
+                .mapToLong(r -> r.getCharCount() == null ? 0L : r.getCharCount())
+                .sum();
+            long avgLatency = Math.round(translateRecords.stream()
+                .filter(r -> r.getCreatedAt() != null && r.getCreatedAt().toLocalDate().equals(queryDate) && r.getCreatedAt().getHour() == hour)
+                .mapToLong(r -> r.getLatencyMs() == null ? 0L : r.getLatencyMs())
+                .filter(v -> v > 0)
+                .average()
+                .orElse(0));
+
+            Map<String, Object> transRow = new java.util.LinkedHashMap<>();
+            transRow.put("time", timeStr);
+            transRow.put("requests", transRequests);
+            transRow.put("charCount", charCount);
+            transRow.put("avgLatencyMs", avgLatency);
+            translations.add(transRow);
+        }
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("selectedDate", selectedDate.toString());
+        result.put("onlineUsers", onlineUsers);
+        result.put("aiCalls", aiCalls);
+        result.put("translations", translations);
+        result.put("todayAiTokens", aiRecords.stream()
+            .filter(r -> r.getCreatedAt() != null && r.getCreatedAt().toLocalDate().equals(queryDate))
+            .mapToLong(r -> r.getTotalTokens() == null ? 0L : r.getTotalTokens())
+            .sum());
+        result.put("todayAiFailures", aiRecords.stream()
+            .filter(r -> r.getCreatedAt() != null && r.getCreatedAt().toLocalDate().equals(queryDate))
+            .filter(r -> !"success".equalsIgnoreCase(r.getStatus()))
+            .count());
+        result.put("todayTranslationFailures", translateRecords.stream()
+            .filter(r -> r.getCreatedAt() != null && r.getCreatedAt().toLocalDate().equals(queryDate))
+            .filter(r -> !r.isSuccess())
+            .count());
+
+        // Security & High-Frequency Real-time stats
+        result.put("realtimeOnline", monitoringSecurityService.getRealtimeOnlineCount());
+        result.put("securityLogs", monitoringSecurityService.getSecurityLogs());
+        result.put("topIps", monitoringSecurityService.getTopRequestIps());
+        result.put("topUsers", monitoringSecurityService.getTopRequestUsers());
+        result.put("realtimeTraffic", monitoringSecurityService.getRealtimeTrafficSeries());
+        result.put("hourlyTraffic", monitoringSecurityService.getHourlyTrafficSeries(selectedDate));
+        result.put("endpointHotspots", monitoringSecurityService.getEndpointHotspots());
+        result.put("trafficSummary", monitoringSecurityService.getWindowSummary());
+
+        return result;
+    }
+
+    @PostMapping("/monitoring/ban-ip")
+    public Map<String, Object> banIp(@RequestParam("ip") String ip, @RequestParam(value = "reason", defaultValue = "管理员手动封禁") String reason) {
+        monitoringSecurityService.banIp(ip, reason);
+        return Map.of("success", true, "message", "已成功封禁 IP: " + ip);
+    }
+
+    @PostMapping("/monitoring/unban-ip")
+    public Map<String, Object> unbanIp(@RequestParam("ip") String ip) {
+        monitoringSecurityService.unbanIp(ip);
+        return Map.of("success", true, "message", "已成功解封 IP: " + ip);
+    }
+
+    @PostMapping("/monitoring/ban-user")
+    public Map<String, Object> banUser(
+        @RequestParam("userId") Long userId,
+        @RequestParam(value = "reason", defaultValue = "管理员手动封禁") String reason,
+        @RequestParam(value = "days", defaultValue = "-1") int days
+    ) {
+        monitoringSecurityService.banUser(userId, reason, days);
+        return Map.of("success", true, "message", "已成功封禁账号 ID: " + userId + " 时长: " + (days < 0 ? "永久" : days + "天"));
+    }
+
+    @PostMapping("/monitoring/unban-user")
+    public Map<String, Object> unbanUser(@RequestParam("userId") Long userId) {
+        monitoringSecurityService.unbanUser(userId);
+        return Map.of("success", true, "message", "已成功解封账号 ID: " + userId);
     }
 }

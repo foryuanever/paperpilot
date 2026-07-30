@@ -1,0 +1,36 @@
+#!/usr/bin/env sh
+set -eu
+
+ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+VENV_DIR="$ROOT_DIR/.runtime-venv"
+PYTHON_BIN="$VENV_DIR/bin/python"
+UV_BIN="$ROOT_DIR/tools/uv"
+
+export PIP_DISABLE_PIP_VERSION_CHECK=1
+export PYTHONUNBUFFERED=1
+export PAPER_SOLVER_MODELS_DIR="${PAPER_SOLVER_MODELS_DIR:-$ROOT_DIR/models}"
+export MINERU_MODEL_SOURCE="${MINERU_MODEL_SOURCE:-modelscope}"
+
+if [ ! -x "$PYTHON_BIN" ]; then
+  if [ -x "$UV_BIN" ]; then
+    "$UV_BIN" python install 3.12
+    "$UV_BIN" venv --python 3.12 "$VENV_DIR"
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -m venv "$VENV_DIR"
+  else
+    echo "PaperSolver dependency needs Python runtime." >&2
+    exit 1
+  fi
+fi
+
+if [ ! -f "$VENV_DIR/.papersolver-structured-ready" ]; then
+  if [ -x "$UV_BIN" ]; then
+    "$UV_BIN" pip install --python "$PYTHON_BIN" -r "$ROOT_DIR/services/structured/requirements.txt"
+  else
+    "$PYTHON_BIN" -m pip install --upgrade pip
+    "$PYTHON_BIN" -m pip install -r "$ROOT_DIR/services/structured/requirements.txt"
+  fi
+  date > "$VENV_DIR/.papersolver-structured-ready"
+fi
+
+exec "$VENV_DIR/bin/mineru" "$@"

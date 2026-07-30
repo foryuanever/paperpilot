@@ -61,16 +61,17 @@
         v-for="topic in filteredTopics"
         :key="topic.id"
         class="tsq-card"
-        data-reveal="scale"
         :class="{ 'tsq-card-admin': isAdmin }"
         @click="selectedTopic = topic"
       >
         <!-- Hero Section -->
         <div class="tsq-card-hero">
           <div class="tsq-hero-badges">
-            <span class="tsq-provider-badge" :class="{ official: topicProviderLabel(topic) === '官方' }">
+            <span class="tsq-provider-badge" :class="{ official: topicProviderLabel(topic) === '官方', personal: isPersonalTopic(topic) }">
+              <svg v-if="isPersonalTopic(topic)" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
               {{ topicProviderLabel(topic) }}
             </span>
+            <span v-if="isHotTopic(topic)" class="tsq-hot-badge">热</span>
             <button
               v-if="isAdmin"
               type="button"
@@ -81,7 +82,7 @@
           </div>
           <div class="tsq-hero-content">
             <h3 class="tsq-hero-title">{{ topic.title }}</h3>
-            <p class="tsq-hero-subtitle">视觉-语言基础模型 × 跨模态融合 × 数据高效适配</p>
+            <p class="tsq-hero-subtitle">{{ cardSubtitle(topic) }}</p>
           </div>
         </div>
 
@@ -102,23 +103,30 @@
         <!-- Footer -->
         <footer class="tsq-card-footer new-footer">
           <div class="tsq-stats-group">
-            <span class="tsq-stat-item">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
-              {{ topic.likes || 0 }}
-            </span>
-            <span class="tsq-stat-item">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-              0
-            </span>
+            <button
+              type="button"
+              class="tsq-stat-action tsq-interest-meter"
+              :class="{ active: topic.interested }"
+              :disabled="topic.interestPending"
+              @click.stop="markInterested(topic)"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+              {{ topic.likes || 0 }} 人想做
+            </button>
           </div>
           <div class="tsq-footer-actions" style="display: flex; gap: 8px;">
             <button type="button" class="tsq-action-btn tsq-wish-btn" @click.stop="toggleSave(topic)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-              收藏
+              {{ topic.saved ? "已收藏" : "收藏" }}
             </button>
-            <button type="button" class="tsq-action-btn tsq-download-btn" @click.stop="toggleSave(topic)">
+            <button
+              type="button"
+              class="tsq-action-btn tsq-download-btn"
+              :disabled="topic.interestPending"
+              @click.stop="markInterested(topic)"
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-              想做
+              {{ topic.interested ? "取消想做" : topic.interestPending ? "记录中" : "想做" }}
             </button>
           </div>
         </footer>
@@ -216,9 +224,10 @@
                   :class="['tsq-direction-block', block.key]"
                 >
                   <b>{{ block.label }}</b>
-                  <ul>
+                  <ul v-if="blockHasHierarchy(block.text)">
                     <li v-for="point in blockPoints(block.text)" :key="point">{{ point }}</li>
                   </ul>
+                  <p v-else>{{ blockPoints(block.text)[0] }}</p>
                 </div>
               </div>
 
@@ -236,9 +245,9 @@
 
           <!-- Detail footer -->
           <footer class="tsq-detail-footer">
-            <button type="button" class="tsq-btn tsq-btn-ghost" :disabled="selectedTopic.interested || selectedTopic.interestPending" @click="markInterested(selectedTopic)">
+            <button type="button" class="tsq-btn tsq-btn-ghost" :disabled="selectedTopic.interestPending" @click="markInterested(selectedTopic)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-              {{ selectedTopic.interested ? "已想做" : "想做这个方向" }}
+              {{ selectedTopic.interested ? "取消想做" : "想做这个方向" }}
             </button>
             <button type="button" class="tsq-btn tsq-btn-primary" @click="toggleSave(selectedTopic)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
@@ -355,6 +364,15 @@
               <textarea v-model.trim="generatorForm.note" rows="4" placeholder="专业、可拿到的数据、导师方向、已有论文、希望偏理论/工程/应用等"></textarea>
             </label>
 
+            <label class="tsq-public-switch" :class="{ active: generatorForm.publicShare }">
+              <input v-model="generatorForm.publicShare" type="checkbox" />
+              <span class="tsq-public-switch-knob"></span>
+              <span class="tsq-public-switch-copy">
+                <b>{{ generatorForm.publicShare ? "公开提供到选题广场" : "仅个人可见" }}</b>
+                <small>{{ generatorForm.publicShare ? "卡片显示为匿名用户提供，其他用户可以想做和收藏。" : "卡片左上角显示个人锁标识，只会出现在你的列表和收藏里。" }}</small>
+              </span>
+            </label>
+
             <div class="tsq-gen-submit">
               <button type="submit" class="tsq-btn tsq-btn-primary tsq-btn-lg">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -434,7 +452,7 @@ const constraintOptions = ["必须有公开数据", "必须可复现", "尽量�
 const sortTabs = [
   { label: "最新", value: "latest" },
   { label: "最热", value: "hot" },
-  { label: "点赞最多", value: "liked" },
+  { label: "想做最多", value: "liked" },
 ];
 const generationSteps = ["读取研究 brief", "拆解对象和数据", "扩展中英文检索词", "检索真实文献", "生成 3-5 个推荐方向", "筛掉泛题和重复方向", "匹配代表论文来源", "写调研报告", "写入我的收藏"];
 const generationThinking = [
@@ -472,6 +490,7 @@ const generatorForm = reactive({
   avoidRoutes: "",
   seedPapers: "",
   note: "",
+  publicShare: false,
 });
 
 const topics = ref([]);
@@ -484,6 +503,7 @@ const adminGenerating = ref(false);
 const generationIndex = ref(0);
 const toastMessage = ref("");
 const deletingTopicIds = ref(new Set());
+const registeredUserCount = ref(0);
 let progressTimer = null;
 
 const generationProgressWidth = computed(() => {
@@ -494,7 +514,10 @@ const generationProgressWidth = computed(() => {
 const generationThinkingTitle = computed(() => generationThinking[generationIndex.value]?.[0] || "正在生成");
 const generationThinkingCopy = computed(() => generationThinking[generationIndex.value]?.[1] || "正在等待模型返回结构化结果。");
 
-onMounted(loadTopics);
+onMounted(() => {
+  loadTopics();
+  loadTopicStats();
+});
 onBeforeUnmount(() => {
   if (progressTimer) clearInterval(progressTimer);
 });
@@ -571,6 +594,15 @@ function closeGenerator() {
   if (progressTimer) clearInterval(progressTimer);
 }
 
+async function loadTopicStats() {
+  try {
+    const stats = await paperpilotApi.getForumStats();
+    registeredUserCount.value = Number(stats?.registeredUserCount || 0);
+  } catch {
+    registeredUserCount.value = 0;
+  }
+}
+
 async function generateTopic() {
   generating.value = true;
   generationIndex.value = 0;
@@ -591,9 +623,9 @@ async function generateTopic() {
     await new Promise(resolve => setTimeout(resolve, 650));
     topics.value = [...createdTopics, ...topics.value.filter(item => !createdIds.has(item.id))];
     selectedTopic.value = createdTopics[0] || null;
-    savedOnly.value = true;
+    savedOnly.value = !generatorForm.publicShare;
     showGenerator.value = false;
-    toast("已完成 1 次真实调研，并加入我的收藏");
+    toast(generatorForm.publicShare ? "已公开到选题广场，来源显示为匿名用户提供" : "已生成个人选题，只在你的列表中可见");
   } catch (error) {
     toast(error.response?.data?.message || "选题调研失败");
   } finally {
@@ -677,25 +709,46 @@ async function toggleSave(topic) {
 }
 
 async function markInterested(topic) {
-  if (topic.interested || topic.interestPending) {
-    toast("已经记录过了");
-    return;
-  }
+  if (topic.interestPending) return;
   const previous = Number(topic.likes || 0);
   const previousInterested = Boolean(topic.interested);
   topic.interestPending = true;
-  topic.interested = true;
+  topic.interested = !previousInterested;
+  topic.likes = Math.max(0, previous + (topic.interested ? 1 : -1));
   try {
     const result = await paperpilotApi.markTopicInterested(topic.id);
-    topic.likes = result.likes ?? topic.likes;
-    topic.interested = Boolean(result.interested ?? true);
-    toast("已记录为匿名想做");
+    const nextInterested = Object.prototype.hasOwnProperty.call(result, "interested")
+      ? Boolean(result.interested)
+      : topic.interested;
+    const nextLikes = Number.isFinite(Number(result.likes)) ? Number(result.likes) : topic.likes;
+    applyTopicInterestState(topic.id, nextInterested, nextLikes);
+    toast(nextInterested ? "已记录为想做" : "已取消想做");
   } catch (error) {
     topic.likes = previous;
     topic.interested = previousInterested;
     toast(error.response?.data?.message || "操作失败");
   } finally {
     topic.interestPending = false;
+  }
+}
+
+function applyTopicInterestState(topicId, interested, likes) {
+  topics.value = topics.value.map(item => {
+    if (item.id !== topicId) return item;
+    return {
+      ...item,
+      interested,
+      likes,
+      interestPending: false,
+    };
+  });
+  if (selectedTopic.value?.id === topicId) {
+    selectedTopic.value = {
+      ...selectedTopic.value,
+      interested,
+      likes,
+      interestPending: false,
+    };
   }
 }
 
@@ -730,6 +783,20 @@ function hiddenTagCount(topic) {
   return Math.max(0, (topic.tags || []).length - 3);
 }
 
+function cardSubtitle(topic) {
+  const pieces = [
+    ...(topic.themeClusters || []),
+    ...(topic.tags || []),
+    topic?.discipline,
+    topic?.stage,
+  ]
+    .map(item => String(item || "").trim())
+    .filter(Boolean)
+    .filter((item, index, array) => array.indexOf(item) === index)
+    .slice(0, 3);
+  return pieces.length ? pieces.join(" × ") : "真实文献检索 × 方法路径 × 可行性评估";
+}
+
 function firstCluster(topic) {
   return (topic.themeClusters || [])[0] || (topic.tags || [])[0] || "专题调研";
 }
@@ -739,7 +806,18 @@ function topicProviderLabel(topic) {
   const source = String(topic?.source || "");
   const modelName = String(topic?.modelName || "");
   if (source.includes("官方") || source.includes("daily-frontier") || modelName === "seed") return "官方";
+  if (source.includes("个人")) return "个人";
   return "匿名用户提供";
+}
+
+function isPersonalTopic(topic) {
+  return topicProviderLabel(topic) === "个人";
+}
+
+function isHotTopic(topic) {
+  const registered = Number(registeredUserCount.value || 0);
+  if (registered <= 1) return Number(topic?.likes || 0) > 0;
+  return Number(topic?.likes || 0) >= Math.ceil(registered / 2);
 }
 
 function detailSubtopics(topic) {
@@ -804,24 +882,36 @@ function directionReportBlocks(item, topic) {
 }
 
 function blockPoints(value) {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
+  const raw = String(value || "").trim();
+  const text = raw.replace(/\s+/g, " ").trim();
   if (!text) return [];
-  const bulletParts = text
-    .split(/[；;。]\s*|(?=·)|(?=•)|(?=^\d+[.、])/g)
-    .map(item => item.replace(/^[·•\-\s]+/, "").trim())
-    .filter(item => item.length > 3);
-  if (bulletParts.length >= 2) return bulletParts.slice(0, 6);
+  if (blockHasHierarchy(raw)) {
+    return raw
+      .split(/\n+/)
+      .flatMap(line => line.split(/(?=[·•]\s)|(?=\d+[.、]\s*)/g))
+      .map(item => item.replace(/^[·•\-\s*]+/, "").replace(/^\d+[.、]\s*/, "").trim())
+      .filter(item => item.length > 3)
+      .slice(0, 5);
+  }
   if (text.length <= 72) return [text];
   const chunks = [];
   let rest = text;
-  while (rest.length > 0 && chunks.length < 5) {
-    const slice = rest.slice(0, 66);
+  while (rest.length > 0 && chunks.length < 3) {
+    const slice = rest.slice(0, 96);
     const cut = Math.max(slice.lastIndexOf("，"), slice.lastIndexOf("、"), slice.lastIndexOf(" "));
-    const end = cut > 24 ? cut + 1 : Math.min(66, rest.length);
+    const end = cut > 36 ? cut + 1 : Math.min(96, rest.length);
     chunks.push(rest.slice(0, end).trim());
     rest = rest.slice(end).trim();
   }
-  return chunks.filter(Boolean);
+  return [chunks.join("").trim() || text];
+}
+
+function blockHasHierarchy(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  const lines = raw.split(/\n+/).map(item => item.trim()).filter(Boolean);
+  if (lines.length >= 2) return true;
+  return /(^|\n)\s*(?:[·•\-*]|\d+[.、])\s+/.test(raw);
 }
 
 function directionScore(item, topic, index) {
@@ -1062,6 +1152,12 @@ function toast(message) {
   box-shadow: 0 4px 16px rgba(99,102,241,0.32);
 }
 .tsq-btn-primary:hover { transform: translateY(-1.5px); box-shadow: 0 8px 24px rgba(99,102,241,0.42); }
+.tsq-btn:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
 .tsq-btn-ghost {
   background: transparent;
   border: 1px solid var(--c-border);
@@ -1069,7 +1165,6 @@ function toast(message) {
 }
 .tsq-btn-ghost:hover { border-color: var(--c-accent); color: var(--c-accent); background: rgba(99,102,241,0.06); }
 .tsq-btn-lg { height: 46px; padding: 0 28px; font-size: 15px; }
-
 /* ── Filter bar ────────────────────────────────────────── */
 .tsq-filter-bar {
   display: flex;
@@ -1637,6 +1732,12 @@ function toast(message) {
   line-height: 1.65;
   color: var(--c-muted);
 }
+.tsq-direction-block p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--c-muted);
+}
 .tsq-direction-block li::before {
   content: "·";
   margin-right: 6px;
@@ -1731,8 +1832,71 @@ function toast(message) {
   font-weight: 900;
   color: var(--c-text);
 }
-
 .tsq-gen-form { display: flex; flex-direction: column; gap: 14px; }
+
+.tsq-public-switch {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--c-border);
+  background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(14,165,233,0.05));
+  cursor: pointer;
+}
+.tsq-public-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.tsq-public-switch-knob {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(100,116,139,0.28);
+  border: 1px solid var(--c-border);
+  position: relative;
+  transition: all 0.2s ease;
+}
+.tsq-public-switch-knob::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.28);
+  transition: transform 0.2s ease;
+}
+.tsq-public-switch.active {
+  border-color: rgba(56,189,248,0.36);
+  background: linear-gradient(135deg, rgba(14,165,233,0.12), rgba(99,102,241,0.09));
+}
+.tsq-public-switch.active .tsq-public-switch-knob {
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  border-color: transparent;
+}
+.tsq-public-switch.active .tsq-public-switch-knob::after {
+  transform: translateX(20px);
+}
+.tsq-public-switch-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tsq-public-switch-copy b {
+  color: var(--c-text);
+  font-size: 13.5px;
+}
+.tsq-public-switch-copy small {
+  color: var(--c-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
 
 .tsq-field {
   display: flex;
@@ -1808,6 +1972,7 @@ function toast(message) {
 .tsq-gen-submit {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
   padding-top: 4px;
 }
 
@@ -2287,6 +2452,28 @@ function toast(message) {
   border: 1px solid rgba(255,255,255,0.15) !important;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
   backdrop-filter: blur(10px) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+.tsq-provider-badge.personal {
+  background: rgba(15,23,42,0.42) !important;
+  color: #cbd5e1 !important;
+  border-color: rgba(203,213,225,0.22) !important;
+}
+.tsq-hot-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(248,113,113,0.96), rgba(245,158,11,0.92));
+  color: #fff7ed;
+  border: 1px solid rgba(254,215,170,0.45);
+  font-size: 11.5px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  box-shadow: 0 8px 18px rgba(248,113,113,0.22);
 }
 
 .tsq-hero-content {
@@ -2399,15 +2586,46 @@ function toast(message) {
 
 .tsq-stats-group {
   display: flex;
-  gap: 16px;
+  gap: 8px;
   color: #64748b;
   font-size: 14px;
+  min-width: 0;
 }
 
-.tsq-stat-item {
+.tsq-stat-item,
+.tsq-stat-action {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.tsq-stat-action {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(56,189,248,0.18);
+  background: rgba(8, 47, 73, 0.22);
+  color: #a5f3fc;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+  white-space: nowrap;
+}
+.tsq-stat-action:hover {
+  transform: translateY(-1px);
+  border-color: rgba(56,189,248,0.46);
+  color: #ecfeff;
+  background: rgba(8,145,178,0.16);
+}
+.tsq-stat-action.active {
+  border-color: rgba(129,140,248,0.58);
+  color: #eef2ff;
+  background: linear-gradient(135deg, rgba(79,70,229,0.34), rgba(14,165,233,0.18));
+  box-shadow: 0 8px 20px rgba(79,70,229,0.2);
+}
+.tsq-stat-action:disabled {
+  cursor: default;
+  opacity: 0.86;
 }
 
 .tsq-wish-btn, .tsq-download-btn {
@@ -2425,16 +2643,28 @@ function toast(message) {
 }
 
 .tsq-wish-btn {
-  background: rgba(255,255,255,0.06) !important;
+  background: rgba(255,255,255,0.05) !important;
   color: #cbd5e1 !important;
-  border: 1px solid rgba(255,255,255,0.15) !important;
+  border: 1px solid rgba(148,163,184,0.2) !important;
 }
 
 .tsq-download-btn {
-  background: linear-gradient(135deg, #10b981, #059669) !important;
+  background: linear-gradient(135deg, #4f46e5, #0891b2) !important;
   color: #ffffff !important;
   border: none !important;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3) !important;
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.28) !important;
+}
+.tsq-download-btn svg {
+  transition: transform .18s ease;
+}
+.tsq-download-btn:hover svg {
+  transform: scale(1.08);
+}
+.tsq-download-btn:disabled {
+  background: linear-gradient(135deg, #64748b, #475569) !important;
+  box-shadow: none !important;
+  cursor: default !important;
+  opacity: 0.82;
 }
 
 .tsq-wish-btn:hover {
@@ -2443,8 +2673,8 @@ function toast(message) {
 }
 
 .tsq-download-btn:hover {
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(79, 70, 229, 0.38) !important;
 }
 
 /* ---------------- Force Overrides for Perfect Light / Dark Adaptation ---------------- */
@@ -2479,6 +2709,22 @@ function toast(message) {
 :root[data-theme="light"] .tsq-stats-group {
   color: #94a3b8 !important;
 }
+:root[data-theme="light"] .tsq-stat-action {
+  background: #f8fbff;
+  border-color: #dbeafe;
+  color: #2563eb;
+}
+:root[data-theme="light"] .tsq-stat-action:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+:root[data-theme="light"] .tsq-stat-action.active {
+  background: linear-gradient(135deg, #eef2ff, #ecfeff);
+  border-color: #818cf8;
+  color: #3730a3;
+  box-shadow: 0 8px 18px rgba(79,70,229,.14);
+}
 :root[data-theme="light"] .tsq-action-btn.tsq-wish-btn {
   background: #f1f5f9 !important;
   color: #475569 !important;
@@ -2489,7 +2735,7 @@ function toast(message) {
   color: #0f172a !important;
 }
 :root[data-theme="light"] .tsq-action-btn.tsq-download-btn {
-  background: linear-gradient(135deg, #10b981, #059669) !important;
+  background: linear-gradient(135deg, #4f46e5, #0891b2) !important;
   color: #ffffff !important;
   border: none !important;
 }
@@ -2506,6 +2752,11 @@ function toast(message) {
   color: #334155 !important;
   border-color: rgba(15, 23, 42, 0.15) !important;
   box-shadow: none !important;
+}
+:root[data-theme="light"] .tsq-provider-badge.personal {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-color: #cbd5e1 !important;
 }
 :root[data-theme="light"] .tsq-card::before {
   opacity: 0.4 !important;
@@ -2532,6 +2783,21 @@ function toast(message) {
 @media (max-width: 768px) {
   .tsq-grid {
     grid-template-columns: 1fr !important;
+  }
+  .tsq-card-footer.new-footer {
+    align-items: stretch !important;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .tsq-stats-group,
+  .tsq-footer-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .tsq-stat-action,
+  .tsq-action-btn {
+    flex: 1;
+    justify-content: center;
   }
 }
 </style>

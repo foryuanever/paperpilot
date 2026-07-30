@@ -108,9 +108,13 @@ public class PaymentController {
         String provider = String.valueOf(body.getOrDefault("provider", "")).trim().toLowerCase();
         String planId = String.valueOf(body.getOrDefault("planId", "custom-recharge")).trim();
         String planCycle = String.valueOf(body.getOrDefault("planCycle", "monthly")).trim();
+        int quantity = 1;
+        try {
+            quantity = Integer.parseInt(String.valueOf(body.getOrDefault("quantity", body.getOrDefault("teamMemberCount", "1"))).trim());
+        } catch (Exception ignored) {}
         double amount = Double.parseDouble(String.valueOf(body.getOrDefault("amount", "0")).replace("¥", "").trim());
         if (!"custom-recharge".equals(planId)) {
-            amount = membershipService.price(planId, planCycle);
+            amount = membershipService.price(planId, planCycle, quantity);
         }
         if (amount <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "充值金额必须大于 0");

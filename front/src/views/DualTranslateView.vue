@@ -670,15 +670,15 @@ const stateTitle = computed(() => {
 });
 const stateDescription = computed(() => {
   if (state.value === "PROGRESS") return "首次生成需要分析页面结构；完成后再次打开会直接读取缓存。";
-  if (state.value === "NATIVE") return "开源对照翻译服务暂不可用，当前使用内置 PDF 阅读和段落翻译备用模式。";
+  if (state.value === "NATIVE") return "本机依赖暂不可用，当前使用内置 PDF 阅读和段落翻译备用模式。";
   return "正在读取论文并建立原文与译文的页面对照关系。";
 });
 
 function friendlyError(requestError, fallback) {
   const raw = requestError?.response?.data?.message || requestError?.response?.data?.detail || "";
   return String(raw || fallback)
-    .replaceAll("PDFMathTranslate", "对照翻译")
-    .replaceAll("pdf2zh", "翻译引擎");
+    .replaceAll("PDFMathTranslate", "本机依赖")
+    .replaceAll("pdf2zh", "本机依赖");
 }
 
 function setCanvas(key, element) {
@@ -893,7 +893,7 @@ async function startTranslation() {
     pollTimer = setInterval(refreshStatus, 1200);
   } catch (requestError) {
     console.warn("pdfmath translation server offline, switching to native dual reader", requestError);
-    await loadNativePdfDualView(friendlyError(requestError, "开源对照翻译服务未启动或模型加载失败"));
+    await loadNativePdfDualView(friendlyError(requestError, "本机依赖未启动或正在初始化"));
   }
 }
 
@@ -914,11 +914,11 @@ async function refreshStatus() {
       await loadTranslatedPdf();
     } else if (state.value === "FAILURE") {
       clearInterval(pollTimer);
-      await loadNativePdfDualView(String(result?.message || "开源对照翻译任务失败，已尝试切换备用模式"));
+      await loadNativePdfDualView(String(result?.message || "本机依赖任务失败，已尝试切换备用模式"));
     }
   } catch (requestError) {
     clearInterval(pollTimer);
-    await loadNativePdfDualView(friendlyError(requestError, "开源对照翻译状态服务暂不可用"));
+    await loadNativePdfDualView(friendlyError(requestError, "本机依赖状态服务暂不可用"));
   }
 }
 

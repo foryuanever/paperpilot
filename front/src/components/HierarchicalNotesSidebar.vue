@@ -613,16 +613,14 @@ function renderMarkdownNode(node, depth = 0) {
   const indent = "  ".repeat(depth);
   let md = "";
   if (node.type === "folder") {
-    md += `${indent}#`.repeat(Math.min(depth + 2, 6)) + ` ${node.title}\n\n`;
+    md += `${indent}${cleanNoteExportText(node.title)}\n`;
   } else if (node.type === "excerpt") {
-    md += `${indent}- **${node.title}** (P.${node.page || 1})\n`;
-    if (node.quoteText) md += `${indent}  > “${node.quoteText}”\n`;
-    if (node.content) md += `${indent}  ${node.content}\n`;
-    md += "\n";
+    md += `${indent}${cleanNoteExportText(node.title)}（P.${node.page || 1}）\n`;
+    if (node.quoteText) md += `${indent}  摘录：${cleanNoteExportText(node.quoteText)}\n`;
+    if (node.content) md += `${indent}  ${cleanNoteExportText(node.content)}\n`;
   } else {
-    md += `${indent}- **${node.title}**\n`;
-    if (node.content) md += `${indent}  ${node.content}\n`;
-    md += "\n";
+    md += `${indent}${cleanNoteExportText(node.title)}\n`;
+    if (node.content) md += `${indent}  ${cleanNoteExportText(node.content)}\n`;
   }
 
   if (node.children && node.children.length) {
@@ -630,15 +628,24 @@ function renderMarkdownNode(node, depth = 0) {
       md += renderMarkdownNode(child, depth + 1);
     }
   }
+  if (depth === 0) md += "\n";
   return md;
 }
 
 function renderNotesMarkdown() {
-  let text = `# ${props.paperTitle || '文献层级笔记大纲'}\n\n`;
+  let text = `${cleanNoteExportText(props.paperTitle || '文献层级笔记大纲')}\n\n`;
   for (const rootNode of notesTree.value) {
     text += renderMarkdownNode(rootNode, 0);
   }
   return text.trim();
+}
+
+function cleanNoteExportText(text) {
+  return String(text || "")
+    .replace(/[#*_`~]/g, "")
+    .replace(/^\s*[-•·]+\s*/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // 导出为 Markdown

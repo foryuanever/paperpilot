@@ -29,6 +29,7 @@ public class ModelConfigService {
     public static final String SCENE_MEETING_DECK = "meeting_deck";
     public static final String SCENE_FORUM_MODERATION = "forum_moderation";
     public static final String SCENE_TOPIC_RESEARCH = "topic_research";
+    public static final String SCENE_BACKUP = "backup";
 
     private final ModelConfigRepository modelConfigRepository;
     private final CurrentUserService currentUserService;
@@ -501,8 +502,9 @@ public class ModelConfigService {
     }
 
     private String poolPriority(ModelConfigEntity entity, String status, Long latencyMs) {
+        int order = entity.getSortOrder() == null ? 0 : entity.getSortOrder();
         long latency = latencyMs == null ? 99_999L : latencyMs;
-        return statusPriority(status) + "-" + String.format("%08d", latency) + "-" + (entity.isActive() ? "0" : "1") + "-" + entity.getId();
+        return String.format("%05d", order) + "-" + statusPriority(status) + "-" + String.format("%08d", latency) + "-" + (entity.isActive() ? "0" : "1") + "-" + entity.getId();
     }
 
     public static String normalizeScene(String scene) {
@@ -522,6 +524,9 @@ public class ModelConfigService {
         }
         if (value.equals("ppt") || value.equals("deck") || value.equals("meeting") || value.equals("meeting_report") || value.equals("meeting_deck")) {
             return SCENE_MEETING_DECK;
+        }
+        if (value.equals("backup") || value.equals("备用") || value.equals("备用号池") || value.equals("备用路由")) {
+            return SCENE_BACKUP;
         }
         return SCENE_GENERAL;
     }
@@ -896,5 +901,19 @@ public class ModelConfigService {
     private boolean isDeepSeekRequest(ModelConfigRequest request) {
         String source = (Objects.toString(request.getProviderName(), "") + " " + Objects.toString(request.getBaseUrl(), "")).toLowerCase();
         return source.contains("deepseek") || source.contains("api.deepseek.com");
+    }
+
+    @Transactional
+    public Map<String, Object> sortPoolRoutes(List<Long> ids) {
+        currentUserService.requireAdmin();
+        for (int i = 0; i < ids.size(); i++) {
+            Long id = ids.get(i);
+            int order = i;
+            modelConfigRepository.findById(id).ifPresent(row -> {
+                row.setSortOrder(order);
+                modelConfigRepository.save(row);
+            });
+        }
+        return Map.of("success", true, "message", "已保存排序");
     }
 }

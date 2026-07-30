@@ -41,6 +41,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -76,6 +77,10 @@ public class MeetingReportService {
     private static final int SECTION_AI_TIMEOUT_SECONDS = 130;
     private static final int PPTXGEN_TIMEOUT_SECONDS = 120;
     private static final long STALE_JOB_MILLIS = Duration.ofMinutes(3).toMillis();
+    private static final int PAPER_QA_CONCURRENCY = 30;
+    private static final int PAPER_QA_QUEUE_LIMIT = 120;
+    private static final int PAPER_QA_AVG_SECONDS = 6;
+    private static final long PAPER_QA_QUEUE_TIMEOUT_MS = Duration.ofSeconds(45).toMillis();
     private static final Map<String, List<String>> SECTION_BLOCKS = Map.of(
         "synthesis", List.of(
             "领域现状", "研究缺口", "研究目标",
@@ -107,7 +112,9 @@ public class MeetingReportService {
     private final Map<String, DeckJob> deckJobs = new ConcurrentHashMap<>();
     private final ExecutorService reportExecutor = Executors.newFixedThreadPool(2);
     private final ExecutorService deckExecutor = Executors.newFixedThreadPool(2);
-    private final ExecutorService sectionAiExecutor = Executors.newCachedThreadPool();
+    private final ExecutorService sectionAiExecutor = Executors.newFixedThreadPool(4);
+    private final Semaphore paperQaLimiter = new Semaphore(PAPER_QA_CONCURRENCY, true);
+    private final AtomicInteger paperQaWaiting = new AtomicInteger(0);
     private final HttpClient httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(12))
         .followRedirects(HttpClient.Redirect.ALWAYS)
@@ -350,7 +357,66 @@ public class MeetingReportService {
         return response(paper, report);
     }
 
+    public Map<String, Object> paperQaQueueStatus() {
+        return paperQaQueueStatus(0);
+    }
+
+    private Map<String, Object> paperQaQueueStatus(int position) {
+        int running = Math.max(0, PAPER_QA_CONCURRENCY - paperQaLimiter.availablePermits());
+        int waiting = Math.max(0, paperQaWaiting.get());
+        int queueAhead = position > 0 ? Math.max(0, position - 1) : waiting;
+        int estimatedWaitSeconds = queueAhead <= 0
+            ? 0
+            : Math.max(PAPER_QA_AVG_SECONDS, (int) Math.ceil(queueAhead * PAPER_QA_AVG_SECONDS / (double) PAPER_QA_CONCURRENCY));
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("running", running);
+        status.put("waiting", waiting);
+        status.put("capacity", PAPER_QA_CONCURRENCY);
+        status.put("queueLimit", PAPER_QA_QUEUE_LIMIT);
+        status.put("position", Math.max(0, position));
+        status.put("queueAhead", queueAhead);
+        status.put("estimatedWaitSeconds", estimatedWaitSeconds);
+        return status;
+    }
+
     public Map<String, Object> askSelection(String workspaceId, Map<String, Object> body) {
+        int position = 0;
+        boolean acquired = false;
+        try {
+            if (!paperQaLimiter.tryAcquire()) {
+                int waiting = paperQaWaiting.get();
+                if (waiting >= PAPER_QA_QUEUE_LIMIT) {
+                    throw new ResponseStatusException(
+                        HttpStatus.TOO_MANY_REQUESTS,
+                        "AI 研读助手排队已满，当前前方约 " + waiting + " 个请求，请稍后再试。"
+                    );
+                }
+                position = paperQaWaiting.incrementAndGet();
+                acquired = paperQaLimiter.tryAcquire(PAPER_QA_QUEUE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                if (!acquired) {
+                    throw new ResponseStatusException(
+                        HttpStatus.TOO_MANY_REQUESTS,
+                        "AI 研读助手仍在排队中，当前前方约 " + Math.max(0, position - 1) + " 个请求，请稍后再试。"
+                    );
+                }
+            } else {
+                acquired = true;
+            }
+            Map<String, Object> result = new LinkedHashMap<>(askSelectionGuarded(workspaceId, body));
+            if (position > 0) {
+                result.put("queue", paperQaQueueStatus(position));
+            }
+            return result;
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "AI 研读助手排队被中断，请稍后重试。");
+        } finally {
+            if (position > 0) paperQaWaiting.decrementAndGet();
+            if (acquired) paperQaLimiter.release();
+        }
+    }
+
+    private Map<String, Object> askSelectionGuarded(String workspaceId, Map<String, Object> body) {
         Long userId = currentUserService.getOrCreateDefaultUserId();
         PaperEntity paper = requirePaper(workspaceId, userId);
         String selection = Objects.toString(body.get("selection"), "").trim();
@@ -380,10 +446,11 @@ public class MeetingReportService {
             3. 色情、露骨性内容、血腥暴力、伤害他人、自残、自杀、违法犯罪、仇恨歧视或规避安全限制的内容。若论文中客观提及相关主题，只能进行中立、必要、学术化解释。
 
             输出规范：
-            1. 回答应短而有信息量。默认不超过 700 个汉字；确需详细解释时最多约 1200 个汉字。不要为了凑字数扩写。
-            2. 优先结合论文上下文回答；如果论文中没有依据，请明确说明“当前论文材料不足以确认”，再给出一般学术解释。
-            3. 使用清晰 Markdown，可用短标题、项目符号和必要的加粗；避免机械套话、空洞赞美和无依据推断。
-            4. 分析图表时，聚焦图表结构、变量/流程、对比指标和能支持的结论。
+            1. 最终回答必须使用简体中文，不得输出英文主体段落。英文论文原句、术语、模型名、指标名可以保留，但必须用中文解释。
+            2. 回答应短而有信息量。默认不超过 700 个汉字；确需详细解释时最多约 1200 个汉字。不要为了凑字数扩写。
+            3. 优先结合论文上下文回答；如果论文中没有依据，请明确说明“当前论文材料不足以确认”，再给出一般学术解释。
+            4. 使用清晰 Markdown，可用短标题、项目符号和必要的加粗；避免机械套话、空洞赞美和无依据推断。
+            5. 分析图表时，聚焦图表结构、变量/流程、对比指标和能支持的结论。
             """;
         String userPrompt = """
             论文题目：%s
@@ -398,6 +465,8 @@ public class MeetingReportService {
             %s
 
             用户问题：%s
+
+            请用简体中文回答；如果需要引用英文原文，只能作为短引用或术语出现，并立刻给出中文解释。
             """.formatted(
                 paper.getTitle(),
                 focusedContext,
@@ -412,8 +481,18 @@ public class MeetingReportService {
                 1200,
                 MEETING_MODEL_FALLBACKS
             );
+            String answer = cleanAcademicAnswer(result.content());
+            if (isMostlyEnglishAcademicAnswer(answer)) {
+                AiChatService.ChatResult zhResult = aiChatService.chatJsonWithModelFallback(
+                    systemPrompt + "\n\n重要：你现在只负责把回答改写成简体中文，不得保留英文主体段落。",
+                    "请将下面回答改写为简体中文学术表达，保留必要英文术语、模型名和指标名即可，不要新增事实：\n\n" + answer,
+                    1000,
+                    MEETING_MODEL_FALLBACKS
+                );
+                answer = cleanAcademicAnswer(zhResult.content());
+            }
             return Map.of(
-                "answer", cleanAcademicAnswer(result.content()),
+                "answer", answer,
                 "modelName", "cling-y-research-assistant"
             );
         } catch (Exception error) {
@@ -600,6 +679,14 @@ public class MeetingReportService {
         return Optional.ofNullable(value).orElse("")
             .replaceAll("\\R{3,}", "\n\n")
             .trim();
+    }
+
+    private boolean isMostlyEnglishAcademicAnswer(String value) {
+        String text = Optional.ofNullable(value).orElse("").trim();
+        if (text.length() < 80) return false;
+        long letters = text.chars().filter(ch -> (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')).count();
+        long chinese = text.chars().filter(ch -> Character.UnicodeScript.of(ch) == Character.UnicodeScript.HAN).count();
+        return letters >= 80 && chinese * 3 < letters;
     }
 
     private boolean isDisallowedPaperChatRequest(String question) {
@@ -3217,6 +3304,9 @@ public class MeetingReportService {
             .replace("\\t", " ")
             .replaceAll("(?m)([：:])\\s*分析内容\\s*", "$1")
             .replaceAll("(?m)^\\s*(?:[-•·○◦▪▫]|\\d+[.、)]|[（(]\\d+[）)])?\\s*(?:领域现状|研究缺口|研究目标|研究对象|方法设计|评价指标|结果表现|对比证据|机制解释|主要创新|研究意义|适用场景|研究局限|应用风险|未来方向)\\s*[：:]\\s*(?=\\S)", "")
+            .replaceAll("(?m)^\\s*[：:；;、，,]+\\s*", "")
+            .replaceAll("(?m)^\\s*(?:[-•·○◦▪▫]|\\d+[.、)]|[（(]\\d+[）)])?\\s*(?:本文|该文|该论文)?(?:采用|使用|运用|包括|包含)?(?:了)?以下(?:方法|指标|内容|方面|步骤)\\s*[：:；;。]?\\s*$", "")
+            .replaceAll("(?m)^\\s*(?:[-•·○◦▪▫]|\\d+[.、)]|[（(]\\d+[）)])?\\s*(?:本文|该文|该论文)?(?:采用|使用|运用)(?:了)?(?:以下|如下)(?:方法|指标|内容|方面|步骤)\\s*[：:；;。]?\\s*$", "")
             .replaceAll("（\\s*(?:来自)?摘要\\s*）", "")
             .replaceAll("\\(\\s*(?:from\\s+)?abstract\\s*\\)", "")
             .replaceAll("（\\s*正文片段(?:未明确)?\\s*）", "")
@@ -3538,7 +3628,8 @@ public class MeetingReportService {
             每条要点禁止重复父级小标题或任意小标题标签；不要写“领域现状：……”“研究缺口：……”“研究目标：……”，要直接写具体判断。
             分点前先在内部判断该小标题的分类标准，再按同一标准切分；不要按句子顺序机械拆成“第一：首先；第二：随着；第三：本文目的”。
             明确区分论文事实和基于摘要的合理判断。
-            不要编造具体数值、数据集、实验结论或作者没有给出的事实；信息不足时说明“摘要未明确，需要查阅正文”。
+            不要编造具体数值、数据集、实验结论或作者没有给出的事实；信息不足时宁可少写，不要反复输出“待核对”。确需提示时，每个字段最多 1 条，写成“需回到引言/方法/实验/结论章节确认……”，不要写空泛占位句。
+            所有内容必须是简体中文；英文术语只能作为括号内术语或模型/指标名保留，不得整句英文输出。
             """;
     }
 
@@ -3559,11 +3650,12 @@ public class MeetingReportService {
             2. 每个要点必须是完整学术判断句，写清对象、方法、数据/材料、指标、结果、机制或边界中的至少一项。
             3. 禁止用“首先、其次、随着、近年来、本文目的、本文主要、研究表明”作为分点逻辑；这些不是分类标准。
             4. 分点要按语义类别组织，例如研究缺口可分“数据缺口、方法缺口、验证缺口”，方法设计可分“输入、核心机制、训练/推理、输出”，结果表现可分“主结果、对比结果、消融/敏感性结果”。
-            5. 如果某类内容只有 1 条有效信息，就只写 1 条；如果没有可靠依据，写 1 条“待核对：……”并说明应查哪个章节，不要编造。
+            5. 如果某类内容只有 1 条有效信息，就只写 1 条；如果没有可靠依据，宁可少写，不要反复写“待核对”。确需提示时，每个字段最多 1 条，写成“需回到……章节确认……”，不要写模板话。
             6. 每条要点不能以当前小标题或其他小标题标签开头；错误示例：“研究缺口：模型缺少临床验证”；正确示例：“现有模型缺少跨机构临床验证，难以证明泛化能力。”。
             能从正文片段判断的内容要说明依据来自引言、方法、实验、结果或结论；没有证据时明确写“正文片段未明确，需要查阅原文对应章节”，并说明要查什么。
             不要编造论文没有给出的数据集、数值、实验结论、作者观点或引用。
             禁止出现“用户要求”“我们被要求”“可以写”“我将”“提示词”“JSON字段”等元叙述。
+            所有内容必须是简体中文；英文原文不得作为要点主体，只能保留必要术语、模型名、数据集名或指标名。
             """;
     }
 
@@ -3578,7 +3670,10 @@ public class MeetingReportService {
             冒号后不得为空；不得把“研究背景：”“研究问题：”“要点：”等只有标签、没有内容的文字当作要点。
             分点必须合理：同一小标题内的要点必须平行，不能第一条讲领域背景、第二条讲方法、第三条讲研究目的。每条都要围绕该小标题本身回答同一种问题。
             每条要点禁止复读小标题标签；不要写“领域现状：……”“研究缺口：……”“研究目标：……”，直接写该要点的具体判断。
+            每个要点禁止只写总起句或提示句，例如“本文采用以下方法”“评价指标包括”“本文的主要对象是”；必须直接写具体对象、方法、指标或证据。
             禁止“第一：首先”“第二：随着”“第三：本文目的”这类按句子顺序切分的乱分点；分点必须按语义类别切分，例如数据、方法、指标、结论、边界。
+            禁止任何要点以冒号、分号、顿号或逗号开头；生成后必须自检并删除开头标点。
+            所有要点必须使用简体中文，不得整句英文输出；英文术语只能作为括号内术语或专有名词保留。
             要求：使用正式学术语言；提炼核心贡献而非复述原文；分析优势与不足；总结对该领域的启示。
             不要输出 Markdown、解释或多余文字，只输出 JSON。不要出现我们被要求、用户要求、可以写、我将等元叙述。
             """.formatted(headings);
@@ -3599,8 +3694,10 @@ public class MeetingReportService {
             4. 分点数量 1-5 条即可。材料足够写 4-5 条，材料一般写 2-3 条，材料很少写 1 条，不要为了凑数重复。
             5. 对方法章节，可按输入对象、核心机制、训练/推理流程、输出目标切分；对结果章节，可按主结果、对比证据、消融/敏感性、机制解释切分；对背景章节，可按领域现状、数据缺口、方法缺口、验证缺口切分。
             6. 如果是综述、理论、系统或人文社科论文，不要强行套机器学习实验结构；应按该论文实际的论证材料、案例、文本、制度、系统功能或理论框架分析。
-            7. 信息不足时不要反复写“原文未明确”。每个小标题最多只允许 1 条“待核对”要点，而且必须放在该小标题最后，用“待核对：……”开头。
+            7. 信息不足时不要反复写“原文未明确”或“待核对”。每个章节最多只允许 1 条核对提示，而且必须放在最需要补证据的小标题最后，写成“需回到……章节确认……”，不要写空泛占位句。
             8. 每条要点禁止重复父级小标题或任意指定小标题标签；不要写“领域现状：……”“研究缺口：……”“方法设计：……”。小标题已经由外层提供，要点必须直接进入内容。
+            9. 每条要点必须是具体判断句，禁止空泛总起句：不要写“本文采用以下方法”“本文的评价指标包括”“该研究主要对象是”后面再另起分点；应直接写“以……为研究对象”“通过……完成……”“采用……评估……”。
+            10. 同一小标题内要点必须平行：如果“方法设计”按方法模块分点，所有点都写方法模块；如果“评价指标”按指标分点，所有点都写指标/评估维度；不要混入研究背景、研究目的或意义。
             质量标准：
             - 所有分析必须紧扣用户给出的论文题目、摘要和正文片段，不得套用其他论文、其他任务或通用模板。
             - 每个要点必须包含具体信息：论文中的对象/概念/方法/数据/材料/指标/结论至少命中一项。
@@ -3609,9 +3706,11 @@ public class MeetingReportService {
             - 同一小标题内不得重复“本文聚焦/旨在/通过……实现……”这类同义开头；每条要点的功能必须不同：定义问题、解释机制、列证据、评价结果、指出边界。
             - 禁止输出“第一：首先”“第二：随着”“第三：本文目的”这种毫无分类逻辑的分点；序号只是展示编号，不是内容逻辑。
             - 不要在每个要点末尾机械标注“来自摘要”“来自正文片段”“摘要”。不要重复写“原文未明确”“正文片段未明确”。
-            - 如果材料没有提供某项事实，不要编造；将不足压缩成最后一条“待核对：建议查看……章节确认……”，同一小标题只能出现一次。
+            - 如果材料没有提供某项事实，不要编造；将不足压缩成最多一条“需回到……章节确认……”，同一章节只能出现一次，不要每个小标题都写核对提示。
             - 优先提取论文自己的专有概念、任务定义、数据来源、方法模块、实验指标和结论；每个要点都要能回答“这篇论文为什么重要、证据在哪里、下一步能追问什么”。
             - 输出前自检：删掉所有“父标题：内容”形式的要点；检查同一小标题内每条要点是否按同一个分类标准切分，若不是就合并或重写。
+            - 输出前自检：删掉所有以“：”“；”“、”“，”开头的要点，删掉所有“本文采用以下方法/本文的评价指标包括/主要对象是”这类只有引导、没有实质信息的要点。
+            - 输出前自检：删掉整句英文要点；如果材料是英文论文，必须翻译并概括成中文判断句，只保留必要英文术语。
             禁止分析本次提示词或写作任务本身，禁止出现“我们被要求”“用户要求”“可以写”“我认为应该写”“汇报时可”“可简要说明”“可以提到”这类元叙述。
             每个小标题内容必须直接回答该小标题，不要把数据来源内容写到评测指标，也不要把研究背景内容写到数据集。
             每个要点直接写成完整句子，不要用“• ”或“- ”开头。不要在每条后面反复写“正文片段”“正文片段未明确”“原文未明确”“需要查阅实验章节”这类尾注；必要时统一写成最后一条“待核对：……”。

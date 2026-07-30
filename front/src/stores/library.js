@@ -15,12 +15,11 @@ function readJson(key, fallback) {
 }
 
 const defaultDocuments = [];
-const JOURNAL_LEVEL_TAGS = new Set([
-  "JCR Q1", "JCR Q2", "JCR Q3", "JCR Q4",
-  "中科院1区", "中科院2区", "中科院3区", "中科院4区",
-  "CCF A", "CCF B", "CCF C", "CCF 其他",
-  "IF 高", "IF 中", "IF 低", "IF 待查",
-]);
+function normalizeJournalTags(tags) {
+  return Array.from(new Set((Array.isArray(tags) ? tags : [])
+    .map(tag => String(tag || "").trim().replace(/\s+/g, " "))
+    .filter(tag => tag && tag.length <= 32)));
+}
 
 function sanitizeTitleFields(paper = {}) {
   const title = String(paper.title || "").trim();
@@ -197,9 +196,7 @@ export const useLibraryStore = defineStore("library", () => {
       progress: paper.progress,
       importance: paper.importance,
       note: paper.note,
-      journalTags: Array.from(new Set((paper.journalTags || [])
-        .map(tag => String(tag || "").trim())
-        .filter(tag => JOURNAL_LEVEL_TAGS.has(tag)))),
+      journalTags: normalizeJournalTags(paper.journalTags),
       venueType: paper.venueType || "期刊",
       venueRanking: paper.venueRanking || "JCR --",
       publishYear: paper.publishYear,

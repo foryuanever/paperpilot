@@ -1,5 +1,8 @@
 import { apiClient } from "./apiClient";
 
+const pdfMathRuntimeByWorkspace = new Map();
+const structuredParseRuntimeByWorkspace = new Map();
+
 export const paperpilotApi = {
   async login(payload) {
     const { data } = await apiClient.post("/api/auth/login", payload, { timeout: 5000 });
@@ -65,6 +68,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.post("/api/admin/model-config/pool/cleanup", null, { params: { scene } });
     return data;
   },
+  async sortModelPool(ids) {
+    const { data } = await apiClient.post("/api/admin/model-config/pool/sort", ids);
+    return data;
+  },
   async activateModelPoolRoute(id, scene = "general") {
     const { data } = await apiClient.post(`/api/admin/model-config/pool/${id}/activate`, null, { params: { scene } });
     return data;
@@ -108,6 +115,37 @@ export const paperpilotApi = {
     const { data } = await apiClient.delete("/api/admin/ai-usage/calls", { timeout: 20000 });
     return data;
   },
+  async getMonitoringAnalytics(params = {}) {
+    const { data } = await apiClient.get("/api/admin/monitoring/analytics", { params });
+    return data;
+  },
+  async banIp(ip, reason = "管理员手动封禁") {
+    const params = new URLSearchParams();
+    params.append("ip", ip);
+    params.append("reason", reason);
+    const { data } = await apiClient.post("/api/admin/monitoring/ban-ip", params);
+    return data;
+  },
+  async unbanIp(ip) {
+    const params = new URLSearchParams();
+    params.append("ip", ip);
+    const { data } = await apiClient.post("/api/admin/monitoring/unban-ip", params);
+    return data;
+  },
+  async banUser(userId, reason = "管理员手动封禁", days = -1) {
+    const params = new URLSearchParams();
+    params.append("userId", userId);
+    params.append("reason", reason);
+    params.append("days", days);
+    const { data } = await apiClient.post("/api/admin/monitoring/ban-user", params);
+    return data;
+  },
+  async unbanUser(userId) {
+    const params = new URLSearchParams();
+    params.append("userId", userId);
+    const { data } = await apiClient.post("/api/admin/monitoring/unban-user", params);
+    return data;
+  },
   async importPaper(payload) {
     const { data } = await apiClient.post("/api/papers/import", payload);
     return data;
@@ -139,6 +177,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.get("/api/library/papers", { params });
     return data;
   },
+  async getLibraryPaper(workspaceId) {
+    const { data } = await apiClient.get(`/api/library/papers/${workspaceId}`);
+    return data;
+  },
   async updateLibraryPaper(workspaceId, payload) {
     const { data } = await apiClient.patch(`/api/library/papers/${workspaceId}`, payload);
     return data;
@@ -161,6 +203,10 @@ export const paperpilotApi = {
   },
   async askPaperSelection(workspaceId, payload) {
     const { data } = await apiClient.post(`/api/meeting-reports/${workspaceId}/ask`, payload, { timeout: 120000 });
+    return data;
+  },
+  async getPaperAiQueueStatus() {
+    const { data } = await apiClient.get("/api/meeting-reports/qa/queue", { timeout: 5000 });
     return data;
   },
   async saveMeetingReport(workspaceId, payload) {
@@ -293,14 +339,34 @@ export const paperpilotApi = {
     return mergeTranslationProviders(providers);
   },
   async startPdfMathTranslation(workspaceId, service = "google") {
+    if (window.paperSolverDesktop?.startPdfMathTranslation) {
+      try {
+        const result = await window.paperSolverDesktop.startPdfMathTranslation({ workspaceId, service });
+        pdfMathRuntimeByWorkspace.set(String(workspaceId), "desktop");
+        return result;
+      } catch (error) {
+        console.warn("PaperSolver local dependency failed, falling back to backend.", error);
+      }
+    }
     const { data } = await apiClient.post(`/api/pdfmathtranslate/${workspaceId}/translate`, { service }, { timeout: 60000 });
+    pdfMathRuntimeByWorkspace.set(String(workspaceId), "backend");
     return data;
   },
   async getPdfMathTranslationStatus(workspaceId) {
+    if (pdfMathRuntimeByWorkspace.get(String(workspaceId)) === "desktop" && window.paperSolverDesktop?.getPdfMathTranslationStatus) {
+      return window.paperSolverDesktop.getPdfMathTranslationStatus({ workspaceId });
+    }
     const { data } = await apiClient.get(`/api/pdfmathtranslate/${workspaceId}/status`, { timeout: 20000 });
     return data;
   },
   async getPdfMathDualPdf(workspaceId) {
+    if (pdfMathRuntimeByWorkspace.get(String(workspaceId)) === "desktop" && window.paperSolverDesktop?.getPdfMathDualPdf) {
+      const result = await window.paperSolverDesktop.getPdfMathDualPdf({ workspaceId });
+      if (result?.base64) {
+        return base64ToBlob(result.base64, result.mimeType || "application/pdf");
+      }
+      throw new Error("桌面端没有返回双语 PDF 内容。");
+    }
     const { data } = await apiClient.get(`/api/pdfmathtranslate/${workspaceId}/dual.pdf`, {
       responseType: "blob",
       timeout: 120000,
@@ -308,21 +374,44 @@ export const paperpilotApi = {
     return data;
   },
   async startMineruParse(workspaceId, force = false) {
+    if (window.paperSolverDesktop?.startStructuredParse) {
+      try {
+        const result = await window.paperSolverDesktop.startStructuredParse({ workspaceId, force });
+        structuredParseRuntimeByWorkspace.set(String(workspaceId), "desktop");
+        return result;
+      } catch (error) {
+        console.warn("PaperSolver local structured parser failed, falling back to backend.", error);
+      }
+    }
     const { data } = await apiClient.post(`/api/mineru/${workspaceId}/parse`, null, {
       params: { force },
       timeout: 30000,
     });
+    structuredParseRuntimeByWorkspace.set(String(workspaceId), "backend");
     return data;
   },
   async getMineruParseStatus(workspaceId) {
+    if (structuredParseRuntimeByWorkspace.get(String(workspaceId)) === "desktop" && window.paperSolverDesktop?.getStructuredParseStatus) {
+      return window.paperSolverDesktop.getStructuredParseStatus({ workspaceId });
+    }
     const { data } = await apiClient.get(`/api/mineru/${workspaceId}/status`, { timeout: 20000 });
     return data;
   },
   async getMineruDocument(workspaceId) {
+    if (structuredParseRuntimeByWorkspace.get(String(workspaceId)) === "desktop" && window.paperSolverDesktop?.getStructuredDocument) {
+      return window.paperSolverDesktop.getStructuredDocument({ workspaceId });
+    }
     const { data } = await apiClient.get(`/api/mineru/${workspaceId}/document`, { timeout: 60000 });
     return data;
   },
   async getMineruAsset(path) {
+    if (String(path || "").startsWith("desktop-structured://") && window.paperSolverDesktop?.getStructuredAsset) {
+      const result = await window.paperSolverDesktop.getStructuredAsset({ path });
+      if (result?.base64) {
+        return base64ToBlob(result.base64, result.mimeType || "application/octet-stream");
+      }
+      throw new Error("桌面端没有返回图表资源内容。");
+    }
     const { data } = await apiClient.get(path, {
       responseType: "blob",
       timeout: 60000,
@@ -370,6 +459,21 @@ export const paperpilotApi = {
   async updateAdminUserMembership(userId, payload) {
     const { data } = await apiClient.patch(`/api/admin/users/${userId}/membership`, payload);
     return data;
+  },
+  async getAdminMembershipPlans() {
+    const { data } = await apiClient.get("/api/admin/membership-plans");
+    return data;
+  },
+  async createAdminMembershipPlan(payload) {
+    const { data } = await apiClient.post("/api/admin/membership-plans", payload);
+    return data;
+  },
+  async updateAdminMembershipPlan(planId, payload) {
+    const { data } = await apiClient.patch(`/api/admin/membership-plans/${planId}`, payload);
+    return data;
+  },
+  async deleteAdminMembershipPlan(planId) {
+    await apiClient.delete(`/api/admin/membership-plans/${planId}`);
   },
   async updateUserRole(userId, role) {
     const { data } = await apiClient.patch(`/api/admin/users/${userId}/role`, { role });
@@ -509,6 +613,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.get("/api/forum/posts", { timeout: 15000 });
     return data;
   },
+  async getForumStats() {
+    const { data } = await apiClient.get("/api/forum/stats", { timeout: 15000 });
+    return data;
+  },
   async getForumActiveUsers() {
     const { data } = await apiClient.get("/api/forum/active-users", { timeout: 15000 });
     return data;
@@ -540,6 +648,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.post(`/api/forum/posts/${id}/report`, payload, { timeout: 15000 });
     return data;
   },
+  async reportUser(userId, payload) {
+    const { data } = await apiClient.post(`/api/forum/users/${userId}/report`, payload, { timeout: 15000 });
+    return data;
+  },
   async viewForumPost(id) {
     const { data } = await apiClient.post(`/api/forum/posts/${id}/view`);
     return data;
@@ -554,18 +666,6 @@ export const paperpilotApi = {
   },
   async likeForumReply(postId, replyId) {
     const { data } = await apiClient.post(`/api/forum/posts/${postId}/reply/${replyId}/like`);
-    return data;
-  },
-  async getMessageContacts() {
-    const { data } = await apiClient.get("/api/messages/contacts");
-    return data;
-  },
-  async getMessageThread(userId) {
-    const { data } = await apiClient.get(`/api/messages/thread/${userId}`);
-    return data;
-  },
-  async sendDirectMessage(userId, payload) {
-    const { data } = await apiClient.post(`/api/messages/thread/${userId}`, payload);
     return data;
   },
   async getUserCard(userId) {
@@ -592,8 +692,9 @@ export const paperpilotApi = {
     const { data } = await apiClient.post(`/api/friends/requests/${userId}`, payload);
     return data;
   },
-  async handleFriendRequest(requestId, action) {
-    await apiClient.patch(`/api/friends/requests/${requestId}`, { action });
+  async handleFriendRequest(requestId, action, payload = {}) {
+    const { data } = await apiClient.patch(`/api/friends/requests/${requestId}`, { action, ...payload });
+    return data;
   },
 
   // Topic square API
@@ -747,31 +848,46 @@ export const paperpilotApi = {
 function canUseDesktopTranslation(provider) {
   if (!window.paperSolverDesktop?.isDesktop) return false;
   const normalized = String(provider || "google").trim().toLowerCase();
-  return ["google", "google-web", "deeplx", "libretranslate", "mtranserver"].includes(normalized);
+  return ["google", "google-web", "bing", "microsoft-edge", "youdao", "360-web", "tencent-transmart", "deeplx", "libretranslate", "mtranserver"].includes(normalized);
+}
+
+function base64ToBlob(base64, mimeType = "application/octet-stream") {
+  const binary = atob(String(base64 || ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mimeType });
 }
 
 function mergeTranslationProviders(providers) {
   const map = new Map();
   for (const provider of providers) {
     if (!provider?.id) continue;
-    const id = String(provider.id);
+    const originalId = String(provider.id);
+    const id = originalId === "google-web" ? "google" : originalId;
     const existing = map.get(id) || {};
+    const normalizedProvider = {
+      ...provider,
+      id,
+      label: originalId === "google-web" ? "谷歌翻译" : provider.label,
+    };
     if (existing.local && !provider.local) {
       map.set(id, {
-        ...provider,
+        ...normalizedProvider,
         ...existing,
         id,
-        configured: String(existing.configured ?? provider.configured ?? false),
+        configured: String(existing.configured ?? normalizedProvider.configured ?? false),
         local: true,
       });
       continue;
     }
     map.set(id, {
       ...existing,
-      ...provider,
+      ...normalizedProvider,
       id,
-      configured: String(provider.configured ?? existing.configured ?? false),
-      local: Boolean(provider.local ?? existing.local),
+      configured: String(normalizedProvider.configured ?? existing.configured ?? false),
+      local: Boolean(normalizedProvider.local ?? existing.local),
     });
   }
   return Array.from(map.values());

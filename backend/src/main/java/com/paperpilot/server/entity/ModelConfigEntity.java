@@ -58,6 +58,9 @@ public class ModelConfigEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
+    @Column(name = "sort_order", nullable = false)
+    private Integer sortOrder = 0;
+
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
@@ -171,4 +174,7 @@ public class ModelConfigEntity {
     public void setLastLatencyMs(Long lastLatencyMs) { this.lastLatencyMs = lastLatencyMs; }
     public LocalDateTime getLastTestedAt() { return lastTestedAt; }
     public void setLastTestedAt(LocalDateTime lastTestedAt) { this.lastTestedAt = lastTestedAt; }
+
+    public Integer getSortOrder() { return sortOrder; }
+    public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
 }

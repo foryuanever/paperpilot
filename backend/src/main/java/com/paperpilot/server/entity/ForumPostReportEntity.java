@@ -34,6 +34,9 @@ public class ForumPostReportEntity {
     @Column(name = "processed_at")
     private LocalDateTime processedAt;
 
+    @Column(name = "screenshot", columnDefinition = "LONGTEXT")
+    private String screenshot;
+
     @PrePersist
     void onCreate() {
         if (createdAt == null) createdAt = LocalDateTime.now();
@@ -56,4 +59,6 @@ public class ForumPostReportEntity {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getProcessedAt() { return processedAt; }
     public void setProcessedAt(LocalDateTime processedAt) { this.processedAt = processedAt; }
+    public String getScreenshot() { return screenshot; }
+    public void setScreenshot(String screenshot) { this.screenshot = screenshot; }
 }

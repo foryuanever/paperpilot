@@ -11,7 +11,6 @@ import ForumView from "../views/ForumView.vue";
 import ForumPostView from "../views/ForumPostView.vue";
 import TeamView from "../views/TeamView.vue";
 import ProfileView from "../views/ProfileView.vue";
-import MessagesView from "../views/MessagesView.vue";
 import ReferralView from "../views/ReferralView.vue";
 import TopicSquareView from "../views/TopicSquareView.vue";
 import { useAuthStore } from "../stores/auth";
@@ -26,6 +25,24 @@ const routes = [
   {
     path: "/login",
     redirect: "/",
+  },
+  {
+    path: "/terms",
+    name: "terms",
+    component: () => import("../views/LegalView.vue"),
+    meta: { public: true, legalType: "terms" },
+  },
+  {
+    path: "/privacy",
+    name: "privacy",
+    component: () => import("../views/LegalView.vue"),
+    meta: { public: true, legalType: "privacy" },
+  },
+  {
+    path: "/disclaimer",
+    name: "disclaimer",
+    component: () => import("../views/LegalView.vue"),
+    meta: { public: true, legalType: "disclaimer" },
   },
   {
     path: "/dashboard",
@@ -129,9 +146,7 @@ const routes = [
   },
   {
     path: "/messages",
-    name: "messages",
-    component: MessagesView,
-    meta: { requiresAuth: true },
+    redirect: "/profile",
   },
 ];
 

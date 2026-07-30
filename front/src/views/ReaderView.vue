@@ -140,7 +140,22 @@
               <span>画笔</span>
             </button>
 
-            <!-- 7. 色彩盘 + 全标注粗细大小与高级调色组件 -->
+            <!-- 7. 局部橡皮擦 -->
+            <button
+              class="dock-tool-btn instant-tooltip"
+              :class="{ active: eraserModeActive }"
+              data-tip="局部橡皮擦：拖动擦除标记"
+              @click="setEraserTool"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m16.5 3.5 4 4a2 2 0 0 1 0 2.8l-8.2 8.2H6.7L3.5 15.3a2 2 0 0 1 0-2.8l10.2-9a2 2 0 0 1 2.8 0Z"/>
+                <path d="m12 8 4 4"/>
+                <path d="M3 21h18"/>
+              </svg>
+              <span>橡皮擦</span>
+            </button>
+
+            <!-- 8. 色彩盘 + 全标注粗细大小与高级调色组件 -->
             <div class="dock-style-wrapper">
               <div class="dock-color-swatches">
                 <span
@@ -348,7 +363,7 @@
 
         <template v-if="!assistantCollapsed">
           <div v-if="assistantTab === 'chat'" class="assistant-scroll">
-            <ReaderReportPanel :workspace-id="workspaceId" :paper="activePaper" :wide="assistantExpanded" />
+            <ReaderReportPanel :key="workspaceId" :workspace-id="workspaceId" :paper="activePaper" :wide="assistantExpanded" />
 
           </div>
 
@@ -561,18 +576,47 @@
             </section>
           </article>
 
-          <canvas
+          <svg
             ref="drawingCanvas"
             class="reader-drawing-layer"
-            :class="{ active: drawingModeActive }"
+            :class="{ active: drawingModeActive, erasing: eraserModeActive }"
             :style="drawingCanvasStyle"
+            :viewBox="`0 0 ${drawingCanvasBox.width || 1} ${drawingCanvasBox.height || 1}`"
+            preserveAspectRatio="none"
             @pointerdown="startInkStroke"
             @pointermove="moveInkStroke"
             @pointerup="finishInkStroke"
             @pointercancel="cancelInkStroke"
             @pointerleave="finishInkStroke"
             @wheel.passive="handleCanvasWheel"
-          ></canvas>
+          >
+            <g v-for="stroke in drawingStrokes" :key="stroke.id || stroke.createdAt || stroke.points?.length">
+              <path
+                v-for="shape in svgStrokeShapes(stroke)"
+                :key="shape.key"
+                :d="shape.d"
+                :stroke="stroke.color || selectedColor"
+                :stroke-width="svgStrokeWidth(stroke)"
+                :stroke-opacity="svgStrokeOpacity(stroke)"
+                fill="none"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </g>
+            <g v-if="activeInkStrokeView">
+              <path
+                v-for="shape in svgStrokeShapes(activeInkStrokeView)"
+                :key="shape.key"
+                :d="shape.d"
+                :stroke="activeInkStrokeView.color || selectedColor"
+                :stroke-width="svgStrokeWidth(activeInkStrokeView)"
+                :stroke-opacity="svgStrokeOpacity(activeInkStrokeView)"
+                fill="none"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </g>
+          </svg>
 
           <!-- WPS 1:1 绿折线引用批注层 (参照图 2) -->
           <div v-if="noteAnnotations.length" class="wps-comments-container">
@@ -687,7 +731,7 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
           <span>AI 解读</span>
         </button>
-        <button class="cmd-btn cmd-translate" :disabled="selectionTranslator.loading" @click="translateSelection">
+        <button class="cmd-btn cmd-translate" :class="{ active: selectionTranslator.providerMenuOpen }" :disabled="selectionTranslator.loading" @click="toggleSelectionProviderPanel">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2v3M22 22l-5-10-5 10M14 18h6"/></svg>
           <span>划词翻译</span>
         </button>
@@ -712,13 +756,31 @@
         </div>
         <button aria-label="关闭选中内容工具" @click="closeSelectionTranslator">×</button>
       </div>
-      <div class="selection-provider-panel">
-        <span>翻译引擎</span>
-        <select v-model="abstractProvider" @change="handleProviderChange">
-          <option v-for="provider in translationProviders" :key="provider.id" :value="provider.id" :disabled="provider.configured === false">
-            {{ provider.label }}{{ provider.configured === false ? "（需配置）" : "" }}
-          </option>
-        </select>
+      <div v-if="selectionTranslator.providerMenuOpen" class="selection-provider-panel">
+        <div class="selection-provider-header">
+          <div>
+            <span>选择翻译引擎</span>
+            <small>当前：{{ providerShortLabel(abstractProvider) }}</small>
+          </div>
+          <b>{{ translationProviders.filter(item => item.configured !== false).length }} 个可用</b>
+        </div>
+        <div class="selection-provider-list">
+          <button
+            v-for="provider in translationProviders"
+            :key="provider.id"
+            class="selection-provider-option"
+            :class="{ active: abstractProvider === provider.id }"
+            :disabled="provider.configured === false"
+            @click="selectSelectionProvider(provider.id)"
+          >
+            <span class="provider-radio"></span>
+            <span class="provider-copy">
+              <span class="provider-name">{{ provider.label }}</span>
+              <small>{{ providerDescription(provider) }}</small>
+            </span>
+            <em>{{ providerBadge(provider) }}</em>
+          </button>
+        </div>
       </div>
       <div v-if="selectionTranslator.loading || selectionTranslator.result || selectionTranslator.error" class="selection-result" :class="{ pending: selectionTranslator.loading, error: selectionTranslator.error, 'is-ai-mode': selectionTranslator.resultTitle === 'AI 解读' }">
         <span v-if="selectionTranslator.loading" class="selection-spinner"></span>
@@ -728,6 +790,7 @@
             <small>{{ selectionTranslator.source.length }} 字符</small>
           </header>
           <p v-if="selectionTranslator.wasCompacted && !selectionTranslator.loading && !selectionTranslator.error" class="selection-compact-note">选区较长，已结合开头、结尾和所在段落进行摘要式解读。</p>
+          <p v-if="selectionTranslator.loading && paperAiQueue.visible" class="selection-queue-note">{{ paperChatQueueLabel }}</p>
           <p>{{ selectionTranslator.loading ? selectionTranslator.loadingText : selectionTranslator.error || selectionTranslator.result }}</p>
         </div>
       </div>
@@ -835,7 +898,7 @@
             <div class="message-content-wrapper">
               <div class="ai-meta-banner">
                 <span class="status-dot pulse"></span>
-                <span>NEURAL COMPUTING // 正在解析论文神经元...</span>
+                <span>{{ paperChatQueueLabel }}</span>
               </div>
               <p class="paper-chat-thinking"><i></i><i></i><i></i></p>
             </div>
@@ -1050,7 +1113,8 @@ const currentToolLabel = computed(() => {
     underline: "文本下划线",
     strike: "文本删除线",
     wavy: "文本波浪线",
-    pen: "自由手绘画笔"
+    pen: "自由手绘画笔",
+    eraser: "局部橡皮擦"
   }[activeAnnotateTool.value] || "标注线形";
 });
 
@@ -1085,9 +1149,14 @@ const drawingCanvasStyle = computed(() => ({
 }));
 const lineTools = ["underline", "strike", "wavy"];
 const lineToolActive = computed(() => lineTools.includes(activeAnnotateTool.value) && activeMouseMode.value === "draw-line");
-const drawingModeActive = computed(() => isDrawingPenActive.value || lineToolActive.value);
+const eraserRadius = ref(18);
+const eraserModeActive = computed(() => activeAnnotateTool.value === "eraser" && activeMouseMode.value === "erase");
+const drawingModeActive = computed(() => isDrawingPenActive.value || lineToolActive.value || eraserModeActive.value);
+const activeInkStrokeView = shallowRef(null);
 let activeInkStroke = null;
 let drawingFrame = 0;
+let eraserDragging = false;
+let eraserDirty = false;
 
 function activateBrushTool(closePanel = true) {
   isDrawingPenActive.value = true;
@@ -1106,6 +1175,18 @@ function setMoveTool() {
   drawingToolPanelOpen.value = false;
   textMarkPanelOpen.value = "";
   showReaderToast("已切换为移动/选择模式");
+}
+
+function setEraserTool() {
+  isDrawingPenActive.value = false;
+  activeMouseMode.value = "erase";
+  activeAnnotateTool.value = "eraser";
+  drawingToolPanelOpen.value = false;
+  textMarkPanelOpen.value = "";
+  closeSelectionTranslator();
+  window.getSelection()?.removeAllRanges();
+  nextTick(resizeDrawingCanvas);
+  showReaderToast("已开启局部橡皮擦，拖过标记即可擦除");
 }
 
 function setLineTool(tool) {
@@ -1240,23 +1321,12 @@ function persistDrawingStrokes() {
 }
 
 function resizeDrawingCanvas() {
-  const canvas = drawingCanvas.value;
   const column = readingColumn.value;
-  if (!canvas || !column) return;
+  if (!column) return;
   drawingCanvasBox.left = 0;
   drawingCanvasBox.top = 0;
   drawingCanvasBox.width = Math.max(1, Math.ceil(column.scrollWidth || column.clientWidth));
   drawingCanvasBox.height = Math.max(1, Math.ceil(column.scrollHeight || column.clientHeight));
-  const dpr = Math.min(1.5, window.devicePixelRatio || 1);
-  const width = drawingCanvasBox.width;
-  const height = drawingCanvasBox.height;
-  if (canvas.width !== Math.ceil(width * dpr) || canvas.height !== Math.ceil(height * dpr)) {
-    canvas.width = Math.ceil(width * dpr);
-    canvas.height = Math.ceil(height * dpr);
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-  }
-  redrawDrawingCanvas();
 }
 
 function drawInkStroke(context, stroke) {
@@ -1353,48 +1423,108 @@ function drawWavyStroke(context, points, amplitude = 6) {
   context.stroke();
 }
 
+function cloneInkStroke(stroke) {
+  if (!stroke) return null;
+  return {
+    ...stroke,
+    points: Array.isArray(stroke.points) ? stroke.points.map(point => ({ ...point })) : [],
+    segments: Array.isArray(stroke.segments) ? stroke.segments.map(segment => ({ ...segment })) : undefined,
+  };
+}
+
+function svgStrokeWidth(stroke) {
+  if (!stroke) return 2;
+  if (stroke.tool === "highlight") return Math.max(8, (stroke.width || 3) * 2.8);
+  return Math.max(1, stroke.width || 2);
+}
+
+function svgStrokeOpacity(stroke) {
+  if (!stroke) return 1;
+  if (stroke.tool === "highlight") return Math.min(0.45, Math.max(0.12, stroke.opacity ?? 0.35));
+  return Math.min(1, Math.max(0.1, stroke.opacity ?? 0.95));
+}
+
+function svgStrokeShapes(stroke) {
+  if (!stroke) return [];
+  if (Array.isArray(stroke.segments) && stroke.segments.length) {
+    return stroke.segments
+      .map((segment, index) => {
+        const x1 = Math.min(Number(segment.x1) || 0, Number(segment.x2) || 0);
+        const x2 = Math.max(Number(segment.x1) || 0, Number(segment.x2) || 0);
+        const y = Number(segment.y) || 0;
+        if (Math.abs(x2 - x1) < 1) return null;
+        return {
+          key: `${stroke.id || "stroke"}-seg-${index}`,
+          d: stroke.tool === "wavy"
+            ? svgWavyLinePath(x1, x2, y, Math.max(3, (stroke.width || 2) * 1.45))
+            : `M ${x1.toFixed(1)} ${y.toFixed(1)} L ${x2.toFixed(1)} ${y.toFixed(1)}`,
+        };
+      })
+      .filter(Boolean);
+  }
+  const points = Array.isArray(stroke.points) ? stroke.points : [];
+  if (!points.length) return [];
+  return [{
+    key: `${stroke.id || "stroke"}-path`,
+    d: stroke.tool === "wavy"
+      ? svgWavyStrokePath(points.map(viewportInkPoint), Math.max(5, (stroke.width || 2) * 2.2))
+      : svgPolylinePath(points.map(viewportInkPoint)),
+  }];
+}
+
+function svgPolylinePath(points) {
+  if (!points.length) return "";
+  const [first, ...rest] = points;
+  if (!rest.length) return `M ${first.x.toFixed(1)} ${first.y.toFixed(1)} L ${(first.x + 0.1).toFixed(1)} ${(first.y + 0.1).toFixed(1)}`;
+  return [
+    `M ${first.x.toFixed(1)} ${first.y.toFixed(1)}`,
+    ...rest.map(point => `L ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
+  ].join(" ");
+}
+
+function svgWavyLinePath(startX, endX, y, amplitude = 3) {
+  const wavelength = 14;
+  const distance = Math.max(1, endX - startX);
+  const steps = Math.max(8, Math.ceil(distance / 4));
+  const parts = [`M ${startX.toFixed(1)} ${y.toFixed(1)}`];
+  for (let index = 1; index <= steps; index += 1) {
+    const t = index / steps;
+    const x = startX + distance * t;
+    const wave = Math.sin((distance * t / wavelength) * Math.PI * 2) * amplitude;
+    parts.push(`L ${x.toFixed(1)} ${(y + wave).toFixed(1)}`);
+  }
+  return parts.join(" ");
+}
+
+function svgWavyStrokePath(points, amplitude = 6) {
+  if (!points.length) return "";
+  const wavelength = 12;
+  const parts = [`M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`];
+  points.forEach((point, pointIndex) => {
+    if (pointIndex === 0) return;
+    const previous = points[pointIndex - 1];
+    const dx = point.x - previous.x;
+    const dy = point.y - previous.y;
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const steps = Math.max(2, Math.ceil(distance / 5));
+    const nx = -dy / distance;
+    const ny = dx / distance;
+    for (let index = 1; index <= steps; index += 1) {
+      const t = index / steps;
+      const wave = Math.sin(((pointIndex + t) * distance / wavelength) * Math.PI * 2) * amplitude * 0.45;
+      parts.push(`L ${(previous.x + dx * t + nx * wave).toFixed(1)} ${(previous.y + dy * t + ny * wave).toFixed(1)}`);
+    }
+  });
+  return parts.join(" ");
+}
+
 function redrawDrawingCanvas() {
-  const canvas = drawingCanvas.value;
-  if (!canvas) return;
-  const dpr = window.devicePixelRatio || 1;
-  const context = canvas.getContext("2d");
-  const width = Number.parseFloat(canvas.style.width) || canvas.width / dpr;
-  const height = Number.parseFloat(canvas.style.height) || canvas.height / dpr;
-  context.setTransform(dpr, 0, 0, dpr, 0, 0);
-  context.clearRect(0, 0, width, height);
-  drawingStrokes.forEach(stroke => drawInkStroke(context, stroke));
-  if (activeInkStroke) drawInkStroke(context, activeInkStroke);
+  activeInkStrokeView.value = activeInkStroke ? cloneInkStroke(activeInkStroke) : null;
 }
 
 function drawInkSegment(from, to, stroke) {
-  const canvas = drawingCanvas.value;
-  if (!canvas || !from || !to) return;
-  if (Array.isArray(stroke?.segments)) {
-    redrawDrawingCanvas();
-    return;
-  }
-  const dpr = Math.min(1.5, window.devicePixelRatio || 1);
-  const context = canvas.getContext("2d");
-  const start = viewportInkPoint(from);
-  const end = viewportInkPoint(to);
-  context.setTransform(dpr, 0, 0, dpr, 0, 0);
-  context.save();
-  context.strokeStyle = stroke.color || selectedColor.value;
-  context.lineWidth = stroke.tool === "highlight" ? Math.max(8, (stroke.width || 3) * 2.8) : stroke.width || 3;
-  context.lineCap = "round";
-  context.lineJoin = "round";
-  context.globalAlpha = stroke.tool === "highlight"
-    ? Math.min(0.45, Math.max(0.12, stroke.opacity ?? 0.35))
-    : Math.min(1, Math.max(0.1, stroke.opacity ?? 0.95));
-  if (stroke.tool === "wavy") {
-    drawWavyStroke(context, [start, end], Math.max(5, (stroke.width || 2) * 2.2));
-  } else {
-    context.beginPath();
-    context.moveTo(start.x, start.y);
-    context.lineTo(end.x, end.y);
-    context.stroke();
-  }
-  context.restore();
+  if (!from || !to || !stroke) return;
+  activeInkStrokeView.value = cloneInkStroke(stroke);
 }
 
 function inkPointFromEvent(event) {
@@ -1443,10 +1573,94 @@ function scheduleDrawingRedraw() {
   });
 }
 
+function distancePointToSegment(point, start, end) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSq = dx * dx + dy * dy;
+  if (!lengthSq) return Math.hypot(point.x - start.x, point.y - start.y);
+  const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq));
+  const projection = { x: start.x + dx * t, y: start.y + dy * t };
+  return Math.hypot(point.x - projection.x, point.y - projection.y);
+}
+
+function eraseLineSegment(segment, point, radius) {
+  const x1 = Math.min(Number(segment.x1) || 0, Number(segment.x2) || 0);
+  const x2 = Math.max(Number(segment.x1) || 0, Number(segment.x2) || 0);
+  const y = Number(segment.y) || 0;
+  if (point.x < x1 - radius || point.x > x2 + radius || Math.abs(point.y - y) > radius + 4) {
+    return [{ ...segment, x1, x2, y }];
+  }
+  const distance = distancePointToSegment(point, { x: x1, y }, { x: x2, y });
+  if (distance > radius + 4) return [{ ...segment, x1, x2, y }];
+  const cutLeft = Math.max(x1, point.x - radius);
+  const cutRight = Math.min(x2, point.x + radius);
+  const nextSegments = [];
+  if (cutLeft - x1 > 4) nextSegments.push({ ...segment, x1, x2: cutLeft, y });
+  if (x2 - cutRight > 4) nextSegments.push({ ...segment, x1: cutRight, x2, y });
+  return nextSegments;
+}
+
+function splitFreehandStroke(stroke, point, radius) {
+  const points = Array.isArray(stroke.points) ? stroke.points : [];
+  const chunks = [];
+  let chunk = [];
+  points.forEach((current, index) => {
+    const previous = points[index - 1];
+    const hitCurrent = Math.hypot(current.x - point.x, current.y - point.y) <= radius;
+    const hitSegment = previous && distancePointToSegment(point, previous, current) <= radius;
+    if (hitCurrent || hitSegment) {
+      if (chunk.length > 1) chunks.push(chunk);
+      chunk = [];
+      return;
+    }
+    chunk.push({ ...current });
+  });
+  if (chunk.length > 1) chunks.push(chunk);
+  return chunks.map((pointsChunk, index) => ({
+    ...stroke,
+    id: `${stroke.id || "ink"}-erase-${Date.now()}-${index}`,
+    points: pointsChunk,
+    segments: undefined,
+  }));
+}
+
+function eraseStrokesNearPoint(point, radius = eraserRadius.value) {
+  let changed = false;
+  for (let index = drawingStrokes.length - 1; index >= 0; index -= 1) {
+    const stroke = drawingStrokes[index];
+    if (Array.isArray(stroke?.segments) && stroke.segments.length) {
+      const nextSegments = stroke.segments.flatMap(segment => eraseLineSegment(segment, point, radius));
+      if (nextSegments.length !== stroke.segments.length || nextSegments.some((segment, i) => (
+        segment.x1 !== stroke.segments[i]?.x1 || segment.x2 !== stroke.segments[i]?.x2
+      ))) {
+        changed = true;
+        if (nextSegments.length) {
+          drawingStrokes.splice(index, 1, { ...stroke, segments: nextSegments });
+        } else {
+          drawingStrokes.splice(index, 1);
+        }
+      }
+      continue;
+    }
+    const pieces = splitFreehandStroke(stroke, point, radius);
+    if (pieces.length !== 1 || pieces[0]?.points?.length !== stroke?.points?.length) {
+      changed = true;
+      drawingStrokes.splice(index, 1, ...pieces);
+    }
+  }
+  if (changed) activeInkStrokeView.value = null;
+  return changed;
+}
+
 function startInkStroke(event) {
   if (!drawingModeActive.value) return;
   event.preventDefault();
   event.currentTarget?.setPointerCapture?.(event.pointerId);
+  if (eraserModeActive.value) {
+    eraserDragging = true;
+    eraserDirty = eraseStrokesNearPoint(inkPointFromEvent(event)) || eraserDirty;
+    return;
+  }
   const tool = isDrawingPenActive.value ? "pen" : activeAnnotateTool.value;
   const firstPoint = tool === "pen" ? inkPointFromEvent(event) : linePointFromEvent(event);
   if (!firstPoint) {
@@ -1468,13 +1682,18 @@ function startInkStroke(event) {
       x2: firstPoint.x,
       y: firstPoint.y,
     }];
-    redrawDrawingCanvas();
+    drawInkSegment(firstPoint, { ...firstPoint, x: firstPoint.x + 0.1 }, activeInkStroke);
   } else {
     drawInkSegment(activeInkStroke.points[0], { x: activeInkStroke.points[0].x + 0.1, y: activeInkStroke.points[0].y + 0.1 }, activeInkStroke);
   }
 }
 
 function moveInkStroke(event) {
+  if (eraserModeActive.value && eraserDragging) {
+    event.preventDefault();
+    eraserDirty = eraseStrokesNearPoint(inkPointFromEvent(event)) || eraserDirty;
+    return;
+  }
   if (!drawingModeActive.value || !activeInkStroke) return;
   event.preventDefault();
   const previous = activeInkStroke.points[activeInkStroke.points.length - 1];
@@ -1484,7 +1703,7 @@ function moveInkStroke(event) {
   activeInkStroke.points.push(next);
   if (activeInkStroke.tool !== "pen") {
     extendLineStroke(activeInkStroke, next);
-    redrawDrawingCanvas();
+    drawInkSegment(previous, next, activeInkStroke);
   } else {
     drawInkSegment(previous, next, activeInkStroke);
   }
@@ -1509,6 +1728,16 @@ function extendLineStroke(stroke, point) {
 }
 
 function finishInkStroke(event) {
+  if (eraserDragging) {
+    event?.preventDefault?.();
+    eraserDragging = false;
+    if (eraserDirty) {
+      persistDrawingStrokes();
+      showReaderToast("已擦除局部标记");
+    }
+    eraserDirty = false;
+    return;
+  }
   if (!activeInkStroke) return;
   event?.preventDefault?.();
   if (activeInkStroke.points.length > 1) {
@@ -1516,9 +1745,13 @@ function finishInkStroke(event) {
     persistDrawingStrokes();
   }
   activeInkStroke = null;
+  redrawDrawingCanvas();
 }
 
 function cancelInkStroke() {
+  if (eraserDragging && eraserDirty) persistDrawingStrokes();
+  eraserDragging = false;
+  eraserDirty = false;
   activeInkStroke = null;
   redrawDrawingCanvas();
 }
@@ -1603,22 +1836,9 @@ const paperMetaTranslation = reactive({
   paperId: "",
 });
 const translationProviders = ref([
-  { id: "google-web", label: "Google 网页翻译", configured: true },
   { id: "google", label: "谷歌翻译", configured: true },
-  { id: "google-api", label: "Google(API)", configured: false },
-  { id: "bing", label: "必应翻译", configured: false },
-  { id: "cnki", label: "CNKI 翻译", configured: false },
-  { id: "deeplx", label: "DeepLX", configured: false },
   { id: "baidu", label: "百度翻译", configured: true },
-  { id: "youdao", label: "有道翻译", configured: true },
-  { id: "huoshan-web", label: "火山网页翻译", configured: false },
-  { id: "tencent-transmart", label: "腾讯 TranSmart", configured: false },
-  { id: "haici", label: "海词翻译", configured: false },
-  { id: "libretranslate", label: "LibreTranslate", configured: false },
-  { id: "mtranserver", label: "MTranServer", configured: false },
-  { id: "microsoft", label: "微软翻译", configured: false },
-  { id: "tencent", label: "腾讯翻译", configured: false },
-  { id: "deepl", label: "DeepL", configured: false }
+  { id: "youdao", label: "有道翻译", configured: true }
 ]);
 const selectionReady = ref(false);
 const selectedRange = shallowRef(null);
@@ -1641,6 +1861,7 @@ const selectionTranslator = reactive({
   blockId: "",
   start: -1,
   end: -1,
+  providerMenuOpen: false,
   annotating: false,
   annotationDraft: "",
   editingAnnotationId: "",
@@ -1676,6 +1897,13 @@ const paperChat = reactive({
     { id: 1, role: "assistant", content: "你好，我会优先结合当前论文回答，也可以协助其他学术研究问题。你可以问研究方法、数据、实验结论或学术概念。" },
   ],
 });
+const paperAiQueue = reactive({
+  visible: false,
+  polling: false,
+  timer: null,
+  status: null,
+});
+const paperChatQueueLabel = computed(() => formatPaperAiQueueStatus(paperAiQueue.status, paperAiQueue.visible));
 const paperChatWindow = reactive({
   x: null,
   y: null,
@@ -2771,17 +2999,37 @@ function providerLabel(providerId) {
 
 function providerShortLabel(providerId) {
   const label = providerLabel(providerId);
-  if (providerId === "google-web") return "Google 网页";
+  if (providerId === "google-web" || providerId === "google") return "谷歌翻译";
   if (providerId === "google-api") return "Google API";
   if (providerId === "microsoft") return "微软翻译";
   if (providerId === "tencent") return "腾讯翻译";
   if (providerId === "tencent-transmart") return "腾讯 TranSmart";
-  if (providerId === "huoshan-web") return "火山网页";
+  if (providerId === "huoshan-web") return "火山翻译";
   if (providerId === "youdao") return "有道翻译";
+  if (providerId === "360-web") return "360 翻译";
   if (providerId === "deeplx") return "DeepLX";
   if (providerId === "deepl") return "DeepL";
   if (providerId === "ai") return "AI 翻译";
   return label;
+}
+
+function providerDescription(provider) {
+  const id = provider?.id;
+  if (id === "google" || id === "google-web") return "速度快，适合划词和短段落";
+  if (id === "bing" || id === "microsoft-edge") return "免配置，长句稳定";
+  if (id === "baidu") return "中文场景友好";
+  if (id === "youdao") return "词句解释更自然";
+  if (id === "deeplx") return "本机依赖服务";
+  if (id === "libretranslate") return "本机开源服务";
+  if (id === "mtranserver") return "本机轻量翻译";
+  if (provider?.configured === false) return "需要先配置";
+  return provider?.local ? "本机可用" : "在线可用";
+}
+
+function providerBadge(provider) {
+  if (provider?.configured === false) return "待配置";
+  if (provider?.local) return "本机";
+  return "可用";
 }
 
 function cycleAndRetranslate(block) {
@@ -2909,14 +3157,99 @@ function closeSelectionTranslator() {
   selectionTranslator.open = false;
   selectionTranslator.loading = false;
   selectionTranslator.annotating = false;
+  selectionTranslator.providerMenuOpen = false;
 }
 
-async function translateSelection() {
+function toggleSelectionProviderPanel() {
+  if (selectionTranslator.loading) return;
+  selectionTranslator.providerMenuOpen = !selectionTranslator.providerMenuOpen;
+  nextTick(() => fitSelectionPopover(false));
+}
+
+function selectSelectionProvider(providerId) {
+  const provider = translationProviders.value.find(item => item.id === providerId);
+  if (!provider || provider.configured === false) return;
+  abstractProvider.value = providerId;
+  selectionTranslator.providerMenuOpen = false;
+  translateSelection(providerId);
+}
+
+function normalizePaperAiQueueStatus(payload = {}) {
+  return {
+    running: Number(payload.running || 0),
+    waiting: Number(payload.waiting || 0),
+    capacity: Number(payload.capacity || 0),
+    queueLimit: Number(payload.queueLimit || 0),
+    position: Number(payload.position || 0),
+    queueAhead: Number(payload.queueAhead || payload.waiting || 0),
+    estimatedWaitSeconds: Number(payload.estimatedWaitSeconds || 0),
+  };
+}
+
+function formatPaperAiQueueStatus(status, visible = false) {
+  const data = status || {};
+  const running = Number(data.running || 0);
+  const waiting = Number(data.waiting || 0);
+  const estimated = Number(data.estimatedWaitSeconds || 0);
+  if (visible && waiting > 0) {
+    const seconds = estimated > 0 ? `，预计等待 ${estimated} 秒` : "";
+    return `AI 排队中：当前等待队列约 ${waiting} 个请求${seconds}`;
+  }
+  if (visible && running > 0) {
+    return `正在处理：当前 ${running} 个 AI 请求并行运行`;
+  }
+  return "NEURAL COMPUTING // 正在解析论文神经元...";
+}
+
+async function refreshPaperAiQueueStatus() {
+  try {
+    const status = await paperpilotApi.getPaperAiQueueStatus();
+    paperAiQueue.status = normalizePaperAiQueueStatus(status);
+    return paperAiQueue.status;
+  } catch (error) {
+    console.warn("paper AI queue status failed", error);
+    return paperAiQueue.status;
+  }
+}
+
+function startPaperAiQueuePolling() {
+  paperAiQueue.visible = true;
+  paperAiQueue.polling = true;
+  refreshPaperAiQueueStatus();
+  if (paperAiQueue.timer) clearInterval(paperAiQueue.timer);
+  paperAiQueue.timer = window.setInterval(refreshPaperAiQueueStatus, 2000);
+}
+
+function stopPaperAiQueuePolling() {
+  paperAiQueue.polling = false;
+  if (paperAiQueue.timer) {
+    clearInterval(paperAiQueue.timer);
+    paperAiQueue.timer = null;
+  }
+  window.setTimeout(() => {
+    if (!paperAiQueue.polling) paperAiQueue.visible = false;
+  }, 900);
+}
+
+async function askPaperSelectionWithQueue(payload) {
+  startPaperAiQueuePolling();
+  try {
+    const result = await paperpilotApi.askPaperSelection(workspaceId.value, payload);
+    if (result?.queue) {
+      paperAiQueue.status = normalizePaperAiQueueStatus(result.queue);
+    }
+    return result;
+  } finally {
+    stopPaperAiQueuePolling();
+  }
+}
+
+async function translateSelection(providerId = abstractProvider.value || "google") {
   const text = selectionTranslator.source;
   if (!text || selectionTranslator.loading) return;
   selectionTranslator.loading = true;
   selectionTranslator.resultTitle = "选中翻译";
-  selectionTranslator.loadingText = "正在生成译文…";
+  selectionTranslator.loadingText = `正在使用 ${providerShortLabel(providerId)} 生成译文…`;
   selectionTranslator.wasCompacted = false;
   selectionTranslator.error = "";
   selectionTranslator.result = "";
@@ -2924,7 +3257,7 @@ async function translateSelection() {
   try {
     const result = await paperpilotApi.translate({
       text,
-      provider: abstractProvider.value || "google",
+      provider: providerId,
       sourceLang: "auto",
       targetLang: "zh-CN",
     }, { timeout: 45000 });
@@ -2952,7 +3285,7 @@ async function explainSelection() {
   selectionTranslator.result = "";
   nextTick(() => fitSelectionPopover(false));
   try {
-    const result = await paperpilotApi.askPaperSelection(workspaceId.value, {
+    const result = await askPaperSelectionWithQueue({
       selection: selected.text,
       paragraph: context.text,
       question: "请用中文解读选中内容：1.它在论文中的作用；2.关键概念；3.读者应注意的研究含义。若选区被压缩，请结合上下文概括，不要要求用户重选。",
@@ -2966,7 +3299,7 @@ async function explainSelection() {
         const retrySelected = compactForSelectionAi(text, 1800);
         const retryContext = compactForSelectionAi(selectionTranslator.sentence || selectionTranslator.paragraph || text, 2200);
         selectionTranslator.wasCompacted = true;
-        const retry = await paperpilotApi.askPaperSelection(workspaceId.value, {
+        const retry = await askPaperSelectionWithQueue({
           selection: retrySelected.text,
           paragraph: retryContext.text,
           question: "请用中文摘要式解读这段长选区：说明论文作用、关键概念和研究含义，控制在300字以内。",
@@ -3093,7 +3426,7 @@ function stopPaperChatDrag() {
   window.removeEventListener("pointercancel", stopPaperChatDrag);
 }
 
-function analyzeFigure(block) {
+async function analyzeFigure(block) {
   if (!block) return;
   const caption = block.text || (block.kind === "table" ? "表格" : "图像");
   openPaperChatPanel();
@@ -3123,27 +3456,28 @@ function analyzeFigure(block) {
     if (container) container.scrollTop = container.scrollHeight;
   });
 
-  paperpilotApi.askPaperSelection(workspaceId.value, {
-    question: `请结合上下文分析这幅图表的内容及其得出的结论：\n【${caption}】`,
-    selection: caption,
-    paragraph: pageText || caption
-  }).then(result => {
+  try {
+    const result = await askPaperSelectionWithQueue({
+      question: `请结合上下文分析这幅图表的内容及其得出的结论：\n【${caption}】`,
+      selection: caption,
+      paragraph: pageText || caption
+    });
     const answer = cleanChatAnswer(result?.answer) || "本次没有返回回答，请重试。";
     paperChat.messages.push({ id: paperChat.nextId++, role: "assistant", content: answer });
-  }).catch(error => {
+  } catch (error) {
     console.warn("paper chat figure analysis failed", error);
     paperChat.messages.push({
       id: paperChat.nextId++,
       role: "assistant",
       content: error?.response?.data?.message || "PaperSolver 暂时无法解析该图表，请稍后重试。",
     });
-  }).finally(() => {
+  } finally {
     paperChat.loading = false;
     nextTick(() => {
       const container = document.querySelector(".paper-chat-messages");
       if (container) container.scrollTop = container.scrollHeight;
     });
-  });
+  }
 }
 
 function insertQuickPrompt(text) {
@@ -3202,7 +3536,7 @@ async function askPaperChat(options = {}) {
   paperChat.question = "";
   paperChat.loading = true;
   try {
-    const result = await paperpilotApi.askPaperSelection(workspaceId.value, {
+    const result = await askPaperSelectionWithQueue({
       question,
       paragraph: currentReaderContextForChat(),
     });
@@ -3820,13 +4154,17 @@ function toggleAssistantCollapse() {
 async function loadTranslationProviders() {
   try {
     const providers = await paperpilotApi.getTranslationProviders();
+    const hiddenProviders = new Set(["kingsoft", "haici"]);
     const normalized = (Array.isArray(providers) ? providers : [])
       .filter(provider => provider?.id && provider?.label)
       .map(provider => ({
-        id: provider.id,
-        label: provider.label,
+        id: provider.id === "google-web" ? "google" : provider.id,
+        label: provider.id === "google-web" ? "谷歌翻译" : provider.label,
         configured: String(provider.configured) === "true"
-      }));
+      }))
+      .filter(provider => !hiddenProviders.has(provider.id))
+      .filter(provider => provider.configured)
+      .filter((provider, index, list) => list.findIndex(item => item.id === provider.id) === index);
     if (normalized.length) translationProviders.value = normalized;
     const selectable = translationProviders.value.filter(provider => provider.configured !== false);
     if (!selectable.some(provider => provider.id === abstractProvider.value)) {
@@ -3883,6 +4221,7 @@ function captureSelection(event) {
   selectionTranslator.blockId = paragraphElement?.dataset?.blockId || "";
   selectionTranslator.start = selectionOffsets?.start ?? -1;
   selectionTranslator.end = selectionOffsets?.end ?? -1;
+  selectionTranslator.providerMenuOpen = false;
   selectionTranslator.annotating = false;
   selectionTranslator.annotationDraft = "";
   selectionTranslator.editingAnnotationId = "";
@@ -3912,6 +4251,7 @@ function captureBlockSelectionFromEvent(event) {
   selectionTranslator.blockId = blockElement.dataset.blockId || "";
   selectionTranslator.start = -1;
   selectionTranslator.end = -1;
+  selectionTranslator.providerMenuOpen = false;
   selectionTranslator.annotating = false;
   selectionTranslator.annotationDraft = "";
   selectionTranslator.editingAnnotationId = "";
@@ -4190,6 +4530,7 @@ onBeforeUnmount(() => {
   destroyed = true;
   clearTimeout(readerToastTimer);
   clearTimeout(noteSyncTimer);
+  if (paperAiQueue.timer) clearInterval(paperAiQueue.timer);
   destroyMindMap();
   if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl);
   mineruAssetUrls.forEach(url => URL.revokeObjectURL(url));
@@ -6083,6 +6424,14 @@ onBeforeUnmount(() => {
   pointer-events: auto;
 }
 
+.reader-drawing-layer.erasing {
+  cursor: cell;
+}
+
+.reader-drawing-layer path {
+  pointer-events: none;
+}
+
 .pinned-screenshot-dock {
   position: fixed;
   inset: 0;
@@ -6409,6 +6758,7 @@ onBeforeUnmount(() => {
   transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
 }
 .selection-command-bar > button:hover { transform: translateY(-1px); border-color: rgba(154, 210, 165, .7); background: rgba(255, 255, 255, .1); }
+.selection-command-bar > button.active { border-color: rgba(91, 124, 255, .8); background: rgba(91, 124, 255, .16); color: #f8fbff; }
 .selection-command-bar > button:disabled { opacity: .48; cursor: default; transform: none; }
 .selection-command-bar > button:last-child {
   width: 30px;
@@ -6420,32 +6770,111 @@ onBeforeUnmount(() => {
   font-size: 16px;
 }
 .selection-provider-panel {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  width: fit-content;
-  min-width: 260px;
-  margin: 6px auto 0;
-  padding: 8px 10px;
-  border: 1px solid rgba(31, 42, 61, 0.08);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.96);
-  color: #64748b;
+  width: min(480px, calc(100vw - 28px));
+  margin: 8px auto 0;
+  padding: 12px;
+  border: 1px solid rgba(79, 70, 229, 0.14);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.96));
+  color: #1e293b;
   font-size: 11px;
   font-weight: 700;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.16);
 }
-.selection-provider-panel select {
-  min-width: 132px;
-  height: 28px;
-  padding: 0 8px;
-  border: 1px solid #d7dee9;
-  border-radius: 8px;
-  color: #1f2937;
+.selection-provider-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: #1f2a44;
+  font-size: 12px;
+}
+.selection-provider-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.selection-provider-header span {
+  font-size: 13px;
+  font-weight: 900;
+}
+.selection-provider-header small { color: #64748b; font-size: 10.5px; }
+.selection-provider-header b {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, .09);
+  color: #4f46e5;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.selection-provider-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 230px;
+  overflow: auto;
+  padding-right: 2px;
+}
+.selection-provider-list::-webkit-scrollbar { width: 6px; }
+.selection-provider-list::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(79, 70, 229, .28); }
+.selection-provider-option {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 9px 10px;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 12px;
+  color: #243147;
+  background: rgba(255, 255, 255, .86);
+  font: 700 11px/1.2 inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, .04);
+  transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.selection-provider-option:hover {
+  transform: translateY(-1px);
+  border-color: rgba(69, 104, 255, .42);
   background: #ffffff;
-  font-size: 11px;
-  font-weight: 700;
+  box-shadow: 0 8px 18px rgba(79, 70, 229, .12);
+}
+.selection-provider-option.active {
+  border-color: rgba(69, 104, 255, .72);
+  background: linear-gradient(135deg, rgba(69, 104, 255, .12), rgba(20, 184, 166, .08));
+  color: #2447d8;
+  box-shadow: inset 0 0 0 1px rgba(69, 104, 255, .12), 0 8px 18px rgba(79, 70, 229, .12);
+}
+.selection-provider-option:disabled { opacity: .46; cursor: not-allowed; background: rgba(241, 245, 249, .68); }
+.provider-radio { width: 12px; height: 12px; border: 2px solid #cbd5e1; border-radius: 999px; box-sizing: border-box; }
+.selection-provider-option.active .provider-radio { border: 4px solid #4568ff; }
+.provider-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.provider-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 900; }
+.selection-provider-option small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 650;
+}
+.selection-provider-option em {
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: #475569;
+  background: rgba(148, 163, 184, .14);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 850;
 }
 .selection-note-action { color: #f6fbf7 !important; }
 .selection-mark-dots {
@@ -6494,6 +6923,18 @@ onBeforeUnmount(() => {
 .selection-result small { color: #8a96a7; font-size: 10px; font-weight: 650; white-space: nowrap; }
 .selection-result p { margin: 0; color: #243147; font: 12px/1.72 "Songti SC", "STSong", serif; white-space: pre-wrap; }
 .selection-result.error p { color: #b42318; }
+.selection-queue-note {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 7px !important;
+  padding: 4px 9px;
+  border: 1px solid rgba(99, 102, 241, .22);
+  border-radius: 999px;
+  color: #3b4fd9 !important;
+  background: rgba(99, 102, 241, .08);
+  font: 11px/1.45 Inter, "PingFang SC", sans-serif !important;
+}
 .selection-compact-note {
   margin: 0 0 7px !important;
   color: #5b6f95 !important;
@@ -6804,6 +7245,12 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(192, 132, 252, 0.22);
   color: #d8b4fe;
   background: rgba(139, 92, 246, 0.13);
+}
+
+:root[data-theme="dark"] .selection-queue-note {
+  border-color: rgba(56, 189, 248, .25);
+  color: #a5f3fc !important;
+  background: rgba(14, 165, 233, .12);
 }
 
 :root[data-theme="dark"] .futuristic-void-panel .quantum-ai-avatar,
@@ -7683,18 +8130,49 @@ onBeforeUnmount(() => {
 :root[data-theme="dark"] .selection-result,
 :root[data-theme="dark"] .selection-provider-panel,
 :root[data-theme="dark"] .selection-annotation-editor {
-  background: rgba(14, 14, 20, 0.96) !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(8, 13, 25, 0.96)) !important;
+  border-color: rgba(124, 139, 255, 0.24) !important;
   color: #f4f4f6 !important;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7) !important;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255,255,255,.05) !important;
 }
 
 :root[data-theme="dark"] .selection-result p,
-:root[data-theme="dark"] .selection-provider-panel select,
 :root[data-theme="dark"] .selection-annotation-editor textarea {
   color: #e2e2e6 !important;
   background: #141e2e !important;
   border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+:root[data-theme="dark"] .selection-provider-header { color: #f4f7ff; }
+:root[data-theme="dark"] .selection-provider-header small { color: #9aa8c3; }
+:root[data-theme="dark"] .selection-provider-header b {
+  background: rgba(34, 211, 238, .12);
+  color: #67e8f9;
+}
+:root[data-theme="dark"] .selection-provider-option {
+  color: #e9efff;
+  border-color: rgba(126, 151, 255, .2);
+  background: rgba(17, 25, 42, .92);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+}
+:root[data-theme="dark"] .selection-provider-option:hover {
+  border-color: rgba(125, 156, 255, .48);
+  background: rgba(24, 34, 58, .96);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, .24);
+}
+:root[data-theme="dark"] .selection-provider-option.active {
+  color: #dbe7ff;
+  border-color: rgba(96, 165, 250, .72);
+  background: linear-gradient(135deg, rgba(79, 70, 229, .24), rgba(8, 145, 178, .18));
+}
+:root[data-theme="dark"] .selection-provider-option small { color: #93a4c4; }
+:root[data-theme="dark"] .selection-provider-option em {
+  color: #b7c6e5;
+  background: rgba(148, 163, 184, .14);
+}
+:root[data-theme="dark"] .selection-provider-option:disabled {
+  color: #6d7890;
+  background: rgba(15, 23, 42, .62);
 }
 
 :root[data-theme="dark"] .selectable-paragraph::selection {

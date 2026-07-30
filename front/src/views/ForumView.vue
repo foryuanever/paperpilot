@@ -9,7 +9,7 @@
           :class="[module.className, { active: activeType === module.value }]"
           @click="toggleType(module.value)"
         >
-          <span class="module-mark">{{ module.short }}</span>
+          <span class="module-mark" v-html="module.icon"></span>
           <span class="module-copy">
             <strong>{{ module.label }}</strong>
             <small>{{ module.description }}</small>
@@ -87,7 +87,7 @@
             v-for="post in paginatedPosts"
             :key="post.id"
             class="research-post"
-            :class="[membershipClass(post.authorMembershipPlan), { 'premium-wave-post': hasPremiumWave(post), 'pinned-post': post.pinned, 'new-post-insert': newestPostId === post.id, 'campus-post': campusCircleActive && Boolean(post.authorSchoolName) }]"
+            :class="{ 'premium-wave-post': hasPremiumWave(post), 'pinned-post': post.pinned, 'new-post-insert': newestPostId === post.id, 'campus-post': campusCircleActive && Boolean(post.authorSchoolName) }"
             :data-school="post.authorSchoolName || ''"
           >
             <div class="forum-row-avatar" :data-user-id="post.authorUserId" title="查看个人卡片">
@@ -116,6 +116,9 @@
                   <button class="type-label" :class="typeClass(post.postType)" @click="activeType = post.postType">
                     {{ post.postType }}
                   </button>
+                  <span v-if="post.visibility && post.visibility !== 'public'" class="visibility-badge" :class="post.visibility">
+                    {{ post.visibilityLabel || visibilityLabel(post.visibility) }}
+                  </span>
                 </div>
               </div>
 
@@ -133,7 +136,7 @@
                   {{ post.replies.length }}
                 </span>
                 <span class="meta-item">
-                  <span class="heat-icon" aria-hidden="true">🔥</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3Z"/><path d="M7 10 11.2 2.8a1.7 1.7 0 0 1 3.1 1.2l-.8 4H19a3 3 0 0 1 2.9 3.7l-1.6 6.5A4 4 0 0 1 16.4 21H7V10Z"/></svg>
                   {{ post.likes || 0 }}
                 </span>
                 <time>{{ post.time }}</time>
@@ -165,23 +168,32 @@
           </article>
         </section>
 
-        <nav v-if="filteredPosts.length > postPageSize" class="forum-pagination" aria-label="帖子分页">
-          <span>共 {{ filteredPosts.length }} 条 · 第 {{ postPage }} / {{ postPageCount }} 页</span>
-          <div>
-            <button :disabled="postPage <= 1" @click="postPage -= 1">上一页</button>
-            <button
-              v-for="page in visiblePostPages"
-              :key="page"
-              :class="{ active: postPage === page }"
-              @click="postPage = page"
-            >
-              {{ page }}
-            </button>
-            <button :disabled="postPage >= postPageCount" @click="postPage += 1">下一页</button>
+        <!-- Custom Pagination -->
+        <nav v-if="filteredPosts.length > 0" class="forum-pagination" aria-label="帖子分页">
+          <span class="pagination-summary">共 {{ filteredPosts.length }} 条 · 第 {{ postPage }}/{{ postPageCount }} 页</span>
+          <div class="pagination-right">
+            <div class="pagination-pages">
+              <button :disabled="postPage <= 1" @click="postPage -= 1">&lt;</button>
+              <button
+                v-for="page in visiblePostPages"
+                :key="page"
+                :class="{ active: postPage === page }"
+                @click="postPage = page"
+              >
+                {{ page }}
+              </button>
+              <button :disabled="postPage >= postPageCount" @click="postPage += 1">&gt;</button>
+            </div>
+            <select v-model.number="postPageSize" class="pagination-size-select">
+              <option :value="5">5 条/页</option>
+              <option :value="10">10 条/页</option>
+              <option :value="15">15 条/页</option>
+              <option :value="25">25 条/页</option>
+            </select>
           </div>
         </nav>
 
-        <section v-else class="empty-state">
+        <section v-if="filteredPosts.length === 0" class="empty-state">
           <span>NO RESULT</span>
           <h2>暂时没有匹配的研究主题</h2>
           <p>你可以清除筛选，或向相同专业的研究者发起第一个求助。</p>
@@ -396,7 +408,7 @@
         <div class="publish-form">
           <section class="publish-notice-box">
             <strong>发帖须知</strong>
-            <p>请确保内容真实、专业、与科研学习相关；不得伪造论文、数据、成果或身份信息；严禁暴力、色情、违法及攻击性内容；任何私下交易均与本站无关，违规内容发现即封号。</p>
+            <p>请确保内容真实、专业、与科研学习相关；请勿私自公开他人身份信息，一经落实直接封号；不得伪造论文、数据、成果或身份信息；严禁暴力、色情、违法及攻击性内容；任何私下交易均与本站无关，违规内容发现即封号。</p>
             <label>
               <input v-model="noticeAccepted" type="checkbox" />
               <span>我已阅读并同意以上发帖须知</span>
@@ -412,8 +424,21 @@
                 :class="[module.className, { active: form.postType === module.value }]"
                 @click="choosePostType(module.value)"
               >
-                <span>{{ module.short }}</span>
+                <span v-html="module.icon"></span>
                 <strong>{{ module.label }}</strong>
+              </button>
+            </div>
+            <div class="visibility-picker" role="radiogroup" aria-label="帖子可见范围">
+              <button
+                v-for="option in visibilityOptions"
+                :key="option.value"
+                type="button"
+                :class="{ active: form.visibility === option.value }"
+                @click="form.visibility = option.value"
+              >
+                <span>{{ option.icon }}</span>
+                <strong>{{ option.label }}</strong>
+                <small>{{ option.description }}</small>
               </button>
             </div>
           </div>
@@ -574,7 +599,25 @@
           <textarea v-model.trim="reportDetail" rows="5" maxlength="800" placeholder="请描述违规原因，例如：广告引流、辱骂攻击、虚假资源、违法内容等。"></textarea>
           <small>{{ reportDetail.length }}/800，至少 6 个字。</small>
         </label>
-        <footer>
+
+        <div class="report-upload-section" style="margin-top: 16px;">
+          <span style="font-size: 13px; font-weight: 600; color: var(--spatial-text); display: block; margin-bottom: 8px;">附上截图证据 (可选)</span>
+          <div class="report-upload-row" style="display: flex; flex-direction: column; gap: 8px;">
+            <label class="report-upload-box" style="position: relative; display: flex; align-items: center; justify-content: center; height: 100px; border: 2px dashed var(--spatial-line); border-radius: 8px; cursor: pointer; overflow: hidden; background: var(--spatial-surface-overlay); transition: all 0.2s;">
+              <input type="file" accept="image/*" @change="handleReportScreenshotUpload" style="display: none;" />
+              <div v-if="!reportScreenshot" class="upload-placeholder" style="display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--spatial-muted);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                <span style="font-size: 12px;">点击上传屏幕截图</span>
+              </div>
+              <div v-else class="upload-preview" style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+                <img :src="reportScreenshot" alt="举报截图预览" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                <button class="remove-preview-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; border: none; border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer;" @click.stop.prevent="reportScreenshot = ''">删除</button>
+              </div>
+            </label>
+            <small v-if="reportUploadError" class="upload-error" style="color: #ef4444; font-size: 11px;">{{ reportUploadError }}</small>
+          </div>
+        </div>
+        <footer style="margin-top: 24px;">
           <button class="cancel-button" @click="closeReportModal">取消</button>
           <button class="submit-button" :disabled="reporting || reportDetail.length < 6" @click="submitReport">
             {{ reporting ? "提交中..." : "提交举报" }}
@@ -604,12 +647,12 @@ const dialogStore = useDialogStore();
 const router = useRouter();
 
 const postModules = [
-  { value: "数据集求助", label: "数据集求助", short: "数", description: "寻找同领域数据与标注", action: "向同行求助数据", className: "dataset" },
-  { value: "科研羊毛", label: "科研羊毛", short: "享", description: "算力、软件与学术优惠", action: "分享限时科研资源", className: "benefit" },
-  { value: "论文期刊", label: "论文期刊", short: "刊", description: "好论文与投稿期刊推荐", action: "推荐论文或期刊", className: "paper" },
-  { value: "研究讨论", label: "研究讨论", short: "研", description: "方法、实验与科研问题", action: "发起方法讨论", className: "research" },
-  { value: "比赛组队", label: "比赛组队", short: "赛", description: "科研竞赛与建模组队", action: "寻找比赛队友", className: "competition" },
-  { value: "摸鱼专区", label: "摸鱼专区", short: "鱼", description: "科研间隙闲聊与轻松分享", action: "发一条轻松动态", className: "fish" }
+  { value: "数据集求助", label: "数据集求助", short: "数", description: "寻找同领域数据与标注", action: "向同行求助数据", className: "dataset", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path></svg>` },
+  { value: "科研羊毛", label: "科研羊毛", short: "享", description: "算力、软件与学术优惠", action: "分享限时科研资源", className: "benefit", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>` },
+  { value: "论文期刊", label: "论文期刊", short: "刊", description: "好论文与投稿期刊推荐", action: "推荐论文或期刊", className: "paper", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>` },
+  { value: "研究讨论", label: "研究讨论", short: "研", description: "方法、实验与科研问题", action: "发起方法讨论", className: "research", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>` },
+  { value: "比赛组队", label: "比赛组队", short: "赛", description: "科研竞赛与建模组队", action: "寻找比赛队友", className: "competition", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34"></path><path d="M12 2a6 6 0 0 1 6 6v3.5c0 1.66-2 3.5-6 3.5s-6-1.84-6-3.5V8a6 6 0 0 1 6-6z"></path></svg>` },
+  { value: "摸鱼专区", label: "摸鱼专区", short: "鱼", description: "科研间隙闲聊与轻松分享", action: "发一条轻松动态", className: "fish", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>` }
 ];
 
 const announcementTemplate = [
@@ -645,6 +688,8 @@ const noticeAccepted = ref(false);
 const newestPostId = ref("");
 const reportTarget = ref(null);
 const reportDetail = ref("");
+const reportScreenshot = ref("");
+const reportUploadError = ref("");
 const reporting = ref(false);
 const moderationBusy = reactive({});
 const showCampusModal = ref(false);
@@ -659,7 +704,7 @@ const campusForm = reactive({
   chsiScreenshot: ""
 });
 const postPage = ref(1);
-const postPageSize = 15;
+const postPageSize = ref(15);
 const activePage = ref(1);
 const activePageSize = 6;
 const markdown = new MarkdownIt({
@@ -680,6 +725,7 @@ const blankForm = () => ({
   venueName: "",
   venueLevel: "",
   resourceLink: "",
+  visibility: "public",
   images: [],
   attachments: []
 });
@@ -720,8 +766,8 @@ const totalReplies = computed(() => forumStore.state.posts.reduce((sum, post) =>
 const hasFilters = computed(() => Boolean(searchQuery.value || activeType.value || activeTag.value || dateStart.value || dateEnd.value));
 const isAdmin = computed(() => authStore.profile.role === "管理员" || authStore.session?.role === "管理员");
 const myPosts = computed(() => forumStore.state.posts.filter(post => isMine(post)));
-const postPageCount = computed(() => Math.max(1, Math.ceil(filteredPosts.value.length / postPageSize)));
-const paginatedPosts = computed(() => filteredPosts.value.slice((postPage.value - 1) * postPageSize, postPage.value * postPageSize));
+const postPageCount = computed(() => Math.max(1, Math.ceil(filteredPosts.value.length / postPageSize.value)));
+const paginatedPosts = computed(() => filteredPosts.value.slice((postPage.value - 1) * postPageSize.value, postPage.value * postPageSize.value));
 const visiblePostPages = computed(() => {
   const total = postPageCount.value;
   const start = Math.max(1, Math.min(postPage.value - 2, total - 4));
@@ -740,6 +786,16 @@ const hotPostPageCount = computed(() => Math.max(1, Math.ceil(hotPosts.value.len
 const paginatedHotPosts = computed(() => hotPosts.value.slice((activePage.value - 1) * activePageSize, activePage.value * activePageSize));
 const maxHotHeat = computed(() => Math.max(1, hotPosts.value[0]?.heat || 1));
 const campusSchoolName = computed(() => authStore.profile.campusVerified ? (authStore.profile.schoolName || campusStatus.value?.schoolName || "") : "");
+const visibilityOptions = computed(() => {
+  const options = [
+    { value: "public", label: "公开", icon: "1", description: "所有用户可见" },
+    { value: "private", label: "私有", icon: "2", description: "仅自己可见" }
+  ];
+  if (authStore.profile.campusVerified) {
+    options.push({ value: "campus", label: "校园圈", icon: "3", description: "同校认证用户可见" });
+  }
+  return options;
+});
 
 const popularTags = computed(() => {
   const counts = {};
@@ -764,7 +820,10 @@ const editorLineNumbers = computed(() => {
 });
 const renderedMarkdown = computed(() => {
   const source = form.content?.trim() || "_预览会显示在这里。_";
-  return markdown.render(source);
+  const cleaned = source
+    .replace(/<!--\s*(?:图片|附件)\s*[:：]\s*.*?-->/gi, "")
+    .replace(/(?:图片|附件)\s*[:：]\s*[^\n\r]+/gi, "");
+  return markdown.render(cleaned);
 });
 
 function typeClass(type) {
@@ -777,6 +836,12 @@ function isFishPostType(type) {
 
 function choosePostType(type) {
   form.postType = type;
+}
+
+function visibilityLabel(value) {
+  if (value === "private") return "私有";
+  if (value === "campus") return "校园圈";
+  return "公开";
 }
 
 function getTypeCount(type) {
@@ -934,6 +999,7 @@ async function submitPost() {
     publishYear: selectedPaper.value?.publishYear || selectedPaper.value?.year || form.publishYear || "",
     venueName: form.venueName.trim(),
     venueLevel: form.venueLevel,
+    visibility: form.visibility,
     resourceLink: "",
     images: form.images.map(compactUploadFile),
     attachments: form.attachments.map(compactUploadFile)
@@ -986,6 +1052,7 @@ function openEditPost(post) {
     venueName: post.venueName || "",
     venueLevel: post.venueLevel || "",
     resourceLink: post.resourceLink || "",
+    visibility: post.visibility || "public",
     images: Array.isArray(post.images) ? [...post.images] : [],
     attachments: Array.isArray(post.attachments) ? [...post.attachments] : []
   });
@@ -1067,7 +1134,7 @@ async function handleEditorPaste(event) {
     }
     const image = await readFile(file);
     form.images.push(image);
-    await insertMarkdown(`\n\n图片：${escapeMarkdownText(image.name || "粘贴图片")}\n\n`, "");
+    await insertMarkdown(`\n\n<!-- 图片：${escapeMarkdownText(image.name || "粘贴图片")} -->\n\n`, "");
   }
 }
 
@@ -1088,7 +1155,7 @@ async function addPastedDataUrlImage(dataUrl) {
     data: dataUrl
   };
   form.images.push(image);
-  await insertMarkdown(`\n\n图片：${escapeMarkdownText(image.name)}\n\n`, "");
+  await insertMarkdown(`\n\n<!-- 图片：${escapeMarkdownText(image.name)} -->\n\n`, "");
 }
 
 function extractImageDataUrl(value) {
@@ -1174,18 +1241,46 @@ function parseForumTime(value) {
 function openReportModal(post) {
   reportTarget.value = post;
   reportDetail.value = "";
+  reportScreenshot.value = "";
+  reportUploadError.value = "";
 }
 
 function closeReportModal() {
   reportTarget.value = null;
   reportDetail.value = "";
+  reportScreenshot.value = "";
+  reportUploadError.value = "";
+}
+
+async function handleReportScreenshotUpload(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  if (!file.type?.startsWith("image/")) {
+    reportUploadError.value = "请上传图片格式的截图。";
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    reportUploadError.value = "截图图片不能超过 5MB。";
+    return;
+  }
+  try {
+    const image = await readFile(file);
+    reportScreenshot.value = image.data;
+    reportUploadError.value = "";
+  } catch (e) {
+    reportUploadError.value = "文件读取失败";
+  }
 }
 
 async function submitReport() {
   if (!reportTarget.value || reportDetail.value.length < 6 || reporting.value) return;
   reporting.value = true;
   try {
-    await forumStore.reportPost(reportTarget.value.id, { detail: reportDetail.value });
+    await forumStore.reportPost(reportTarget.value.id, {
+      detail: reportDetail.value,
+      screenshot: reportScreenshot.value
+    });
     authStore.addNotification({
       title: "举报已提交",
       desc: "管理员会在后台查看并处理。"
@@ -1239,7 +1334,9 @@ function normalizeMembershipPlan(plan) {
 }
 
 function isHotPost(post) {
-  return Number(post.likes || 0) + Number(post.replies?.length || 0) >= 50;
+  const registered = Number(forumStore.state.registeredUserCount || 0);
+  if (registered <= 0) return false;
+  return Number(post.views || 0) >= Math.ceil(registered * 2 / 3);
 }
 
 async function handleAttachmentUpload(event) {
@@ -1251,7 +1348,7 @@ async function handleAttachmentUpload(event) {
     }
     const attachment = await readFile(file);
     form.attachments.push(attachment);
-    await insertMarkdown(`\n\n附件：${escapeMarkdownText(attachment.name)}\n\n`, "");
+    await insertMarkdown(`\n\n<!-- 附件：${escapeMarkdownText(attachment.name)} -->\n\n`, "");
   }
   event.target.value = "";
 }
@@ -1759,6 +1856,28 @@ function formatFileSize(bytes) {
   color: #818cf8 !important;
 }
 
+/* Pagination Dark Mode Overrides */
+:root[data-theme="dark"] .forum-pagination {
+  background: #111827 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #94a3b8 !important;
+}
+:root[data-theme="dark"] .forum-pagination button {
+  background: #1f2937 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #c9d1d9 !important;
+}
+:root[data-theme="dark"] .forum-pagination button.active {
+  background: #1f6feb !important;
+  border-color: #388bfd !important;
+  color: #fff !important;
+}
+:root[data-theme="dark"] .pagination-size-select {
+  background: #1f2937 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #c9d1d9 !important;
+}
+
 /* Modals & Overlay Dark Mode Fixes */
 :root[data-theme="dark"] .modal-overlay {
   background: rgba(0, 0, 0, 0.75) !important;
@@ -1824,16 +1943,46 @@ function formatFileSize(bytes) {
   color: #818cf8 !important;
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3) !important;
 }
+:root[data-theme="dark"] .visibility-picker button {
+  background: #111827 !important;
+  border-color: rgba(148, 163, 184, .18) !important;
+  color: #cbd5e1 !important;
+}
+:root[data-theme="dark"] .visibility-picker button > span {
+  color: #93c5fd !important;
+  background: rgba(59, 130, 246, .16) !important;
+}
+:root[data-theme="dark"] .visibility-picker button strong {
+  color: #f8fafc !important;
+}
+:root[data-theme="dark"] .visibility-picker button small {
+  color: #94a3b8 !important;
+}
+:root[data-theme="dark"] .visibility-picker button.active {
+  background: rgba(79, 70, 229, .16) !important;
+  border-color: rgba(129, 140, 248, .72) !important;
+  color: #c4b5fd !important;
+}
+:root[data-theme="dark"] .visibility-badge.private {
+  border-color: rgba(148, 163, 184, .22);
+  color: #cbd5e1;
+  background: rgba(30, 41, 59, .7);
+}
+:root[data-theme="dark"] .visibility-badge.campus {
+  border-color: rgba(45, 212, 191, .28);
+  color: #5eead4;
+  background: rgba(15, 118, 110, .16);
+}
 
 /* Form inputs & textareas */
-:root[data-theme="dark"] .publish-form input,
+:root[data-theme="dark"] .publish-form input:not([type="checkbox"]),
 :root[data-theme="dark"] .publish-form select,
 :root[data-theme="dark"] .publish-form textarea {
   background: #0d1117 !important;
   border-color: rgba(255, 255, 255, 0.1) !important;
   color: #f1f5f9 !important;
 }
-:root[data-theme="dark"] .publish-form input:focus,
+:root[data-theme="dark"] .publish-form input:not([type="checkbox"]):focus,
 :root[data-theme="dark"] .publish-form select:focus,
 :root[data-theme="dark"] .publish-form textarea:focus {
   border-color: #6366f1 !important;
@@ -2203,7 +2352,7 @@ button { cursor: pointer; }
 .community-search { height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: #f6f8fb; border: 1px solid #e5e9f0; border-radius: 12px; }
 .community-search svg { width: 19px; color: #8490a3; }
 .community-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: #172033; }
-.sort-select, .publish-form select, .publish-form input, .publish-form textarea {
+.sort-select, .publish-form select, .publish-form input:not([type="checkbox"]), .publish-form textarea {
   border: 1px solid #dfe5ee;
   border-radius: 11px;
   background: #fff;
@@ -2608,8 +2757,7 @@ button { cursor: pointer; }
   border-top: 1px solid #edf0f4;
 }
 
-.active-board-pager button,
-.forum-pagination button {
+.active-board-pager button {
   min-width: 30px;
   height: 30px;
   border: 1px solid #dce4ef;
@@ -2621,8 +2769,7 @@ button { cursor: pointer; }
   flex-shrink: 0;
 }
 
-.active-board-pager button:disabled,
-.forum-pagination button:disabled {
+.active-board-pager button:disabled {
   opacity: .45;
   cursor: not-allowed;
 }
@@ -2681,6 +2828,12 @@ button { cursor: pointer; }
   width: 16px;
   height: 16px;
   accent-color: #dc2626;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  appearance: checkbox !important;
+  flex-shrink: 0;
+  margin: 0;
 }
 .form-section + .form-section { margin-top: 24px; padding-top: 21px; border-top: 1px solid #edf0f4; }
 .form-section h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 14px; }
@@ -2690,13 +2843,80 @@ button { cursor: pointer; }
 .type-picker button > span { width: 27px; height: 27px; border-radius: 8px; font-size: 11px; }
 .type-picker button strong { font-size: 11px; }
 .type-picker button.active { border-color: #79a8f5; box-shadow: 0 0 0 3px #edf4ff; color: #075ee5; }
+.visibility-picker {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.visibility-picker button {
+  min-height: 66px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 2px;
+  border: 1px solid #e2e8f0;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #fff, #f8fbff);
+  color: #42526b;
+  text-align: left;
+}
+.visibility-picker button > span {
+  grid-row: span 2;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #2563eb;
+  background: #eef4ff;
+  font-size: 12px;
+  font-weight: 950;
+}
+.visibility-picker button strong {
+  font-size: 12px;
+  font-weight: 900;
+}
+.visibility-picker button small {
+  color: #7b8798;
+  font-size: 11px;
+}
+.visibility-picker button.active {
+  border-color: #6366f1;
+  color: #3730a3;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, .12);
+}
+.visibility-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(99, 102, 241, .18);
+  color: #4f46e5;
+  background: rgba(238, 242, 255, .82);
+  font-size: 11px;
+  font-weight: 900;
+}
+.visibility-badge.private {
+  border-color: rgba(15, 23, 42, .14);
+  color: #475569;
+  background: rgba(241, 245, 249, .9);
+}
+.visibility-badge.campus {
+  border-color: rgba(20, 184, 166, .24);
+  color: #0f766e;
+  background: rgba(240, 253, 250, .92);
+}
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .publish-form label { display: flex; flex-direction: column; gap: 7px; }
 .publish-form label > span { color: #59657a; font-size: 11px; font-weight: 700; }
 .publish-form label small { color: #a0a9b7; font-weight: 400; }
-.publish-form input, .publish-form select { height: 42px; padding: 0 12px; box-sizing: border-box; }
+.publish-form input:not([type="checkbox"]), .publish-form select { height: 42px; padding: 0 12px; box-sizing: border-box; }
 .publish-form textarea { padding: 12px; resize: vertical; line-height: 1.6; box-sizing: border-box; }
-.publish-form input:focus, .publish-form select:focus, .publish-form textarea:focus { border-color: #75a6f6; box-shadow: 0 0 0 3px #edf4ff; }
+.publish-form input:not([type="checkbox"]):focus, .publish-form select:focus, .publish-form textarea:focus { border-color: #75a6f6; box-shadow: 0 0 0 3px #edf4ff; }
 .wide-field + .wide-field { margin-top: 12px; }
 .tag-field {
   padding: 14px;
@@ -2872,6 +3092,7 @@ button { cursor: pointer; }
   .campus-upload-grid { grid-template-columns: 1fr; }
   .campus-form footer { align-items: flex-start; flex-direction: column; }
   .type-picker { grid-template-columns: repeat(2, 1fr); }
+  .visibility-picker { grid-template-columns: 1fr; }
   .post-label-row { align-items: flex-start; }
   .resource-panel, .post-footer { align-items: flex-start; flex-direction: column; }
   .resource-main { width: 100%; grid-template-columns: 1fr; }
@@ -3105,7 +3326,7 @@ button { cursor: pointer; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(100deg, transparent 0%, rgba(124, 58, 237, .075) 34%, rgba(37, 99, 235, .11) 50%, rgba(124, 58, 237, .075) 66%, transparent 100%);
+  background: linear-gradient(100deg, transparent 0%, rgba(124, 58, 237, .075) 34%, rgba(37, 99, 235, .11) 50%, rgba(45, 212, 191, .08) 66%, transparent 100%);
   transform: translateX(-120%);
   animation: forum-premium-wave 8.5s linear infinite;
 }
@@ -3113,7 +3334,8 @@ button { cursor: pointer; }
 .research-post.new-post-insert {
   position: relative;
   overflow: hidden;
-  animation: forum-new-post-in 680ms cubic-bezier(.22, 1, .36, 1) both;
+  transform-origin: top left;
+  animation: forum-new-post-in 860ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 .research-post.new-post-insert::after {
@@ -3132,18 +3354,33 @@ button { cursor: pointer; }
 }
 
 @keyframes forum-new-post-in {
-  from {
+  0% {
     opacity: 0;
-    transform: translateX(-28px);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: -11px;
+    transform: translateX(-42px);
     background: #edf5ff;
   }
-  58% {
+  42% {
     opacity: 1;
+    max-height: 220px;
+    padding-top: 16px;
+    padding-bottom: 14px;
+    margin-bottom: 0;
+    transform: translateX(-42px);
+    background: #edf5ff;
+  }
+  76% {
+    opacity: 1;
+    max-height: 220px;
     transform: translateX(0);
     background: #edf5ff;
   }
-  to {
+  100% {
     opacity: 1;
+    max-height: 220px;
     transform: translateX(0);
   }
 }
@@ -3246,26 +3483,126 @@ button { cursor: pointer; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  margin-top: 14px;
-  padding: 12px 14px;
-  border: 1px solid #e7ebf2;
-  border-radius: 14px;
-  background: #fff;
+  flex-wrap: nowrap;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 12px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
   color: #64748b;
-  font-size: 12px;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.forum-pagination > div {
+.pagination-summary {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pagination-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: max-content;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
+.pagination-pages {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: max-content;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
 }
 
+.forum-pagination button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.forum-pagination button:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+.forum-pagination button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
 .forum-pagination button.active {
-  border-color: #8cb7ff;
-  color: #075ee5;
-  background: #edf4ff;
+  border-color: #4f46e5 !important;
+  background: rgba(79, 70, 229, 0.08) !important;
+  color: #4f46e5 !important;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+.pagination-size-select {
+  height: 32px;
+  width: 112px;
+  padding: 0 26px 0 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23475569' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+  flex-shrink: 0;
+}
+.pagination-size-select:hover {
+  border-color: #94a3b8;
+}
+
+@media (max-width: 720px) {
+  .forum-pagination {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .pagination-summary,
+  .pagination-right {
+    width: 100%;
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 560px) {
+  .pagination-size-select {
+    width: 100%;
+  }
+
+  .pagination-right,
+  .pagination-pages {
+    flex-wrap: wrap;
+  }
 }
 
 .forum-meta-line {
@@ -3293,16 +3630,6 @@ button { cursor: pointer; }
   color: #7a8390;
 }
 
-.meta-item .heat-icon {
-  display: inline-grid;
-  place-items: center;
-  width: 15px;
-  height: 15px;
-  font-size: 14px;
-  line-height: 1;
-  filter: saturate(1.15);
-}
-
 .member-name {
   font: inherit;
   font-weight: 800;
@@ -3319,13 +3646,18 @@ button { cursor: pointer; }
 
 .member-plus,
 .member-study {
-  color: #1d4ed8;
+  color: #8b5cf6;
+  text-shadow: 0 0 14px rgba(139, 92, 246, .2);
 }
 
 .member-pro,
 .member-lab {
-  color: #7c3aed;
-  text-shadow: 0 0 14px rgba(124, 58, 237, .14);
+  color: #5b6dff;
+  background: linear-gradient(100deg, #8b5cf6 0%, #3b82f6 48%, #14b8a6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 16px rgba(59, 130, 246, .18);
 }
 
 .member-max {

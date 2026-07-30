@@ -20,6 +20,11 @@ public class MeetingReportController {
         this.meetingReportService = meetingReportService;
     }
 
+    @GetMapping("/qa/queue")
+    public Map<String, Object> qaQueueStatus() {
+        return meetingReportService.paperQaQueueStatus();
+    }
+
     @GetMapping("/{workspaceId}")
     public Map<String, Object> get(@PathVariable("workspaceId") String workspaceId) {
         return meetingReportService.get(workspaceId);

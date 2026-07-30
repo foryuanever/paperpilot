@@ -44,11 +44,6 @@
           <input type="search" placeholder="搜索论文、作者、DOI" />
         </label>
 
-        <router-link class="icon-button message-button" to="/messages" title="私信">
-          <span v-html="chromeIcons.message"></span>
-          <span v-if="messageUnreadCount" class="notification-badge">{{ messageUnreadCount }}</span>
-        </router-link>
-
         <div class="topbar-menu-wrap">
           <button class="icon-button notification-button" @click.stop="openAnnouncementCenter">
             <span v-html="chromeIcons.bell"></span>
@@ -164,8 +159,8 @@
                 :class="{ active: activeAnnouncementTab === tab.key }"
                 @click="activeAnnouncementTab = tab.key"
               >
-                <span v-html="tab.icon"></span>
-                {{ tab.label }}
+                <span class="announcement-tab-icon" v-html="tab.icon"></span>
+                <span class="announcement-tab-label">{{ tab.label }}</span>
                 <b v-if="tab.count">{{ tab.count }}</b>
               </button>
             </nav>
@@ -217,6 +212,46 @@
                   </article>
                 </div>
                 <div v-else class="announcement-empty">暂无版本更新公告。</div>
+              </section>
+
+              <section v-else-if="activeAnnouncementTab === 'contact'" class="announcement-section">
+                <article class="announcement-intro">
+                  <strong>联系方式申请</strong>
+                  <span>别人申请你的联系方式时会出现在这里。同意前需要填写微信或 QQ，系统不会默认暴露邮箱。</span>
+                </article>
+                <div v-if="contactRequestItems.length || contactResultNoticeItems.length" class="announcement-card-list">
+                  <article
+                    v-for="request in contactRequestItems"
+                    :key="request.requestId"
+                    class="announcement-card contact-request-notice"
+                  >
+                    <span class="announcement-card-mark">联</span>
+                    <span>
+                      <strong>{{ request.name }} 申请联系方式</strong>
+                      <small>{{ request.role }} · {{ request.message || "希望与你建立科研联系" }}</small>
+                      <time>{{ request.time }}</time>
+                    </span>
+                    <div class="announcement-card-actions">
+                      <button type="button" class="ghost" @click="handleContactNotice(request.requestId, 'reject')">拒绝</button>
+                      <button type="button" @click="handleContactNotice(request.requestId, 'accept')">同意</button>
+                    </div>
+                  </article>
+                  <button
+                    v-for="item in contactResultNoticeItems"
+                    :key="item.id"
+                    type="button"
+                    class="announcement-card contact-result-notice"
+                    @click="openNotification(item)"
+                  >
+                    <span class="announcement-card-mark">讯</span>
+                    <span>
+                      <strong>{{ item.title }}</strong>
+                      <small>{{ item.desc }}</small>
+                      <time>{{ formatSiteMessageTime(item.createdAt) }}</time>
+                    </span>
+                  </button>
+                </div>
+                <div v-else class="announcement-empty">暂无待处理的联系方式申请。</div>
               </section>
 
               <section v-else class="announcement-section">
@@ -386,14 +421,13 @@ const membershipExpiry = computed(() => {
 const chromeIcons = {
   search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-3.5-3.5"/></svg>`,
   bell: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5a4 4 0 0 0-4 4v2.2c0 .7-.2 1.4-.6 2l-1.1 1.7A1 1 0 0 0 7.1 16h9.8a1 1 0 0 0 .8-1.6l-1.1-1.7a3.7 3.7 0 0 1-.6-2V8.5a4 4 0 0 0-4-4Z"/><path d="M10 18a2.2 2.2 0 0 0 4 0"/></svg>`,
-  message: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18.5 3.8 21l3.4-1.1c1.4.7 3 .9 4.8.9 5 0 9-3.6 9-8.1s-4-8.1-9-8.1-9 3.6-9 8.1c0 2.2.8 4.2 2 5.8Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></svg>`,
 };
 
-const messageUnreadCount = ref(0);
 const forumUnreadCount = ref(0);
 const latestForumSignature = ref("");
 const announcementCenterOpen = ref(false);
 const activeAnnouncementTab = ref("forum");
+const contactRequests = ref({ incoming: [], outgoing: [], pendingCount: 0 });
 
 const currentTheme = ref(localStorage.getItem("paperpilot_theme") || "dark");
 const isDarkTheme = computed(() => currentTheme.value === "dark");
@@ -420,22 +454,6 @@ function handleBrandRefresh() {
   window.setTimeout(() => {
     desktopRefreshing.value = false;
   }, 760);
-}
-
-async function refreshMessageUnread() {
-  if (!authStore.session.isAuthenticated) {
-    messageUnreadCount.value = 0;
-    return;
-  }
-  try {
-    const [result, friendRequests] = await Promise.all([
-      paperpilotApi.getMessageContacts(),
-      paperpilotApi.getFriendRequests(),
-    ]);
-    messageUnreadCount.value = (result.unreadCount || 0) + (friendRequests.pendingCount || 0);
-  } catch {
-    messageUnreadCount.value = 0;
-  }
 }
 
 function forumSeenKey() {
@@ -470,8 +488,8 @@ async function refreshForumNavSignal() {
 async function openNotification(item) {
   await authStore.markNotificationRead(item.id);
   uiStore.closeOverlays();
-  if (item.type === "private_message") {
-    router.push("/messages");
+  if (item.type === "contact_request" || item.type === "contact_request_result" || item.type === "friend_request" || item.type === "friend_request_result") {
+    router.push("/profile");
     return;
   }
   if (item.type?.startsWith("campus_")) {
@@ -566,10 +584,18 @@ const announcementIcons = {
   forum: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7.5h14M5 12h10M5 16.5h7"/><path d="M4 4h16v12H8l-4 4V4Z"/></svg>`,
   timeline: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l10-3v16L8 17H4V7Z"/><path d="M8 7v10"/><path d="M20 9.5c1.2 1.2 1.2 3.8 0 5"/></svg>`,
   team: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1.5c0-1.8-1.8-3.2-4-3.2s-4 1.4-4 3.2V19"/><circle cx="12" cy="8" r="3"/><path d="M4 18v-1c0-1.3 1.1-2.4 2.7-2.8"/><path d="M20 18v-1c0-1.3-1.1-2.4-2.7-2.8"/><path d="M6.5 10.5a2.2 2.2 0 1 1 1.2-4"/><path d="M17.5 10.5a2.2 2.2 0 1 0-1.2-4"/></svg>`,
+  contact: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11a4 4 0 1 0 8 0 4 4 0 0 0-8 0Z"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M18.5 4.5 20 6l-3 3-1.5-1.5 3-3Z"/></svg>`,
 };
+
+const contactRequestItems = computed(() => contactRequests.value.incoming || []);
+const contactResultNoticeItems = computed(() => authStore.session.notifications.filter(item => {
+  const type = String(item.type || "");
+  return type === "contact_request_result" || type === "friend_request_result";
+}));
 
 const siteNoticeItems = computed(() => authStore.session.notifications.filter(item => {
   const type = String(item.type || "");
+  if (type.startsWith("contact_") || type.startsWith("friend_")) return false;
   const title = `${item.title || ""}${item.desc || ""}`;
   return type.startsWith("forum_")
     || type.startsWith("campus_")
@@ -619,11 +645,12 @@ const announcementTabs = computed(() => [
   { key: "forum", label: "站内通知", icon: announcementIcons.forum, count: siteNoticeItems.value.length },
   { key: "timeline", label: "时间线", icon: announcementIcons.timeline, count: unreadTimelineMessages.value.length },
   { key: "team", label: "组内通知", icon: announcementIcons.team, count: urgentTeamNoticeCount.value },
+  { key: "contact", label: "联系申请", icon: announcementIcons.contact, count: contactRequestItems.value.length + contactResultNoticeItems.value.length },
 ]);
 
 const urgentTeamNoticeCount = computed(() => teamNoticeItems.value.filter(item => item.mark === "截" || item.mark === "逾").length);
 const unreadTimelineMessages = computed(() => timelineNoticeItems.value.filter(message => !readSiteMessageIds.value.has(siteMessageReadKey(message))));
-const announcementUnreadCount = computed(() => siteNoticeItems.value.length + unreadTimelineMessages.value.length + urgentTeamNoticeCount.value);
+const announcementUnreadCount = computed(() => siteNoticeItems.value.length + unreadTimelineMessages.value.length + urgentTeamNoticeCount.value + contactRequestItems.value.length + contactResultNoticeItems.value.length);
 const showAnnouncementCenter = computed(() => announcementCenterOpen.value || Boolean(activeSiteMessage.value));
 
 const unreadSiteMessages = computed(() => siteMessages.value.filter(
@@ -723,6 +750,7 @@ function siteNoticeMark(type) {
 }
 
 function pickAnnouncementTab() {
+  if (contactRequestItems.value.length) return "contact";
   if (siteNoticeItems.value.length) return "forum";
   if (unreadTimelineMessages.value.length || timelineNoticeItems.value.length) return "timeline";
   return "team";
@@ -735,6 +763,10 @@ function openAnnouncementCenter() {
 }
 
 async function markVisibleAnnouncementRead() {
+  if (activeAnnouncementTab.value === "contact") {
+    await Promise.allSettled(contactResultNoticeItems.value.map(item => authStore.markNotificationRead(item.id)));
+    return;
+  }
   if (activeAnnouncementTab.value === "forum") {
     await Promise.allSettled(siteNoticeItems.value.map(item => authStore.markNotificationRead(item.id)));
     return;
@@ -746,6 +778,35 @@ async function markVisibleAnnouncementRead() {
     persistSiteMessageReadState();
     activeSiteMessage.value = null;
   }
+}
+
+async function refreshContactRequests() {
+  if (!authStore.session.isAuthenticated) {
+    contactRequests.value = { incoming: [], outgoing: [], pendingCount: 0 };
+    return;
+  }
+  try {
+    contactRequests.value = await paperpilotApi.getFriendRequests();
+  } catch {
+    contactRequests.value = { incoming: [], outgoing: [], pendingCount: 0 };
+  }
+}
+
+async function handleContactNotice(requestId, action) {
+  let contactInfo = "";
+  if (action === "accept") {
+    const input = await dialogStore.prompt("请输入你愿意展示给对方的微信或 QQ。系统不会默认展示邮箱。", {
+      title: "同意联系方式申请",
+      confirmText: "同意并展示",
+      placeholder: "例如：微信 paper_solver / QQ 123456",
+    });
+    contactInfo = String(input || "").trim();
+    if (!contactInfo) return;
+  }
+  await paperpilotApi.handleFriendRequest(requestId, action, action === "accept" ? { contactInfo } : {});
+  await refreshContactRequests();
+  await authStore.refreshNotifications().catch(() => {});
+  window.dispatchEvent(new CustomEvent("paperpilot:contact-requests-changed"));
 }
 
 function closeAnnouncementCenter() {
@@ -775,6 +836,7 @@ watch(
     activeSiteMessage.value = null;
     siteMessages.value = [];
     refreshSiteMessages();
+    refreshContactRequests();
   },
   { flush: "post" },
 );
@@ -812,6 +874,7 @@ onMounted(() => {
   window.addEventListener("scroll", resetActivityTimer);
   window.addEventListener("paperpilot:site-messages-changed", refreshSiteMessages);
   window.addEventListener("paperpilot:forum-posts-changed", refreshForumNavSignal);
+  window.addEventListener("paperpilot:contact-requests-changed", refreshContactRequests);
   document.addEventListener("click", handleUserAvatarClick);
 
   activityTimer = setInterval(() => {
@@ -829,14 +892,14 @@ onMounted(() => {
   }, 1000);
   authStore.refreshNotifications().catch(() => {});
   if (authStore.session.isAuthenticated) usageStore.fetchSummary().catch(() => {});
-  refreshMessageUnread();
   refreshForumNavSignal();
+  refreshContactRequests();
   loadSiteMessageReadState();
   refreshSiteMessages();
   notificationTimer = setInterval(() => {
     authStore.refreshNotifications().catch(() => {});
-    refreshMessageUnread();
     refreshForumNavSignal();
+    refreshContactRequests();
   }, 15000);
   siteMessageTimer = setInterval(refreshSiteMessages, 15000);
 });
@@ -848,6 +911,7 @@ onUnmounted(() => {
   window.removeEventListener("scroll", resetActivityTimer);
   window.removeEventListener("paperpilot:site-messages-changed", refreshSiteMessages);
   window.removeEventListener("paperpilot:forum-posts-changed", refreshForumNavSignal);
+  window.removeEventListener("paperpilot:contact-requests-changed", refreshContactRequests);
   document.removeEventListener("click", handleUserAvatarClick);
   if (activityTimer) clearInterval(activityTimer);
   if (notificationTimer) clearInterval(notificationTimer);
@@ -1373,7 +1437,7 @@ async function submitPasswordChange() {
 }
 
 .announcement-dialog {
-  width: min(560px, 100%);
+  width: min(660px, 100%);
   min-height: min(560px, calc(100vh - 36px));
   max-height: calc(100vh - 36px);
   display: grid;
@@ -1410,7 +1474,7 @@ async function submitPasswordChange() {
   margin: 4px 14px 16px;
   padding: 5px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
   border-radius: 26px;
   background: #f0f0f0;
@@ -1429,6 +1493,7 @@ async function submitPasswordChange() {
   background: transparent;
   font-size: 15px;
   font-weight: 900;
+  white-space: nowrap;
   cursor: pointer;
   transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
@@ -2258,7 +2323,8 @@ async function submitPasswordChange() {
 /* Tabs */
 .announcement-tabs {
   padding: 6px !important;
-  border-radius: 999px !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  border-radius: 20px !important;
 }
 :root[data-theme="dark"] .announcement-tabs {
   background: rgba(0, 0, 0, 0.35) !important;
@@ -2270,9 +2336,36 @@ async function submitPasswordChange() {
 }
 
 .announcement-tabs button {
-  border-radius: 999px !important;
-  font-size: 13.5px !important;
+  min-width: 0 !important;
+  height: 38px !important;
+  gap: 5px !important;
+  border-radius: 15px !important;
+  padding: 0 8px !important;
+  font-size: 12px !important;
   font-weight: 850 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+}
+
+.announcement-tab-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.announcement-tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.announcement-tabs button b {
+  flex: 0 0 auto;
+  min-width: 17px !important;
+  height: 17px !important;
+  padding: 0 5px !important;
+  font-size: 10px !important;
 }
 :root[data-theme="dark"] .announcement-tabs button {
   color: #94a3b8 !important;
@@ -2292,6 +2385,76 @@ async function submitPasswordChange() {
   padding: 14px 16px !important;
   border-radius: 16px !important;
   transition: all 0.2s ease !important;
+}
+
+.contact-request-notice {
+  grid-template-columns: 38px minmax(0, 1fr) max-content !important;
+  cursor: default !important;
+}
+
+.contact-request-notice > span:nth-child(2),
+.contact-result-notice > span:nth-child(2) {
+  min-width: 0;
+}
+
+.announcement-card-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 126px;
+  white-space: nowrap;
+}
+
+.announcement-card-actions button {
+  height: 32px;
+  min-width: 58px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.announcement-card-actions button.ghost {
+  color: inherit;
+  background: transparent;
+}
+
+:root[data-theme="dark"] .announcement-card-actions button.ghost {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: #cbd5e1;
+}
+
+:root[data-theme="light"] .announcement-card-actions button.ghost {
+  border: 1px solid #dbe3ef;
+  color: #64748b;
+}
+
+@media (max-width: 620px) {
+  .announcement-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    border-radius: 18px !important;
+  }
+
+  .contact-request-notice {
+    grid-template-columns: 38px minmax(0, 1fr) !important;
+  }
+
+  .announcement-card-actions {
+    grid-column: 2;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  .announcement-card-actions button {
+    min-width: 56px;
+    padding: 0 10px;
+  }
 }
 
 :root[data-theme="dark"] .announcement-card {

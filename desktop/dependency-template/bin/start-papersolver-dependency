@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+set -eu
+
+echo "PaperSolver local dependency package is a template."
+echo "Replace this script with the real local service launcher before packaging."
+exit 1
