@@ -320,6 +320,10 @@ public class MembershipService {
         defaults.add(defaultPlan(PLAN_PRO, 3));
         defaults.add(defaultPlan(PLAN_TEAM_PLUS, 4));
         defaults.add(defaultPlan(PLAN_TEAM_PRO, 5));
+        defaults.add(defaultPlan("pack_tier_lite", 10));
+        defaults.add(defaultPlan("pack_tier_standard", 11));
+        defaults.add(defaultPlan("pack_tier_plus", 12));
+        defaults.add(defaultPlan("pack_tier_pro", 13));
         for (MembershipPlanEntity item : defaults) {
             java.util.Optional<MembershipPlanEntity> existingOpt = planRepository.findById(item.getId());
             if (existingOpt.isEmpty()) {
@@ -379,6 +383,22 @@ public class MembershipService {
             item.setReviewQuota(1800); item.setPptQuota(6); item.setChatQuota(3600); item.setTranslateQuota(50); item.setImmersiveQuota(50);
             item.setResearchQuota(1200); item.setReportQuota(20);
             item.setTeamShared(true); item.setTeamSeats(20); item.setForumSpecial(true); item.setForumTopDaily(1); item.setPeakPriority(true);
+        } else if ("pack_tier_lite".equals(id)) {
+            item.setName("学术启航加油包"); item.setSubtitle("适合日常轻量文献阅读"); item.setMonthlyPrice(19.9D);
+            item.setReviewQuota(5); item.setPptQuota(0); item.setChatQuota(50); item.setTranslateQuota(3); item.setImmersiveQuota(3);
+            item.setResearchQuota(0); item.setReportQuota(0);
+        } else if ("pack_tier_standard".equals(id)) {
+            item.setName("学术精进加油包"); item.setSubtitle("适合高频文献精研"); item.setMonthlyPrice(39.9D);
+            item.setReviewQuota(15); item.setPptQuota(0); item.setChatQuota(120); item.setTranslateQuota(8); item.setImmersiveQuota(8);
+            item.setResearchQuota(10); item.setReportQuota(0);
+        } else if ("pack_tier_plus".equals(id)) {
+            item.setName("学术大师加油包"); item.setSubtitle("中度学术汇报制作"); item.setMonthlyPrice(69.9D);
+            item.setReviewQuota(35); item.setPptQuota(2); item.setChatQuota(250); item.setTranslateQuota(18); item.setImmersiveQuota(18);
+            item.setResearchQuota(25); item.setReportQuota(0);
+        } else if ("pack_tier_pro".equals(id)) {
+            item.setName("学术至尊加油包"); item.setSubtitle("终极文献分析汇报"); item.setMonthlyPrice(99.9D);
+            item.setReviewQuota(80); item.setPptQuota(5); item.setChatQuota(600); item.setTranslateQuota(40); item.setImmersiveQuota(40);
+            item.setResearchQuota(60); item.setReportQuota(5);
         } else {
             item.setName("新会员套餐"); item.setSubtitle("自定义上架套餐"); item.setMonthlyPrice(19.9D);
             item.setReviewQuota(900); item.setPptQuota(4); item.setChatQuota(1800); item.setTranslateQuota(20); item.setImmersiveQuota(20);

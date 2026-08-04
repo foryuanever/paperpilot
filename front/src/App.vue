@@ -442,17 +442,11 @@ function toggleTheme() {
 }
 
 function handleBrandRefresh() {
-  if (!isDesktopApp) {
+  if (isDesktopApp) {
+    window.location.reload();
+  } else {
     router.push("/library");
-    return;
   }
-  if (desktopRefreshing.value) return;
-  desktopRefreshing.value = true;
-  desktopRefreshKey.value += 1;
-  window.dispatchEvent(new CustomEvent("papersolver:soft-refresh", { detail: { path: route.fullPath } }));
-  window.setTimeout(() => {
-    desktopRefreshing.value = false;
-  }, 760);
 }
 
 function routeComponentKey(viewRoute) {

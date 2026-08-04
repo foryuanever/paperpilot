@@ -148,13 +148,22 @@
           <!-- Badge -->
           <div class="card-top-row" style="justify-content: flex-end; min-height: 20px;">
             <span v-if="plan.id === usageStore.state.membership?.id" class="tier-badge badge-current">当前使用中</span>
-            <span v-else-if="plan.id === 'plus'" class="tier-badge badge-hot">🔥 推荐</span>
+            <span v-else-if="plan.id === 'plus'" class="tier-badge badge-hot">推荐</span>
+          </div>
+
+          <!-- Seckill Banner -->
+          <div v-if="isSeckillActive(plan)" class="seckill-countdown-banner" style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px; margin-bottom: 12px; padding: 6px 10px; border-radius: 8px; background: linear-gradient(90deg, #ef4444, #f97316); color: #fff; font-size: 11px; font-weight: 800; box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); border: 1px solid rgba(255,255,255,0.1);">
+            <span>⚡️ 限时秒杀中</span>
+            <span style="font-variant-numeric: tabular-nums;">{{ formatSeckillCountdown(plan) }}</span>
           </div>
 
           <!-- Name & desc -->
           <div class="plan-name-block">
-            <h3>{{ plan.name }}</h3>
-            <p>{{ planCopy(plan.id) }}</p>
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+              <h3>{{ plan.name }}</h3>
+              <span v-if="plan.subtitle" style="font-size: 11px; font-weight: 800; color: var(--c-accent); padding: 2px 6px; background: rgba(99,102,241,0.08); border-radius: 4px; border: 1px solid rgba(99,102,241,0.15);">{{ plan.subtitle }}</span>
+            </div>
+            <p style="margin-top: 8px;">{{ planCopy(plan.id) }}</p>
           </div>
 
           <!-- Price -->
@@ -164,8 +173,11 @@
               <span class="price-sub">永久开放</span>
             </template>
             <template v-else>
-              <span class="price-main">¥<em>{{ plan.monthlyPrice }}</em></span>
-              <span class="price-sub">/ 月</span>
+              <span class="price-main">¥<em>{{ planPrice(plan) }}</em></span>
+              <span class="price-sub">/ {{ cycleShortLabel(selectedCycle) }}</span>
+              <span v-if="isSeckillActive(plan)" class="price-original" style="text-decoration: line-through; margin-left: 8px; font-size: 13px; color: var(--c-muted); font-weight: 500;">
+                ¥{{ originalPlanPrice(plan) }}
+              </span>
             </template>
           </div>
 
@@ -233,6 +245,12 @@
             </div>
           </div>
 
+          <!-- Seckill Banner for Pack -->
+          <div v-if="isSeckillActive(pack)" class="seckill-countdown-banner" style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px; margin-bottom: 12px; padding: 6px 10px; border-radius: 8px; background: linear-gradient(90deg, #ef4444, #f97316); color: #fff; font-size: 11px; font-weight: 800; box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); border: 1px solid rgba(255,255,255,0.1);">
+            <span>⚡️ 限时秒杀中</span>
+            <span style="font-variant-numeric: tabular-nums;">{{ formatSeckillCountdown(pack) }}</span>
+          </div>
+
           <div class="card-hr" style="margin: 10px 0;"></div>
 
           <!-- Pack Features -->
@@ -248,7 +266,12 @@
           </ul>
 
           <div class="pack-v2-bottom" style="margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.04);">
-            <div class="pack-v2-price">¥<em>{{ pack.price }}</em><span>/ 包</span></div>
+            <div class="pack-v2-price">
+              ¥<em>{{ planPrice(pack) }}</em><span>/ 包</span>
+              <span v-if="isSeckillActive(pack)" class="price-original" style="text-decoration: line-through; margin-left: 8px; font-size: 13px; color: var(--c-muted); font-weight: 500;">
+                ¥{{ originalPlanPrice(pack) }}
+              </span>
+            </div>
           </div>
           <button class="pack-v2-btn" :class="{ active: selectedPlan === pack.id }">
             {{ selectedPlan === pack.id ? '✓ 已选中' : '加入选择' }}
@@ -376,76 +399,23 @@ const filteredOrders = computed(() => {
 const provider = ref("wechat");
 const selectedCycle = ref("monthly");
 const selectedPlan = ref("pack_tier_lite");
-const powerPacks = [
-  {
-    id: "pack_tier_lite",
-    name: "学术启航加油包",
-    desc: "适合日常轻量文献阅读与基础翻译需求",
-    price: 19.9,
-    unit: "包",
-    icon: "review",
-    label: "启航包",
-    benefits: [
-      { name: "对照/沉浸翻译", value: "30万字符", included: true },
-      { name: "研读对话", value: "50次", included: true },
-      { name: "AI论文综述", value: "5次", included: true },
-      { name: "调研广场", value: "不包含", included: false },
-      { name: "组会PPT", value: "不包含", included: false },
-      { name: "组会一键汇报", value: "不包含", included: false }
-    ]
-  },
-  {
-    id: "pack_tier_standard",
-    name: "学术精进加油包",
-    desc: "适合高频文献精研与学术搜索用户",
-    price: 39.9,
-    unit: "包",
-    icon: "chat",
-    label: "精进包",
-    benefits: [
-      { name: "对照/沉浸翻译", value: "80万字符", included: true },
-      { name: "研读对话", value: "120次", included: true },
-      { name: "AI论文综述", value: "15次", included: true },
-      { name: "调研广场", value: "10次", included: true },
-      { name: "组会PPT", value: "不包含", included: false },
-      { name: "组会一键汇报", value: "不包含", included: false }
-    ]
-  },
-  {
-    id: "pack_tier_plus",
-    name: "学术大师加油包",
-    desc: "适合中大型论文写作与中度学术汇报制作",
-    price: 69.9,
-    unit: "包",
-    icon: "ppt",
-    label: "大师包",
-    benefits: [
-      { name: "对照/沉浸翻译", value: "180万字符", included: true },
-      { name: "研读对话", value: "250次", included: true },
-      { name: "AI论文综述", value: "35次", included: true },
-      { name: "调研广场", value: "25次", included: true },
-      { name: "组会PPT", value: "2次", included: true },
-      { name: "组会一键汇报", value: "不包含", included: false }
-    ]
-  },
-  {
-    id: "pack_tier_pro",
-    name: "学术至尊加油包",
-    desc: "全功能超大额度，终极文献分析与自动汇报套件",
-    price: 99.9,
-    unit: "包",
-    icon: "report",
-    label: "至尊包",
-    benefits: [
-      { name: "对照/沉浸翻译", value: "400万字符", included: true },
-      { name: "研读对话", value: "600次", included: true },
-      { name: "AI论文综述", value: "80次", included: true },
-      { name: "调研广场", value: "60次", included: true },
-      { name: "组会PPT", value: "5次", included: true },
-      { name: "组会一键汇报", value: "5次", included: true }
-    ]
-  }
-];
+const powerPacks = computed(() => {
+  const packs = displayPlans.value.filter((item) => item.id.startsWith("pack_"));
+  return packs.map((item) => {
+    let icon = "review";
+    if (item.id.includes("standard")) icon = "chat";
+    else if (item.id.includes("plus")) icon = "ppt";
+    else if (item.id.includes("pro")) icon = "report";
+
+    return {
+      ...item,
+      icon,
+      desc: item.subtitle || "补充科研额度",
+      price: item.effectiveMonthlyPrice || item.monthlyPrice || 0,
+      benefits: packRows(item)
+    };
+  });
+});
 const paymentMessage = ref("");
 const ticketDialog = ref(null);
 const qrDialog = ref(null);
@@ -479,10 +449,14 @@ const defaultPlans = [
   { id: "pro", name: "个人 Pro", subtitle: "极速进阶", monthlyPrice: 29.9, reviewQuotaDaily: 60, pptQuotaMonthly: 6, chatQuotaDaily: 120, translateQuotaDaily: 50, immersiveQuotaDaily: 50, forumSpecial: true, forumTopDaily: 1, peakPriority: true, teamShared: false },
   { id: "team_plus", name: "课题组团队 Plus", subtitle: "导师购买分配 (9折)", monthlyPrice: 17.91, perUserPrice: 19.9, reviewQuotaDaily: 30, pptQuotaMonthly: 4, chatQuotaDaily: 60, translateQuotaDaily: 20, immersiveQuotaDaily: 20, forumSpecial: true, forumTopDaily: 0, peakPriority: true, teamShared: true, teamSeats: 10 },
   { id: "team_pro", name: "课题组团队 Pro", subtitle: "实验室旗舰 (9折)", monthlyPrice: 26.91, perUserPrice: 29.9, reviewQuotaDaily: 60, pptQuotaMonthly: 6, chatQuotaDaily: 120, translateQuotaDaily: 50, immersiveQuotaDaily: 50, forumSpecial: true, forumTopDaily: 1, peakPriority: true, teamShared: true, teamSeats: 20 },
+  { id: "pack_tier_lite", name: "学术启航加油包", subtitle: "适合日常轻量文献阅读", monthlyPrice: 19.9, reviewQuota: 5, pptQuota: 0, chatQuota: 50, translateQuota: 3, immersiveQuota: 3, researchQuota: 0, reportQuota: 0, teamShared: false },
+  { id: "pack_tier_standard", name: "学术精进加油包", subtitle: "适合高频文献精研", monthlyPrice: 39.9, reviewQuota: 15, pptQuota: 0, chatQuota: 120, translateQuota: 8, immersiveQuota: 8, researchQuota: 10, reportQuota: 0, teamShared: false },
+  { id: "pack_tier_plus", name: "学术大师加油包", subtitle: "中度学术汇报制作", monthlyPrice: 69.9, reviewQuota: 35, pptQuota: 2, chatQuota: 250, translateQuota: 18, immersiveQuota: 18, researchQuota: 25, reportQuota: 0, teamShared: false },
+  { id: "pack_tier_pro", name: "学术至尊加油包", subtitle: "终极文献分析汇报", monthlyPrice: 99.9, reviewQuota: 80, pptQuota: 5, chatQuota: 600, translateQuota: 40, immersiveQuota: 40, researchQuota: 60, reportQuota: 5, teamShared: false },
 ];
 
 const plans = computed(() => usageStore.state.plans || []);
-const planOrder = ["free", "lite", "plus", "pro", "team_plus", "team_pro"];
+const planOrder = ["free", "lite", "plus", "pro", "team_plus", "team_pro", "pack_tier_lite", "pack_tier_standard", "pack_tier_plus", "pack_tier_pro"];
 const displayPlans = computed(() => {
   const byId = new Map(defaultPlans.map((plan) => [plan.id, plan]));
   (plans.value || []).forEach((plan) => {
@@ -502,24 +476,29 @@ const planGroups = computed(() => [
     key: "personal",
     label: "个人套餐",
     description: "包含永久免费版、基础版、热销版与进阶版，满足不同阶段科研需求。",
-    plans: displayPlans.value.filter((item) => !item.teamShared),
+    plans: personalPlans.value,
   },
 ]);
-const personalPlans = computed(() => displayPlans.value.filter((item) => !item.teamShared));
+const personalPlans = computed(() => displayPlans.value.filter((item) => !item.teamShared && !item.id.startsWith("pack_")));
 const membership = computed(() => usageStore.state.membership || { id: "free", name: "未开通会员", benefits: {} });
 const selectedPlanInfo = computed(() => {
   const id = selectedPlan.value || "";
   if (id.startsWith("pack_")) {
-    const pack = powerPacks.find(p => p.id === id);
+    const pack = powerPacks.value.find(p => p.id === id);
     if (pack) {
       return {
         id: pack.id,
         name: pack.name,
         monthlyPrice: pack.price,
-        originalMonthlyPrice: pack.price,
+        originalMonthlyPrice: pack.originalMonthlyPrice || pack.price,
         description: pack.desc,
-        unit: pack.unit,
-        count: pack.count
+        seckillEnabled: pack.seckillEnabled,
+        seckillPrice: pack.seckillPrice,
+        seckillStartsAt: pack.seckillStartsAt,
+        seckillEndsAt: pack.seckillEndsAt,
+        seckillLabel: pack.seckillLabel,
+        seckillActive: pack.seckillActive,
+        teamShared: false
       };
     }
   }
@@ -602,7 +581,7 @@ const checkoutDescription = computed(() => {
 onMounted(() => {
   saleTimer = window.setInterval(() => {
     nowTick.value = Date.now();
-  }, 1000);
+  }, 40);
   load();
   loadOrders();
 });
@@ -674,13 +653,15 @@ function seckillRemainingMs(plan) {
 function formatSeckillCountdown(plan) {
   const ms = seckillRemainingMs(plan);
   if (!ms) return "进行中";
-  const total = Math.floor(ms / 1000);
-  const days = Math.floor(total / 86400);
-  const hours = Math.floor((total % 86400) / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const seconds = total % 60;
-  if (days > 0) return `${days}天 ${String(hours).padStart(2, "0")}小时 ${String(minutes).padStart(2, "0")}分 ${String(seconds).padStart(2, "0")}秒`;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  const hours = Math.floor(ms / 3600000);
+  const minutes = Math.floor((ms % 3600000) / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  const cc = Math.floor((ms % 1000) / 10);
+  const hh = String(hours).padStart(2, "0");
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(seconds).padStart(2, "0");
+  const ccStr = String(cc).padStart(2, "0");
+  return `${hh}:${mm}:${ss}.${ccStr}`;
 }
 
 function quotaPercent(item) {
@@ -741,90 +722,109 @@ function planCopy(id) {
 
 function planRows(plan) {
   const id = normalizePlanId(plan.id);
+  const isTeam = Boolean(plan.teamShared);
+  const prefix = isTeam ? "每人" : "";
+
+  const translateVal = plan.translateQuotaDaily ? `${prefix}每天 ${plan.translateQuotaDaily} 篇` : "未包含";
+  const immersiveVal = plan.immersiveQuotaDaily ? `${prefix}每天 ${plan.immersiveQuotaDaily} 篇` : "未包含";
+  const reviewVal = plan.reviewQuotaDaily ? `${prefix}每天 ${plan.reviewQuotaDaily} 次` : "未包含";
+  const chatVal = plan.chatQuotaDaily ? `${prefix}每天 ${plan.chatQuotaDaily} 次` : "未包含";
+  const pptVal = plan.pptQuotaMonthly ? `${prefix}每月 ${plan.pptQuotaMonthly} 次` : "未包含";
+  const researchVal = plan.researchQuotaDaily ? `${prefix}每天 ${plan.researchQuotaDaily} 次` : "未包含";
+  const reportVal = plan.reportQuotaMonthly ? `${prefix}每月 ${plan.reportQuotaMonthly} 次` : "未包含";
+
+  const forumVal = plan.forumSpecial ? (id === "pro" || id === "team_pro" ? "包含 (每日1次置顶)" : "包含") : "未包含";
+  const peakVal = plan.peakPriority ? "优先通道" : "标准通道";
 
   if (id === "free") {
     return [
       { label: "论文插件导入", description: "文献一键入库与管理", value: "不限次", included: true },
-      { label: "对照翻译", description: "双栏对照翻译阅读", value: "每天 5 篇", included: true },
-      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: "每天 3 篇", included: true },
-      { label: "AI 论文综述", description: "结构化文献综述生成", value: "每天 3 次", included: true },
-      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: "每天 5 次", included: true },
-      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: "未包含", included: false },
-      { label: "调研广场", description: "社会与学术热点文献分析调研", value: "每天 3 次", included: true },
-      { label: "组会一键汇报", description: "自动整合组会大纲与一键汇报", value: "每月 1 次", included: true },
-      { label: "论坛会员特效与标识", description: "彩色姓名与专属标识", value: "未包含", included: false },
-      { label: "高峰期优先响应", description: "高并发时段优先通道", value: "否", included: false },
+      { label: "对照翻译", description: "双栏对照翻译阅读", value: translateVal, included: Number(plan.translateQuotaDaily || 0) > 0 },
+      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: immersiveVal, included: Number(plan.immersiveQuotaDaily || 0) > 0 },
+      { label: "AI 论文综述", description: "结构化文献综述生成", value: reviewVal, included: Number(plan.reviewQuotaDaily || 0) > 0 },
+      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: chatVal, included: Number(plan.chatQuotaDaily || 0) > 0 },
+      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: pptVal, included: Number(plan.pptQuotaMonthly || 0) > 0 },
+      { label: "调研广场", description: "社会与学术热点文献分析调研", value: researchVal, included: Number(plan.researchQuotaDaily || 0) > 0 },
+      { label: "组会一键汇报", description: "自动整合组会大纲与一键汇报", value: reportVal, included: Number(plan.reportQuotaMonthly || 0) > 0 },
+      { label: "论坛会员特效与标识", description: "彩色姓名与专属标识", value: forumVal, included: Boolean(plan.forumSpecial) },
+      { label: "高峰期优先响应", description: "高并发时段优先通道", value: "标准通道", included: false },
     ];
   }
   if (id === "lite") {
     return [
       { label: "论文插件导入", description: "文献一键入库与管理", value: "不限次", included: true },
-      { label: "对照翻译", description: "双栏对照翻译阅读", value: "每天 10 篇", included: true },
-      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: "每天 10 篇", included: true },
-      { label: "AI 论文综述", description: "结构化文献综述生成", value: "每天 15 次", included: true },
-      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: "每天 30 次", included: true },
-      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: "每月 2 次", included: true },
-      { label: "调研广场", description: "社会与学术热点文献分析调研", value: "每天 10 次", included: true },
-      { label: "组会一键汇报", description: "自动整合组会大纲与一键汇报", value: "每月 5 次", included: true },
-      { label: "论坛会员特效与标识", description: "彩色姓名与专属标识", value: "未包含", included: false },
-      { label: "高峰期优先响应", description: "高并发时段优先通道", value: "否", included: false },
+      { label: "对照翻译", description: "双栏对照翻译阅读", value: translateVal, included: Number(plan.translateQuotaDaily || 0) > 0 },
+      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: immersiveVal, included: Number(plan.immersiveQuotaDaily || 0) > 0 },
+      { label: "AI 论文综述", description: "结构化文献综述生成", value: reviewVal, included: Number(plan.reviewQuotaDaily || 0) > 0 },
+      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: chatVal, included: Number(plan.chatQuotaDaily || 0) > 0 },
+      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: pptVal, included: Number(plan.pptQuotaMonthly || 0) > 0 },
+      { label: "调研广场", description: "社会与学术热点文献分析调研", value: researchVal, included: Number(plan.researchQuotaDaily || 0) > 0 },
+      { label: "组会一键汇报", description: "自动整合组会大纲与一键汇报", value: reportVal, included: Number(plan.reportQuotaMonthly || 0) > 0 },
+      { label: "论坛会员特效与标识", description: "彩色姓名与专属标识", value: forumVal, included: Boolean(plan.forumSpecial) },
+      { label: "高峰期优先响应", description: "高并发时段优先通道", value: peakVal, included: Boolean(plan.peakPriority) },
     ];
   }
   if (id === "plus") {
     return [
       { label: "论文插件导入", description: "文献一键入库与管理", value: "不限次", included: true },
-      { label: "对照翻译", description: "双栏对照翻译阅读", value: "每天 20 篇", included: true },
-      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: "每天 20 篇", included: true },
-      { label: "AI 论文综述", description: "结构化文献综述生成", value: "每天 30 次", included: true },
-      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: "每天 60 次", included: true },
-      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: "每月 4 次", included: true },
-      { label: "调研广场", description: "社会与学术热点文献分析调研", value: "每天 20 次", included: true },
-      { label: "组会一键汇报", description: "自动整合组会大纲与一键汇报", value: "每月 10 次", included: true },
-      { label: "论坛会员特效与标识", description: "彩色姓名与专属标识", value: "包含", included: true },
-      { label: "高峰期优先响应", description: "高并发时段优先通道", value: "否", included: false },
+      { label: "对照翻译", description: "双栏对照翻译阅读", value: translateVal, included: Number(plan.translateQuotaDaily || 0) > 0 },
+      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: immersiveVal, included: Number(plan.immersiveQuotaDaily || 0) > 0 },
+      { label: "AI 论文综述", description: "结构化文献综述生成", value: reviewVal, included: Number(plan.reviewQuotaDaily || 0) > 0 },
+      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: chatVal, included: Number(plan.chatQuotaDaily || 0) > 0 },
+      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: pptVal, included: Number(plan.pptQuotaMonthly || 0) > 0 },
+      { label: "调研广场", description: "社会与学术热点文献分析调研", value: researchVal, included: Number(plan.researchQuotaDaily || 0) > 0 },
+      { label: "组会一键汇报", description: "自动整合组会大纲与一键汇报", value: reportVal, included: Number(plan.reportQuotaMonthly || 0) > 0 },
+      { label: "论坛会员特效与标识", description: "彩色姓名与专属标识", value: forumVal, included: Boolean(plan.forumSpecial) },
+      { label: "高峰期优先响应", description: "高并发时段优先通道", value: peakVal, included: Boolean(plan.peakPriority) },
     ];
   }
   if (id === "pro") {
     return [
       { label: "论文插件导入", description: "文献一键入库与管理", value: "不限次", included: true },
-      { label: "对照翻译", description: "双栏对照翻译阅读", value: "每天 50 篇", included: true },
-      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: "每天 50 篇", included: true },
-      { label: "AI 论文综述", description: "结构化文献综述生成", value: "每天 60 次", included: true },
-      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: "每天 120 次", included: true },
-      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: "每月 6 次", included: true },
-      { label: "调研广场", description: "社会与学术热点文献分析调研", value: "每天 40 次", included: true },
-      { label: "组会一键汇报", description: "自动整合组会大纲与一键汇报", value: "每月 20 次", included: true },
-      { label: "论坛会员特效与标识", description: "会员特效 + 每日1次发帖置顶", value: "包含 (每日1次置顶)", included: true },
-      { label: "高峰期优先响应", description: "高并发时段优先通道", value: "优先", included: true },
+      { label: "对照翻译", description: "双栏对照翻译阅读", value: translateVal, included: Number(plan.translateQuotaDaily || 0) > 0 },
+      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: immersiveVal, included: Number(plan.immersiveQuotaDaily || 0) > 0 },
+      { label: "AI 论文综述", description: "结构化文献综述生成", value: reviewVal, included: Number(plan.reviewQuotaDaily || 0) > 0 },
+      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: chatVal, included: Number(plan.chatQuotaDaily || 0) > 0 },
+      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: pptVal, included: Number(plan.pptQuotaMonthly || 0) > 0 },
+      { label: "调研广场", description: "社会与学术热点文献分析调研", value: researchVal, included: Number(plan.researchQuotaDaily || 0) > 0 },
+      { label: "组会一键汇报", description: "自动整合组会大纲与一键汇报", value: reportVal, included: Number(plan.reportQuotaMonthly || 0) > 0 },
+      { label: "论坛会员特效与标识", description: "会员特效 + 每日1次发帖置顶", value: forumVal, included: Boolean(plan.forumSpecial) },
+      { label: "高峰期优先响应", description: "高并发时段优先通道", value: peakVal, included: Boolean(plan.peakPriority) },
     ];
   }
-  if (id === "team_plus") {
-    return [
-      { label: "论文插件导入", description: "全员文献入库与 PDF 管理", value: "不限次", included: true },
-      { label: "对照翻译", description: "全员双栏对照翻译阅读", value: "每人每天 20 篇", included: true },
-      { label: "沉浸翻译", description: "全员全页版式沉浸翻译", value: "每人每天 20 篇", included: true },
-      { label: "AI 论文综述", description: "全员结构化综述生成", value: "每人每天 30 次", included: true },
-      { label: "论文解析与研读对话", description: "全员学术问答与推演", value: "每人每天 60 次", included: true },
-      { label: "组会 PPT 汇报制作", description: "全员 PPT Agent 自动汇报", value: "每人每月 4 次", included: true },
-      { label: "调研广场", description: "全员社会与学术热点文献分析调研", value: "每人每天 20 次", included: true },
-      { label: "组会一键汇报", description: "全员自动大纲与一键汇报", value: "每人每月 10 次", included: true },
-      { label: "论坛会员特效与标识", description: "全员尊享会员标识", value: "全员包含", included: true },
-      { label: "导师购买统一分配", description: "按人数结算享 9 折优惠", value: "¥17.91 / 人 / 月", included: true },
-      { label: "高峰期优先响应", description: "全员享受极速优先通道", value: "优先", included: true },
-    ];
-  }
+  // Team plan
   return [
     { label: "论文插件导入", description: "全员文献入库与 PDF 管理", value: "不限次", included: true },
-    { label: "对照翻译", description: "全员双栏对照翻译阅读", value: "每人每天 50 篇", included: true },
-    { label: "沉浸翻译", description: "全员全页版式沉浸翻译", value: "每人每天 50 篇", included: true },
-    { label: "AI 论文综述", description: "全员结构化综述生成", value: "每人每天 60 次", included: true },
-    { label: "论文解析与研读对话", description: "全员学术问答与推演", value: "每人每天 120 次", included: true },
-    { label: "组会 PPT 汇报制作", description: "全员 PPT Agent 自动汇报", value: "每人每月 6 次", included: true },
-    { label: "调研广场", description: "全员社会与学术热点文献分析调研", value: "每人每天 40 次", included: true },
-    { label: "组会一键汇报", description: "全员自动大纲与一键汇报", value: "每人每月 20 次", included: true },
-    { label: "论坛会员特效与标识", description: "全员会员标识 + 每人每日1次置顶", value: "全员包含 (每日1次置顶)", included: true },
-    { label: "导师购买统一分配", description: "按人数结算享 9 折优惠", value: "¥26.91 / 人 / 月", included: true },
-    { label: "高峰期优先响应", description: "全员享受极速优先通道", value: "优先", included: true },
+    { label: "对照翻译", description: "全员双栏对照翻译阅读", value: translateVal, included: Number(plan.translateQuotaDaily || 0) > 0 },
+    { label: "沉浸翻译", description: "全员全页版式沉浸翻译", value: immersiveVal, included: Number(plan.immersiveQuotaDaily || 0) > 0 },
+    { label: "AI 论文综述", description: "全员结构化综述生成", value: reviewVal, included: Number(plan.reviewQuotaDaily || 0) > 0 },
+    { label: "论文解析与研读对话", description: "全员学术问答与推演", value: chatVal, included: Number(plan.chatQuotaDaily || 0) > 0 },
+    { label: "组会 PPT 汇报制作", description: "全员 PPT Agent 自动汇报", value: pptVal, included: Number(plan.pptQuotaMonthly || 0) > 0 },
+    { label: "调研广场", description: "全员社会与学术热点文献分析调研", value: researchVal, included: Number(plan.researchQuotaDaily || 0) > 0 },
+    { label: "组会一键汇报", description: "全员自动大纲与一键汇报", value: reportVal, included: Number(plan.reportQuotaMonthly || 0) > 0 },
+    { label: "论坛会员特效与标识", description: "全员尊享会员标识", value: forumVal, included: Boolean(plan.forumSpecial) },
+    { label: "导师购买统一分配", description: "按人数结算享优惠", value: `¥${plan.monthlyPrice} / 人 / 月`, included: true },
+    { label: "高峰期优先响应", description: "全员享受极速优先通道", value: peakVal, included: Boolean(plan.peakPriority) },
+  ];
+}
+
+function packRows(pack) {
+  const translateVal = pack.translateQuota ? `+${pack.translateQuota} 篇` : "未包含";
+  const immersiveVal = pack.immersiveQuota ? `+${pack.immersiveQuota} 篇` : "未包含";
+  const reviewVal = pack.reviewQuota ? `+${pack.reviewQuota} 次` : "未包含";
+  const chatVal = pack.chatQuota ? `+${pack.chatQuota} 次` : "未包含";
+  const pptVal = pack.pptQuota ? `+${pack.pptQuota} 次` : "未包含";
+  const researchVal = pack.researchQuota ? `+${pack.researchQuota} 次` : "未包含";
+  const reportVal = pack.reportQuota ? `+${pack.reportQuota} 次` : "未包含";
+
+  return [
+    { name: "对照翻译", value: translateVal, included: Number(pack.translateQuota || 0) > 0 },
+    { name: "沉浸翻译", value: immersiveVal, included: Number(pack.immersiveQuota || 0) > 0 },
+    { name: "AI论文综述", value: reviewVal, included: Number(pack.reviewQuota || 0) > 0 },
+    { name: "研读对话", value: chatVal, included: Number(pack.chatQuota || 0) > 0 },
+    { name: "调研广场", value: researchVal, included: Number(pack.researchQuota || 0) > 0 },
+    { name: "组会PPT", value: pptVal, included: Number(pack.pptQuota || 0) > 0 },
+    { name: "组会一键汇报", value: reportVal, included: Number(pack.reportQuota || 0) > 0 },
   ];
 }
 
@@ -1726,18 +1726,23 @@ async function submitTicket() {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 12px 5px 8px;
+  padding: 6px 14px 6px 10px;
   border-radius: 999px;
-  background: rgba(99,102,241,0.06);
-  border: 1px solid rgba(99,102,241,0.15);
+  background: rgba(14, 165, 233, 0.08);
+  border: 1px solid rgba(14, 165, 233, 0.25);
   font-size: 11.5px;
-  color: var(--c-muted);
-  font-weight: 700;
+  color: #0284c7;
+  font-weight: 800;
   width: fit-content;
 }
+:global(html[data-theme="dark"]) .luckin-hint {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
 .luckin-icon-sm {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   object-fit: cover;
 }
