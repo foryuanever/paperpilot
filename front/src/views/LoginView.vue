@@ -490,15 +490,8 @@
                 <p class="oauth-hint">为保障学术交流与数据安全，当前支持通过 QQ 一键安全登录与注册，免密且更安全。</p>
                 <div v-if="errorText" class="auth-err" style="margin-bottom: 20px;">{{ errorText }}</div>
                 
-                <button type="button" class="btn-oauth-premium qq" @click="loginWithQQ" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                  <svg class="icon-qq-svg" viewBox="0 0 120 48" width="60" height="24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 4px;">
-                    <!-- Penguin Silhouette -->
-                    <path d="M22 6C14.268 6 8 12.268 8 20c0 3.328 1.155 6.386 3.09 8.814L6.924 35.84C5.972 37.498 7.159 39 9.076 39h25.848c1.917 0 3.104-1.502 2.152-3.16l-4.166-7.026C34.845 26.386 36 23.328 36 20c0-7.732-6.268-14-14-14zm0 24c-5.523 0-10-4.477-10-10s4.477-10 10-10 10 4.477 10 10-4.477 10-10 10z" fill="#12B7F5"/>
-                    <path d="M22 13c-3.866 0-7 3.134-7 7 0 1.298.353 2.513.97 3.559L13.1 28.508c-.42.731.1 1.492.946 1.492h15.908c.847 0 1.367-.761.946-1.492l-2.87-4.949c.617-1.046.97-2.261.97-3.559 0-3.866-3.134-7-7-7z" fill="#12B7F5"/>
-                    <!-- QQ Text -->
-                    <text x="44" y="32" fill="#12B7F5" font-family="system-ui, sans-serif" font-weight="900" font-size="28" letter-spacing="1">QQ</text>
-                  </svg>
-                  <span style="font-size: 1.02rem; letter-spacing: 1px;">安全登录 / 注册</span>
+                <button type="button" class="btn-oauth-premium qq" @click="loginWithQQ">
+                  QQ 登录
                 </button>
                 
                 <div style="text-align: center; margin-top: 24px;">

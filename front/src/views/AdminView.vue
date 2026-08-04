@@ -490,7 +490,7 @@
               <div class="payment-work-head">
                 <div>
                   <span>支付订单</span>
-                  <strong>{{ paymentOrders.length }} 笔</strong>
+                  <strong>{{ filteredPaymentOrders.length }} 笔</strong>
                 </div>
               </div>
               <article v-for="order in paginatedPaymentOrders" :key="order.orderNo" class="payment-order-admin">
@@ -501,9 +501,9 @@
                 </div>
                 <code>{{ order.orderNo }}</code>
               </article>
-              <div v-if="!paymentOrders.length" class="payment-empty">暂无用户创建的支付订单。</div>
+              <div v-if="!filteredPaymentOrders.length" class="payment-empty">暂无已完成的支付订单。</div>
               <div v-else class="admin-pagination compact-pagination">
-                <span>{{ paginationText(paymentOrders.length, orderPage, orderPageSize) }}</span>
+                <span>{{ paginationText(filteredPaymentOrders.length, orderPage, orderPageSize) }}</span>
                 <div>
                   <button :disabled="orderPage <= 1" @click="orderPage -= 1">上一页</button>
                   <strong>{{ orderPage }} / {{ orderPageCount }}</strong>
@@ -545,36 +545,7 @@
         </div>
 
         <!-- Tab Content: Teams -->
-        <div v-if="activeTab === 'teams'" class="tab-pane">
-          <div class="pane-header-row">
-            <h3>科研团队管理</h3>
-            <button class="spatial-btn spatial-btn-accent compact-btn" @click="showAddTeamModal = true">创建团队</button>
-          </div>
 
-          <!-- Search toolbar -->
-          <div class="search-filter-toolbar spatial-glass-panel animate-hover-up" style="margin-bottom: 20px; display: flex; align-items: center; padding: 16px; border-radius: 12px; position: relative;">
-            <input id="admin-team-search" name="teamSearch" v-model="teamQuery" placeholder="输入团队名称或团队标识过滤..." style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--spatial-line); background: var(--spatial-surface); color: var(--spatial-graphite);" />
-          </div>
-
-          <div class="admin-stats-grid">
-            <div v-for="t in filteredTeams" :key="t.id" class="admin-stat-card spatial-glass-panel animate-hover-up" style="flex-direction: column; gap: 12px; align-items: stretch; border-radius: 16px;">
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <div>
-                  <h4 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--spatial-graphite);">{{ t.name }}</h4>
-                  <code class="team-identifier">{{ t.identifier }}</code>
-                </div>
-              </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--spatial-gray); border-top: 1px solid var(--spatial-line); padding-top: 12px; margin-top: 4px;">
-                <span>包含成员数: <strong>{{ t.memberCount }} 人</strong></span>
-                <div class="table-actions" style="gap: 8px;">
-                  <button class="spatial-btn spatial-btn-ghost compact-btn" style="min-height: 28px; padding: 0 10px; font-size: 0.75rem;" @click="viewTeam(t)">详情</button>
-                  <button class="spatial-btn spatial-btn-ghost compact-btn" style="min-height: 28px; padding: 0 10px; font-size: 0.75rem; border-color: rgba(239,68,68,0.2); color: #ef4444; background: rgba(239,68,68,0.02);" @click="deleteTeam(t)">删除</button>
-                </div>
-              </div>
-            </div>
-            <div v-if="filteredTeams.length === 0" style="grid-column: 1 / -1; text-align: center; color: #64748b; padding: 48px 0;" class="spatial-glass-panel">暂无科研团队</div>
-          </div>
-        </div>
 
         <!-- Tab Content: Models (Redesigned 2-Column Layout) -->
         <div v-if="activeTab === 'models'" class="tab-pane models-redesign-pane">
@@ -1317,7 +1288,7 @@
     <!-- Quota Detail & Replenish Modal -->
     <Transition name="fade">
       <div v-if="showQuotaDetailModal" class="admin-modal-overlay" @click="showQuotaDetailModal = false">
-        <div class="admin-modal-card spatial-glass-panel" @click.stop style="width: 480px; max-width: 95vw;">
+        <div class="admin-modal-card spatial-glass-panel" @click.stop style="width: 620px; max-width: 96vw;">
           <h4>权益使用详情与额度补给</h4>
           <p>查看 {{ selectedUserForQuota?.username }} 的各项权益消耗并补充额外额度。</p>
           <div class="quota-modal-snapshot" style="margin-bottom: 20px;">
@@ -1915,7 +1886,7 @@ const adminTabOptions = [
   { value: "users", label: "用户目录与授权", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
   { value: "membershipPlans", label: "套餐管理", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 1 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 1 0 0-5C13 2 12 7 12 7z"/></svg>` },
   { value: "recharges", label: "充值入账记录", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>` },
-  { value: "teams", label: "科研团队管理", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>` },
+
   { value: "models", label: "AI 路由与模型", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/></svg>` },
   { value: "aiUsage", label: "AI 调用记录", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>` },
   { value: "monitoring", label: "管理员监控页面", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 15px; height: 15px;"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>` },
@@ -2319,7 +2290,7 @@ const subscriptionPlans = computed(() => membershipPlans.value.filter(plan => !p
 const powerPackPlans = computed(() => membershipPlans.value.filter(plan => plan.id.startsWith("pack_")));
 const userPageCount = computed(() => getPageCount(filteredUsers.value.length, userPageSize.value));
 const ticketPageCount = computed(() => getPageCount(paymentTickets.value.length, ticketPageSize.value));
-const orderPageCount = computed(() => getPageCount(paymentOrders.value.length, orderPageSize.value));
+const orderPageCount = computed(() => getPageCount(filteredPaymentOrders.value.length, orderPageSize.value));
 const rechargePageCount = computed(() => getPageCount(filteredRecharges.value.length, rechargePageSize.value));
 const logPageCount = computed(() => getPageCount(systemLogs.value.length, logPageSize.value));
 const forumReportPageCount = computed(() => getPageCount(forumReports.value.length, forumReportPageSize.value));
@@ -2328,7 +2299,8 @@ const siteMessagePageCount = computed(() => getPageCount(siteMessages.value.leng
 const tutorialPageCount = computed(() => getPageCount(tutorials.value.length, tutorialPageSize.value));
 const paginatedUsers = computed(() => paginateRows(filteredUsers.value, userPage.value, userPageSize.value));
 const paginatedPaymentTickets = computed(() => paginateRows(paymentTickets.value, ticketPage.value, ticketPageSize.value));
-const paginatedPaymentOrders = computed(() => paginateRows(paymentOrders.value, orderPage.value, orderPageSize.value));
+const filteredPaymentOrders = computed(() => paymentOrders.value.filter(o => o.status !== 'pending_payment'));
+const paginatedPaymentOrders = computed(() => paginateRows(filteredPaymentOrders.value, orderPage.value, orderPageSize.value));
 const paginatedRecharges = computed(() => paginateRows(filteredRecharges.value, rechargePage.value, rechargePageSize.value));
 const paginatedSystemLogs = computed(() => paginateRows(systemLogs.value, logPage.value, logPageSize.value));
 const paginatedForumReports = computed(() => paginateRows(forumReports.value, forumReportPage.value, forumReportPageSize.value));
@@ -6394,6 +6366,19 @@ function formatTokenCount(num) {
 .quota-modal-snapshot strong {
   color: #0f172a;
   font-size: 1.05rem;
+}
+
+:global(html[data-theme="dark"]) .quota-modal-snapshot > div {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:global(html[data-theme="dark"]) .quota-modal-snapshot span {
+  color: var(--c-muted);
+}
+
+:global(html[data-theme="dark"]) .quota-modal-snapshot strong {
+  color: #e2e8f0;
 }
 /* AI usage ledger styles are now isolated in AdminAiUsagePanel.vue */
 

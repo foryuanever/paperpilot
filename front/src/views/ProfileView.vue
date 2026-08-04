@@ -422,7 +422,13 @@ const pageBackgroundStyle = computed(() => {
   };
 });
 
-const fruitScore = computed(() => Number(currentUserMember.value?.fruitScore ?? authStore.profile.fruitScore ?? 0));
+const fruitScore = computed(() => {
+  // authStore.session.user.fruitScore is updated synchronously after drawCheckinFruit
+  const fromAuth = Number(authStore.profile.fruitScore ?? 0);
+  // Also check teamStore for current member (may differ if team is loaded)
+  const fromMember = teamStore.members.find(m => m.email === authStore.profile.email)?.fruitScore;
+  return fromMember !== undefined ? Number(fromMember) : fromAuth;
+});
 const levelInfo = computed(() => getMemberLevelInfo(fruitScore.value));
 
 const myPosts = computed(() => {
