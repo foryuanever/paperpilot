@@ -41,13 +41,6 @@
       {
         "from": "build/icon.png",
         "to": "icon.png"
-      },
-      {
-        "from": "release/dependencies",
-        "to": "dependencies",
-        "filter": [
-          "papersolver-local-dependency-*"
-        ]
       }
     ],
     "mac": {
