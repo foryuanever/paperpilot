@@ -876,7 +876,13 @@ async function getDirectorySize(dirPath) {
 
 function runSpawnCommand(cmd, args, options, onLog) {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, options);
+    const spawnEnv = {
+      UV_PYTHON_INSTALL_MIRROR: "https://mirror.nju.edu.cn/github-release/astral-sh/python-build-standalone/",
+      UV_INDEX_URL: "https://pypi.tuna.tsinghua.edu.cn/simple",
+      ...process.env,
+      ...(options?.env || {})
+    };
+    const child = spawn(cmd, args, { ...options, env: spawnEnv });
     let errAccumulator = "";
     child.stdout.on("data", (chunk) => {
       if (onLog) onLog(chunk.toString());
@@ -917,25 +923,25 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
 
     // --- Phase 1: Download & Extract base zip framework (0% - 15%) ---
     if (bundledArchive) {
-      emit({ stage: "prepare", progress: 5, message: "正在读取内置 PaperSolver 本机依赖包..." });
+      emit({ stage: "prepare", progress: 5, message: "正在载入计算环境资源..." });
     } else {
-      emit({ stage: "download", progress: 2, message: "正在连接 PaperSolver 依赖服务..." });
+      emit({ stage: "download", progress: 2, message: "正在连接核心服务..." });
       await downloadFileToPath(url, archivePath, (progress) => {
         emit({
           stage: "download",
           progress: Math.max(3, Math.min(12, Math.round(progress * 0.10 + 2))),
-          message: `正在下载依赖包引导环境 ${Math.round(progress)}%`
+          message: `正在下载基础环境 ${Math.round(progress)}%`
         });
       }, "依赖包");
     }
     
-    emit({ stage: "verify", progress: 13, message: "正在校验依赖包..." });
+    emit({ stage: "verify", progress: 13, message: "正在校验核心文件..." });
     const stat = await fs.promises.stat(archivePath);
     if (!stat.size || stat.size < 1024 * 10) {
       throw new Error("依赖包引导环境下载不完整，请稍后重试。");
     }
     
-    emit({ stage: "extract", progress: 15, message: force ? "正在重新部署基础目录..." : "正在部署基础目录..." });
+    emit({ stage: "extract", progress: 15, message: "正在部署系统目录..." });
     if (force) {
       await fs.promises.rm(installDir, { recursive: true, force: true });
     }
@@ -950,14 +956,14 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
     const pythonBin = path.join(venvDir, isWin ? "Scripts" : "bin", isWin ? "python.exe" : "python");
     
     // --- Phase 2: Setup Python & Install pip dependencies (15% - 50%) ---
-    emit({ stage: "python-env", progress: 18, message: "正在自检本地人工智能运行环境..." });
+    emit({ stage: "python-env", progress: 18, message: "正在自检本地运行环境..." });
     
     const settings = readDesktopSettings();
     const liteMode = settings.localDependencyLiteMode;
 
     // Check if python venv exists, if not, create it
     if (!fs.existsSync(pythonBin)) {
-      emit({ stage: "python-env", progress: 20, message: "正在创建 Python 虚拟计算隔离沙箱..." });
+      emit({ stage: "python-env", progress: 20, message: "正在构建本地隔离沙箱..." });
       await runSpawnCommand(uvBin, ["python", "install", "3.12"], { cwd: installDir });
       await runSpawnCommand(uvBin, ["venv", "--python", "3.12", ".runtime-venv"], { cwd: installDir });
     }
@@ -966,79 +972,109 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
     const pdfReadyMarker = path.join(venvDir, ".papersolver-pdf-ready");
     const structuredReadyMarker = path.join(venvDir, ".papersolver-structured-ready");
     
-    if (force || !fs.existsSync(pdfReadyMarker) || !fs.existsSync(structuredReadyMarker)) {
-      emit({ stage: "python-env", progress: 25, message: "正在下载并安装核心算法依赖包（第一阶段）..." });
-      
-      // Install PDF service requirements
-      await runSpawnCommand(
-        uvBin, 
-        ["pip", "install", "--python", pythonBin, "-r", path.join(installDir, "services", "pdf", "requirements.txt")], 
-        { cwd: installDir },
-        (log) => {
-          const match = log.match(/Downloading\s+([^\s]+)/i);
-          if (match) {
-            const pkg = match[1].split("-")[0];
-            emit({ stage: "python-env", progress: 28, message: `正在下载算法组件: ${pkg}...` });
-          } else if (log.includes("Installing")) {
-            emit({ stage: "python-env", progress: 32, message: "正在解压并安装组件..." });
+    if (liteMode) {
+      // In liteMode, we only install PDF translation requirements (no PyTorch, no MinerU)
+      if (force || !fs.existsSync(pdfReadyMarker)) {
+        emit({ stage: "python-env", progress: 25, message: "正在载入系统组件..." });
+        await runSpawnCommand(
+          uvBin, 
+          ["pip", "install", "--python", pythonBin, "-r", path.join(installDir, "services", "pdf", "requirements.txt")], 
+          { cwd: installDir },
+          (log) => {
+            if (log.includes("Downloading") || log.includes("Installing")) {
+              emit({ stage: "python-env", progress: 35, message: "正在部署系统组件..." });
+            }
           }
-        }
-      );
+        );
+      }
+      // Remove structured markers and binaries if they exist, to ensure clean state
+      await fs.promises.rm(structuredReadyMarker, { force: true }).catch(() => {});
+      const mineruBin = path.join(installDir, "bin", process.platform === "win32" ? "mineru.exe" : "mineru");
+      const mineruCmd = path.join(installDir, "bin", "mineru.cmd");
+      await fs.promises.rm(mineruBin, { force: true }).catch(() => {});
+      await fs.promises.rm(mineruCmd, { force: true }).catch(() => {});
       
-      emit({ stage: "python-env", progress: 38, message: "正在下载并安装版面解析依赖包（第二阶段）..." });
-      
-      // Install Structured parser requirements
-      await runSpawnCommand(
-        uvBin, 
-        ["pip", "install", "--python", pythonBin, "-r", path.join(installDir, "services", "structured", "requirements.txt")], 
-        { cwd: installDir },
-        (log) => {
-          const match = log.match(/Downloading\s+([^\s]+)/i);
-          if (match) {
-            const pkg = match[1].split("-")[0];
-            emit({ stage: "python-env", progress: 42, message: `正在下载解析组件: ${pkg}...` });
-          } else if (log.includes("Installing")) {
-            emit({ stage: "python-env", progress: 46, message: "正在解压并安装版面解析组件..." });
+      emit({ stage: "python-env", progress: 50, message: "已部署极简运行环境" });
+    } else {
+      // In full mode, we install both PDF and Structured requirements (requires PyTorch & MinerU)
+      if (force || !fs.existsSync(pdfReadyMarker) || !fs.existsSync(structuredReadyMarker)) {
+        emit({ stage: "python-env", progress: 25, message: "正在载入核心算法组件..." });
+        
+        // Install PDF service requirements
+        await runSpawnCommand(
+          uvBin, 
+          ["pip", "install", "--python", pythonBin, "-r", path.join(installDir, "services", "pdf", "requirements.txt")], 
+          { cwd: installDir },
+          (log) => {
+            if (log.includes("Downloading") || log.includes("Installing")) {
+              emit({ stage: "python-env", progress: 28, message: "正在部署核心算法组件..." });
+            }
           }
+        );
+        
+        if (process.platform === "win32") {
+          emit({ stage: "python-env", progress: 39, message: "正在优化系统计算引擎..." });
+          await runSpawnCommand(
+            uvBin,
+            ["pip", "install", "--python", pythonBin, "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cpu"],
+            { cwd: installDir }
+          );
         }
-      );
+
+        emit({ stage: "python-env", progress: 41, message: "正在加载图像与解析组件..." });
+        
+        // Install Structured parser requirements
+        await runSpawnCommand(
+          uvBin, 
+          ["pip", "install", "--python", pythonBin, "-r", path.join(installDir, "services", "structured", "requirements.txt")], 
+          { cwd: installDir },
+          (log) => {
+            if (log.includes("Downloading") || log.includes("Installing")) {
+              emit({ stage: "python-env", progress: 42, message: "正在部署图像与解析组件..." });
+            }
+          }
+        );
+      }
+      emit({ stage: "python-env", progress: 50, message: "已部署完整运行环境" });
     }
 
     // --- Phase 3: Pre-download AI Layout & Translation Models (50% - 90%) ---
-    emit({ stage: "models", progress: 50, message: "正在连接 AI 离线大模型仓库..." });
-    
-    // Check downloaded models folder size to monitor progress
-    const modelscopeCacheDir = path.join(os.homedir(), ".cache", "modelscope", "hub", "models", "OpenDataLab", "PDF-Extract-Kit-1___0");
-    const expectedSize = liteMode ? 256 * 1024 * 1024 : 1000 * 1024 * 1024;
-    
-    let modelDownloadCompleted = false;
-    const progressTimer = setInterval(async () => {
-      if (modelDownloadCompleted) return;
-      const size = await getDirectorySize(modelscopeCacheDir);
-      const percentage = Math.min(99, Math.round((size / expectedSize) * 100));
-      emit({
-        stage: "models",
-        progress: Math.max(52, Math.min(88, Math.round(50 + percentage * 0.38))),
-        message: `正在下载论文版面解析大模型 ${percentage}%`
-      });
-    }, 2000);
-
-    try {
-      const args = [path.join(installDir, "services", "structured", "download_models.py")];
-      if (liteMode) {
-        args.push("--lite");
-      }
+    if (!liteMode) {
+      emit({ stage: "models", progress: 50, message: "正在配置大模型运行环境..." });
       
-      await runSpawnCommand(pythonBin, args, { cwd: installDir });
-    } finally {
-      modelDownloadCompleted = true;
-      clearInterval(progressTimer);
+      // Check downloaded models folder size to monitor progress
+      const modelscopeCacheDir = path.join(os.homedir(), ".cache", "modelscope", "hub", "models", "OpenDataLab", "PDF-Extract-Kit-1___0");
+      const expectedSize = 1000 * 1024 * 1024;
+      
+      let modelDownloadCompleted = false;
+      const progressTimer = setInterval(async () => {
+        if (modelDownloadCompleted) return;
+        const size = await getDirectorySize(modelscopeCacheDir);
+        const percentage = Math.min(99, Math.round((size / expectedSize) * 100));
+        emit({
+          stage: "models",
+          progress: Math.max(52, Math.min(88, Math.round(50 + percentage * 0.38))),
+          message: `正在载入离线算法模型 ${percentage}%`
+        });
+      }, 2000);
+
+      try {
+        const args = [path.join(installDir, "services", "structured", "download_models.py")];
+        await runSpawnCommand(pythonBin, args, { cwd: installDir });
+      } finally {
+        modelDownloadCompleted = true;
+        clearInterval(progressTimer);
+      }
+    } else {
+      emit({ stage: "models", progress: 85, message: "极简模式跳过大模型配置。" });
     }
 
     // --- Phase 4: Write ready markers & Start local services (90% - 100%) ---
-    emit({ stage: "start", progress: 90, message: "正在对算法模型包进行最终校验与签名..." });
+    emit({ stage: "start", progress: 90, message: "正在进行最后的系统配置优化..." });
     await fs.promises.writeFile(pdfReadyMarker, new Date().toISOString());
-    await fs.promises.writeFile(structuredReadyMarker, new Date().toISOString());
+    if (!liteMode) {
+      await fs.promises.writeFile(structuredReadyMarker, new Date().toISOString());
+    }
     
     emit({ stage: "start", progress: 94, message: "正在启动本机翻译与解析进程服务..." });
     await startLocalDependencyServices({ waitForReady: true });

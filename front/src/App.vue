@@ -69,7 +69,7 @@
               <div class="profile-popover-meta">
                 <div class="profile-popover-name-row">
                   <strong class="profile-popover-name">{{ authStore.profile.name }}</strong>
-                  <span class="profile-popover-role-badge" :class="getRoleClass(currentUserMember.role)">{{ currentUserMember.role }}</span>
+                  <span class="profile-popover-role-badge" :class="authStore.profile.role === '管理员' ? 'badge-admin' : 'badge-student'">{{ authStore.profile.role === '管理员' ? '管理员' : '普通用户' }}</span>
                   <span class="profile-popover-role-badge badge-vip">{{ membershipName }}</span>
                 </div>
                 <div class="profile-popover-email" v-if="!String(authStore.profile.email || '').startsWith('qq_user_')">{{ authStore.profile.email }}</div>
@@ -89,11 +89,11 @@
             <div class="profile-popover-stats">
               <div class="stats-item">
                 <span class="stats-label">注册时间</span>
-                <span class="stats-value">{{ currentUserMember.registerTime }}</span>
+                <span class="stats-value">{{ authStore.profile.registerTime || currentUserMember.registerTime }}</span>
               </div>
               <div class="stats-item">
                 <span class="stats-label">邀请码</span>
-                <span class="stats-value">{{ authStore.profile.inviteCode || 'N/A' }}</span>
+                <span class="stats-value">无</span>
               </div>
             </div>
 
@@ -380,8 +380,7 @@ const navItems = computed(() => {
       { to: "/topics", label: "选题大厅" },
       { to: "/meeting-report", label: "组会汇报" },
       { to: "/forum", label: "学术贴吧" },
-      { to: "/models", label: "额度管理" },
-      { to: "/team", label: "我的team" }
+      { to: "/models", label: "额度管理" }
     ];
   }
   return pageNavItems;

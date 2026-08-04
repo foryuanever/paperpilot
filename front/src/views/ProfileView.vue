@@ -31,7 +31,7 @@
           <div class="hero-copy">
             <div class="hero-name-row">
               <h1>{{ authStore.profile.name }}</h1>
-              <span class="role-pill" :class="getRoleClass(currentUserMember.role)">{{ currentUserMember.role }}</span>
+              <span class="role-pill" :class="authStore.profile.role === '管理员' ? 'role-admin' : 'role-student'">{{ authStore.profile.role === '管理员' ? '管理员' : '普通用户' }}</span>
             </div>
             <p v-if="!String(authStore.profile.email || '').startsWith('qq_user_')">{{ authStore.profile.email }}</p>
             <span v-if="authStore.profile.campusVerified && authStore.profile.schoolName" class="school-badge">
@@ -44,11 +44,6 @@
               <span>科研等级</span>
               <strong>LV{{ levelInfo.level }}</strong>
               <small>{{ levelInfo.current }} / 100 硕果</small>
-            </article>
-            <article class="hero-stat">
-              <span>在线时长</span>
-              <strong>{{ formatActiveTime(currentUserMember.activeTime) }}</strong>
-              <small>持续积累中的科研活跃度</small>
             </article>
             <article class="hero-stat">
               <span>累计硕果</span>
@@ -76,19 +71,11 @@
             <div class="summary-list">
               <div class="summary-item">
                 <span>注册日期</span>
-                <strong>{{ currentUserMember.registerTime }}</strong>
+                <strong>{{ authStore.profile.registerTime || currentUserMember.registerTime }}</strong>
               </div>
               <div class="summary-item">
-                <span>邀请码</span>
-                <strong>{{ authStore.profile.inviteCode || '—' }}</strong>
-              </div>
-              <div class="summary-item">
-                <span>团队角色</span>
-                <strong>{{ currentUserMember.role }}</strong>
-              </div>
-              <div class="summary-item">
-                <span>当前状态</span>
-                <strong>{{ currentUserMember.status === "online" ? "在线" : "离线" }}</strong>
+                <span>用户角色</span>
+                <strong>{{ authStore.profile.role === '管理员' ? '管理员' : '普通用户' }}</strong>
               </div>
               <div class="summary-item">
                 <span>校园认证</span>

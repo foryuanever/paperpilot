@@ -117,95 +117,139 @@
     </section>
 
     <!-- ── Plan Workbench ──────────────────────────────────────── -->
-    <section class="plan-workbench">
+    <section class="plan-workbench" id="plans-section">
       <div class="plan-heading">
         <div>
-          <h2>套餐开通与重置</h2>
-          <p>用量按成功完成后扣减，每个重置周期自动恢复当期额度。PPT 生成包含完整组会 Agent 流程。</p>
+          <span class="section-chip">会员套餐</span>
+          <h2>选择适合你的科研方案</h2>
+          <p>全量开放文献导入与基础翻译；综述、PPT、问答按套餐用量结算，订阅周期自动重置。</p>
         </div>
-        <div class="cycle-switch" role="tablist" aria-label="套餐周期">
-          <button v-for="option in cycles" :key="option.id" :class="{ active: selectedCycle === option.id }" @click="selectedCycle = option.id">
-            {{ option.label }}
-            <small v-if="option.badge">{{ option.badge }}</small>
-          </button>
+        <div class="cycle-toggle-pill">
+          <button
+            v-for="cycle in cycles"
+            :key="cycle.id"
+            :class="{ active: selectedCycle === cycle.id }"
+            @click="selectedCycle = cycle.id"
+          >{{ cycle.label }}</button>
         </div>
       </div>
 
-      <div class="plan-groups">
-        <section v-for="group in planGroups" :key="group.key" class="plan-group">
-          <div class="plan-group-title">
-            <span>{{ group.label }}</span>
-            <p>{{ group.description }}</p>
+      <div class="plan-cards-v2">
+        <article
+          v-for="plan in personalPlans"
+          :key="plan.id"
+          class="plan-card-v2"
+          :class="[normalizePlanId(plan.id), { active: selectedPlan === plan.id, current: plan.id === usageStore.state.membership?.id, featured: plan.id === 'plus' }]"
+          @click="selectedPlan = plan.id"
+        >
+          <!-- Top accent line for featured -->
+          <div v-if="plan.id === 'plus'" class="card-accent-line"></div>
+
+          <!-- Badge -->
+          <div class="card-top-row">
+            <div class="plan-tier-icon">
+              <!-- Free: Leaf/Circle -->
+              <svg v-if="plan.id === 'free'" class="tier-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+              <!-- Lite: Spark/Dollar -->
+              <svg v-else-if="plan.id === 'lite'" class="tier-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              <!-- Plus: Star -->
+              <svg v-else-if="plan.id === 'plus'" class="tier-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <!-- Pro: Diamond -->
+              <svg v-else-if="plan.id === 'pro'" class="tier-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/></svg>
+            </div>
+            <span v-if="plan.id === usageStore.state.membership?.id" class="tier-badge badge-current">当前使用中</span>
+            <span v-else-if="plan.id === 'plus'" class="tier-badge badge-hot">🔥 推荐</span>
           </div>
-          <div class="plan-cards" :class="`plan-cards-${group.key}`">
-            <article
-              v-for="plan in group.plans"
-              :key="plan.id"
-              class="plan-card"
-              :class="[plan.id, { active: selectedPlan === plan.id }]"
-              @click="selectedPlan = plan.id"
-            >
-              <header>
-                <div>
-                  <div class="plan-title-row">
-                    <h3>{{ planCardTitle(plan.id) }}</h3>
-                    <em>{{ planBadgeLabel(plan.id) }}</em>
-                  </div>
-                  <p>{{ planCopy(plan.id) }}</p>
-                </div>
-                <span class="plan-icon-badge">{{ planBadge(plan.id) }}</span>
-              </header>
 
-              <div v-if="isSeckillActive(plan)" class="plan-sale-strip">
-                <span>{{ plan.seckillLabel || "限时秒杀" }}</span>
-                <strong>{{ formatSeckillCountdown(plan) }}</strong>
-              </div>
-              <div class="price-line" :class="{ sale: isSeckillActive(plan) }">
-                <span v-if="isSeckillActive(plan)" class="origin-price">¥{{ originalPlanPrice(plan) }}</span>
-                <strong>¥{{ planPrice(plan) }}</strong>
-                <span>/ {{ cycleLabel(selectedCycle) }}{{ plan.teamShared ? ` (${teamMemberCount}人总计)` : '' }}</span>
-                <span v-if="plan.id === 'lite'" class="luckin-tag">
-                  <img :src="luckinLogo" alt="瑞幸" class="luckin-icon" />
-                  相当于一个月一杯瑞幸咖啡～
-                </span>
-              </div>
-
-              <div v-if="plan.teamShared" class="team-seats-selector" @click.stop>
-                <span class="seats-label">团队人数</span>
-                <div class="seats-counter">
-                  <button type="button" class="counter-btn" :disabled="teamMemberCount <= 2" @click="teamMemberCount = Math.max(2, teamMemberCount - 1)">-</button>
-                  <div class="counter-value-box">
-                    <input
-                      type="text"
-                      inputmode="numeric"
-                      pattern="[0-9]*"
-                      :value="teamMemberCount"
-                      @input="onTeamCountInput"
-                      class="counter-input"
-                    />
-                    <span class="counter-unit">人</span>
-                  </div>
-                  <button type="button" class="counter-btn" :disabled="teamMemberCount >= 100" @click="teamMemberCount = Math.min(100, teamMemberCount + 1)">+</button>
-                </div>
-              </div>
-
-              <ul class="center-plan-features">
-                <li v-for="row in planRows(plan)" :key="row.label" :class="{ excluded: !row.included }">
-                  <span class="feature-check" :class="{ excluded: !row.included }">{{ row.included ? "✓" : "×" }}</span>
-                  <div>
-                    <strong>{{ row.label }}：{{ row.value }}</strong>
-                    <small>{{ row.description }}</small>
-                  </div>
-                </li>
-              </ul>
-              <p class="settlement-note">每个重置周期用量独立计算，次月重置或续费后自动充沛额度。</p>
-
-              <button class="plan-buy-button" :class="{ 'free-button': plan.id === 'free' }" :disabled="plan.id === 'free'" @click.stop="selectAndCheckout(plan.id)">
-                {{ plan.id === 'free' ? '免费版使用中' : '开通该套餐' }}
-              </button>
-            </article>
+          <!-- Name & desc -->
+          <div class="plan-name-block">
+            <h3>{{ plan.name }}</h3>
+            <p>{{ planCopy(plan.id) }}</p>
           </div>
-        </section>
+
+          <!-- Price -->
+          <div class="plan-price-row">
+            <template v-if="!plan.monthlyPrice">
+              <span class="price-main">免费</span>
+              <span class="price-sub">永久开放</span>
+            </template>
+            <template v-else>
+              <span class="price-main">¥<em>{{ plan.monthlyPrice }}</em></span>
+              <span class="price-sub">/ 月</span>
+            </template>
+          </div>
+
+          <!-- Luckin tag for Lite -->
+          <div v-if="plan.id === 'lite'" class="luckin-hint">
+            <img :src="luckinLogo" class="luckin-icon-sm" alt="luckin" />
+            <span>一杯瑞幸咖啡的价格</span>
+          </div>
+
+          <div class="card-hr"></div>
+
+          <!-- Features -->
+          <ul class="plan-feat-list">
+            <li v-for="row in planRows(plan)" :key="row.label" :class="{ 'feat-off': !row.included }">
+              <span class="feat-status-icon" :class="row.included ? 'status-ok' : 'status-no'">
+                {{ row.included ? '✓' : '✗' }}
+              </span>
+              <span class="feat-label">{{ row.label }}</span>
+              <span class="feat-val">{{ row.value }}</span>
+            </li>
+          </ul>
+
+          <button class="plan-cta-btn" :class="{ 'cta-active': selectedPlan === plan.id, 'cta-current': plan.id === usageStore.state.membership?.id }">
+            <template v-if="plan.id === usageStore.state.membership?.id">✓ 当前使用中</template>
+            <template v-else-if="selectedPlan === plan.id">已选中 · 下方确认支付</template>
+            <template v-else>选择此方案</template>
+          </button>
+        </article>
+      </div>
+    </section>
+
+    <!-- ── Power Packs ──────────────────────────────────────── -->
+    <section class="plan-workbench">
+      <div class="plan-heading">
+        <div>
+          <span class="section-chip chip-amber">额度加油包</span>
+          <h2>按需补充，永不过期</h2>
+          <p>购买后即时生效，直接叠加至当前可用额度，无需等待周期重置，适合临时大额用量场景。</p>
+        </div>
+      </div>
+
+      <div class="packs-grid">
+        <article
+          v-for="pack in powerPacks"
+          :key="pack.id"
+          class="pack-card-v2"
+          :class="{ 'pack-v2-active': selectedPlan === pack.id }"
+          @click="selectedPlan = pack.id"
+        >
+          <!-- Left side colored strip -->
+          <div class="pack-accent-bar" :class="pack.icon"></div>
+
+          <div class="pack-v2-top">
+            <div class="pack-v2-icon" :class="pack.icon">
+              <svg v-if="pack.icon === 'review'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              <svg v-else-if="pack.icon === 'ppt'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+              <svg v-else-if="pack.icon === 'chat'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <svg v-else-if="pack.icon === 'translation'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              <svg v-else-if="pack.icon === 'research'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div class="pack-v2-info">
+              <strong>{{ pack.name }}</strong>
+              <span>{{ pack.desc }}</span>
+            </div>
+          </div>
+          <div class="pack-v2-bottom">
+            <div class="pack-v2-qty">+{{ pack.count }} {{ pack.unit }}</div>
+            <div class="pack-v2-price">¥{{ pack.price }}<span>/ 包</span></div>
+          </div>
+          <button class="pack-v2-btn" :class="{ active: selectedPlan === pack.id }">
+            {{ selectedPlan === pack.id ? '✓ 已选中' : '加入选择' }}
+          </button>
+        </article>
       </div>
     </section>
 
@@ -213,7 +257,7 @@
     <section class="checkout-bar">
       <div>
         <span>本次开通</span>
-        <strong>{{ selectedPlanInfo.name }} · {{ cycleLabel(selectedCycle) }}</strong>
+        <strong>{{ selectedPlanInfo.name }}{{ selectedPlanInfo.id && selectedPlanInfo.id.startsWith('pack_') ? ' (即时加量)' : ' · ' + cycleLabel(selectedCycle) }}</strong>
         <p>{{ checkoutDescription }}</p>
       </div>
       <div class="checkout-actions">
@@ -327,7 +371,15 @@ const filteredOrders = computed(() => {
 });
 const provider = ref("wechat");
 const selectedCycle = ref("monthly");
-const selectedPlan = ref("plus");
+const selectedPlan = ref("pack_review");
+const powerPacks = [
+  { id: "pack_review", name: "AI 综述加油包", desc: "增加 10 次文献综述生成额度", price: 9.9, count: 10, unit: "次", icon: "review", label: "综述加油包" },
+  { id: "pack_ppt", name: "组会 PPT 加油包", desc: "增加 3 次 PPT 自动汇报生成额度", price: 19.9, count: 3, unit: "次", icon: "ppt", label: "PPT加油包" },
+  { id: "pack_chat", name: "研读对话加油包", desc: "增加 50 次论文问答对话额度", price: 9.9, count: 50, unit: "次", icon: "chat", label: "对话加油包" },
+  { id: "pack_translation", name: "对照/沉浸翻译加油包", desc: "增加 30 篇全文翻译额度", price: 9.9, count: 30, unit: "篇", icon: "translation", label: "翻译加油包" },
+  { id: "pack_research", name: "调研广场加油包", desc: "增加 20 次热点调研分析额度", price: 9.9, count: 20, unit: "次", icon: "research", label: "调研加油包" },
+  { id: "pack_report", name: "组会一键汇报加油包", desc: "增加 5 次自动一键汇报大纲额度", price: 14.9, count: 5, unit: "次", icon: "report", label: "汇报加油包" }
+];
 const paymentMessage = ref("");
 const ticketDialog = ref(null);
 const qrDialog = ref(null);
@@ -386,15 +438,27 @@ const planGroups = computed(() => [
     description: "包含永久免费版、基础版、热销版与进阶版，满足不同阶段科研需求。",
     plans: displayPlans.value.filter((item) => !item.teamShared),
   },
-  {
-    key: "team",
-    label: "课题组团队套餐",
-    description: "导师购买按人数计费（享 9 折），包含团队分配与全员特权。",
-    plans: displayPlans.value.filter((item) => item.teamShared),
-  },
 ]);
+const personalPlans = computed(() => displayPlans.value.filter((item) => !item.teamShared));
 const membership = computed(() => usageStore.state.membership || { id: "free", name: "未开通会员", benefits: {} });
-const selectedPlanInfo = computed(() => displayPlans.value.find((item) => item.id === selectedPlan.value) || displayPlans.value[0] || { name: "研读会员", monthlyPrice: 19.9, reviewQuota: 10, pptQuota: 2, chatQuota: 80 });
+const selectedPlanInfo = computed(() => {
+  const id = selectedPlan.value || "";
+  if (id.startsWith("pack_")) {
+    const pack = powerPacks.find(p => p.id === id);
+    if (pack) {
+      return {
+        id: pack.id,
+        name: pack.name,
+        monthlyPrice: pack.price,
+        originalMonthlyPrice: pack.price,
+        description: pack.desc,
+        unit: pack.unit,
+        count: pack.count
+      };
+    }
+  }
+  return displayPlans.value.find((item) => item.id === id) || displayPlans.value[0] || { name: "研读会员", monthlyPrice: 19.9, reviewQuota: 10, pptQuota: 2, chatQuota: 80 };
+});
 const remainingDays = computed(() => {
   if (!membership.value.active || !membership.value.expiresAt) return 0;
   const expires = parseDateValue(membership.value.expiresAt);
@@ -456,6 +520,9 @@ const benefitItems = computed(() => {
 
 const checkoutDescription = computed(() => {
   const plan = selectedPlanInfo.value;
+  if (plan.id && plan.id.startsWith("pack_")) {
+    return `${plan.description} (单次购买即时生效，无月度自动重置)`;
+  }
   const count = plan.teamShared ? teamMemberCount.value : 0;
   return [
     `对照 ${plan.translateQuotaDaily || 10} 篇/天`,
@@ -500,6 +567,9 @@ async function loadOrders() {
 }
 
 function planPrice(plan) {
+  if (plan.id && plan.id.startsWith("pack_")) {
+    return Number(plan.monthlyPrice || 0).toFixed(2);
+  }
   const monthly = isSeckillActive(plan) ? Number(plan.seckillPrice ?? plan.effectiveMonthlyPrice ?? plan.monthlyPrice ?? 0) : Number(plan.effectiveMonthlyPrice ?? plan.monthlyPrice ?? 0);
   return totalPlanPrice(monthly, plan);
 }
@@ -1326,118 +1396,1003 @@ async function submitTicket() {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
 }
 
-/* ── Plan Workbench ──────────────────────────────────────── */
+/* ══════════════════════════════════════════════════
+   PLAN WORKBENCH — V2 Premium Design
+   ══════════════════════════════════════════════════ */
 .plan-workbench {
   position: relative;
   z-index: 2;
-  margin-bottom: 44px;
+  margin-bottom: 56px;
 }
+
+.section-chip {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--c-accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  margin-bottom: 10px;
+}
+.section-chip.chip-amber {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+  border-color: rgba(245, 158, 11, 0.2);
+}
+:root[data-theme="dark"] .section-chip.chip-amber { color: #fbbf24; }
 
 .plan-heading {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 20px;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 .plan-heading h2 {
-  margin: 0 0 4px;
-  font-size: 22px;
+  margin: 0 0 6px;
+  font-size: clamp(20px, 2vw, 26px);
   font-weight: 900;
   color: var(--c-text);
+  letter-spacing: -0.3px;
 }
-.plan-heading p {
+.plan-heading > div > p {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 14px;
   color: var(--c-muted);
+  max-width: 600px;
+  line-height: 1.6;
 }
 
-/* Cycle Switch Pill */
-.cycle-switch {
+/* Cycle Toggle */
+.cycle-toggle-pill {
   display: inline-flex;
-  gap: 4px;
+  gap: 3px;
   padding: 4px;
-  border-radius: var(--r-pill);
+  border-radius: 999px;
   background: var(--c-surface);
   border: 1px solid var(--c-border);
   box-shadow: var(--sh-sm);
+  flex-shrink: 0;
 }
-.cycle-switch button {
-  height: 36px;
+.cycle-toggle-pill button {
+  height: 34px;
   padding: 0 18px;
-  border-radius: var(--r-pill);
+  border-radius: 999px;
   border: none;
   background: transparent;
   color: var(--c-muted);
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
-.cycle-switch button.active {
+.cycle-toggle-pill button.active {
   background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
-}
-.cycle-switch button small {
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-  font-size: 10px;
-  font-weight: 900;
-}
-.cycle-switch button.active small {
-  background: rgba(255, 255, 255, 0.25);
   color: #fff;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
-/* Plan Groups & Cards Grid */
-.plan-groups {
+/* Plan Cards Grid V2 */
+.plan-cards-v2 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+@media (max-width: 1200px) {
+  .plan-cards-v2 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .plan-cards-v2 { grid-template-columns: 1fr; }
+}
+
+/* Plan Card V2 — Premium Glassmorphism & Dark Minimal */
+.plan-card-v2 {
+  position: relative;
+  border-radius: 20px;
+  background: radial-gradient(circle at 10% 10%, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.005)), var(--c-surface);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 36px;
+  gap: 16px;
+  cursor: pointer;
+  backdrop-filter: blur(16px);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
 }
-.plan-group-title {
-  margin-bottom: 18px;
+:root[data-theme="light"] .plan-card-v2 {
+  background: radial-gradient(circle at 10% 10%, rgba(15, 23, 42, 0.02), rgba(15, 23, 42, 0.002)), var(--c-surface);
+  border-color: rgba(15, 23, 42, 0.08);
 }
-.plan-group-title span {
+.plan-card-v2::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent 50%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+:root[data-theme="light"] .plan-card-v2::after {
+  background: linear-gradient(135deg, rgba(15,23,42,0.1), transparent 50%);
+}
+
+.plan-card-v2:hover {
+  border-color: rgba(99, 102, 241, 0.45);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18), 0 0 20px rgba(99,102,241,0.1);
+  transform: translateY(-4px);
+}
+.plan-card-v2.active {
+  border-color: var(--c-accent) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25), 0 12px 32px rgba(99, 102, 241, 0.15) !important;
+}
+.plan-card-v2.featured {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: radial-gradient(circle at 10% 10%, rgba(99, 102, 241, 0.06), rgba(255, 255, 255, 0.005)), var(--c-surface);
+}
+
+/* Top accent line for featured (Plus) */
+.card-accent-line {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #6366f1, #a855f7);
+  border-radius: 20px 20px 0 0;
+}
+
+/* Top row: tier icon + badge */
+.card-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.plan-tier-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: var(--sh-sm);
+}
+:root[data-theme="light"] .plan-tier-icon {
+  background: rgba(15,23,42,0.04);
+  border-color: rgba(15,23,42,0.08);
+  color: var(--c-text);
+}
+.plan-card-v2.featured .plan-tier-icon,
+.plan-card-v2.active .plan-tier-icon {
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(99,102,241,0.25);
+}
+.tier-svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Tier badges */
+.tier-badge {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.2px;
+}
+.badge-current {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.badge-hot {
+  background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(168,85,247,0.18));
+  color: #a5b4fc;
+  border: 1px solid rgba(99,102,241,0.25);
+}
+:root[data-theme="light"] .badge-hot {
+  color: #4f46e5;
+}
+
+/* Name block */
+.plan-name-block h3 {
+  margin: 0 0 4px;
+  font-size: 19px;
+  font-weight: 900;
+  color: var(--c-text);
+  letter-spacing: -0.3px;
+}
+.plan-name-block p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--c-muted);
+  line-height: 1.5;
+}
+
+/* Price */
+.plan-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.price-main {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--c-muted);
+  line-height: 1;
+}
+.price-main em {
+  font-style: normal;
+  font-size: 38px;
+  font-weight: 950;
+  color: var(--c-text);
+  letter-spacing: -1.5px;
+  font-family: tabular-nums, Inter, system-ui;
+}
+.plan-card-v2.featured .price-main em,
+.plan-card-v2.active .price-main em {
+  background: linear-gradient(135deg, #818cf8, #c084fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.price-sub {
+  font-size: 13.5px;
+  color: var(--c-muted);
+  font-weight: 600;
+}
+
+/* Luckin hint */
+.luckin-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 8px;
+  border-radius: 999px;
+  background: rgba(99,102,241,0.06);
+  border: 1px solid rgba(99,102,241,0.15);
+  font-size: 11.5px;
+  color: var(--c-muted);
+  font-weight: 700;
+  width: fit-content;
+}
+.luckin-icon-sm {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Horizontal rule */
+.card-hr {
+  height: 1px;
+  background: linear-gradient(90deg, var(--c-border), transparent);
+}
+
+/* Feature list */
+.plan-feat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+}
+.plan-feat-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+}
+:root[data-theme="light"] .plan-feat-list li {
+  border-color: rgba(15, 23, 42, 0.04);
+}
+.plan-feat-list li:last-child { border-bottom: none; }
+.plan-feat-list li.feat-off { opacity: 0.42; }
+
+/* status icons ✓ / ✗ */
+.feat-status-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11.5px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+.feat-status-icon.status-ok {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+}
+.feat-status-icon.status-no {
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.12);
+}
+
+.feat-label {
+  flex: 1;
+  color: var(--c-text);
+  font-weight: 650;
+}
+.feat-val {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--c-muted);
+  white-space: nowrap;
+}
+.plan-feat-list li:not(.feat-off) .feat-val {
+  color: var(--c-accent);
+}
+
+/* CTA button */
+.plan-cta-btn {
+  width: 100%;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.02);
+  color: var(--c-text);
+  font-size: 13.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  margin-top: 4px;
+}
+:root[data-theme="light"] .plan-cta-btn {
+  border-color: rgba(15,23,42,0.12);
+  background: rgba(15,23,42,0.02);
+}
+.plan-cta-btn:hover {
+  border-color: var(--c-accent);
+  color: #fff;
+  background: var(--c-accent);
+  box-shadow: 0 4px 14px rgba(99,102,241,0.25);
+}
+.plan-cta-btn.cta-active {
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+}
+.plan-cta-btn.cta-current {
+  background: rgba(16,185,129,0.08);
+  border-color: rgba(16,185,129,0.3);
+  color: #10b981;
+}
+
+/* ── Power Packs V2 — Premium Glass Layout ─────────── */
+.packs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 960px) {
+  .packs-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 580px) {
+  .packs-grid { grid-template-columns: 1fr; }
+}
+
+.pack-card-v2 {
+  position: relative;
+  border-radius: 16px;
+  background: radial-gradient(circle at 10% 10%, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.005)), var(--c-surface);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 20px 20px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+:root[data-theme="light"] .pack-card-v2 {
+  background: radial-gradient(circle at 10% 10%, rgba(15, 23, 42, 0.015), rgba(15, 23, 42, 0.002)), var(--c-surface);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+.pack-card-v2:hover {
+  border-color: rgba(99,102,241,0.4);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.12), 0 0 15px rgba(99,102,241,0.06);
+  transform: translateY(-3px);
+}
+.pack-card-v2.pack-v2-active {
+  border-color: var(--c-accent) !important;
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.25), 0 10px 28px rgba(99,102,241,0.12) !important;
+}
+
+/* Left colored accent bar */
+.pack-accent-bar {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 4px;
+  transition: width 0.25s ease;
+}
+.pack-card-v2:hover .pack-accent-bar {
+  width: 6px;
+}
+/* Theme colors for accent bar and icon */
+.pack-accent-bar.review      { background: #8b5cf6; }
+.pack-accent-bar.ppt         { background: #10b981; }
+.pack-accent-bar.chat        { background: #f59e0b; }
+.pack-accent-bar.translation { background: #3b82f6; }
+.pack-accent-bar.research    { background: #ec4899; }
+.pack-accent-bar.report      { background: #f43f5e; }
+
+/* Pack top: icon + info */
+.pack-v2-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.pack-v2-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+}
+.pack-v2-icon svg { width: 18px; height: 18px; }
+
+/* Specific icon background colors with transparent opacity */
+.pack-v2-icon.review      { color: #c084fc; background: rgba(139, 92, 246, 0.12); border-color: rgba(139, 92, 246, 0.15); }
+.pack-v2-icon.ppt         { color: #34d399; background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.15); }
+.pack-v2-icon.chat        { color: #fbbf24; background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.15); }
+.pack-v2-icon.translation { color: #60a5fa; background: rgba(59, 130, 246, 0.12); border-color: rgba(59, 130, 246, 0.15); }
+.pack-v2-icon.research    { color: #f472b6; background: rgba(236, 72, 153, 0.12); border-color: rgba(236, 72, 153, 0.15); }
+.pack-v2-icon.report      { color: #fb7185; background: rgba(244, 63, 94, 0.12); border-color: rgba(244, 63, 94, 0.15); }
+
+:root[data-theme="light"] .pack-v2-icon.review      { color: #8b5cf6; }
+:root[data-theme="light"] .pack-v2-icon.ppt         { color: #10b981; }
+:root[data-theme="light"] .pack-v2-icon.chat        { color: #d97706; }
+:root[data-theme="light"] .pack-v2-icon.translation { color: #2563eb; }
+:root[data-theme="light"] .pack-v2-icon.research    { color: #db2777; }
+:root[data-theme="light"] .pack-v2-icon.report      { color: #e11d48; }
+
+.pack-v2-info {
+  flex: 1;
+}
+.pack-v2-info strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--c-text);
+  margin-bottom: 2px;
+}
+.pack-v2-info span {
+  display: block;
+  font-size: 12px;
+  color: var(--c-muted);
+  line-height: 1.45;
+}
+
+/* Pack bottom: qty + price */
+.pack-v2-bottom {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+:root[data-theme="light"] .pack-v2-bottom {
+  border-color: rgba(15,23,42,0.04);
+}
+.pack-v2-qty {
+  font-size: 21px;
+  font-weight: 950;
+  color: var(--c-accent);
+  letter-spacing: -0.5px;
+}
+.pack-v2-price {
+  font-size: 23px;
+  font-weight: 950;
+  color: var(--c-text);
+  letter-spacing: -0.5px;
+  font-family: tabular-nums, Inter, system-ui;
+}
+.pack-v2-price span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-muted);
+  margin-left: 2px;
+}
+
+/* Pack CTA button */
+.pack-v2-btn {
+  width: 100%;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.01);
+  color: var(--c-muted);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+:root[data-theme="light"] .pack-v2-btn {
+  border-color: rgba(15,23,42,0.1);
+  background: rgba(15,23,42,0.01);
+}
+.pack-v2-btn:hover {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+  background: rgba(99,102,241,0.06);
+}
+.pack-v2-btn.active {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+}
+
+
+/* Color Themes per tier */
+.plan-card-v2.free   { --tier-h: 215; --tier-s: 25%; --tier-l: 50%; }
+.plan-card-v2.lite   { --tier-h: 158; --tier-s: 64%; --tier-l: 36%; }
+.plan-card-v2.plus   { --tier-h: 225; --tier-s: 80%; --tier-l: 52%; }
+.plan-card-v2.pro    { --tier-h: 270; --tier-s: 75%; --tier-l: 52%; }
+
+.plan-card-v2 {
+  --tc: hsl(var(--tier-h), var(--tier-s), var(--tier-l));
+  --tc-soft: hsla(var(--tier-h), var(--tier-s), var(--tier-l), 0.08);
+  --tc-border: hsla(var(--tier-h), var(--tier-s), var(--tier-l), 0.25);
+  --tc-glow: hsla(var(--tier-h), var(--tier-s), var(--tier-l), 0.18);
+
+  position: relative;
+  border-radius: 20px;
+  background: var(--c-surface);
+  border: 1.5px solid var(--tc-border);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+.plan-card-v2::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, var(--tc-soft) 0%, transparent 60%);
+  pointer-events: none;
+  border-radius: inherit;
+  transition: opacity 0.3s ease;
+  opacity: 0.7;
+}
+.plan-card-v2:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 16px 40px var(--tc-glow), 0 4px 12px rgba(0,0,0,0.06);
+  border-color: var(--tc);
+}
+.plan-card-v2.active {
+  border-color: var(--tc);
+  box-shadow: 0 0 0 2px var(--tc), 0 16px 40px var(--tc-glow);
+}
+.plan-card-v2.active::before { opacity: 1; }
+.plan-card-v2.featured {
+  border-color: hsl(var(--tier-h), var(--tier-s), calc(var(--tier-l) + 5%));
+}
+
+/* Featured glow strip on top */
+.featured-glow {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--tc), hsl(calc(var(--tier-h) + 30), var(--tier-s), calc(var(--tier-l) + 10%)));
+  border-radius: 20px 20px 0 0;
+}
+
+/* Badges */
+.v2-current-badge {
+  position: absolute;
+  top: 14px; right: 14px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  font-size: 10.5px;
+  font-weight: 800;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.v2-hot-badge {
+  position: absolute;
+  top: 14px; right: 14px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  font-size: 10.5px;
+  font-weight: 800;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+/* Card Header */
+.v2-card-header {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.v2-plan-icon-wrap {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--tc);
+  box-shadow: 0 4px 12px var(--tc-glow);
+}
+.v2-plan-icon {
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+}
+.v2-plan-meta h3 {
+  margin: 0 0 3px;
   font-size: 17px;
   font-weight: 900;
   color: var(--c-text);
-  display: block;
 }
-.plan-group-title p {
-  margin: 3px 0 0;
-  font-size: 13px;
+.v2-plan-meta p {
+  margin: 0;
+  font-size: 12px;
   color: var(--c-muted);
+  line-height: 1.45;
 }
 
-.plan-cards {
+/* Price block */
+.v2-price-block {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.v2-price-free {
+  font-size: 32px;
+  font-weight: 950;
+  color: var(--c-text);
+  line-height: 1;
+}
+.v2-price-num {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--c-muted);
+  line-height: 1;
+}
+.v2-price-num strong {
+  font-size: 36px;
+  font-weight: 950;
+  color: var(--tc);
+  letter-spacing: -1px;
+}
+.v2-price-cycle {
+  font-size: 13px;
+  color: var(--c-muted);
+  font-weight: 600;
+}
+
+/* Divider */
+.v2-divider {
+  height: 1px;
+  background: linear-gradient(90deg, var(--tc-border), transparent);
+}
+
+/* Feature List */
+.v2-features {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  flex: 1;
+}
+.v2-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13px;
+}
+.v2-features li.excluded {
+  opacity: 0.45;
+}
+.v2-feat-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 900;
+  color: #fff;
+  background: var(--tc);
+  margin-top: 1px;
 }
-.plan-cards-team {
-  grid-template-columns: repeat(2, 1fr);
+.v2-features li.excluded .v2-feat-icon {
+  background: rgba(148, 163, 184, 0.3);
+  color: var(--c-subtle);
 }
-@media (max-width: 1120px) {
-  .plan-cards { grid-template-columns: repeat(2, 1fr); }
+.v2-feat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
-@media (max-width: 640px) {
-  .plan-cards, .plan-cards-team { grid-template-columns: 1fr; }
+.v2-feat-text strong {
+  font-weight: 700;
+  color: var(--c-text);
+  line-height: 1.3;
+}
+.v2-feat-text span {
+  font-size: 11.5px;
+  color: var(--tc);
+  font-weight: 700;
+}
+.v2-features li.excluded .v2-feat-text span {
+  color: var(--c-subtle);
+}
+
+/* CTA Button */
+.v2-cta {
+  width: 100%;
+  height: 42px;
+  border-radius: 12px;
+  border: 1.5px solid var(--tc-border);
+  background: var(--tc-soft);
+  color: var(--tc);
+  font-size: 13.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  margin-top: auto;
+}
+.v2-cta:hover {
+  background: var(--tc);
+  color: #fff;
+  border-color: var(--tc);
+  box-shadow: 0 6px 18px var(--tc-glow);
+  transform: translateY(-1px);
+}
+.v2-cta-selected {
+  background: var(--tc) !important;
+  color: #fff !important;
+  border-color: var(--tc) !important;
+  box-shadow: 0 6px 18px var(--tc-glow) !important;
+}
+
+/* ══════════════════════════════════════════════════
+   POWER PACKS — V2 Premium Grid
+   ══════════════════════════════════════════════════ */
+.packs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+@media (max-width: 960px) {
+  .packs-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 580px) {
+  .packs-grid { grid-template-columns: 1fr; }
+}
+
+/* Color themes for each pack type */
+.pack-card.review      { --pk-h: 258; --pk-s: 90%; --pk-l: 58%; }
+.pack-card.ppt         { --pk-h: 160; --pk-s: 70%; --pk-l: 38%; }
+.pack-card.chat        { --pk-h: 37;  --pk-s: 90%; --pk-l: 50%; }
+.pack-card.translation { --pk-h: 215; --pk-s: 75%; --pk-l: 52%; }
+.pack-card.research    { --pk-h: 330; --pk-s: 82%; --pk-l: 55%; }
+.pack-card.report      { --pk-h: 5;   --pk-s: 88%; --pk-l: 55%; }
+
+.pack-card {
+  --pk: hsl(var(--pk-h), var(--pk-s), var(--pk-l));
+  --pk-soft: hsla(var(--pk-h), var(--pk-s), var(--pk-l), 0.08);
+  --pk-border: hsla(var(--pk-h), var(--pk-s), var(--pk-l), 0.22);
+  --pk-glow: hsla(var(--pk-h), var(--pk-s), var(--pk-l), 0.2);
+
+  position: relative;
+  border-radius: 20px;
+  background: var(--c-surface);
+  border: 1.5px solid var(--pk-border);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+.pack-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(145deg, var(--pk-soft) 0%, transparent 55%);
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+.pack-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--pk);
+  box-shadow: 0 16px 36px var(--pk-glow), 0 4px 12px rgba(0,0,0,0.05);
+}
+.pack-card:hover::before { opacity: 1; }
+.pack-active {
+  border-color: var(--pk) !important;
+  box-shadow: 0 0 0 2px var(--pk), 0 16px 36px var(--pk-glow) !important;
+}
+.pack-active::before { opacity: 1 !important; }
+
+/* Decorative blob */
+.pack-blob {
+  position: absolute;
+  bottom: -30px; right: -30px;
+  width: 100px; height: 100px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--pk-soft), transparent 70%);
+  pointer-events: none;
+  transition: transform 0.4s ease;
+}
+.pack-card:hover .pack-blob {
+  transform: scale(1.4);
+}
+
+/* Pack top row */
+.pack-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pack-icon-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--pk);
+  color: #fff;
+  box-shadow: 0 4px 12px var(--pk-glow);
+  flex-shrink: 0;
+}
+.pack-icon-wrap svg {
+  width: 20px;
+  height: 20px;
+}
+.pack-label-tag {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--pk-soft);
+  color: var(--pk);
+  font-size: 10.5px;
+  font-weight: 800;
+  border: 1px solid var(--pk-border);
+}
+
+/* Pack body */
+.pack-body h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 850;
+  color: var(--c-text);
+}
+.pack-body p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--c-muted);
+  line-height: 1.45;
+}
+
+/* Pack bottom */
+.pack-bottom {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+.pack-quantity {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--pk);
+  letter-spacing: -0.3px;
+}
+.pack-pricing {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+.pack-pricing strong {
+  font-size: 26px;
+  font-weight: 950;
+  color: var(--c-text);
+  letter-spacing: -0.5px;
+}
+.pack-pricing span {
+  font-size: 12px;
+  color: var(--c-muted);
+  font-weight: 600;
+}
+
+/* Pack CTA */
+.pack-cta {
+  width: 100%;
+  height: 38px;
+  border-radius: 10px;
+  border: 1.5px solid var(--pk-border);
+  background: transparent;
+  color: var(--pk);
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.pack-cta:hover {
+  background: var(--pk);
+  color: #fff;
+  border-color: var(--pk);
+  box-shadow: 0 4px 14px var(--pk-glow);
+}
+.pack-cta-active {
+  background: var(--pk) !important;
+  color: #fff !important;
+  border-color: var(--pk) !important;
+  box-shadow: 0 4px 14px var(--pk-glow) !important;
+}
+
+/* Premium Card Color-Coded Themes */
+.plan-card.free {
+  --tier: #64748b;
+  --tier-soft: rgba(100, 116, 139, 0.05);
+  --tier-line: rgba(100, 116, 139, 0.2);
+}
+.plan-card.lite {
+  --tier: #0b946f;
+  --tier-soft: rgba(11, 148, 111, 0.05);
+  --tier-line: rgba(11, 148, 111, 0.22);
+}
+.plan-card.plus {
+  --tier: #2664ea;
+  --tier-soft: rgba(38, 100, 234, 0.05);
+  --tier-line: rgba(38, 100, 234, 0.22);
+}
+.plan-card.pro {
+  --tier: #7a2fe3;
+  --tier-soft: rgba(122, 47, 227, 0.05);
+  --tier-line: rgba(122, 47, 227, 0.22);
+}
+.plan-card.team_plus {
+  --tier: #d97706;
+  --tier-soft: rgba(217, 119, 6, 0.05);
+  --tier-line: rgba(217, 119, 6, 0.22);
+}
+.plan-card.team_pro {
+  --tier: #b45309;
+  --tier-soft: rgba(180, 83, 9, 0.05);
+  --tier-line: rgba(180, 83, 9, 0.22);
 }
 
 .plan-card {
   position: relative;
-  border-radius: var(--r);
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--tier-soft), var(--c-surface) 60%) !important;
+  border: 1px solid var(--tier-line) !important;
   box-shadow: var(--sh-sm);
-  padding: 26px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -1445,21 +2400,19 @@ async function submitTicket() {
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .plan-card:hover {
-  transform: translateY(-5px);
-  border-color: rgba(99, 102, 241, 0.35);
-  box-shadow: var(--sh-md);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
 }
 .plan-card.active {
-  border-color: var(--c-accent) !important;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18), var(--sh-md) !important;
-  background: rgba(99, 102, 241, 0.03) !important;
+  border-color: var(--tier) !important;
+  box-shadow: 0 0 0 2px var(--tier), 0 12px 28px rgba(0, 0, 0, 0.12) !important;
 }
 
 .plan-card header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 .plan-title-row {
   display: flex;
@@ -1469,7 +2422,7 @@ async function submitTicket() {
 }
 .plan-title-row h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 900;
   color: var(--c-text);
 }
@@ -1477,19 +2430,30 @@ async function submitTicket() {
   font-style: normal;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--c-accent);
+  background: var(--c-surface);
+  border: 1px solid var(--tier-line);
+  color: var(--tier);
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 850;
 }
-.plan-card p {
-  margin: 0;
+.plan-card .plan-subtitle {
+  margin: 4px 0 0;
   font-size: 12px;
   color: var(--c-muted);
   line-height: 1.55;
 }
-.plan-icon-badge {
-  font-size: 20px;
+.plan-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  color: #fff;
+  background: var(--tier);
+  font-weight: 900;
+  font-size: 16px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
 }
 
 .price-line {
@@ -1497,9 +2461,124 @@ async function submitTicket() {
   align-items: baseline;
   flex-wrap: wrap;
   gap: 6px 9px;
-  margin-bottom: 18px;
-  padding-bottom: 16px;
+  margin: 12px 0 16px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--c-border);
+}
+
+/* Premium Benefit Ladder CSS */
+.benefit-ladder {
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  background: var(--c-surface);
+  margin-bottom: 16px;
+}
+
+.ladder-head,
+.ladder-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.ladder-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  color: var(--c-text);
+  background: rgba(0, 0, 0, 0.02);
+  font-weight: 850;
+  font-size: 12.5px;
+}
+:root[data-theme="dark"] .ladder-head {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ladder-head b {
+  color: var(--tier);
+  font-size: 11px;
+}
+
+.ladder-row {
+  font-size: 12px;
+}
+.ladder-row.not-included {
+  opacity: 0.55;
+}
+
+.ladder-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+.ladder-info strong {
+  color: var(--c-text);
+  font-weight: 700;
+}
+.ladder-info small {
+  color: var(--c-muted);
+  font-size: 10px;
+  margin-top: 1px;
+}
+
+.ladder-row b {
+  color: var(--c-text);
+  font-weight: 800;
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.row-icon {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #10b981;
+  font-size: 10px;
+  font-weight: 900;
+}
+.ladder-row.not-included .row-icon {
+  background: #ef4444;
+}
+
+.settlement-note {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--c-muted);
+  text-align: center;
+  font-size: 10.5px;
+  background: rgba(0, 0, 0, 0.01);
+}
+
+.plan-actions {
+  margin-top: 14px;
+}
+.solid-buy {
+  width: 100%;
+  height: 40px;
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  background: var(--tier);
+  font-size: 13.5px;
+  font-weight: 850;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.solid-buy:hover {
+  transform: translateY(-1.5px);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+.solid-buy.active {
+  filter: brightness(0.95);
 }
 
 .plan-sale-strip {

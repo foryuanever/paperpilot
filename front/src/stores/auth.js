@@ -40,7 +40,7 @@ export const useAuthStore = defineStore("auth", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
   }
 
-  const profile = computed(() => session.user || { name: "Guest", email: "", inviteCode: "", avatarUrl: "", backgroundUrl: "", schoolName: "", campusVerified: false, qq: "", wechat: "", qqOpenid: "" });
+  const profile = computed(() => session.user || { name: "Guest", email: "", inviteCode: "", avatarUrl: "", backgroundUrl: "", schoolName: "", campusVerified: false, qq: "", wechat: "", qqOpenid: "", registerTime: "" });
   const unreadCount = computed(() => session.notifications.length);
 
   function persist() {
@@ -81,7 +81,7 @@ export const useAuthStore = defineStore("auth", () => {
           name: saved.name,
           email: saved.email,
           inviteCode: saved.inviteCode,
-          role: saved.role || session.user.role || "学生",
+          role: saved.role || session.user.role || "普通用户",
           avatarUrl: saved.avatarUrl || "",
           backgroundUrl: saved.backgroundUrl || "",
           fruitScore: saved.fruitScore || session.user.fruitScore || 0,
@@ -90,6 +90,7 @@ export const useAuthStore = defineStore("auth", () => {
           qq: saved.qq || "",
           wechat: saved.wechat || "",
           qqOpenid: saved.qqOpenid || session.user.qqOpenid || "",
+          registerTime: saved.registerTime || session.user.registerTime || "",
         };
         session.role = session.user.role;
         persist();
@@ -108,7 +109,7 @@ export const useAuthStore = defineStore("auth", () => {
       name: user.name,
       email: user.email,
       inviteCode: user.inviteCode,
-      role: user.role || "学生",
+      role: user.role || "普通用户",
       avatarUrl: user.avatarUrl || "",
       backgroundUrl: user.backgroundUrl || "",
       fruitScore: user.fruitScore || 0,
@@ -117,6 +118,7 @@ export const useAuthStore = defineStore("auth", () => {
       qq: user.qq || "",
       wechat: user.wechat || "",
       qqOpenid: user.qqOpenid || "",
+      registerTime: user.registerTime || "",
     };
     // Provide a direct shortcut for role checks used throughout the app
     session.role = session.user.role;
@@ -127,11 +129,9 @@ export const useAuthStore = defineStore("auth", () => {
   function createDemoUser(payload = {}) {
     const email = payload.email || "demo@paperpilot.app";
     const baseName = String(payload.name || email.split("@")[0] || "Demo User").trim();
-    let defaultRole = "学生";
+    let defaultRole = "普通用户";
     if (email.toLowerCase().includes("admin")) {
       defaultRole = "管理员";
-    } else if (email.toLowerCase().includes("tutor")) {
-      defaultRole = "导师";
     }
     return {
       userId: `demo-${Date.now()}`,

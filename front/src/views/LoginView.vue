@@ -1785,6 +1785,8 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap');
+
 .lite-mode-selector {
   margin: 10px 0 14px 0;
   display: flex;
@@ -1815,7 +1817,7 @@ onUnmounted(() => {
 .lite-mode-label:hover {
   color: #f1f5f9;
 }
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap');
+
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
 .home-root {

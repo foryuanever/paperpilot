@@ -46,7 +46,7 @@
             <div class="stat-info">
               <span class="stat-label">全局注册用户</span>
               <strong class="stat-value">{{ globalStats.totalUsers }} 位</strong>
-              <span class="stat-sub">学生 {{ globalStats.studentCount }} / 导师 {{ globalStats.tutorCount }} / 管理员 {{ globalStats.adminCount }}</span>
+              <span class="stat-sub">普通用户 {{ globalStats.ordinaryCount }} / 管理员 {{ globalStats.adminCount }}</span>
             </div>
           </div>
           <div class="admin-stat-card spatial-glass-panel animate-hover-up">
@@ -125,8 +125,7 @@
             <div style="width: 160px;">
               <select v-model="roleFilter" class="admin-select" style="margin-top: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--spatial-line); background: var(--spatial-surface); color: var(--spatial-graphite);">
                 <option value="全部">所有角色</option>
-                <option value="学生">学生</option>
-                <option value="导师">导师</option>
+                <option value="普通用户">普通用户</option>
                 <option value="管理员">管理员</option>
               </select>
             </div>
@@ -1255,8 +1254,7 @@
           <div class="form-group" style="margin-top: 12px;">
             <label>角色</label>
             <select id="new-role" name="role" v-model="newUser.role" class="admin-select">
-              <option value="学生">学生</option>
-              <option value="导师">导师</option>
+              <option value="普通用户">普通用户</option>
               <option value="管理员">管理员</option>
             </select>
           </div>
@@ -1868,7 +1866,7 @@ const forumReportSaving = ref(false);
 const newUser = ref({
   username: "",
   email: "",
-  role: "学生",
+  role: "普通用户",
   password: "",
 });
 
@@ -2430,7 +2428,7 @@ async function fetchAllData() {
       username: u.username || "—",
       email: u.email,
       ip: u.lastIp || "—",
-      role: u.role || "学生",
+      role: u.role || "普通用户",
       password: u.plainPassword || "—",
       tokenLimit: u.tokenLimit || 5000000,
       tokenUsed: u.tokenUsed || 0,
@@ -3359,13 +3357,11 @@ function countUsersByRole(role) {
 
 function getAvatarColor(role) {
   if (role === "管理员") return "#ff3b30";
-  if (role === "导师") return "#a855f7";
   return "#0066ff";
 }
 
 function getRoleClass(role) {
   if (role === "管理员") return "role-admin";
-  if (role === "导师") return "role-tutor";
   return "role-student";
 }
 
@@ -3516,10 +3512,8 @@ async function saveUserMembership() {
 }
 
 async function toggleUserRole(user) {
-  let nextRole = "学生";
-  if (user.role === "学生") nextRole = "导师";
-  else if (user.role === "导师") nextRole = "管理员";
-  else nextRole = "学生";
+  let nextRole = "普通用户";
+  if (user.role !== "管理员") nextRole = "管理员";
 
   try {
     await paperpilotApi.updateUserRole(user.id, nextRole);
@@ -3593,7 +3587,7 @@ async function addUser() {
       password: newUser.value.password || "Password2026!",
     });
     showAddUserModal.value = false;
-    newUser.value = { username: "", email: "", role: "学生", password: "" };
+    newUser.value = { username: "", email: "", role: "普通用户", password: "" };
     await fetchAllData();
   } catch (error) {
     console.error("Failed to add user:", error);

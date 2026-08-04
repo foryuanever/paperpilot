@@ -102,7 +102,7 @@
         </div>
       </div>
 
-      <template v-if="activeTab === 'papers'">
+      <template v-if="activeTab === 'papers' || activeTab === 'plugin'">
       <div class="spatial-command-strip library-toolbar">
         <div class="library-toolbar-left">
           <input v-model="keyword" class="toolbar-search" placeholder="搜索标题、作者、备注..." />
@@ -753,6 +753,7 @@ const journalTagGroups = [
 const toastMessage = ref("");
 const libraryTabs = [
   { id: "papers", label: "全部文献", description: "阅读、翻译与分析" },
+  { id: "plugin", label: "通过插件导入", description: "浏览器插件导入的文献" },
   { id: "add", label: "个人文献添加", description: "题录与本地 PDF" },
   { id: "zotero", label: "Zotero 导入", description: "批量题录导入" },
   { id: "storage", label: "PDF 管理", description: "文件管理与替换" },
@@ -810,7 +811,14 @@ function matchesFilter(paper) {
 
 const filteredDocuments = computed(() => {
   const text = keyword.value.trim().toLowerCase();
-  const documents = libraryStore.state.documents.filter((paper) => {
+  let baseDocs = libraryStore.state.documents;
+  if (activeTab.value === "plugin") {
+    baseDocs = baseDocs.filter((paper) => {
+      const src = paper.importSource || "";
+      return src && src !== "个人添加" && src !== "Zotero 导入";
+    });
+  }
+  const documents = baseDocs.filter((paper) => {
     if (!matchesFilter(paper)) return false;
     if (!text) return true;
     return [

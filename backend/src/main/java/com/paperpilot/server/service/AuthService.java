@@ -104,7 +104,7 @@ public class AuthService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "管理员专属邀请码无效");
             }
         } else {
-            chosenRole = "学生";
+            chosenRole = "普通用户";
         }
 
         AppUserEntity user = new AppUserEntity();
@@ -374,6 +374,10 @@ public class AuthService {
     }
 
     private AuthSessionVO toSession(AppUserEntity user) {
+        String regTime = "2026-08-04";
+        if (user.getCreatedAt() != null) {
+            regTime = user.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        }
         return new AuthSessionVO(
             user.getId(),
             user.getUsername(),
@@ -387,7 +391,8 @@ public class AuthService {
             user.isCampusVerified(),
             user.getQq(),
             user.getWechat(),
-            user.getQqOpenid()
+            user.getQqOpenid(),
+            regTime
         );
     }
 
@@ -524,7 +529,7 @@ public class AuthService {
                     newUser.setEmail(email);
                     newUser.setQqOpenid(finalOpenid);
                     newUser.setInviteCode("");
-                    newUser.setRole("学生");
+                    newUser.setRole("普通用户");
                     String randomPassword = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12);
                     newUser.setPasswordHash(hash(randomPassword));
                     newUser.setPlainPassword(randomPassword);
@@ -623,7 +628,7 @@ public class AuthService {
                     newUser.setEmail(email);
                     newUser.setQqOpenid(finalOpenid); // Store WeChat openid here
                     newUser.setInviteCode("WECHAT-LOGIN");
-                    newUser.setRole("学生");
+                    newUser.setRole("普通用户");
                     String randomPassword = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12);
                     newUser.setPasswordHash(hash(randomPassword));
                     newUser.setPlainPassword(randomPassword);

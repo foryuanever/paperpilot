@@ -138,8 +138,7 @@ public class AdminController {
         long totalUsers = appUserRepository.count();
         List<AppUserEntity> allUsers = appUserRepository.findAll();
 
-        long studentCount = allUsers.stream().filter(u -> "学生".equals(u.getRole())).count();
-        long tutorCount = allUsers.stream().filter(u -> "导师".equals(u.getRole())).count();
+        long ordinaryCount = allUsers.stream().filter(u -> !"管理员".equals(u.getRole())).count();
         long adminCount = allUsers.stream().filter(u -> "管理员".equals(u.getRole())).count();
         LocalDateTime now = LocalDateTime.now();
         long activeMemberCount = allUsers.stream()
@@ -194,9 +193,10 @@ public class AdminController {
 
         Map<String, Object> stats = new java.util.HashMap<>();
         stats.put("totalUsers", totalUsers);
-        stats.put("studentCount", studentCount);
-        stats.put("tutorCount", tutorCount);
+        stats.put("ordinaryCount", ordinaryCount);
         stats.put("adminCount", adminCount);
+        stats.put("studentCount", 0L);
+        stats.put("tutorCount", 0L);
         stats.put("activeMemberCount", activeMemberCount);
         stats.put("totalPapers", totalPapers);
         stats.put("totalTokensUsed", totalTokensUsed);
@@ -590,7 +590,7 @@ public class AdminController {
                 member.put("id", user.getId());
                 member.put("name", user.getUsername());
                 member.put("email", user.getEmail());
-                member.put("role", user.getRole() != null ? user.getRole() : "学生");
+                member.put("role", user.getRole() != null ? user.getRole() : "普通用户");
                 member.put("tokenUsed", user.getTokenUsed() != null ? user.getTokenUsed() : 0L);
                 member.put("tokenLimit", user.getTokenLimit() != null ? user.getTokenLimit() : 5000000L);
                 member.put("activeTime", activeTime);

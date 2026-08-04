@@ -85,7 +85,7 @@ public class AppUserEntity {
     }
 
     @Column(name = "role", length = 32)
-    private String role = "学生";
+    private String role = "普通用户";
 
     public String getRole() {
         return role;

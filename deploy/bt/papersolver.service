@@ -1,0 +1,16 @@
+[Unit]
+Description=PaperSolver Spring Boot Backend
+After=network.target mysql.service mariadb.service mysqld.service
+
+[Service]
+Type=simple
+WorkingDirectory=/www/server/papersolver/backend
+EnvironmentFile=/etc/papersolver/papersolver.env
+ExecStart=/usr/bin/java -Xms512m -Xmx1536m -jar /www/server/papersolver/backend/paperpilot-server-0.0.1-SNAPSHOT.jar
+Restart=always
+RestartSec=5
+StandardOutput=append:/www/server/papersolver/logs/backend.log
+StandardError=append:/www/server/papersolver/logs/backend-error.log
+
+[Install]
+WantedBy=multi-user.target

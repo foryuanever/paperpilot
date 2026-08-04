@@ -966,7 +966,7 @@ async function deleteResource(id) {
 
 const newMemberName = ref("");
 const newMemberEmail = ref("");
-const newMemberRole = ref("学生");
+const newMemberRole = ref("普通用户");
 
 const showAddTaskForm = ref(false);
 const editingTaskId = ref(null);
@@ -1179,7 +1179,7 @@ function formatActiveTime(seconds) {
 }
 
 function toggleRole(member) {
-  const roles = ["学生", "特权用户", "管理员"];
+  const roles = ["普通用户", "管理员"];
   const currentIndex = roles.indexOf(member.role);
   const nextRole = roles[(currentIndex + 1) % roles.length];
   teamStore.updateRole(member.id, nextRole);
@@ -1213,7 +1213,7 @@ function submitInvite() {
     });
     newMemberName.value = "";
     newMemberEmail.value = "";
-    newMemberRole.value = "学生";
+    newMemberRole.value = "普通用户";
     showInviteModal.value = false;
     showToast("邀请已创建");
   } catch (error) {

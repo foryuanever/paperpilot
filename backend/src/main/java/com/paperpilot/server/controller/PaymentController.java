@@ -160,7 +160,17 @@ public class PaymentController {
             quantity = Integer.parseInt(String.valueOf(body.getOrDefault("quantity", body.getOrDefault("teamMemberCount", "1"))).trim());
         } catch (Exception ignored) {}
         double amount = Double.parseDouble(String.valueOf(body.getOrDefault("amount", "0")).replace("¥", "").trim());
-        if (!"custom-recharge".equals(planId)) {
+        if (planId != null && planId.startsWith("pack_")) {
+            amount = switch (planId) {
+                case "pack_review" -> 9.9;
+                case "pack_ppt" -> 19.9;
+                case "pack_chat" -> 9.9;
+                case "pack_translation" -> 9.9;
+                case "pack_research" -> 9.9;
+                case "pack_report" -> 14.9;
+                default -> 0.0;
+            };
+        } else if (!"custom-recharge".equals(planId)) {
             amount = membershipService.price(planId, planCycle, quantity);
         }
         if (amount <= 0) {
@@ -580,7 +590,23 @@ public class PaymentController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "订单用户不存在");
         }
         double paidAmount = normalizeMoney(order.getAmount()).doubleValue();
-        if (!"custom-recharge".equals(order.getPlanId())) {
+        if (order.getPlanId() != null && order.getPlanId().startsWith("pack_")) {
+            String pack = order.getPlanId();
+            if ("pack_review".equals(pack)) {
+                user.setReviewQuota((user.getReviewQuota() == null ? 0 : user.getReviewQuota()) + 10);
+            } else if ("pack_ppt".equals(pack)) {
+                user.setPptQuota((user.getPptQuota() == null ? 0 : user.getPptQuota()) + 3);
+            } else if ("pack_chat".equals(pack)) {
+                user.setChatQuota((user.getChatQuota() == null ? 0 : user.getChatQuota()) + 50);
+            } else if ("pack_translation".equals(pack) || "pack_translate".equals(pack)) {
+                user.setTokenLimit((user.getTokenLimit() == null ? 0L : user.getTokenLimit()) + 1000000L);
+            } else if ("pack_research".equals(pack)) {
+                user.setResearchQuota((user.getResearchQuota() == null ? 0 : user.getResearchQuota()) + 20);
+            } else if ("pack_report".equals(pack)) {
+                user.setReportQuota((user.getReportQuota() == null ? 0 : user.getReportQuota()) + 5);
+            }
+            appUserRepository.save(user);
+        } else if (!"custom-recharge".equals(order.getPlanId())) {
             membershipService.activate(user, order.getPlanId(), order.getPlanCycle());
         } else {
             user.setBalanceAmount((user.getBalanceAmount() == null ? 0.0 : user.getBalanceAmount()) + paidAmount);

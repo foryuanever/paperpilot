@@ -433,10 +433,10 @@ function dprScale() {
 
 function resizeDrawingCanvas() {
   const canvas = drawingCanvas.value;
-  const surface = annotationSurface.value;
-  if (!canvas || !surface) return;
-  const width = Math.max(1, Math.ceil(surface.scrollWidth || surface.clientWidth));
-  const height = Math.max(1, Math.ceil(surface.scrollHeight || surface.clientHeight));
+  const mainElement = readerMain.value;
+  if (!canvas || !mainElement) return;
+  const width = Math.max(1, mainElement.clientWidth);
+  const height = Math.max(1, mainElement.clientHeight);
   const dpr = dprScale();
   if (canvas.width !== Math.ceil(width * dpr) || canvas.height !== Math.ceil(height * dpr)) {
     canvas.width = Math.ceil(width * dpr);
@@ -495,23 +495,24 @@ function linePointFromEvent(event) {
   };
 }
 
-function drawWavyLine(context, startX, endX, y, amplitude = 3) {
-  const left = Math.min(startX, endX);
-  const right = Math.max(startX, endX);
+function drawWavyLine(context, startX, endX, y, amplitude = 3, scrollX = 0, scrollY = 0) {
+  const left = Math.min(startX, endX) - scrollX;
+  const right = Math.max(startX, endX) - scrollX;
+  const snapY = y - scrollY;
   if (right - left < 2) return;
   const wavelength = 13;
   const steps = Math.max(8, Math.ceil((right - left) / 4));
   context.beginPath();
-  context.moveTo(left, y);
+  context.moveTo(left, snapY);
   for (let index = 1; index <= steps; index += 1) {
     const t = index / steps;
     const x = left + (right - left) * t;
-    context.lineTo(x, y + Math.sin(((right - left) * t / wavelength) * Math.PI * 2) * amplitude);
+    context.lineTo(x, snapY + Math.sin(((right - left) * t / wavelength) * Math.PI * 2) * amplitude);
   }
   context.stroke();
 }
 
-function drawStroke(context, stroke) {
+function drawStroke(context, stroke, scrollX = 0, scrollY = 0) {
   if (!stroke) return;
   context.save();
   context.strokeStyle = stroke.color;
@@ -524,11 +525,11 @@ function drawStroke(context, stroke) {
   if (Array.isArray(stroke.segments)) {
     stroke.segments.forEach(segment => {
       if (stroke.tool === "wavy") {
-        drawWavyLine(context, segment.x1, segment.x2, segment.y, Math.max(2.5, stroke.width * 1.35));
+        drawWavyLine(context, segment.x1, segment.x2, segment.y, Math.max(2.5, stroke.width * 1.35), scrollX, scrollY);
       } else {
         context.beginPath();
-        context.moveTo(segment.x1, segment.y);
-        context.lineTo(segment.x2, segment.y);
+        context.moveTo(segment.x1 - scrollX, segment.y - scrollY);
+        context.lineTo(segment.x2 - scrollX, segment.y - scrollY);
         context.stroke();
       }
     });
@@ -541,9 +542,9 @@ function drawStroke(context, stroke) {
     return;
   }
   context.beginPath();
-  context.moveTo(points[0].x, points[0].y);
-  points.slice(1).forEach(point => context.lineTo(point.x, point.y));
-  if (points.length === 1) context.lineTo(points[0].x + 0.1, points[0].y + 0.1);
+  context.moveTo(points[0].x - scrollX, points[0].y - scrollY);
+  points.slice(1).forEach(point => context.lineTo(point.x - scrollX, point.y - scrollY));
+  if (points.length === 1) context.lineTo(points[0].x - scrollX + 0.1, points[0].y - scrollY + 0.1);
   context.stroke();
   context.restore();
 }
@@ -551,14 +552,22 @@ function drawStroke(context, stroke) {
 function redrawDrawingCanvas() {
   const canvas = drawingCanvas.value;
   if (!canvas) return;
+  const mainElement = readerMain.value;
+  const scrollX = mainElement ? mainElement.scrollLeft : 0;
+  const scrollY = mainElement ? mainElement.scrollTop : 0;
+
+  // Translate the canvas container using transform to lock it over the viewport
+  canvas.style.transform = `translate(${scrollX}px, ${scrollY}px)`;
+
   const dpr = dprScale();
   const context = canvas.getContext("2d");
   const width = Number.parseFloat(canvas.style.width) || canvas.width / dpr;
   const height = Number.parseFloat(canvas.style.height) || canvas.height / dpr;
   context.setTransform(dpr, 0, 0, dpr, 0, 0);
   context.clearRect(0, 0, width, height);
-  drawingStrokes.forEach(stroke => drawStroke(context, stroke));
-  if (activeInkStroke) drawStroke(context, activeInkStroke);
+
+  drawingStrokes.forEach(stroke => drawStroke(context, stroke, scrollX, scrollY));
+  if (activeInkStroke) drawStroke(context, activeInkStroke, scrollX, scrollY);
 }
 
 function scheduleDrawingResize() {
@@ -644,6 +653,7 @@ function handleReaderScroll(event) {
   if (!target) return;
   const maxScroll = Math.max(1, target.scrollHeight - target.clientHeight);
   readingProgress.value = Math.max(0, Math.min(100, Math.round((target.scrollTop / maxScroll) * 100)));
+  redrawDrawingCanvas();
 }
 
 function drawingStorageKey() {
@@ -1392,15 +1402,55 @@ onBeforeUnmount(() => {
   display: block;
   pointer-events: none;
   touch-action: none;
+  transform-origin: 0 0;
 }
 .dual-drawing-layer.active {
   pointer-events: auto;
 }
-.spread-reader { width: min(1760px, calc(100% - 28px)); margin: 0 auto; padding: 14px 0 56px; }
+.spread-reader {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 14px 12px 56px;
+}
 .spread-head { position: sticky; top: 0; z-index: 3; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 7px 0; background: #dfe4eb; }
 .spread-head span { padding: 7px 12px; border-radius: 7px; color: #445064; background: #f7f8fa; font-size: 11px; font-weight: 750; text-align: center; }
 .page-spread { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; margin-bottom: 14px; }
-.page-spread figure { min-width: 0; margin: 0; overflow-x: auto; overflow-y: hidden; background: #fff; box-shadow: 0 2px 7px rgba(20, 31, 48, .16); }
+.page-spread figure {
+  min-width: 0;
+  margin: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(20, 31, 48, .16);
+}
+/* Custom prominent scrollbars for figures */
+.page-spread figure::-webkit-scrollbar {
+  height: 10px;
+  display: block !important;
+}
+.page-spread figure::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 99px;
+}
+.page-spread figure::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.45);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.page-spread figure::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+:root[data-theme="dark"] .page-spread figure::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+}
+:root[data-theme="dark"] .page-spread figure::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.6);
+}
+:root[data-theme="dark"] .page-spread figure::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.85);
+}
 .page-spread canvas { display: block; max-width: none; height: auto !important; margin: 0 auto; background: #fff; }
 .page-spread figcaption { padding: 6px 10px; border-top: 1px solid #e5e8ed; color: #7a8494; font-size: 10px; text-align: center; }
 .empty-page { min-height: 420px; display: grid; place-items: center; color: #98a2b3; font-size: 12px; }

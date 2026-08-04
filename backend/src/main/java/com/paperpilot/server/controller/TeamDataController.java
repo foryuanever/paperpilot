@@ -79,7 +79,7 @@ public class TeamDataController {
             map.put("id", "m-" + user.getId());
             map.put("name", user.getUsername());
             map.put("email", user.getEmail());
-            map.put("role", user.getRole() != null ? user.getRole() : "学生");
+            map.put("role", user.getRole() != null ? user.getRole() : "普通用户");
             // Check if user logged in recently or just make them online
             map.put("status", "online"); 
             map.put("tokenUsed", user.getTokenUsed() != null ? user.getTokenUsed() : 0L);
@@ -373,7 +373,7 @@ public class TeamDataController {
 
     private void notifyStudents(String type, Long referenceId, String title, String description) {
         List<UserNotificationEntity> notifications = appUserRepository.findAll().stream()
-            .filter(user -> "学生".equals(user.getRole()) || "特权用户".equals(user.getRole()))
+            .filter(user -> "普通用户".equals(user.getRole()) || "特权用户".equals(user.getRole()))
             .map(user -> {
                 UserNotificationEntity notification = new UserNotificationEntity();
                 notification.setUserId(user.getId());

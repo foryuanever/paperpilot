@@ -1,7 +1,7 @@
 <template>
   <section class="checkin-lottery-card" :class="{ checked: todayCheckin?.status === '已打卡' }">
     <div class="checkin-card-time">
-      <strong>实验室学术签到</strong>
+      <strong>学术签到</strong>
       <span>{{ currentDate }}</span>
       <b>{{ currentClock }}</b>
     </div>

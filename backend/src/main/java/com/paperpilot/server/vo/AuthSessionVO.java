@@ -15,6 +15,7 @@ public class AuthSessionVO {
     private String qq;
     private String wechat;
     private String qqOpenid;
+    private String registerTime;
 
     public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl) {
         this(userId, name, email, inviteCode, role, avatarUrl, backgroundUrl, 0);
@@ -25,10 +26,10 @@ public class AuthSessionVO {
     }
 
     public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl, Integer fruitScore, String schoolName, boolean campusVerified) {
-        this(userId, name, email, inviteCode, role, avatarUrl, backgroundUrl, fruitScore, schoolName, campusVerified, null, null, null);
+        this(userId, name, email, inviteCode, role, avatarUrl, backgroundUrl, fruitScore, schoolName, campusVerified, null, null, null, null);
     }
 
-    public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl, Integer fruitScore, String schoolName, boolean campusVerified, String qq, String wechat, String qqOpenid) {
+    public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl, Integer fruitScore, String schoolName, boolean campusVerified, String qq, String wechat, String qqOpenid, String registerTime) {
         this.userId = userId;
         this.name = name;
         this.email = email;
@@ -42,6 +43,7 @@ public class AuthSessionVO {
         this.qq = qq;
         this.wechat = wechat;
         this.qqOpenid = qqOpenid;
+        this.registerTime = registerTime;
     }
 
     public Long getUserId() {
@@ -94,5 +96,9 @@ public class AuthSessionVO {
 
     public String getQqOpenid() {
         return qqOpenid;
+    }
+
+    public String getRegisterTime() {
+        return registerTime;
     }
 }

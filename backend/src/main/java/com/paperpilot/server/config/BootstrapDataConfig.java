@@ -59,6 +59,14 @@ public class BootstrapDataConfig {
         return (args) -> {
             seedInviteCodes(inviteCodeRepository);
             seedUsers(appUserRepository);
+            // Run user role database migration to standardize to "普通用户" and "管理员"
+            appUserRepository.findAll().forEach(user -> {
+                String role = user.getRole();
+                if (!"管理员".equals(role) && !"普通用户".equals(role)) {
+                    user.setRole("普通用户");
+                    appUserRepository.save(user);
+                }
+            });
             seedTeam(teamRepository, appUserRepository);
             Long userId = currentUserService.getOrCreateDefaultUserId();
             seedTranslationRecords(translationRecordRepository, userId);
@@ -274,24 +282,24 @@ public class BootstrapDataConfig {
 
     private void seedUsers(AppUserRepository appUserRepository) {
         // Seed default system users with realistic IPs, active times, and token quotas
-        seedUser(appUserRepository, "学生小张", "student@paperslover.app", "Student2026!", "学生", null, 18000L, 1000000L, 420000L);
-        seedUser(appUserRepository, "导师王教授", "tutor@paperslover.app", "Tutor2026!", "导师", null, 12600L, 5000000L, 240000L);
+        seedUser(appUserRepository, "学生小张", "student@paperslover.app", "Student2026!", "普通用户", null, 18000L, 1000000L, 420000L);
+        seedUser(appUserRepository, "导师王教授", "tutor@paperslover.app", "Tutor2026!", "普通用户", null, 12600L, 5000000L, 240000L);
         seedUser(appUserRepository, "超级管理员", "admin@paperslover.app", "Admin2026!", "管理员", null, 14400L, 1500000L, 98000L);
         
         // Seed My Team roster specific members
-        seedUser(appUserRepository, "李小明", "xm.li@paperslover.com", "Student2026!", "学生", null, 18000L, 1000000L, 420000L);
-        seedUser(appUserRepository, "张美华", "mh.zhang@paperslover.com", "Special2026!", "特权用户", null, 9000L, 2000000L, 780000L);
-        seedUser(appUserRepository, "王大锤", "dc.wang@paperslover.com", "Student2026!", "学生", null, 0L, 500000L, 120000L);
+        seedUser(appUserRepository, "李小明", "xm.li@paperslover.com", "Student2026!", "普通用户", null, 18000L, 1000000L, 420000L);
+        seedUser(appUserRepository, "张美华", "mh.zhang@paperslover.com", "Special2026!", "普通用户", null, 9000L, 2000000L, 780000L);
+        seedUser(appUserRepository, "王大锤", "dc.wang@paperslover.com", "Student2026!", "普通用户", null, 0L, 500000L, 120000L);
         seedUser(appUserRepository, "赵铁柱", "tz.zhao@paperslover.com", "Admin2026!", "管理员", null, 14400L, 1500000L, 98000L);
 
         // Keep legacy forum authors addressable by profile cards, messages and friend requests.
-        seedUser(appUserRepository, "李明航 (NLP 博士在读)", "liminghang@paperslover.community", "Research2026!", "科研用户", null, 9600L, 500000L, 80000L);
-        seedUser(appUserRepository, "王小东 (算法工程师)", "wangxiaodong@paperslover.community", "Research2026!", "科研用户", null, 7200L, 500000L, 52000L);
-        seedUser(appUserRepository, "AI研习者", "ai-researcher@paperslover.community", "Research2026!", "科研用户", null, 5400L, 500000L, 36000L);
-        seedUser(appUserRepository, "张文杰 (CV 副教授)", "zhangwenjie@paperslover.community", "Research2026!", "导师", null, 8400L, 1000000L, 110000L);
-        seedUser(appUserRepository, "Chen_RAG", "chen-rag@paperslover.community", "Research2026!", "科研用户", null, 4200L, 500000L, 22000L);
-        seedUser(appUserRepository, "刘培强 (研究员)", "liupeiqiang@paperslover.community", "Research2026!", "科研用户", null, 7800L, 800000L, 74000L);
-        seedUser(appUserRepository, "赵子明 (NLP工程师)", "zhaoziming@paperslover.community", "Research2026!", "科研用户", null, 6600L, 500000L, 48000L);
+        seedUser(appUserRepository, "李明航 (NLP 博士在读)", "liminghang@paperslover.community", "Research2026!", "普通用户", null, 9600L, 500000L, 80000L);
+        seedUser(appUserRepository, "王小东 (算法工程师)", "wangxiaodong@paperslover.community", "Research2026!", "普通用户", null, 7200L, 500000L, 52000L);
+        seedUser(appUserRepository, "AI研习者", "ai-researcher@paperslover.community", "Research2026!", "普通用户", null, 5400L, 500000L, 36000L);
+        seedUser(appUserRepository, "张文杰 (CV 副教授)", "zhangwenjie@paperslover.community", "Research2026!", "普通用户", null, 8400L, 1000000L, 110000L);
+        seedUser(appUserRepository, "Chen_RAG", "chen-rag@paperslover.community", "Research2026!", "普通用户", null, 4200L, 500000L, 22000L);
+        seedUser(appUserRepository, "刘培强 (研究员)", "liupeiqiang@paperslover.community", "Research2026!", "普通用户", null, 7800L, 800000L, 74000L);
+        seedUser(appUserRepository, "赵子明 (NLP工程师)", "zhaoziming@paperslover.community", "Research2026!", "普通用户", null, 6600L, 500000L, 48000L);
     }
 
     private void seedUser(AppUserRepository appUserRepository, String username, String email, String password, String role, String lastIp, long activeTime, long tokenLimit, long tokenUsed) {
