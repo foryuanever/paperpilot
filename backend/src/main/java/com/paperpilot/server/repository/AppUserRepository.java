@@ -12,6 +12,7 @@ public interface AppUserRepository extends JpaRepository<AppUserEntity, Long> {
 
     Optional<AppUserEntity> findByEmail(String email);
     Optional<AppUserEntity> findByUsername(String username);
+    Optional<AppUserEntity> findByQqOpenid(String qqOpenid);
     List<AppUserEntity> findByTeamIdOrderByCreatedAtAsc(Long teamId);
     List<AppUserEntity> findAllByIdNotOrderByUsernameAsc(Long id);
 

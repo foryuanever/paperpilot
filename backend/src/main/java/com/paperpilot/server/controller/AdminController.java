@@ -26,6 +26,7 @@ import com.paperpilot.server.repository.PaymentOrderRepository;
 import com.paperpilot.server.repository.PaymentTicketRepository;
 import com.paperpilot.server.repository.ForumPostRepository;
 import com.paperpilot.server.repository.ForumPostReportRepository;
+import com.paperpilot.server.repository.ForumReplyRepository;
 import com.paperpilot.server.repository.CheckinRepository;
 import com.paperpilot.server.repository.TutorialArticleRepository;
 import com.paperpilot.server.repository.CampusVerificationRepository;
@@ -38,6 +39,7 @@ import com.paperpilot.server.service.MonitoringSecurityService;
 import com.paperpilot.server.service.CurrentUserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -65,6 +67,7 @@ public class AdminController {
     private final PaymentTicketRepository paymentTicketRepository;
     private final ForumPostRepository forumPostRepository;
     private final ForumPostReportRepository forumPostReportRepository;
+    private final ForumReplyRepository forumReplyRepository;
     private final CheckinRepository checkinRepository;
     private final NotificationService notificationService;
     private final TutorialArticleRepository tutorialArticleRepository;
@@ -89,6 +92,7 @@ public class AdminController {
         PaymentTicketRepository paymentTicketRepository,
         ForumPostRepository forumPostRepository,
         ForumPostReportRepository forumPostReportRepository,
+        ForumReplyRepository forumReplyRepository,
         CheckinRepository checkinRepository,
         NotificationService notificationService,
         TutorialArticleRepository tutorialArticleRepository,
@@ -112,6 +116,7 @@ public class AdminController {
         this.paymentTicketRepository = paymentTicketRepository;
         this.forumPostRepository = forumPostRepository;
         this.forumPostReportRepository = forumPostReportRepository;
+        this.forumReplyRepository = forumReplyRepository;
         this.checkinRepository = checkinRepository;
         this.notificationService = notificationService;
         this.tutorialArticleRepository = tutorialArticleRepository;
@@ -236,6 +241,8 @@ public class AdminController {
                 map.put("lastIp", user.getLastIp());
                 map.put("createdAt", user.getCreatedAt());
                 map.put("banned", monitoringSecurityService.isUserBanned(user.getId()));
+                map.put("qqOpenid", user.getQqOpenid());
+                map.put("avatarUrl", user.getAvatarUrl());
                 return map;
             })
             .toList();
@@ -498,6 +505,19 @@ public class AdminController {
         }
         authService.logAction("处理论坛举报 #" + saved.getId() + ": " + forumReportStatusLabel(saved.getStatus()), "info", getClientIp(request));
         return forumReportToMap(saved);
+    }
+
+    @DeleteMapping("/forum/posts/{postId}")
+    @Transactional
+    public Map<String, Object> deleteForumPost(@PathVariable("postId") Long postId, HttpServletRequest request) {
+        currentUserService.requireAdmin();
+        ForumPostEntity post = forumPostRepository.findById(postId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "帖子不存在"));
+        forumReplyRepository.deleteAllByPostId(post.getId());
+        forumPostReportRepository.deleteAllByPostId(post.getId());
+        forumPostRepository.delete(post);
+        authService.logAction("管理员强制删除论坛帖子 ID: " + postId + ", 标题: " + post.getTitle(), "warn", getClientIp(request));
+        return Map.of("success", true);
     }
 
     @GetMapping("/campus-verifications")

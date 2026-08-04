@@ -12,6 +12,9 @@ public class AuthSessionVO {
     private Integer fruitScore;
     private String schoolName;
     private boolean campusVerified;
+    private String qq;
+    private String wechat;
+    private String qqOpenid;
 
     public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl) {
         this(userId, name, email, inviteCode, role, avatarUrl, backgroundUrl, 0);
@@ -22,6 +25,10 @@ public class AuthSessionVO {
     }
 
     public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl, Integer fruitScore, String schoolName, boolean campusVerified) {
+        this(userId, name, email, inviteCode, role, avatarUrl, backgroundUrl, fruitScore, schoolName, campusVerified, null, null, null);
+    }
+
+    public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl, Integer fruitScore, String schoolName, boolean campusVerified, String qq, String wechat, String qqOpenid) {
         this.userId = userId;
         this.name = name;
         this.email = email;
@@ -32,6 +39,9 @@ public class AuthSessionVO {
         this.fruitScore = fruitScore;
         this.schoolName = schoolName;
         this.campusVerified = campusVerified;
+        this.qq = qq;
+        this.wechat = wechat;
+        this.qqOpenid = qqOpenid;
     }
 
     public Long getUserId() {
@@ -72,5 +82,17 @@ public class AuthSessionVO {
 
     public boolean isCampusVerified() {
         return campusVerified;
+    }
+
+    public String getQq() {
+        return qq;
+    }
+
+    public String getWechat() {
+        return wechat;
+    }
+
+    public String getQqOpenid() {
+        return qqOpenid;
     }
 }

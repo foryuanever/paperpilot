@@ -103,4 +103,38 @@ public class AuthController {
         public String getNewPassword() { return newPassword; }
         public void setNewPassword(String newPassword) { this.newPassword = newPassword; }
     }
+    @org.springframework.web.bind.annotation.GetMapping("/qq/callback")
+    public void qqCallback(
+            @org.springframework.web.bind.annotation.RequestParam("code") String code,
+            @org.springframework.web.bind.annotation.RequestParam(value = "state", required = false) String state,
+            jakarta.servlet.http.HttpServletResponse response,
+            HttpServletRequest httpRequest) throws java.io.IOException {
+        String ip = getClientIp(httpRequest);
+        try {
+            AuthSessionVO session = authService.loginOrRegisterViaQQ(code, ip);
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            String json = mapper.writeValueAsString(session);
+            String base64 = java.util.Base64.getUrlEncoder().encodeToString(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            response.sendRedirect("https://papersolver.cn/login?qqSession=" + base64);
+        } catch (Exception e) {
+            response.sendRedirect("https://papersolver.cn/login?error=" + java.net.URLEncoder.encode(e.getMessage(), java.nio.charset.StandardCharsets.UTF_8));
+        }
+    }
+    @org.springframework.web.bind.annotation.GetMapping("/wechat/callback")
+    public void wechatCallback(
+            @org.springframework.web.bind.annotation.RequestParam("code") String code,
+            @org.springframework.web.bind.annotation.RequestParam(value = "state", required = false) String state,
+            jakarta.servlet.http.HttpServletResponse response,
+            HttpServletRequest httpRequest) throws java.io.IOException {
+        String ip = getClientIp(httpRequest);
+        try {
+            AuthSessionVO session = authService.loginOrRegisterViaWechat(code, ip);
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            String json = mapper.writeValueAsString(session);
+            String base64 = java.util.Base64.getUrlEncoder().encodeToString(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            response.sendRedirect("https://papersolver.cn/login?qqSession=" + base64);
+        } catch (Exception e) {
+            response.sendRedirect("https://papersolver.cn/login?error=" + java.net.URLEncoder.encode(e.getMessage(), java.nio.charset.StandardCharsets.UTF_8));
+        }
+    }
 }

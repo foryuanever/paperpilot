@@ -22,6 +22,16 @@ const H = 720;
 const P = palette(settings.visualStyle);
 const FONT_BODY = 'Arial, &quot;Microsoft YaHei&quot;, sans-serif';
 const FONT_TITLE = 'Georgia, &quot;Microsoft YaHei&quot;, serif';
+const MAX_SLIDE_COUNT = 10;
+
+function parseSlideLimit(value) {
+  const raw = String(value ?? "").trim();
+  const matches = raw.match(/\d+/g);
+  if (!matches || matches.length === 0) return MAX_SLIDE_COUNT;
+  const parsed = Number.parseInt(matches[matches.length - 1], 10);
+  if (!Number.isFinite(parsed)) return MAX_SLIDE_COUNT;
+  return Math.max(1, Math.min(MAX_SLIDE_COUNT, parsed));
+}
 
 function palette(style = "academic_blue") {
   if (style === "dark_tech") {
@@ -999,20 +1009,28 @@ function writeProject() {
 - Keep every slide native-editable through PPT Master SVG export.
 `);
 
+  const slideLimit = parseSlideLimit(deck.slideLimit ?? deck.slideCount ?? settings.slideCount ?? settings.page_count);
+  const wantsAppendix = includeComparisonAppendix();
+  const reservedSlides = 3 + (wantsAppendix ? 1 : 0);
+  const contentSlideLimit = Math.max(0, slideLimit - reservedSlides);
   const pages = [];
   pages.push({ name: svgName(1, "cover"), svg: coverSvg(), notes: "开场说明本次汇报聚焦上传主论文。" });
-  pages.push({ name: svgName(2, "agenda"), svg: agendaSvg(2), notes: "说明汇报顺序。" });
+  if (pages.length < slideLimit) {
+    pages.push({ name: svgName(2, "agenda"), svg: agendaSvg(2), notes: "说明汇报顺序。" });
+  }
   const sourceSlides = Array.isArray(deck.slides)
     ? deck.slides.filter((item) => includeComparisonAppendix() || !isComparisonText(`${item.eyebrow || ""} ${item.title || ""} ${item.subtitle || ""}`))
     : [];
-  const maxSlides = Math.max(2, Math.min(8, sourceSlides.length));
+  const maxSlides = Math.min(contentSlideLimit, sourceSlides.length);
   sourceSlides.slice(0, maxSlides).forEach((item, i) => {
     pages.push({ name: svgName(pages.length + 1, `content_${i + 1}`), svg: contentSvg(item, pages.length + 1, i), notes: notesText(item) });
   });
-  if (includeComparisonAppendix()) {
+  if (wantsAppendix && pages.length < slideLimit) {
     pages.push({ name: svgName(pages.length + 1, "comparison_appendix"), svg: comparisonSvg(pages.length + 1), notes: "对比附录仅供讨论参考。" });
   }
-  pages.push({ name: svgName(pages.length + 1, "discussion"), svg: discussionSvg(pages.length + 1), notes: "提出组会讨论问题。" });
+  if (pages.length < slideLimit) {
+    pages.push({ name: svgName(pages.length + 1, "discussion"), svg: discussionSvg(pages.length + 1), notes: "提出组会讨论问题。" });
+  }
 
   pages.forEach((page, i) => {
     fs.writeFileSync(path.join(svgDir, page.name), page.svg);

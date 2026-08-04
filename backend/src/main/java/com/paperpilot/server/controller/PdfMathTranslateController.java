@@ -37,7 +37,7 @@ public class PdfMathTranslateController {
         return service.status(workspaceId);
     }
 
-    @GetMapping("/{workspaceId}/dual.pdf")
+    @GetMapping({"/{workspaceId}/dual.pdf", "/{workspaceId}/dual"})
     public ResponseEntity<byte[]> dual(@PathVariable String workspaceId) {
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + workspaceId + "-dual.pdf\"")

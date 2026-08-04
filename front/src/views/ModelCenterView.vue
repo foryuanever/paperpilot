@@ -218,14 +218,21 @@
       </div>
       <div class="checkout-actions">
         <div class="pay-methods">
-          <button :class="{ active: provider === 'alipay' }" @click="provider = 'alipay'"><i>支</i>支付宝</button>
-          <button :class="{ active: provider === 'wechat' }" @click="provider = 'wechat'"><i>微</i>微信支付</button>
+          <button class="active" disabled style="display: flex; align-items: center; justify-content: center; gap: 4px;">
+            <svg class="wechat-pay-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 18px; height: 18px; fill: #07C160;">
+              <path d="M8.2 12.3c0-.3.2-.5.5-.5s.5.2.5.5-.2.5-.5.5-.5-.2-.5-.5zm2.8 0c0-.3.2-.5.5-.5s.5.2.5.5-.2.5-.5.5-.5-.2-.5-.5zM17 9.5c0-3-3.1-5.5-7-5.5S3 6.5 3 9.5c0 1.7 1 3.2 2.6 4.2l-.5 1.5 1.9-1c.9.3 1.9.4 3 .4 3.9 0 7-2.5 7-5.1zm5.2 4.3c0-2.4-2.2-4.4-5.2-4.4-.3 0-.6 0-.8.1 1 1.1 1.5 2.6 1.5 4.1 0 2.2-1.1 4.1-2.9 5.2l.4 1.3 1.6-.9c.7.2 1.5.3 2.3.3 3.1 0 5.2-2 5.2-4.2l-.1-1.5zm-3.2 1.9c0-.2.2-.4.4-.4s.4.2.4.4-.2.4-.4.4-.4-.2-.4-.4zm1.9 0c0-.2.2-.4.4-.4s.4.2.4.4-.2.4-.4.4-.4-.2-.4-.4z" fill="#07C160"/>
+            </svg>
+            微信支付
+          </button>
         </div>
         <button class="primary-button" :disabled="paying" @click="checkout">
           {{ paying ? "正在创建订单..." : `¥${planPrice(selectedPlanInfo)} 去支付` }}
         </button>
       </div>
-      <p v-if="paymentMessage" class="payment-message">{{ paymentMessage }}</p>
+      <p v-if="paymentMessage" class="payment-message" :class="{ success: paymentMessage.includes('成功') }">
+        <span v-if="paymentMessage.includes('成功')" class="success-check-icon">✓</span>
+        {{ paymentMessage }}
+      </p>
     </section>
 
     <!-- ── Orders Section ──────────────────────────────────────── -->
@@ -238,9 +245,9 @@
         <button class="ghost-button" :disabled="ordersLoading" @click="loadOrders">{{ ordersLoading ? "刷新中" : "刷新订单" }}</button>
       </div>
 
-      <div v-if="orders.length" class="orders-table">
+      <div v-if="filteredOrders.length" class="orders-table">
         <div class="order-head"><span>订单号</span><span>开通套餐</span><span>订单金额</span><span>状态</span><span>售后操作</span></div>
-        <div v-for="order in orders" :key="order.orderNo" class="order-item">
+        <div v-for="order in filteredOrders" :key="order.orderNo" class="order-item">
           <div><strong>{{ order.orderNo }}</strong><small>{{ formatDate(order.createdAt) }}</small></div>
           <span>{{ orderPlanName(order) }}</span>
           <strong>¥{{ Number(order.amount || 0).toFixed(2) }}</strong>
@@ -248,7 +255,7 @@
           <button class="ticket-button" @click="openTicket(order)">申请售后</button>
         </div>
       </div>
-      <div v-else class="orders-empty">还没有套餐订单。开通后这里会显示支付状态、工单和退款进度。</div>
+      <div v-else class="orders-empty">还没有已生效套餐订单。开通后这里会显示已支付和已退款的订单状态。</div>
     </section>
 
     <!-- Ticket Dialog -->
@@ -256,13 +263,44 @@
       <form method="dialog" @submit.prevent="submitTicket">
         <div class="dialog-heading">
           <div><span>售后工单</span><h2>{{ ticket.orderNo }}</h2></div>
-          <button class="close-button" value="cancel" aria-label="关闭">×</button>
+          <button type="button" class="close-button" aria-label="关闭" @click="ticketDialog?.close()">×</button>
         </div>
         <label>工单类型<select v-model="ticket.type"><option value="support">支付与开通问题</option><option value="refund">退款申请</option></select></label>
         <label>问题标题<input v-model.trim="ticket.subject" placeholder="例如：支付后会员未生效" /></label>
         <label>具体说明<textarea v-model.trim="ticket.detail" rows="5" placeholder="请写明订单、发生时间、问题现象和希望处理方式。"></textarea></label>
         <p v-if="ticketError" class="ticket-error">{{ ticketError }}</p>
         <button class="primary-button" :disabled="ticketSubmitting">{{ ticketSubmitting ? "提交中..." : "提交工单" }}</button>
+      </form>
+    </dialog>
+
+    <dialog ref="qrDialog" class="wechat-pay-dialog">
+      <form method="dialog" @submit.prevent>
+        <div class="dialog-heading">
+          <div><span>WECHAT PAY</span><h2>微信扫码支付</h2></div>
+          <button class="close-button" value="cancel" aria-label="关闭" @click="closeWechatPayDialog">×</button>
+        </div>
+        <div class="wechat-pay-body">
+          <div class="wechat-qr-shell">
+            <div v-if="currentPayOrder?.status === 'paid'" class="wechat-pay-success-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="success-checkmark-svg">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <img v-else-if="wechatQrCode" :src="wechatQrCode" alt="微信支付二维码" />
+            <div v-else class="wechat-qr-loading">生成二维码中...</div>
+          </div>
+          <div class="wechat-pay-meta">
+            <strong>{{ currentPayOrder?.orderNo || "待创建订单" }}</strong>
+            <span>{{ selectedPlanInfo.name }} · {{ cycleLabel(selectedCycle) }}</span>
+            <b v-if="currentPayOrder?.status !== 'paid'">¥{{ Number(currentPayOrder?.amount || planPrice(selectedPlanInfo) || 0).toFixed(2) }}</b>
+            <b v-else style="color: #10b981;">支付成功！</b>
+            <p>{{ paymentMessage || "请使用微信扫一扫完成支付，支付成功后会员权益会自动生效。" }}</p>
+          </div>
+        </div>
+        <div class="wechat-pay-actions">
+          <button type="button" class="ghost-button" @click="loadOrders">刷新订单</button>
+          <button type="button" class="primary-button" @click="closeWechatPayDialog">我知道了</button>
+        </div>
       </form>
     </dialog>
   </main>
@@ -272,8 +310,10 @@
 import { useScrollReveal } from "../composables/useScrollReveal";
 useScrollReveal(".model-center-page");
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import QRCode from "qrcode";
 import { useUsageStore } from "../stores/usage";
 import { paperpilotApi } from "../services/paperpilotApi";
+import { getCurrentApiBaseUrl } from "../services/apiClient";
 import goldCardReference from "../assets/membership/gold-card-cropped.jpg";
 import luckinLogo from "../assets/luckin-logo.png";
 
@@ -281,16 +321,23 @@ const usageStore = useUsageStore();
 const loading = ref(false);
 const paying = ref(false);
 const ordersLoading = ref(false);
-const provider = ref("alipay");
+const orders = ref([]);
+const filteredOrders = computed(() => {
+  return orders.value.filter(order => order.status === "paid" || order.status === "refunded");
+});
+const provider = ref("wechat");
 const selectedCycle = ref("monthly");
 const selectedPlan = ref("plus");
-const orders = ref([]);
 const paymentMessage = ref("");
 const ticketDialog = ref(null);
+const qrDialog = ref(null);
 const ticketSubmitting = ref(false);
 const ticketError = ref("");
 const nowTick = ref(Date.now());
+const wechatQrCode = ref("");
+const currentPayOrder = ref(null);
 let saleTimer = null;
+let paymentPollTimer = null;
 const ticket = ref({ orderNo: "", type: "support", subject: "", detail: "" });
 const teamMemberCount = ref(5);
 
@@ -427,6 +474,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (saleTimer) window.clearInterval(saleTimer);
+  stopPaymentPolling();
 });
 
 async function load() {
@@ -674,6 +722,14 @@ function statusLabel(status) {
 async function checkout() {
   paying.value = true;
   paymentMessage.value = "";
+  
+  const currentBaseUrl = getCurrentApiBaseUrl() || "";
+  if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(currentBaseUrl)) {
+    paymentMessage.value = `当前客户端连接的服务地址是：${currentBaseUrl}。本地测试服务器无法直接进行微信支付回调，因此无法生成订单。请回到客户端的登录页面，点击下方的【设置】按钮，将“云端服务地址”修改为您的公网服务器地址（例如 https://papersolver.cn/api），保存并重启客户端后再试。`;
+    paying.value = false;
+    return;
+  }
+
   try {
     const order = await paperpilotApi.createPaymentOrder({
       planId: selectedPlan.value,
@@ -682,14 +738,50 @@ async function checkout() {
       quantity: teamMemberCount.value,
       teamMemberCount: teamMemberCount.value
     });
+    currentPayOrder.value = order;
     paymentMessage.value = order.message || "订单已创建。";
-    if (order.paymentUrl) window.open(order.paymentUrl, "_blank", "noopener,noreferrer");
+    if (order.paymentUrl) {
+      wechatQrCode.value = await QRCode.toDataURL(order.paymentUrl, {
+        margin: 1,
+        width: 260,
+        color: { dark: "#111827", light: "#ffffff" },
+      });
+      qrDialog.value?.showModal();
+      startPaymentPolling(order.orderNo);
+    }
     await loadOrders();
   } catch (error) {
     paymentMessage.value = error?.response?.data?.message || "创建订单失败，请稍后重试。";
   } finally {
     paying.value = false;
   }
+}
+
+function startPaymentPolling(orderNo) {
+  stopPaymentPolling();
+  paymentPollTimer = window.setInterval(async () => {
+    await loadOrders();
+    const latest = orders.value.find((item) => item.orderNo === orderNo);
+    if (latest) currentPayOrder.value = latest;
+    if (latest?.status === "paid") {
+      paymentMessage.value = "微信支付成功，会员权益已生效。";
+      stopPaymentPolling();
+      await usageStore.load();
+      setTimeout(() => qrDialog.value?.close(), 900);
+    }
+  }, 3000);
+}
+
+function stopPaymentPolling() {
+  if (paymentPollTimer) {
+    window.clearInterval(paymentPollTimer);
+    paymentPollTimer = null;
+  }
+}
+
+function closeWechatPayDialog() {
+  stopPaymentPolling();
+  qrDialog.value?.close();
 }
 
 function openTicket(order) {
@@ -757,6 +849,41 @@ async function submitTicket() {
   --sh-sm: 0 2px 10px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
   --sh-md: 0 10px 32px rgba(0,0,0,.45);
   --sh-lg: 0 20px 60px rgba(0,0,0,.65);
+}
+
+.ticket-dialog {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 16px;
+  color: var(--c-text);
+  width: 90%;
+  max-width: 480px;
+  padding: 24px;
+}
+.wechat-pay-success-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 200px;
+  height: 200px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 12px;
+  color: #10b981;
+}
+.success-checkmark-svg {
+  width: 80px;
+  height: 80px;
+}
+.payment-message.success {
+  color: #10b981 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: bold;
+}
+.success-check-icon {
+  font-size: 1.2rem;
 }
 
 /* Ambient Orbs */
@@ -1669,6 +1796,10 @@ async function submitTicket() {
   gap: 6px;
   transition: all 0.18s;
 }
+.pay-methods button:disabled {
+  cursor: default;
+  opacity: 1;
+}
 .pay-methods button.active {
   border-color: var(--c-accent);
   color: var(--c-accent);
@@ -1777,7 +1908,7 @@ async function submitTicket() {
   width: fit-content;
 }
 .status.paid, .status.success { background: rgba(16, 185, 129, 0.12); color: #10b981; }
-.status.pending { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+.status.pending, .status.pending_payment, .status.created, .status.config_required { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
 .status.failed, .status.cancelled { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
 
 .ticket-button {
@@ -1815,6 +1946,99 @@ async function submitTicket() {
   padding: 28px 32px;
   width: min(480px, calc(100vw - 32px));
 }
+
+.wechat-pay-dialog {
+  border: 1px solid var(--c-border);
+  border-radius: 24px;
+  background: var(--c-surface);
+  color: var(--c-text);
+  box-shadow: var(--sh-lg);
+  padding: 28px;
+  width: min(560px, calc(100vw - 32px));
+}
+
+.wechat-pay-dialog::backdrop {
+  background: rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(8px);
+}
+
+.wechat-pay-body {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 22px;
+  align-items: center;
+}
+
+.wechat-qr-shell {
+  width: 220px;
+  height: 220px;
+  border-radius: 20px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+  display: grid;
+  place-items: center;
+  padding: 14px;
+}
+
+.wechat-qr-shell img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.wechat-qr-loading {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.wechat-pay-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wechat-pay-meta strong {
+  font-size: 12px;
+  color: var(--c-muted);
+  word-break: break-all;
+}
+
+.wechat-pay-meta span {
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.wechat-pay-meta b {
+  font-size: 34px;
+  line-height: 1;
+  color: #22c55e;
+}
+
+.wechat-pay-meta p {
+  margin: 4px 0 0;
+  color: var(--c-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.wechat-pay-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+@media (max-width: 640px) {
+  .wechat-pay-body {
+    grid-template-columns: 1fr;
+  }
+  .wechat-qr-shell {
+    margin: 0 auto;
+  }
+}
+
 .ticket-dialog::backdrop {
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(6px);

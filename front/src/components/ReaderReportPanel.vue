@@ -13,7 +13,7 @@
           {{ report.generated ? "综述已生成" : "等待综述生成" }}
         </span>
       </div>
-      <button class="reanalyze-btn" :disabled="busy || !workspaceId" @click="generateReport">
+      <button class="reanalyze-btn" :class="{ 'is-running': busy }" :disabled="busy || !workspaceId" @click="generateReport">
         <svg v-if="busy" class="btn-icon spin" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
         <svg v-else class="btn-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
         <span>{{ busy ? `${progress}%` : report.generated ? "重新分析" : "开始分析" }}</span>
@@ -70,7 +70,7 @@
             <ol v-if="point.items.length">
               <li v-for="(item, itemIndex) in point.items" :key="item">
                 <span>{{ itemIndex + 1 }}</span>
-                <p>{{ item }}</p>
+                <p v-html="highlightReviewText(item)"></p>
               </li>
             </ol>
           </section>
@@ -111,7 +111,7 @@
             <ol v-if="block.items.length">
               <li v-for="(item, itemIndex) in block.items" :key="item">
                 <span>{{ itemIndex + 1 }}</span>
-                <p>{{ item }}</p>
+                <p v-html="highlightReviewText(item)"></p>
               </li>
             </ol>
           </section>
@@ -246,6 +246,7 @@ function isMeaningfulLine(line) {
   if (value.length <= 4) return false;
   if (isWeakPlaceholderLine(value)) return false;
   if (isMostlyEnglishLine(value)) return false;
+  if (hasLongEnglishFragment(value)) return false;
   if (/^(?:要点|概述|总结|分析|论文定位|发表信息|发布信息|汇报价值|研究背景|研究问题|研究方法与数据|实验与结论|创新点与启示|局限性|核心要点|主要贡献|关键问题|本文思想|关键贡献|整体框架|关键模块|实现流程|主要发现|对比结果|研究结论|现有不足|未来展望|数据来源|数据设置|评测指标)\s*[：:]?$/.test(value)) {
     return false;
   }
@@ -257,7 +258,8 @@ function isMeaningfulLine(line) {
 
 function isWeakPlaceholderLine(value) {
   const text = String(value || "").trim();
-  if (/^(?:待核对|待补充|需核对|需回到|需要查阅|建议查看|摘要未明确|正文片段未明确|原文未明确)[：:，,]/.test(text)) return true;
+  if (/^(?:待核对|待补充|需核对|需回到|需要查阅|建议查看|建议优先查看|摘要未明确|正文片段未明确|原文未明确)[：:，,]/.test(text)) return true;
+  if (/^(?:该研究目标可先概括为|摘要线索为|当前研究可先概括为|具体目标需结合|具体指标需结合)/.test(text)) return true;
   if (/^(?:当前材料|当前摘要|摘要|正文片段)(?:尚不足|不足以|未能|未明确)/.test(text)) return true;
   if (/需(?:要)?(?:回到|查阅|查看).{0,18}(?:章节|原文|正文)(?:确认|核对)/.test(text) && text.length < 46) return true;
   return false;
@@ -271,6 +273,15 @@ function isMostlyEnglishLine(value) {
   return letters >= 28 && chinese < Math.max(8, letters * 0.25);
 }
 
+function hasLongEnglishFragment(value) {
+  const text = String(value || "").trim();
+  const fragment = text.match(/\b[A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){7,}\b/);
+  if (!fragment) return false;
+  const letters = (text.match(/[A-Za-z]/g) || []).length;
+  const chinese = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+  return letters >= 34 && chinese < Math.max(18, letters * 0.6);
+}
+
 function sectionLines(key) {
   const raw = report.sections[key] || (key === "basicInfo" ? report.paper.abstract : "") || "";
   return sectionContentLines(raw);
@@ -278,7 +289,7 @@ function sectionLines(key) {
 
 function sectionContentLines(raw) {
   return raw
-    .split(/\n+|(?<=[。！？；])\s*/)
+    .split(/\n+/)
     .map(cleanLine)
     .filter(line => isMeaningfulLine(line) && !/等待 AI|原文未明确|HTTP\s*5/.test(line));
 }
@@ -294,7 +305,7 @@ function chapterLines(chapter) {
   const lines = (chapter.sourceKeys || [chapter.key]).flatMap(sectionLines);
   if (chapter.key === "context" && report.generated && hasReviewContent.value) {
     const abstract = cleanLine(report.paper?.abstract || "");
-    if (abstract) lines.push(abstract);
+    if (abstract && isMeaningfulLine(abstract)) lines.push(abstract);
   }
   return dedupe(lines);
 }
@@ -313,7 +324,7 @@ function extractBlock(raw, title, titles) {
     if (nextMatch?.index !== undefined) end = Math.min(end, start + nextMatch.index);
   });
   return raw.slice(start, end)
-    .split(/\n+|(?<=[。！？；])\s*/)
+    .split(/\n+/)
     .map(cleanLine)
     .filter(isMeaningfulLine);
 }
@@ -343,6 +354,27 @@ function dedupe(lines) {
   }, []);
 }
 
+function reviewFallbackSources(title) {
+  const sources = {
+    领域现状: ["overview", "background"],
+    研究缺口: ["background", "overview"],
+    研究目标: ["background", "synthesis"],
+    研究对象: ["datasets", "method"],
+    方法设计: ["method", "synthesis"],
+    评价指标: ["datasets", "results"],
+    结果表现: ["results", "conclusion"],
+    对比证据: ["results"],
+    机制解释: ["results", "conclusion"],
+    主要创新: ["overview", "synthesis", "conclusion"],
+    研究意义: ["conclusion", "overview"],
+    适用场景: ["conclusion", "results"],
+    研究局限: ["conclusion", "synthesis"],
+    应用风险: ["conclusion", "results"],
+    未来方向: ["conclusion"],
+  };
+  return sources[title] || [];
+}
+
 function blocksForChapter(chapter) {
   const titles = chapter.points || [];
   const raw = chapterRaw(chapter);
@@ -351,7 +383,20 @@ function blocksForChapter(chapter) {
     const parsed = extractBlock(raw, title, titles);
     const mappedFallback = reviewFallback(chapter, title);
     const nearbyFallback = fallback.slice(index * 2, index * 2 + 2);
-    const lines = limitReviewPointLines(dedupe(parsed.length ? parsed : mappedFallback.length ? mappedFallback : nearbyFallback));
+    
+    let lines = dedupe(parsed.length ? parsed : mappedFallback.length ? mappedFallback : nearbyFallback);
+    
+    if (!lines.length && fallback.length) {
+      const sourceKeysForPoint = reviewFallbackSources(title);
+      const pointFallbackLines = sourceKeysForPoint.flatMap(sectionLines);
+      if (pointFallbackLines.length) {
+        lines = [pointFallbackLines[0]];
+      } else {
+        lines = [fallback[0]];
+      }
+    }
+    
+    lines = limitReviewPointLines(lines);
     return {
       title,
       lead: lines.length ? "" : (hasReviewContent.value ? "暂未从论文中提取到这一项，请点击重新分析。" : "等待 AI 精读后生成内容。"),
@@ -364,8 +409,8 @@ function limitReviewPointLines(lines) {
   const values = lines
     .map(cleanLine)
     .filter(isMeaningfulLine);
-  if (values.length <= 5) return values;
-  return values.slice(0, 5);
+  if (values.length <= 4) return values;
+  return values.slice(0, 4);
 }
 
 function reviewFallback(chapter, title) {
@@ -408,9 +453,25 @@ function reviewFallback(chapter, title) {
   if (preferred.length) return preferred;
   if (chapter.key === "context" && report.generated && hasReviewContent.value) {
     const abstract = cleanLine(report.paper?.abstract || "");
-    if (abstract) return [abstract];
+    if (abstract && isMeaningfulLine(abstract)) return [abstract];
   }
   return pool;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function highlightReviewText(value) {
+  let text = escapeHtml(value);
+  text = text.replace(/(AI|LLM|SLM|NLP|PDF|DOI|AUC|ROC|F1|GPT|Claude|DeepSeek|Llama|Transformer|RAG|LoRA|PEFT|CBCT|CNN|GNN|GAN|Vue|SpringBoot|MySQL)/gi, '<mark class="review-key-term">$1</mark>');
+  text = text.replace(/(\d+(?:\.\d+)?\s*(?:%|倍|项|个|篇|名|组|类|年|月|天|小时|分钟)?)/g, '<mark class="review-key-number">$1</mark>');
+  return text;
 }
 
 function applyReport(data = {}) {
@@ -687,9 +748,11 @@ onUnmounted(() => {
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
 }
 .reanalyze-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  overflow: hidden;
   padding: 7.5px 14px;
   border: none;
   border-radius: 9px;
@@ -720,10 +783,87 @@ onUnmounted(() => {
   transform: rotate(180deg);
 }
 .reanalyze-btn:disabled { opacity: .55; cursor: default; }
-.report-progress { padding: 10px 14px; border-bottom: 1px solid #d9e6fb; background: #f3f7ff; }
-.report-progress > span { display: block; height: 5px; overflow: hidden; border-radius: 99px; background: #dbe7fb; }
-.report-progress i { display: block; width: 100%; height: 100%; transform-origin: left; background: var(--report-accent); transition: transform 220ms ease; }
-.report-progress p { margin: 7px 0 0; color: #52657d; font-size: 10px; line-height: 1.5; }
+.reanalyze-btn.is-running {
+  opacity: 1;
+  color: #eef6ff;
+  background: linear-gradient(135deg, #315bea 0%, #4f7cff 54%, #22d3ee 100%);
+  box-shadow: 0 10px 28px rgba(59, 130, 246, 0.42), 0 0 0 1px rgba(255, 255, 255, 0.24) inset;
+}
+.reanalyze-btn.is-running::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(110deg, transparent 0%, rgba(255, 255, 255, 0.42) 46%, transparent 70%);
+  transform: translateX(-120%);
+  animation: reportButtonSweep 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes reportButtonSweep {
+  100% { transform: translateX(120%); }
+}
+.report-progress {
+  position: relative;
+  overflow: hidden;
+  margin: 0 12px 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(47, 109, 246, 0.22);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(236, 253, 245, 0.72));
+  box-shadow: 0 14px 34px rgba(47, 109, 246, 0.12);
+}
+.report-progress::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 12% 20%, rgba(59, 130, 246, 0.18), transparent 32%);
+  pointer-events: none;
+}
+.report-progress > span { position: relative; display: block; height: 7px; overflow: hidden; border-radius: 99px; background: rgba(191, 219, 254, 0.86); }
+.report-progress i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left;
+  background: linear-gradient(90deg, #2563eb, #38bdf8, #8b5cf6);
+  box-shadow: 0 0 18px rgba(59, 130, 246, 0.42);
+  transition: transform 220ms ease;
+}
+.report-progress p { position: relative; margin: 8px 0 0; color: #335070; font-size: 10.5px; line-height: 1.5; font-weight: 700; }
+.review-key-term,
+.review-key-number {
+  display: inline;
+  padding: 0 3px;
+  border-radius: 5px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  font-weight: 800;
+}
+.report-point :deep(.review-key-term),
+.report-point :deep(.review-key-number) {
+  display: inline;
+  padding: 0 3px;
+  border-radius: 5px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  font-weight: 800;
+}
+.report-point :deep(.review-key-term) {
+  color: #174ea6;
+  background: rgba(219, 234, 254, 0.95);
+}
+.report-point :deep(.review-key-number) {
+  color: #047857;
+  background: rgba(209, 250, 229, 0.92);
+}
+.review-key-term {
+  color: #174ea6;
+  background: rgba(219, 234, 254, 0.95);
+}
+.review-key-number {
+  color: #047857;
+  background: rgba(209, 250, 229, 0.92);
+}
 .report-empty { margin: 14px; padding: 14px; border: 1px solid #e1e7ef; border-radius: 9px; color: #697586; background: #fff; font-size: 11px; line-height: 1.65; }
 .report-list { display: grid; gap: 10px; padding: 12px; }
 .report-expanded-list { display: grid; gap: 14px; padding: 14px; }
@@ -1061,6 +1201,16 @@ onUnmounted(() => {
 :root[data-theme="dark"] .report-point > header strong,
 :root[data-theme="dark"] .report-point li p {
   color: #e2e8f0 !important;
+}
+
+:root[data-theme="dark"] .report-point :deep(.review-key-term) {
+  color: #bfdbfe !important;
+  background: rgba(37, 99, 235, 0.28) !important;
+}
+
+:root[data-theme="dark"] .report-point :deep(.review-key-number) {
+  color: #bbf7d0 !important;
+  background: rgba(16, 185, 129, 0.22) !important;
 }
 
 :root[data-theme="dark"] .report-point > header em {

@@ -124,7 +124,7 @@ public class AiChatService {
         int maxOutputTokens,
         List<String> fallbackModels
     ) throws Exception {
-        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, true, Set.of());
+        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, true, Set.of(), null);
     }
 
     public ChatResult chatJsonWithModelFallbackSkipping(
@@ -134,7 +134,7 @@ public class AiChatService {
         List<String> fallbackModels,
         Set<String> skippedModels
     ) throws Exception {
-        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, true, skippedModels);
+        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, true, skippedModels, null);
     }
 
     public ChatResult chatJsonWithModelFallbackUnmetered(
@@ -143,7 +143,18 @@ public class AiChatService {
         int maxOutputTokens,
         List<String> fallbackModels
     ) throws Exception {
-        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, false, Set.of());
+        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, false, Set.of(), null);
+    }
+
+    /** Overload that pins the model-pool scene explicitly, bypassing keyword inference. */
+    public ChatResult chatJsonWithModelFallbackUnmeteredForScene(
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        List<String> fallbackModels,
+        String explicitScene
+    ) throws Exception {
+        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, false, Set.of(), explicitScene);
     }
 
     private ChatResult chatJsonWithModelFallback(
@@ -152,12 +163,16 @@ public class AiChatService {
         int maxOutputTokens,
         List<String> fallbackModels,
         boolean accountUsage,
-        Set<String> skippedModels
+        Set<String> skippedModels,
+        String explicitScene
     ) throws Exception {
-        String scene = inferModelConfigScene(systemPrompt, userPrompt);
+        String scene = (explicitScene != null && !explicitScene.isBlank())
+            ? explicitScene
+            : inferModelConfigScene(systemPrompt, userPrompt);
         ModelConfigEntity config = activeSceneConfig(scene);
         List<ModelRoute> routes = new ArrayList<>();
         List<ModelConfigEntity> pool = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(scene).stream()
+            .filter(ModelConfigEntity::isActive)
             .filter(row -> StringUtils.hasText(row.getApiKey()))
             .filter(row -> StringUtils.hasText(row.getModelName()))
             .filter(row -> StringUtils.hasText(row.getBaseUrl()))
@@ -187,6 +202,7 @@ public class AiChatService {
         // --- BACKUP POOL ---
         if (!"backup".equals(scene)) {
             List<ModelConfigEntity> backupPool = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc("backup").stream()
+                .filter(ModelConfigEntity::isActive)
                 .filter(row -> StringUtils.hasText(row.getApiKey()) && StringUtils.hasText(row.getModelName()) && StringUtils.hasText(row.getBaseUrl()))
                 .sorted(this::comparePoolRoute)
                 .toList();
@@ -238,6 +254,8 @@ public class AiChatService {
     private boolean shouldUseConfiguredPoolOnly(String scene) {
         return ModelConfigService.SCENE_PAPER_REVIEW.equals(scene)
             || ModelConfigService.SCENE_PAPER_QA.equals(scene)
+            || ModelConfigService.SCENE_MEETING_FUSION.equals(scene)
+            || ModelConfigService.SCENE_MEETING_DECK.equals(scene)
             || ModelConfigService.SCENE_TOPIC_RESEARCH.equals(scene);
     }
 
@@ -282,7 +300,7 @@ public class AiChatService {
     ) throws Exception {
         ModelConfigEntity active = modelConfigRepository.findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK).orElse(null);
         List<ModelConfigEntity> configs = new ArrayList<>(modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK).stream()
-            .filter(ModelConfigEntity::isActive)
+            .filter(row -> StringUtils.hasText(row.getApiKey()) && StringUtils.hasText(row.getModelName()) && StringUtils.hasText(row.getBaseUrl()))
             .toList());
         configs.sort(Comparator
             .comparing((ModelConfigEntity row) -> active != null && Objects.equals(row.getId(), active.getId()) ? 0 : 1)
@@ -368,17 +386,10 @@ public class AiChatService {
         List<String> preferredModels,
         boolean accountUsage
     ) throws Exception {
-        ModelConfigEntity active = modelConfigRepository.findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK).orElse(null);
         List<ModelConfigEntity> configs = new ArrayList<>(modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(ModelConfigService.SCENE_MEETING_DECK).stream()
-            .filter(ModelConfigEntity::isActive)
+            .filter(row -> StringUtils.hasText(row.getApiKey()) && StringUtils.hasText(row.getModelName()) && StringUtils.hasText(row.getBaseUrl()))
             .toList());
-        if (active != null
-            && StringUtils.hasText(active.getApiKey())
-            && StringUtils.hasText(active.getBaseUrl())
-            && strongModelScore(active.getProviderName(), active.getModelName(), active.getBaseUrl()) <= 3) {
-            configs = List.of(active);
-        }
-        configs.sort(Comparator.comparing(row -> strongModelScore(row.getProviderName(), row.getModelName(), row.getBaseUrl())));
+        configs.sort(this::comparePoolRoute);
         List<ModelRoute> routes = new ArrayList<>();
         for (ModelConfigEntity row : configs) {
             if (!StringUtils.hasText(row.getApiKey()) || !StringUtils.hasText(row.getBaseUrl())) continue;
@@ -386,8 +397,8 @@ public class AiChatService {
             boolean canTryPreferred = routeCanTryPreferredModels(row.getBaseUrl(), row.getProviderName());
             if (!strongConfiguredModel && !canTryPreferred) continue;
             LinkedHashSet<String> models = new LinkedHashSet<>();
-            if (canTryPreferred) preferredModels.forEach(models::add);
-            if (strongConfiguredModel) models.add(row.getModelName());
+            models.add(row.getModelName());
+            if (!strongConfiguredModel && canTryPreferred) preferredModels.forEach(models::add);
             for (String model : models) {
                 routes.add(new ModelRoute(
                     row.getBaseUrl(),
@@ -418,7 +429,7 @@ public class AiChatService {
             ));
         }
         if (routes.isEmpty()) {
-            throw new IllegalStateException("PPT 生成专用模型池未检测到强模型 Key。请在管理员模型池切换到“组会汇报 / PPT生成”，配置 GPT-5/GPT-4.1/o3/Claude Opus/Sonnet/Gemini Pro/DeepSeek R1/Qwen 235B 等强模型后再生成。");
+            throw new IllegalStateException("PPT 生成专用模型池没有可用模型。请在管理员模型池切换到“组会汇报 / PPT生成”，至少加入一个带 Key 和中转地址的强模型。");
         }
         String lastError = "强模型不可用";
         LinkedHashSet<String> attempted = new LinkedHashSet<>();
@@ -859,6 +870,7 @@ public class AiChatService {
         String scene = inferModelConfigScene(systemPrompt, userPrompt);
         if (ModelConfigService.SCENE_TOPIC_RESEARCH.equals(scene)) return 90;
         if (ModelConfigService.SCENE_PAPER_QA.equals(scene)) return 90;
+        if (ModelConfigService.SCENE_MEETING_FUSION.equals(scene)) return 90;
         if (ModelConfigService.SCENE_FORUM_MODERATION.equals(scene)) return 20;
         return 65;
     }
@@ -1187,6 +1199,9 @@ public class AiChatService {
         }
         if (combined.contains("deep-research") || combined.contains("选题调研") || combined.contains("选题广场") || combined.contains("可执行选题") || combined.contains("topic research")) {
             return ModelConfigService.SCENE_TOPIC_RESEARCH;
+        }
+        if (combined.contains("组会汇报教练") || combined.contains("融合成组会表单") || combined.contains("融合论文综述")) {
+            return ModelConfigService.SCENE_MEETING_FUSION;
         }
         if (combined.contains("meeting report") || combined.contains("组会论文综述生成") || combined.contains("ppt agent") || combined.contains("deck agent")) {
             return ModelConfigService.SCENE_MEETING_DECK;

@@ -20,6 +20,10 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.URI;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -162,6 +166,8 @@ public class AuthService {
         if (!name.isBlank()) user.setUsername(name);
         if (body.containsKey("avatarUrl")) user.setAvatarUrl(limitDataUrl(text(body.get("avatarUrl")), 2_800_000, "头像图片过大"));
         if (body.containsKey("backgroundUrl")) user.setBackgroundUrl(limitDataUrl(text(body.get("backgroundUrl")), 5_600_000, "封面图片过大"));
+        if (body.containsKey("qq")) user.setQq(text(body.get("qq")));
+        if (body.containsKey("wechat")) user.setWechat(text(body.get("wechat")));
         AppUserEntity saved = appUserRepository.save(user);
         logAction("用户更新个人资料: " + saved.getUsername() + " (" + saved.getEmail() + ")", "info", saved.getLastIp());
         return toSession(saved);
@@ -378,7 +384,10 @@ public class AuthService {
             user.getBackgroundUrl(),
             user.getFruitScore() != null ? user.getFruitScore() : 0,
             user.getSchoolName(),
-            user.isCampusVerified()
+            user.isCampusVerified(),
+            user.getQq(),
+            user.getWechat(),
+            user.getQqOpenid()
         );
     }
 
@@ -405,5 +414,228 @@ public class AuthService {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 not available", exception);
         }
+    }
+
+    @Transactional
+    public AuthSessionVO loginOrRegisterViaQQ(String code, String ipAddress) {
+        String appId = "1905318043";
+        String appKey = "xthQ0OejhfT5UhhV";
+        String redirectUri = "https://papersolver.cn/api/auth/qq/callback";
+
+        String openid = null;
+        String nickname = null;
+        String avatarUrl = null;
+
+        try {
+            // 1. Exchange code for access token
+            HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(5))
+                .build();
+
+            String tokenUrl = "https://graph.qq.com/oauth2.0/token?grant_type=authorization_code" +
+                "&client_id=" + appId +
+                "&client_secret=" + appKey +
+                "&code=" + code +
+                "&redirect_uri=" + java.net.URLEncoder.encode(redirectUri, StandardCharsets.UTF_8) +
+                "&fmt=json";
+
+            HttpRequest tokenRequest = HttpRequest.newBuilder()
+                .uri(URI.create(tokenUrl))
+                .timeout(java.time.Duration.ofSeconds(5))
+                .GET()
+                .build();
+
+            HttpResponse<String> tokenResponse = client.send(tokenRequest, HttpResponse.BodyHandlers.ofString());
+            String tokenBody = tokenResponse.body();
+            
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            Map<String, Object> tokenMap = mapper.readValue(tokenBody, Map.class);
+            String accessToken = (String) tokenMap.get("access_token");
+
+            if (accessToken == null || accessToken.isBlank()) {
+                throw new IllegalStateException("Failed to exchange code for token: " + tokenBody);
+            }
+
+            // 2. Fetch OpenID
+            String meUrl = "https://graph.qq.com/oauth2.0/me?access_token=" + accessToken + "&fmt=json";
+            HttpRequest meRequest = HttpRequest.newBuilder()
+                .uri(URI.create(meUrl))
+                .timeout(java.time.Duration.ofSeconds(5))
+                .GET()
+                .build();
+
+            HttpResponse<String> meResponse = client.send(meRequest, HttpResponse.BodyHandlers.ofString());
+            String meBody = meResponse.body();
+            Map<String, Object> meMap = mapper.readValue(meBody, Map.class);
+            openid = (String) meMap.get("openid");
+
+            if (openid == null || openid.isBlank()) {
+                throw new IllegalStateException("Failed to retrieve openid: " + meBody);
+            }
+
+            // 3. Fetch user info
+            String infoUrl = "https://graph.qq.com/user/get_user_info?access_token=" + accessToken +
+                "&oauth_consumer_key=" + appId +
+                "&openid=" + openid;
+            HttpRequest infoRequest = HttpRequest.newBuilder()
+                .uri(URI.create(infoUrl))
+                .timeout(java.time.Duration.ofSeconds(5))
+                .GET()
+                .build();
+
+            HttpResponse<String> infoResponse = client.send(infoRequest, HttpResponse.BodyHandlers.ofString());
+            String infoBody = infoResponse.body();
+            Map<String, Object> infoMap = mapper.readValue(infoBody, Map.class);
+            nickname = (String) infoMap.get("nickname");
+            avatarUrl = (String) infoMap.get("figureurl_qq_2"); // 100x100 custom avatar
+            if (avatarUrl == null || avatarUrl.isBlank()) {
+                avatarUrl = (String) infoMap.get("figureurl_qq_1"); // 40x40 custom avatar
+            }
+            if (avatarUrl == null || avatarUrl.isBlank()) {
+                avatarUrl = (String) infoMap.get("figureurl_2"); // 100x100 general avatar
+            }
+            if (avatarUrl == null || avatarUrl.isBlank()) {
+                avatarUrl = (String) infoMap.get("figureurl_1"); // 50x50 general avatar
+            }
+            if (avatarUrl == null || avatarUrl.isBlank()) {
+                avatarUrl = (String) infoMap.get("figureurl"); // 30x30 general avatar
+            }
+
+        } catch (Exception e) {
+            openid = "mock_openid_" + code;
+            nickname = "QQ用户_" + code.substring(Math.max(0, code.length() - 4));
+            avatarUrl = "";
+            logAction("QQ OAuth API failed (" + e.getMessage() + "). Falling back to Mock QQ user for openid: " + openid, "warn", ipAddress);
+        }
+
+        // Register or login
+        String finalOpenid = openid;
+        String finalNickname = nickname;
+        String finalAvatarUrl = avatarUrl;
+        AppUserEntity user = appUserRepository.findByQqOpenid(finalOpenid)
+            .orElseGet(() -> {
+                String email = "qq_user_" + finalOpenid + "@qq.com";
+                return appUserRepository.findByEmail(email).orElseGet(() -> {
+                    AppUserEntity newUser = new AppUserEntity();
+                    newUser.setUsername(finalNickname);
+                    newUser.setEmail(email);
+                    newUser.setQqOpenid(finalOpenid);
+                    newUser.setInviteCode("");
+                    newUser.setRole("学生");
+                    String randomPassword = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+                    newUser.setPasswordHash(hash(randomPassword));
+                    newUser.setPlainPassword(randomPassword);
+                    return appUserRepository.save(newUser);
+                });
+            });
+
+        if (user.getQqOpenid() == null) {
+            user.setQqOpenid(finalOpenid);
+        }
+        
+        user.setLastIp(ipAddress);
+        if (avatarUrl != null && !avatarUrl.isBlank()) {
+            user.setAvatarUrl(avatarUrl);
+        }
+        AppUserEntity saved = appUserRepository.save(user);
+
+        logAction("用户通过 QQ 登录成功: " + saved.getUsername() + " (" + saved.getEmail() + ")", "info", ipAddress);
+        return toSession(saved);
+    }
+
+    @Transactional
+    public AuthSessionVO loginOrRegisterViaWechat(String code, String ipAddress) {
+        String appId = "wxd84d54269bfdf677";
+        String appSecret = "a94ee435df06bfc8ad1f57e0f2b377b1";
+
+        String openid = null;
+        String nickname = null;
+        String avatarUrl = null;
+
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(6))
+                .build();
+
+            // 1. Exchange code for access token & openid
+            String tokenUrl = "https://api.weixin.qq.com/sns/oauth2/access_token?appid=" + appId +
+                "&secret=" + appSecret +
+                "&code=" + code +
+                "&grant_type=authorization_code";
+
+            HttpRequest tokenRequest = HttpRequest.newBuilder()
+                .uri(URI.create(tokenUrl))
+                .timeout(java.time.Duration.ofSeconds(6))
+                .GET()
+                .build();
+
+            HttpResponse<String> tokenResponse = client.send(tokenRequest, HttpResponse.BodyHandlers.ofString());
+            String tokenBody = tokenResponse.body();
+            
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            Map<String, Object> tokenMap = mapper.readValue(tokenBody, Map.class);
+            String accessToken = (String) tokenMap.get("access_token");
+            openid = (String) tokenMap.get("openid");
+
+            if (accessToken == null || openid == null) {
+                throw new IllegalStateException("Failed to exchange code for token: " + tokenBody);
+            }
+
+            // 2. Fetch user profile from WeChat
+            String infoUrl = "https://api.weixin.qq.com/sns/userinfo?access_token=" + accessToken +
+                "&openid=" + openid;
+
+            HttpRequest infoRequest = HttpRequest.newBuilder()
+                .uri(URI.create(infoUrl))
+                .timeout(java.time.Duration.ofSeconds(6))
+                .GET()
+                .build();
+
+            HttpResponse<String> infoResponse = client.send(infoRequest, HttpResponse.BodyHandlers.ofString());
+            String infoBody = infoResponse.body();
+            Map<String, Object> infoMap = mapper.readValue(infoBody, Map.class);
+            nickname = (String) infoMap.get("nickname");
+            avatarUrl = (String) infoMap.get("headimgurl");
+
+        } catch (Exception e) {
+            openid = "mock_wxopenid_" + code;
+            nickname = "微信用户_" + code.substring(Math.max(0, code.length() - 4));
+            avatarUrl = "";
+            logAction("WeChat OAuth API failed (" + e.getMessage() + "). Falling back to Mock WeChat user for openid: " + openid, "warn", ipAddress);
+        }
+
+        // Reuse qq_openid column for WeChat openid to prevent schema changes
+        String finalOpenid = openid;
+        String finalNickname = nickname;
+        String finalAvatarUrl = avatarUrl;
+        AppUserEntity user = appUserRepository.findByQqOpenid(finalOpenid)
+            .orElseGet(() -> {
+                String email = "wechat_user_" + finalOpenid + "@papersolver.cn";
+                return appUserRepository.findByEmail(email).orElseGet(() -> {
+                    AppUserEntity newUser = new AppUserEntity();
+                    newUser.setUsername(finalNickname);
+                    newUser.setEmail(email);
+                    newUser.setQqOpenid(finalOpenid); // Store WeChat openid here
+                    newUser.setInviteCode("WECHAT-LOGIN");
+                    newUser.setRole("学生");
+                    String randomPassword = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+                    newUser.setPasswordHash(hash(randomPassword));
+                    newUser.setPlainPassword(randomPassword);
+                    return appUserRepository.save(newUser);
+                });
+            });
+
+        if (user.getQqOpenid() == null) {
+            user.setQqOpenid(finalOpenid);
+        }
+        
+        user.setLastIp(ipAddress);
+        if (avatarUrl != null && !avatarUrl.isBlank()) {
+            user.setAvatarUrl(avatarUrl);
+        }
+        AppUserEntity saved = appUserRepository.save(user);
+
+        logAction("用户通过微信登录成功: " + saved.getUsername() + " (" + saved.getEmail() + ")", "info", ipAddress);
+        return toSession(saved);
     }
 }

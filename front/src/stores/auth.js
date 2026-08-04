@@ -40,7 +40,7 @@ export const useAuthStore = defineStore("auth", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
   }
 
-  const profile = computed(() => session.user || { name: "Guest", email: "", inviteCode: "", avatarUrl: "", backgroundUrl: "", schoolName: "", campusVerified: false });
+  const profile = computed(() => session.user || { name: "Guest", email: "", inviteCode: "", avatarUrl: "", backgroundUrl: "", schoolName: "", campusVerified: false, qq: "", wechat: "", qqOpenid: "" });
   const unreadCount = computed(() => session.notifications.length);
 
   function persist() {
@@ -70,6 +70,8 @@ export const useAuthStore = defineStore("auth", () => {
       if (payload.name !== undefined) session.user.name = payload.name;
       if (payload.avatarUrl !== undefined) session.user.avatarUrl = payload.avatarUrl;
       if (payload.backgroundUrl !== undefined) session.user.backgroundUrl = payload.backgroundUrl;
+      if (payload.qq !== undefined) session.user.qq = payload.qq;
+      if (payload.wechat !== undefined) session.user.wechat = payload.wechat;
       persist();
       try {
         const saved = await paperpilotApi.updateProfile(payload);
@@ -85,6 +87,9 @@ export const useAuthStore = defineStore("auth", () => {
           fruitScore: saved.fruitScore || session.user.fruitScore || 0,
           schoolName: saved.schoolName || session.user.schoolName || "",
           campusVerified: Boolean(saved.campusVerified ?? session.user.campusVerified),
+          qq: saved.qq || "",
+          wechat: saved.wechat || "",
+          qqOpenid: saved.qqOpenid || session.user.qqOpenid || "",
         };
         session.role = session.user.role;
         persist();
@@ -109,6 +114,9 @@ export const useAuthStore = defineStore("auth", () => {
       fruitScore: user.fruitScore || 0,
       schoolName: user.schoolName || "",
       campusVerified: Boolean(user.campusVerified),
+      qq: user.qq || "",
+      wechat: user.wechat || "",
+      qqOpenid: user.qqOpenid || "",
     };
     // Provide a direct shortcut for role checks used throughout the app
     session.role = session.user.role;
@@ -236,5 +244,6 @@ export const useAuthStore = defineStore("auth", () => {
     register,
     updateProfileFields,
     persist,
+    applySession,
   };
 });

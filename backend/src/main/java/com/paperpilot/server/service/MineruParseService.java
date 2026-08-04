@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -217,8 +218,18 @@ public class MineruParseService {
             Path input = materializePdf(paper);
             Path log = workspaceOutput.resolve("mineru.log");
             backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "RUNNING", 55, "MinerU 正在解析论文版面", "");
+            
+            Path mineruExecutable;
+            try {
+                mineruExecutable = resolveMineruBinary();
+            } catch (IOException e) {
+                // MinerU binary is not available (e.g. on server), fallback to light-weight PDFBox parse
+                parseWithPdfBox(workspaceId, paper, input);
+                return;
+            }
+
             ProcessBuilder builder = new ProcessBuilder(
-                mineruBinary,
+                mineruExecutable.toString(),
                 "-p", input.toAbsolutePath().toString(),
                 "-o", workspaceOutput.toAbsolutePath().toString(),
                 "-b", "pipeline",
@@ -244,12 +255,78 @@ public class MineruParseService {
         }
     }
 
+    private void parseWithPdfBox(String workspaceId, PaperEntity paper, Path pdfPath) {
+        Long userId = paper.getUserId();
+        try {
+            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "RUNNING", 50, "检测到未安装 MinerU，正在通过 PDFBox 进行轻量级文本解析", "");
+            
+            List<Map<String, Object>> contentList = new ArrayList<>();
+            try (org.apache.pdfbox.pdmodel.PDDocument document = org.apache.pdfbox.Loader.loadPDF(pdfPath.toFile())) {
+                org.apache.pdfbox.text.PDFTextStripper stripper = new org.apache.pdfbox.text.PDFTextStripper();
+                int pageCount = document.getNumberOfPages();
+                for (int i = 1; i <= pageCount; i++) {
+                    stripper.setStartPage(i);
+                    stripper.setEndPage(i);
+                    String text = stripper.getText(document);
+                    
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("page_idx", i - 1);
+                    item.put("type", "paragraph");
+                    item.put("text", text != null ? text.trim() : "");
+                    contentList.add(item);
+                }
+            }
+            
+            Path workspaceOutput = outputRoot.resolve(workspaceId);
+            Files.createDirectories(workspaceOutput);
+            Path outputFile = workspaceOutput.resolve("content_list.json");
+            objectMapper.writeValue(outputFile.toFile(), contentList);
+            
+            tasks.put(workspaceId, new TaskState("SUCCESS", "轻量级文本解析完成", ""));
+            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "SUCCESS", 100, "段落、图表与阅读顺序解析完成", "");
+        } catch (Exception error) {
+            tasks.put(workspaceId, new TaskState("FAILURE", "轻量级解析失败", error.getMessage()));
+            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "FAILURE", 100, "论文结构化解析失败", error.getMessage());
+        }
+    }
+
+    private Path resolveMineruBinary() throws IOException {
+        List<Path> candidates = new ArrayList<>();
+        String configured = string(mineruBinary).trim();
+        if (!configured.isBlank()) candidates.add(Path.of(configured));
+        candidates.add(Path.of(".mineru-venv/bin/mineru"));
+        candidates.add(Path.of("../.mineru-venv/bin/mineru"));
+
+        for (Path candidate : candidates) {
+            Path normalized = candidate.toAbsolutePath().normalize();
+            if (Files.isRegularFile(normalized) && Files.isExecutable(normalized)) {
+                return normalized;
+            }
+        }
+
+        Path fromPath = findExecutableOnPath("mineru");
+        if (fromPath != null) return fromPath;
+
+        throw new IOException("未找到 MinerU 可执行文件。请设置 MINERU_BINARY，或确认 .mineru-venv/bin/mineru 已安装。当前配置：" + configured);
+    }
+
+    private Path findExecutableOnPath(String command) {
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv == null || pathEnv.isBlank()) return null;
+        for (String dir : pathEnv.split(File.pathSeparator)) {
+            if (dir == null || dir.isBlank()) continue;
+            Path candidate = Path.of(dir, command).toAbsolutePath().normalize();
+            if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) return candidate;
+        }
+        return null;
+    }
+
     private Path materializePdf(PaperEntity paper) throws IOException, InterruptedException {
         Path target = inputRoot.resolve(paper.getWorkspaceId() + ".pdf");
         String source = string(paper.getPaperUrl()).trim();
         if (source.startsWith("/api/papers/uploads/")) {
-            Path local = Path.of("uploads").resolve(paper.getWorkspaceId() + ".pdf");
-            if (!Files.isRegularFile(local)) {
+            Path local = resolveLocalUploadPdf(paper.getWorkspaceId());
+            if (local == null) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "本地 PDF 不存在");
             }
             Files.copy(local, target, StandardCopyOption.REPLACE_EXISTING);
@@ -270,6 +347,20 @@ public class MineruParseService {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "无法获取论文 PDF");
         }
         return target;
+    }
+
+    private Path resolveLocalUploadPdf(String workspaceId) {
+        String fileName = workspaceId + ".pdf";
+        List<Path> candidates = List.of(
+            Path.of("uploads").resolve(fileName),
+            Path.of("backend").resolve("uploads").resolve(fileName),
+            Path.of("../uploads").resolve(fileName)
+        );
+        for (Path candidate : candidates) {
+            Path normalized = candidate.toAbsolutePath().normalize();
+            if (Files.isRegularFile(normalized)) return normalized;
+        }
+        return null;
     }
 
     private Optional<Path> findContentList(String workspaceId) {

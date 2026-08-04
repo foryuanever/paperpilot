@@ -27,6 +27,7 @@ public class ModelConfigService {
     public static final String SCENE_PAPER_REVIEW = "paper_review";
     public static final String SCENE_PAPER_QA = "paper_qa";
     public static final String SCENE_MEETING_DECK = "meeting_deck";
+    public static final String SCENE_MEETING_FUSION = "meeting_fusion";
     public static final String SCENE_FORUM_MODERATION = "forum_moderation";
     public static final String SCENE_TOPIC_RESEARCH = "topic_research";
     public static final String SCENE_BACKUP = "backup";
@@ -497,6 +498,7 @@ public class ModelConfigService {
         row.put("updatedAt", entity.getUpdatedAt());
         row.put("keyUrl", inferKeyUrl(entity.getProviderName(), entity.getBaseUrl()));
         row.put("duplicateCount", 1);
+        row.put("sortOrder", entity.getSortOrder() == null ? 0 : entity.getSortOrder());
         row.put("priority", poolPriority(entity, resolvedStatus, resolvedLatencyMs));
         return row;
     }
@@ -521,6 +523,9 @@ public class ModelConfigService {
         }
         if (value.equals("forum") || value.equals("forum_moderation") || value.equals("moderation") || value.equals("发帖审核")) {
             return SCENE_FORUM_MODERATION;
+        }
+        if (value.equals("meeting_fusion") || value.equals("fusion") || value.equals("组会融合") || value.equals("一键融合")) {
+            return SCENE_MEETING_FUSION;
         }
         if (value.equals("ppt") || value.equals("deck") || value.equals("meeting") || value.equals("meeting_report") || value.equals("meeting_deck")) {
             return SCENE_MEETING_DECK;
@@ -906,14 +911,20 @@ public class ModelConfigService {
     @Transactional
     public Map<String, Object> sortPoolRoutes(List<Long> ids) {
         currentUserService.requireAdmin();
-        for (int i = 0; i < ids.size(); i++) {
-            Long id = ids.get(i);
-            int order = i;
+        if (ids == null || ids.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "没有可保存的模型节点");
+        }
+        Set<Long> seen = new HashSet<>();
+        int saved = 0;
+        for (Long id : ids) {
+            if (id == null || id <= 0 || !seen.add(id)) continue;
+            int order = saved;
             modelConfigRepository.findById(id).ifPresent(row -> {
                 row.setSortOrder(order);
                 modelConfigRepository.save(row);
             });
+            saved++;
         }
-        return Map.of("success", true, "message", "已保存排序");
+        return Map.of("success", true, "message", "已保存排序", "saved", saved);
     }
 }

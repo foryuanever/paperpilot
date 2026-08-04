@@ -273,6 +273,18 @@ public class AiUsageService {
         return Map.of("removed", removed);
     }
 
+    public Map<String, Object> deleteAdminCall(Long id) {
+        currentUserService.requireAdmin();
+        if (id == null) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "ID不能为空");
+        }
+        boolean exists = repository.existsById(id);
+        if (exists) {
+            repository.deleteById(id);
+        }
+        return Map.of("success", exists);
+    }
+
     public Map<String, Object> summary() {
         AppUserEntity user = currentUserService.getOrCreateDefaultUser();
         boolean showingAllUsers = true;
@@ -479,6 +491,7 @@ public class AiUsageService {
         row.put("outputUnitPrice", billingService.outputUnitPrice(unitPriceOf(record), multiplierOf(record)));
         row.put("billingMultiplier", multiplierOf(record));
         row.put("billingFormula", "$" + unitPriceOf(record) + " / 1000 × (" + safe(record.getPromptTokens()) + " + " + safe(record.getCompletionTokens()) + " × " + multiplierOf(record) + ")");
+        row.put("accountingNote", usageAccountingNote(record));
         row.put("status", blankTo(record.getStatus(), "success"));
         row.put("latencyMs", safe(record.getLatencyMs()));
         row.put("errorMessage", blankTo(record.getErrorMessage(), ""));
@@ -487,6 +500,15 @@ public class AiUsageService {
         row.put("fallbackModel", fallback.get("model"));
         row.put("fallbackTime", fallback.get("time"));
         return row;
+    }
+
+    private String usageAccountingNote(AiUsageRecordEntity record) {
+        String scene = blankTo(record.getScene(), "");
+        String action = blankTo(record.getAction(), "");
+        if (ModelConfigService.SCENE_MEETING_DECK.equalsIgnoreCase(scene) && action.contains("PPT")) {
+            return "PPTMaster 是多轮 Agent 执行：中转站会把每轮请求的缓存输入单独计费；本站记录按 Codex 日志汇总 tokens，真实扣费请以中转站账单为准。";
+        }
+        return "";
     }
 
     private Map<String, Object> fallbackResolution(AiUsageRecordEntity record) {
@@ -520,14 +542,45 @@ public class AiUsageService {
         if (value.contains("PPT") || value.contains("Agent")) return "组会PPT Agent执行";
         if (value.contains("审核")) return "AI发帖审核";
         if (value.contains("选题")) return "选题调研";
+        if (value.contains("融合")) return "组会一键融合";
         if (value.contains("组会")) return "论文综述生成";
         if (value.contains("翻译")) return "论文翻译";
         return "AI研读对话";
     }
 
     private String sceneLabel(String scene, String action) {
+        String s = blankTo(scene, "").toLowerCase();
+        if ("meeting_fusion".equals(s) || "review".equals(s)) {
+            return "组会一键融合";
+        }
+        if ("paper_review".equals(s) || "report".equals(s)) {
+            return "论文综述";
+        }
+        if ("paper_qa".equals(s)) {
+            return "AI论文问答";
+        }
+        if ("meeting_deck".equals(s)) {
+            return "PPT生成";
+        }
+        if ("forum_moderation".equals(s)) {
+            return "AI发帖审核";
+        }
+        if ("topic_research".equals(s)) {
+            return "选题大厅";
+        }
+        if ("translate".equals(s)) {
+            return "全文翻译";
+        }
+
+        // Fallbacks for compatibility or older records
         String act = blankTo(action, "");
-        if (act.contains("组会")) {
+        if (act.contains("PPT") || act.contains("ppt")) {
+            return "PPT生成";
+        }
+        if (act.contains("融合")) {
+            return "组会一键融合";
+        }
+        if (act.contains("综述") || act.contains("汇报") || act.contains("组会")) {
             return "论文综述";
         }
         if ("translate".equalsIgnoreCase(scene)) {

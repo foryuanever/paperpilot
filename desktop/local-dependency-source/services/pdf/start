@@ -24,6 +24,12 @@ if [ ! -x "$PYTHON_BIN" ]; then
   fi
 fi
 
+if [ -f "$VENV_DIR/.papersolver-pdf-ready" ]; then
+  if ! "$PYTHON_BIN" -c "from pdf2zh import translate_stream; from tencentcloud.tmt.v20180321.models import TextTranslateRequest" >/dev/null 2>&1; then
+    rm -f "$VENV_DIR/.papersolver-pdf-ready"
+  fi
+fi
+
 if [ ! -f "$VENV_DIR/.papersolver-pdf-ready" ]; then
   if [ -x "$UV_BIN" ]; then
     "$UV_BIN" pip install --python "$PYTHON_BIN" -r "$SERVICE_DIR/requirements.txt"

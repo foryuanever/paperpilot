@@ -20,7 +20,10 @@ export async function initializeApiBaseUrl() {
   }
   try {
     const config = await window.paperSolverDesktop.getBackendConfig();
-    const nextUrl = normalizeApiBaseUrl(config?.apiBaseUrl) || resolveInitialApiBaseUrl();
+    let nextUrl = normalizeApiBaseUrl(config?.apiBaseUrl);
+    if (!nextUrl || nextUrl.includes("127.0.0.1:8080") || nextUrl.includes("localhost:8080")) {
+      nextUrl = "https://papersolver.cn/api";
+    }
     setApiBaseUrl(nextUrl, { persist: true });
   } catch {
     setApiBaseUrl(resolveInitialApiBaseUrl(), { persist: false });
@@ -52,40 +55,18 @@ export function normalizeApiBaseUrl(url) {
 export async function testApiBaseUrl(url) {
   const apiBaseUrl = normalizeApiBaseUrl(url);
   if (!apiBaseUrl) {
-    throw new Error("请输入有效地址，例如 https://api.papersolver.cn");
+    throw new Error("请输入有效地址，例如 https://papersolver.cn/api");
   }
   try {
-    const { data } = await axios.get(`${apiBaseUrl}/api/health`, {
+    // POST /auth/login with empty body: returns 400/401 when server is alive (not 404/500)
+    const resp = await axios.post(`${apiBaseUrl}/auth/login`, {}, {
       timeout: 6000,
-      headers: {
-        "Accept": "application/json",
-      },
+      validateStatus: (status) => status < 500,
     });
-    return {
-      ok: true,
-      apiBaseUrl,
-      service: data?.service || "PaperSolver Backend",
-    };
+    return { ok: true, apiBaseUrl, service: "PaperSolver Backend" };
   } catch (error) {
-    if (error?.response?.status === 404) {
-      try {
-        const { data } = await axios.get(`${apiBaseUrl}/api/tutorials`, {
-          timeout: 6000,
-          headers: {
-            "Accept": "application/json",
-          },
-        });
-        return {
-          ok: true,
-          apiBaseUrl,
-          count: Array.isArray(data) ? data.length : 0,
-        };
-      } catch (fallbackError) {
-        error = fallbackError;
-      }
-    }
-    if (error?.response?.status) {
-      throw new Error(`后端已响应，但接口返回 ${error.response.status}`);
+    if (error?.response?.status && error.response.status < 500) {
+      return { ok: true, apiBaseUrl, service: "PaperSolver Backend" };
     }
     if (error?.code === "ECONNABORTED") {
       throw new Error("连接超时，请检查后端是否启动或服务器安全组是否放行。");
@@ -100,8 +81,20 @@ export async function testApiBaseUrl(url) {
 function resolveInitialApiBaseUrl() {
   const stored = localStorage.getItem(API_BASE_STORAGE_KEY);
   const normalizedStored = normalizeApiBaseUrl(stored);
-  if (normalizedStored) return normalizedStored;
-  return normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL) || "http://127.0.0.1:8080";
+  if (normalizedStored) {
+    if (normalizedStored.includes("127.0.0.1:8080") || normalizedStored.includes("localhost:8080")) {
+      return "https://papersolver.cn";
+    }
+    return normalizedStored;
+  }
+  const envUrl = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+  if (envUrl) {
+    if (envUrl.includes("127.0.0.1:8080") || envUrl.includes("localhost:8080")) {
+      return "https://papersolver.cn";
+    }
+    return envUrl;
+  }
+  return "https://papersolver.cn";
 }
 
 apiClient.interceptors.request.use((config) => {

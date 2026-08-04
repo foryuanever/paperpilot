@@ -115,6 +115,14 @@ export const paperpilotApi = {
     const { data } = await apiClient.delete("/api/admin/ai-usage/calls", { timeout: 20000 });
     return data;
   },
+  async deleteAdminAiUsageCall(id) {
+    const { data } = await apiClient.delete(`/api/admin/ai-usage/calls/${id}`, { timeout: 20000 });
+    return data;
+  },
+  async deleteAdminForumPost(id) {
+    const { data } = await apiClient.delete(`/api/admin/forum/posts/${id}`, { timeout: 20000 });
+    return data;
+  },
   async getMonitoringAnalytics(params = {}) {
     const { data } = await apiClient.get("/api/admin/monitoring/analytics", { params });
     return data;
@@ -227,6 +235,12 @@ export const paperpilotApi = {
   async getMeetingDeckStatus(jobId) {
     const { data } = await apiClient.get(`/api/meeting-reports/deck/jobs/${jobId}/status`, { timeout: 20000 });
     return data;
+  },
+  async saveMeetingDeckToDesktop(payload) {
+    if (!window.paperSolverDesktop?.savePptDeck) {
+      throw new Error("桌面端保存能力不可用");
+    }
+    return window.paperSolverDesktop.savePptDeck(payload);
   },
   async analyzeMeetingDeck(payload) {
     const { data } = await apiClient.post("/api/meeting-reports/deck/analyze", payload, { timeout: 180000 });

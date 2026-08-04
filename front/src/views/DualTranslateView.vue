@@ -297,10 +297,16 @@ const isDualPdfMode = ref(false);
 const dualScale = ref(1);
 const showZoomPresets = ref(false);
 const zoomPresetList = [
-  { label: "80%", scale: 0.8 },
+  { label: "40%", scale: 0.4 },
+  { label: "50%", scale: 0.5 },
+  { label: "75%", scale: 0.75 },
   { label: "100%", scale: 1 },
   { label: "125%", scale: 1.25 },
   { label: "150%", scale: 1.5 },
+  { label: "175%", scale: 1.75 },
+  { label: "200%", scale: 2 },
+  { label: "250%", scale: 2.5 },
+  { label: "300%", scale: 3 },
 ];
 const showStylePopover = ref(false);
 const markColorPicker = ref(null);
@@ -728,7 +734,7 @@ async function rerenderCanvases() {
 }
 
 function setScalePreset(scale) {
-  dualScale.value = Math.min(1.8, Math.max(0.65, Number(scale) || 1));
+  dualScale.value = Math.min(3.0, Math.max(0.4, Number(scale) || 1));
   showZoomPresets.value = false;
   rerenderCanvases();
 }

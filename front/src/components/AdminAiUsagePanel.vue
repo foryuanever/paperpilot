@@ -88,6 +88,7 @@
               <th>总量</th>
               <th>费用</th>
               <th>状态</th>
+              <th style="width: 80px; text-align: center; white-space: nowrap;">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -98,8 +99,8 @@
                 <small>{{ row.userEmail || `ID ${row.userId || "—"}` }}</small>
               </td>
               <td class="ledger-module-col">
-                <strong>{{ row.sceneLabel }}</strong>
-                <small>{{ row.action }}</small>
+                <strong>{{ formatSceneLabel(row) }}</strong>
+                <small>{{ formatActionLabel(row) }}</small>
               </td>
               <td class="ledger-model">
                 <strong>{{ row.model }}</strong>
@@ -116,10 +117,21 @@
                   已切换 {{ row.fallbackModel }} 成功
                 </small>
                 <small v-if="row.status === 'failed'" class="ledger-error">{{ row.errorMessage || "调用失败" }}</small>
+                <small v-if="row.accountingNote" class="ledger-accounting-note">{{ row.accountingNote }}</small>
+              </td>
+              <td style="text-align: center; white-space: nowrap;">
+                <button
+                  class="action-btn text-danger-btn compact-btn"
+                  style="white-space: nowrap; display: inline-block;"
+                  title="删除此条调用记录"
+                  @click="deleteCallRecord(row)"
+                >
+                  删除
+                </button>
               </td>
             </tr>
             <tr v-if="!rows.length">
-              <td colspan="9" class="ledger-empty">{{ loading ? "正在读取调用记录..." : "暂无调用记录，真实模型调用后会自动出现在这里。" }}</td>
+              <td colspan="10" class="ledger-empty">{{ loading ? "正在读取调用记录..." : "暂无调用记录，真实模型调用后会自动出现在这里。" }}</td>
             </tr>
           </tbody>
         </table>
@@ -165,6 +177,7 @@ const filters = ref({
 const sceneOptions = [
   { value: "paper_review", label: "论文综述" },
   { value: "paper_qa", label: "AI论文问答" },
+  { value: "meeting_fusion", label: "组会一键融合" },
   { value: "meeting_deck", label: "PPT生成" },
   { value: "forum_moderation", label: "AI发帖审核" },
   { value: "topic_research", label: "选题研究" },
@@ -237,6 +250,51 @@ async function clearAiUsageCalls() {
     dialogStore.alert(error.response?.data?.message || "清空 AI 调用记录失败");
   } finally {
     clearing.value = false;
+  }
+}
+
+function formatSceneLabel(row) {
+  const scene = String(row.scene || "").toLowerCase();
+  if (scene === "meeting_fusion" || scene === "review") {
+    return "组会一键融合";
+  }
+  if (scene === "paper_review" || scene === "report") {
+    return "论文综述";
+  }
+  if (scene === "meeting_deck") {
+    return "PPT生成";
+  }
+  return row.sceneLabel || "AI研读对话";
+}
+
+function formatActionLabel(row) {
+  const scene = String(row.scene || "").toLowerCase();
+  const action = String(row.action || "");
+  if (scene === "meeting_fusion" || scene === "review") {
+    return "组会一键融合";
+  }
+  if (scene === "meeting_deck") {
+    return "组会PPT Agent执行";
+  }
+  if (action === "论文综述生成" && (scene === "meeting_fusion" || scene === "review")) {
+    return "组会一键融合";
+  }
+  return action;
+}
+
+async function deleteCallRecord(row) {
+  const ok = await dialogStore.confirm(`确认删除此条 AI 调用记录吗？此操作不可撤销。`, {
+    title: "删除调用记录",
+    confirmText: "删除",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    await paperpilotApi.deleteAdminAiUsageCall(row.id);
+    await loadAiUsageCalls();
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "删除调用记录失败");
   }
 }
 
@@ -536,6 +594,19 @@ onMounted(() => {
   font-weight: 700;
 }
 
+.ledger-accounting-note {
+  display: block;
+  max-width: 360px;
+  margin-top: 6px;
+  color: #b45309;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+:root[data-theme="dark"] .ledger-accounting-note {
+  color: #fbbf24;
+}
+
 .ledger-empty {
   padding: 48px !important;
   text-align: center;
@@ -579,5 +650,14 @@ onMounted(() => {
   color: var(--spatial-gray);
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.text-danger-btn {
+  color: #ef4444 !important;
+}
+
+.text-danger-btn:hover {
+  opacity: 0.8;
+  text-decoration: underline;
 }
 </style>

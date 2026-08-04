@@ -52,7 +52,7 @@ paperpilot:
   pdfmathtranslate:
     base-url: ${PDFMATH_TRANSLATE_URL:http://127.0.0.1:11008}
   mineru:
-    binary: ${MINERU_BINARY:../.mineru-venv/bin/mineru}
+    binary: ${MINERU_BINARY:.mineru-venv/bin/mineru}
     model-source: ${MINERU_MODEL_SOURCE:modelscope}
   ppt-master:
     skill-dir: ${PPT_MASTER_SKILL_DIR:/Users/yuan/.codex/skills/ppt-master}
@@ -60,6 +60,15 @@ paperpilot:
     codex: ${PPT_MASTER_CODEX:/Applications/Codex.app/Contents/Resources/codex}
     agent-timeout-minutes: ${PPT_MASTER_AGENT_TIMEOUT_MINUTES:120}
   payment:
+    wechat:
+      # 微信支付 API v3。生产环境请用环境变量配置，不要把证书和密钥提交到代码仓库。
+      app-id: ${PAPERPILOT_WECHAT_PAY_APP_ID:}
+      mch-id: ${PAPERPILOT_WECHAT_PAY_MCH_ID:}
+      api-v3-key: ${PAPERPILOT_WECHAT_PAY_API_V3_KEY:}
+      serial-no: ${PAPERPILOT_WECHAT_PAY_SERIAL_NO:}
+      private-key-path: ${PAPERPILOT_WECHAT_PAY_PRIVATE_KEY_PATH:}
+      private-key: ${PAPERPILOT_WECHAT_PAY_PRIVATE_KEY:}
+      notify-url: ${PAPERPILOT_WECHAT_PAY_NOTIFY_URL:}
     zhifufm:
       api-base-url: ${PAPERPILOT_ZHIFUFM_API_BASE_URL:}
       merchant-num: ${PAPERPILOT_ZHIFUFM_MERCHANT_NUM:}
@@ -69,3 +78,10 @@ paperpilot:
       return-url: ${PAPERPILOT_ZHIFUFM_RETURN_URL:}
       alipay-pay-type: ${PAPERPILOT_ZHIFUFM_ALIPAY_PAY_TYPE:alipay}
       wechat-pay-type: ${PAPERPILOT_ZHIFUFM_WECHAT_PAY_TYPE:wechat}
+  security:
+    firewall:
+      enabled: ${PAPERPILOT_SECURITY_FIREWALL_ENABLED:true}
+      limit-ip-count: ${PAPERPILOT_SECURITY_FIREWALL_LIMIT_IP_COUNT:1000}
+      limit-ip-ban: ${PAPERPILOT_SECURITY_FIREWALL_LIMIT_IP_BAN:1500}
+      limit-user-count: ${PAPERPILOT_SECURITY_FIREWALL_LIMIT_USER_COUNT:500}
+

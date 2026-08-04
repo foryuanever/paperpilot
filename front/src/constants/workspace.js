@@ -61,12 +61,12 @@ export const apiItems = [
 ];
 
 export const pageNavItems = [
+  { to: "/search", label: "文献检索", icon: "search" },
   { to: "/library", label: "文献库", icon: "library" },
   { to: "/reading", label: "文献阅读", icon: "reading" },
+  { to: "/topics", label: "选题大厅", icon: "search" },
   { to: "/meeting-report", label: "组会汇报", icon: "slides" },
-  { to: "/search", label: "学术搜索", icon: "search" },
-  { to: "/topics", label: "选题广场", icon: "search" },
-  { to: "/forum", label: "学术论坛", icon: "forum" },
-  { to: "/models", label: "用量与重置", icon: "models" },
-  { to: "/team", label: "管理team", icon: "team" },
+  { to: "/forum", label: "学术贴吧", icon: "forum" },
+  { to: "/models", label: "额度管理", icon: "models" },
+  { to: "/team", label: "我的team", icon: "team" },
 ];

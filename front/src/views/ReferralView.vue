@@ -103,7 +103,7 @@ const authStore = useAuthStore();
 const copied = ref(false);
 const localCode = ref(localStorage.getItem("papersolver-referral-code") || "");
 const createdAt = ref(localStorage.getItem("papersolver-referral-created-at") || "");
-const referralCode = computed(() => localCode.value || authStore.profile.inviteCode || "PAPERSLOVER2026");
+const referralCode = computed(() => localCode.value || authStore.profile.inviteCode || "PAPERSOLVER2026");
 const registerLink = computed(() => `${window.location.origin}/#/register?code=${encodeURIComponent(referralCode.value)}`);
 const inviteStats = computed(() => ({
   registered: Number(localStorage.getItem("papersolver-referral-invited") || 0),

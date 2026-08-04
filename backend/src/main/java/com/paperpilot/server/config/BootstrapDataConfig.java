@@ -147,6 +147,18 @@ public class BootstrapDataConfig {
                 user.setTeamId(null);
                 continue;
             }
+            // Only assign seeded default users to the seed team
+            String email = user.getEmail() == null ? "" : user.getEmail().toLowerCase();
+            boolean isSeededUser = email.endsWith("@paperslover.app") 
+                || email.endsWith("@paperslover.com") 
+                || email.equals("local@paperpilot.app");
+            if (!isSeededUser) {
+                // Keep the user's existing teamId, do not overwrite it!
+                if (team.getId().equals(user.getTeamId())) {
+                    assignedSeats += 1;
+                }
+                continue;
+            }
             if (assignedSeats < baseSeatLimit) {
                 user.setTeamId(team.getId());
                 assignedSeats += 1;
@@ -284,27 +296,22 @@ public class BootstrapDataConfig {
 
     private void seedUser(AppUserRepository appUserRepository, String username, String email, String password, String role, String lastIp, long activeTime, long tokenLimit, long tokenUsed) {
         java.util.Optional<AppUserEntity> existingOpt = appUserRepository.findByEmail(email);
-        AppUserEntity user;
-        boolean isNew = existingOpt.isEmpty();
+        // If the user already exists, do NOT overwrite their password, role, or profile.
+        // Only seed data for brand-new accounts to avoid resetting admin passwords on every restart.
         if (existingOpt.isPresent()) {
-            user = existingOpt.get();
-        } else {
-            user = new AppUserEntity();
-            user.setEmail(email);
-            user.setInviteCode("PAPERPILOT2026");
+            return;
         }
+        AppUserEntity user = new AppUserEntity();
+        user.setEmail(email);
+        user.setInviteCode("PAPERPILOT2026");
         user.setUsername(username);
         user.setRole(role);
         user.setPasswordHash(hash(password));
         user.setPlainPassword(password);
         user.setLastIp(lastIp);
         user.setActiveTime(activeTime);
-        if (isNew || user.getTokenLimit() == null) {
-            user.setTokenLimit(tokenLimit);
-        }
-        if (isNew || user.getTokenUsed() == null) {
-            user.setTokenUsed(tokenUsed);
-        }
+        user.setTokenLimit(tokenLimit);
+        user.setTokenUsed(tokenUsed);
         appUserRepository.save(user);
     }
 

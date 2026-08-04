@@ -88,6 +88,7 @@ export const useDialogStore = defineStore("dialog", () => {
     alert,
     showError,
     showSuccess,
+    toast: showSuccess,   // lightweight success alias used by admin modules
     confirm,
     prompt,
     accept: () => finish(true),

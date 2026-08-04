@@ -152,9 +152,27 @@
                   <td>
                     <div class="user-name-cell">
                       <span class="user-avatar" :data-user-id="user.id" :data-user-email="user.email" title="查看个人卡片" :style="{ backgroundColor: getAvatarColor(user.role) }">
-                        {{ user.username.slice(0, 1).toUpperCase() }}
+                        <img v-if="user.avatarUrl" :src="user.avatarUrl" alt="头像" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />
+                        <template v-else>{{ user.username.slice(0, 1).toUpperCase() }}</template>
                       </span>
-                      <strong>{{ user.username }}</strong>
+                      <strong style="display: inline-flex; align-items: center; gap: 6px;">
+                        {{ user.username }}
+                        <span v-if="user.qqOpenid || String(user.email || '').startsWith('qq_user_')" class="qq-user-badge" title="QQ快捷登录用户" style="display: inline-flex; align-items: center; background: #e6f7ff; padding: 2px 6px; border-radius: 4px; border: 1px solid #bae7ff; font-size: 10px; color: #0050b3; font-weight: 700; gap: 3px; scale: 0.9;">
+                          <svg viewBox="0 0 64 64" width="12" height="12" style="display: block;">
+                            <ellipse cx="22" cy="54" rx="8" ry="4" fill="#FFAE00" />
+                            <ellipse cx="42" cy="54" rx="8" ry="4" fill="#FFAE00" />
+                            <ellipse cx="32" cy="31" rx="20" ry="22" fill="#1C1F21" />
+                            <ellipse cx="32" cy="19" rx="14" ry="12" fill="#1C1F21" />
+                            <ellipse cx="32" cy="35" rx="15" ry="16" fill="#FFFFFF" />
+                            <ellipse cx="32" cy="19" rx="12" ry="10" fill="#FFFFFF" />
+                            <circle cx="27" cy="18" r="2.5" fill="#1C1F21" />
+                            <circle cx="37" cy="18" r="2.5" fill="#1C1F21" />
+                            <path d="M26,22 C26,22 32,27 38,22 C38,20 26,20 26,22 Z" fill="#FFAE00" />
+                            <path d="M16,30 Q32,36 48,30 C50,35 46,35 44,35 L48,46 L42,46 L40,35 Q32,37 24,35 L20,46 L16,46 Z" fill="#FF3B30" />
+                          </svg>
+                          QQ
+                        </span>
+                      </strong>
                     </div>
                   </td>
                   <td>{{ user.email }}</td>
@@ -192,6 +210,7 @@
                     <div class="table-actions">
                       <button class="spatial-btn spatial-btn-accent compact-btn" style="min-height: 28px; padding: 0 10px; font-size: 0.75rem;" @click="editUserMembership(user)">分配会员</button>
                       <button class="spatial-btn spatial-btn-ghost compact-btn" style="min-height: 28px; padding: 0 10px; font-size: 0.75rem;" @click="toggleUserRole(user)">切角色</button>
+                      <button class="spatial-btn spatial-btn-ghost compact-btn" style="min-height: 28px; padding: 0 10px; font-size: 0.75rem; border-color: rgba(14,165,233,0.3); color: #0ea5e9; background: rgba(14,165,233,0.02);" @click="loginAsUser(user)">登入</button>
                       <button
                         v-if="!user.banned"
                         class="spatial-btn spatial-btn-ghost compact-btn"
@@ -595,8 +614,14 @@
                       <button class="spatial-btn spatial-btn-ghost compact-btn" @click="openEditRelayModal(activeRelay)">
                         配置连接
                       </button>
-                      <button class="spatial-btn spatial-btn-accent compact-btn" @click="testAllModelsSpeed">
-                        一键测速
+                      <button
+                        class="spatial-btn spatial-btn-accent compact-btn"
+                        :disabled="testingAllModels"
+                        :style="testingAllModels ? 'opacity:0.7;cursor:not-allowed;' : ''"
+                        @click="testAllModelsSpeed"
+                      >
+                        <span v-if="testingAllModels">测速中 {{ testAllProgress.done }}/{{ testAllProgress.total }}…</span>
+                        <span v-else>一键测速</span>
                       </button>
                     </div>
                   </div>
@@ -675,9 +700,21 @@
                         </span>
                       </div>
 
-                      <!-- Billing info -->
-                      <div class="model-billing-price">
-                        {{ getModelMetadata(model.id).billing }}
+                      <!-- Billing info - visual cost tier -->
+                      <div class="model-cost-tier-wrapper">
+                        <span
+                          class="model-cost-tier-badge"
+                          :class="getModelMetadata(model.id).costTierClass"
+                          :title="getModelMetadata(model.id).billing"
+                        >
+                          <span class="cost-tier-dots">
+                            <i v-for="n in 5" :key="n" :class="{ active: n <= getModelMetadata(model.id).costDots }"></i>
+                          </span>
+                          {{ getModelMetadata(model.id).costLabel }}
+                        </span>
+                        <span class="model-billing-hint" :title="getModelMetadata(model.id).billing">
+                          {{ getModelMetadata(model.id).billingShort }}
+                        </span>
                       </div>
 
                       <!-- Model Description -->
@@ -1003,6 +1040,12 @@
                       >
                         不采纳
                       </button>
+                      <button
+                        class="spatial-btn spatial-btn-ghost compact-btn danger-lite"
+                        @click="deleteForumPostDirectly(report)"
+                      >
+                        删除
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -1205,7 +1248,7 @@
           </div>
           <div class="form-group" style="margin-top: 12px;">
             <label>邮箱</label>
-            <input id="new-email" name="email" v-model="newUser.email" placeholder="you@paperslover.app" />
+            <input id="new-email" name="email" v-model="newUser.email" placeholder="you@papersolver.app" />
           </div>
           <div class="form-group" style="margin-top: 12px;">
             <label>角色</label>
@@ -1234,7 +1277,7 @@
           <h4>手动充值入账</h4>
           <div class="form-group" style="margin-top: 12px;">
             <label>用户邮箱</label>
-            <input id="recharge-email" name="recharge-email" v-model="newRecharge.email" placeholder="e.g. student@paperslover.app" />
+            <input id="recharge-email" name="recharge-email" v-model="newRecharge.email" placeholder="e.g. student@papersolver.app" />
           </div>
           <div class="form-group" style="margin-top: 12px;">
             <label>充值金额 (¥)</label>
@@ -1710,6 +1753,7 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, watch } from "vue";
+import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useDialogStore } from "../stores/dialog";
 import { paperpilotApi } from "../services/paperpilotApi";
@@ -1722,6 +1766,7 @@ import AdminMonitoringPanel from "../components/AdminMonitoringPanel.vue";
 const authStore = useAuthStore();
 const dialogStore = useDialogStore();
 const workspaceStore = useWorkspaceStore();
+const router = useRouter();
 const activeTab = ref("models");
 const adminSidebarCollapsed = ref(false);
 const showStatsPanel = ref(false);
@@ -1863,6 +1908,8 @@ const activeRelay = ref(null);
 const relayModels = ref([]);
 const loadingModels = ref(false);
 const relayModelsError = ref("");
+const testingAllModels = ref(false);
+const testAllProgress = ref({ done: 0, total: 0 });
 
 const modelTestResults = ref({}); // key: modelId, value: { testing: boolean, latencyMs: number, success: boolean, message: string }
 const modelActionStates = ref({}); // key: modelId + '|' + scene, value: boolean
@@ -2014,6 +2061,11 @@ const modelSceneOptions = [
     hint: "deep-research、选题卡、代表论文和研究空白",
   },
   {
+    value: "meeting_fusion",
+    label: "组会融合",
+    hint: "一键融合多个论文综述生成汇报大纲",
+  },
+  {
     value: "meeting_deck",
     label: "PPT生成",
     hint: "必须配置 gpt-5.4 级别强模型",
@@ -2032,6 +2084,7 @@ const modelSceneOptions = [
 const aiUsageSceneOptions = [
   { value: "paper_review", label: "论文综述" },
   { value: "paper_qa", label: "AI论文问答" },
+  { value: "meeting_fusion", label: "组会融合" },
   { value: "meeting_deck", label: "PPT生成" },
   { value: "forum_moderation", label: "AI发帖审核" },
   { value: "topic_research", label: "选题研究" },
@@ -2206,6 +2259,7 @@ const modelSceneDescription = computed(() => ({
   paper_review: "论文综述独立配置，适合长上下文、结构化综述、引用线索整理；建议用性价比强模型。",
   paper_qa: "AI 论文问答独立配置，优先低延迟和低成本，保障用户愿意高频使用。",
   topic_research: "选题调研独立配置，适合 deep-research、主题聚类、代表论文和研究空白整理，可用便宜长上下文模型。",
+  meeting_fusion: "一键融合独立配置，在多篇综述融合为组会汇报时调用，建议选择分析与结构化能力强的模型。",
   meeting_deck: "PPT 生成使用独立强模型配置，必须配置 gpt-5.4 或更强模型；不会影响问答和审核。",
   forum_moderation: "AI 发帖审核独立配置，适合低价快模型，重点是稳定 JSON 输出和审核延迟。",
 })[modelScene.value] || "模型入口独立配置，避免高成本任务和轻量任务混用。");
@@ -2213,6 +2267,7 @@ const modelPoolDescription = computed(() => ({
   paper_review: "这里只管理论文综述模型池。建议主路由选稳定强模型，备用路由选便宜模型。",
   paper_qa: "这里只管理 AI 论文问答模型池。遇到限流、超时或上游失败时，会在问答池内尝试备用路由。",
   topic_research: "这里只管理选题调研模型池。生成主题簇、研究空白、代表论文和可行路线时会优先读取这个池子。",
+  meeting_fusion: "这里只管理组会一键融合的模型池。组会进行多文献一键生成汇报时调用此处的模型。",
   meeting_deck: "这里只管理 PPT 生成专用池。PPT 多轮 Agent 只会读取这个池子，主模型建议 gpt-5.4。",
   forum_moderation: "这里只管理发帖审核模型池。可以配置低价快模型，不必占用 PPT 强模型额度。",
 })[modelScene.value] || "这里只管理当前入口的模型池。");
@@ -2241,6 +2296,13 @@ function compareModelRoutes(a, b) {
     failed: 7,
     needs_adapter: 8,
   };
+  const orderA = Number(a.sortOrder ?? a.manualOrder ?? a.orderIndex);
+  const orderB = Number(b.sortOrder ?? b.manualOrder ?? b.orderIndex);
+  const priorityA = parseInt(String(a.priority ?? "99999"), 10);
+  const priorityB = parseInt(String(b.priority ?? "99999"), 10);
+  const manualA = Number.isFinite(orderA) ? orderA : Number.isFinite(priorityA) ? priorityA : 99999;
+  const manualB = Number.isFinite(orderB) ? orderB : Number.isFinite(priorityB) ? priorityB : 99999;
+  if (manualA !== manualB) return manualA - manualB;
   const scoreA = [
     a.active ? -3 : 0,
     a.keyConfigured ? 0 : 2,
@@ -2382,6 +2444,8 @@ async function fetchAllData() {
       chatUsed: u.chatUsed || 0,
       fruitScore: u.fruitScore || 0,
       createdTime: formatDate(u.createdAt),
+      qqOpenid: u.qqOpenid,
+      avatarUrl: u.avatarUrl,
     }));
 
     // 2. Fetch Recharge Records
@@ -2935,11 +2999,11 @@ async function loadScenePoolData() {
     const activeRelayKeys = new Set(
       relays.value.map(r => `${r.providerName.toLowerCase()}|${r.baseUrl.toLowerCase()}`)
     );
-    scenePoolData.value = rawData.filter(item => {
+    scenePoolData.value = sortPoolRows(rawData.filter(item => {
       if (item.template) return false;
       const routeKey = `${item.providerName.toLowerCase()}|${item.baseUrl.toLowerCase()}`;
       return activeRelayKeys.has(routeKey);
-    });
+    }));
   } catch (e) {
     console.error("Failed to load scene pool:", e);
   } finally {
@@ -2955,11 +3019,11 @@ async function refreshScenePool() {
     const activeRelayKeys = new Set(
       relays.value.map(r => `${r.providerName.toLowerCase()}|${r.baseUrl.toLowerCase()}`)
     );
-    scenePoolData.value = rawData.filter(item => {
+    scenePoolData.value = sortPoolRows(rawData.filter(item => {
       if (item.template) return false;
       const routeKey = `${item.providerName.toLowerCase()}|${item.baseUrl.toLowerCase()}`;
       return activeRelayKeys.has(routeKey);
-    });
+    }));
   } catch (e) {
     console.error("Failed to refresh scene pool:", e);
   } finally {
@@ -2979,6 +3043,19 @@ async function cleanupScenePool() {
   } finally {
     loadingScenePool.value = false;
   }
+}
+
+function sortPoolRows(rows = []) {
+  return [...rows].sort((a, b) => {
+    const orderA = Number(a.sortOrder ?? a.manualOrder ?? a.orderIndex);
+    const orderB = Number(b.sortOrder ?? b.manualOrder ?? b.orderIndex);
+    const priorityA = parseInt(String(a.priority ?? "99999"), 10);
+    const priorityB = parseInt(String(b.priority ?? "99999"), 10);
+    const resolvedA = Number.isFinite(orderA) ? orderA : Number.isFinite(priorityA) ? priorityA : 99999;
+    const resolvedB = Number.isFinite(orderB) ? orderB : Number.isFinite(priorityB) ? priorityB : 99999;
+    if (resolvedA !== resolvedB) return resolvedA - resolvedB;
+    return (Number(a.id) || 0) - (Number(b.id) || 0);
+  });
 }
 
 async function removeScenePoolRoute(routeId) {
@@ -3023,9 +3100,11 @@ async function handleRouteDrop(event, index) {
     items.splice(toIdx, 0, draggedItem);
     scenePoolData.value = items;
 
-    const ids = items.map(r => r.id);
+    const ids = Array.from(new Set(items.map(r => Number(r.id)).filter(Number.isFinite)));
+    scenePoolData.value = items.map((item, idx) => ({ ...item, sortOrder: idx, manualOrder: idx }));
     try {
       await paperpilotApi.sortModelPool(ids);
+      await loadScenePoolData();
       dialogStore.toast("已更新优先级排序");
     } catch (e) {
       dialogStore.alert("保存排序失败：" + (e.response?.data?.message || e.message));
@@ -3048,14 +3127,26 @@ watch(activeRelay, (newVal) => {
 });
 
 function getModelMetadata(modelId) {
-  if (!modelId) return { type: "文本", billing: "按量计费", desc: "通用模型", typeClass: "type-text" };
+  if (!modelId) return {
+    type: "文本", billing: "按量计费", desc: "通用模型", typeClass: "type-text",
+    costLabel: "通用", costDots: 2, costTierClass: "tier-low", billingShort: "按量计费"
+  };
   const id = modelId.toLowerCase();
 
-  // Default values
   let type = "文本";
   let billing = "输入 $0.0015 / 1K | 输出 $0.005 / 1K";
   let desc = "通用大语言模型，支持文本对话、代码编写与推理";
   let typeClass = "type-text";
+  // costDots: 1=极低 2=低 3=中 4=高 5=旗舰
+  let costDots = 2;
+  let costLabel = "低价";
+  let costTierClass = "tier-low";
+  let billingShort = "约 ¥0.01/千字";
+
+  // Helper
+  function setCost(dots, label, cls, short) {
+    costDots = dots; costLabel = label; costTierClass = cls; billingShort = short;
+  }
 
   // 1. Gemini
   if (id.includes("gemini")) {
@@ -3063,48 +3154,51 @@ function getModelMetadata(modelId) {
       if (id.includes("lite")) {
         billing = "输入 $0.000075 / 1K | 输出 $0.0003 / 1K";
         desc = "轻量级高性价比模型，极速响应，适合低成本任务";
+        setCost(1, "极低价", "tier-free", "约 ¥0.001/千字");
       } else {
         billing = "输入 $0.000375 / 1K | 输出 $0.001125 / 1K";
         desc = "快速且通用的多模态模型，在速度和性能间取得极佳平衡";
+        setCost(1, "极低价", "tier-free", "约 ¥0.005/千字");
       }
     } else if (id.includes("pro")) {
       billing = "输入 $0.00125 / 1K | 输出 $0.00375 / 1K";
       desc = "Google 旗舰多模态模型，支持复杂推理、代码和高精度分析";
+      setCost(2, "低价", "tier-low", "约 ¥0.02/千字");
     }
     if (id.includes("image") || id.includes("vision")) {
-      type = "图像";
-      typeClass = "type-image";
+      type = "图像"; typeClass = "type-image";
       desc = "专为图像生成、视觉理解与分析定制的模型";
     } else if (id.includes("search")) {
-      type = "检索";
-      typeClass = "type-search";
+      type = "检索"; typeClass = "type-search";
       desc = "内置官方搜索引擎组件，支持实时联网检索答疑";
     } else {
-      type = "多模态";
-      typeClass = "type-multimodal";
+      type = "多模态"; typeClass = "type-multimodal";
     }
   }
-  // 2. GPT-4 / GPT-3 / GPT-5
+  // 2. GPT
   else if (id.includes("gpt")) {
     if (id.includes("gpt-4o-mini")) {
       billing = "输入 $0.00015 / 1K | 输出 $0.0006 / 1K";
       desc = "轻量级 GPT-4o 衍生版，速度极快，价格极其便宜";
-      type = "多模态";
-      typeClass = "type-multimodal";
+      type = "多模态"; typeClass = "type-multimodal";
+      setCost(1, "极低价", "tier-free", "约 ¥0.004/千字");
     } else if (id.includes("gpt-4o")) {
       billing = "输入 $0.0025 / 1K | 输出 $0.010 / 1K";
       desc = "OpenAI 旗舰智能模型，全方位顶尖表现，支持视觉分析";
-      type = "多模态";
-      typeClass = "type-multimodal";
+      type = "多模态"; typeClass = "type-multimodal";
+      setCost(3, "中等", "tier-mid", "约 ¥0.09/千字");
     } else if (id.includes("gpt-4")) {
       billing = "输入 $0.03 / 1K | 输出 $0.06 / 1K";
       desc = "经典 GPT-4 复杂推理模型，深度分析与代码逻辑专家";
+      setCost(5, "旗舰级", "tier-flagship", "约 ¥0.65/千字");
     } else if (id.includes("gpt-3.5")) {
       billing = "输入 $0.0005 / 1K | 输出 $0.0015 / 1K";
       desc = "快速稳定的 GPT-3.5 经典版本，适合简单文本处理";
+      setCost(2, "低价", "tier-low", "约 ¥0.014/千字");
     } else if (id.includes("gpt-5")) {
       billing = "输入 $0.005 / 1K | 输出 $0.015 / 1K";
       desc = "新一代超大规模预训练模型，多语种与逻辑分析专家";
+      setCost(4, "较贵", "tier-high", "约 ¥0.14/千字");
     }
   }
   // 3. Claude
@@ -3112,14 +3206,16 @@ function getModelMetadata(modelId) {
     if (id.includes("sonnet")) {
       billing = "输入 $0.003 / 1K | 输出 $0.015 / 1K";
       desc = "Anthropic 旗舰模型，逻辑写作、代码生成及分析领域的行业标杆";
-      type = "多模态";
-      typeClass = "type-multimodal";
+      type = "多模态"; typeClass = "type-multimodal";
+      setCost(4, "较贵", "tier-high", "约 ¥0.13/千字");
     } else if (id.includes("haiku")) {
       billing = "输入 $0.00025 / 1K | 输出 $0.00125 / 1K";
       desc = "极速轻量级模型，适合高并发、低延迟的日常文本分类及提取";
+      setCost(1, "极低价", "tier-free", "约 ¥0.009/千字");
     } else if (id.includes("opus")) {
       billing = "输入 $0.015 / 1K | 输出 $0.075 / 1K";
       desc = "Claude 系列最强大脑，专攻高难度逻辑、科研解析与算法编写";
+      setCost(5, "旗舰级", "tier-flagship", "约 ¥0.65/千字");
     }
   }
   // 4. DeepSeek
@@ -3127,56 +3223,62 @@ function getModelMetadata(modelId) {
     if (id.includes("r1")) {
       billing = "输入 ¥0.004 / 1K | 输出 ¥0.016 / 1K";
       desc = "开源深度推理模型，数理逻辑与复杂推理能力媲美 o1";
+      setCost(2, "低价", "tier-low", "约 ¥0.016/千字");
     } else if (id.includes("v3")) {
       billing = "输入 ¥0.001 / 1K | 输出 ¥0.002 / 1K";
       desc = "高效低成本大模型，常识问答与通用文本生成性价比极高";
+      setCost(1, "极低价", "tier-free", "约 ¥0.002/千字");
     } else if (id.includes("coder")) {
       billing = "输入 ¥0.001 / 1K | 输出 ¥0.002 / 1K";
       desc = "代码大模型，针对软件工程与算法生成深度优化";
+      setCost(1, "极低价", "tier-free", "约 ¥0.002/千字");
     }
     if (id.includes("chat")) {
       desc = "DeepSeek 官方对话优化版，响应迅速、中文能力极强";
     }
   }
-  // 5. Kimi
+  // 5. Kimi / Moonshot
   else if (id.includes("kimi") || id.includes("moonshot")) {
     billing = "输入 ¥0.012 / 1K | 输出 ¥0.012 / 1K";
     desc = "支持超长上下文关联的中文旗舰大模型，阅读长篇文献专家";
+    setCost(3, "中等", "tier-mid", "约 ¥0.012/千字");
   }
-  // 6. GLM / ChatGLM
+  // 6. GLM / CogView
   else if (id.includes("glm") || id.includes("cogview")) {
     if (id.includes("cogview") || id.includes("image")) {
-      type = "图像";
-      typeClass = "type-image";
+      type = "图像"; typeClass = "type-image";
       billing = "单次计费 ¥0.1 / 张";
       desc = "智谱 CogView 高保真图像理解与画面生成模型";
+      setCost(3, "中等", "tier-mid", "¥0.1/张");
     } else {
       billing = "输入 ¥0.002 / 1K | 输出 ¥0.006 / 1K";
       desc = "智谱清言最新对话大模型，学术翻译与中文语义对齐极佳";
+      setCost(2, "低价", "tier-low", "约 ¥0.006/千字");
     }
   }
-  // 7. Qwen / Tongyi
+  // 7. Qwen
   else if (id.includes("qwen")) {
     if (id.includes("vl") || id.includes("audio")) {
-      type = "多模态";
-      typeClass = "type-multimodal";
+      type = "多模态"; typeClass = "type-multimodal";
       billing = "输入 ¥0.008 / 1K | 输出 ¥0.008 / 1K";
       desc = "通义千问视觉/语音多模态大模型，支持音视频及图像解析";
+      setCost(2, "低价", "tier-low", "约 ¥0.008/千字");
     } else {
       billing = "输入 ¥0.001 / 1K | 输出 ¥0.002 / 1K";
       desc = "阿里开源通义千问旗舰级模型，中英文表现优异、覆盖广泛";
+      setCost(1, "极低价", "tier-free", "约 ¥0.002/千字");
     }
   }
 
-  // Specific checks for image output/input
+  // Image models override
   if (id.includes("dall") || id.includes("sdxl") || id.includes("flux") || id.includes("midjourney")) {
-    type = "图像";
-    typeClass = "type-image";
+    type = "图像"; typeClass = "type-image";
     billing = "单次计费 $0.02 - $0.08 / 张";
     desc = "顶级文生图/图生图扩散模型，用于生成高精度插画与海报";
+    setCost(3, "中等", "tier-mid", "$0.02–0.08/张");
   }
 
-  return { type, billing, desc, typeClass };
+  return { type, billing, desc, typeClass, costLabel, costDots, costTierClass, billingShort };
 }
 
 async function openAllScenesPoolModal() {
@@ -3201,16 +3303,26 @@ function getPoolCount(scene) {
 }
 
 async function testAllModelsSpeed() {
-  if (!relayModels.value.length) return;
+  if (!relayModels.value.length || testingAllModels.value) return;
+  testingAllModels.value = true;
+  testAllProgress.value = { done: 0, total: relayModels.value.length };
   const queue = [...relayModels.value];
   const concurrency = 4;
-  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
-    while (queue.length) {
-      const model = queue.shift();
-      if (model) await testModelSpeed(model);
-    }
-  });
-  await Promise.all(workers);
+  try {
+    const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+      while (queue.length) {
+        const model = queue.shift();
+        if (model) {
+          await testModelSpeed(model);
+          testAllProgress.value.done++;
+        }
+      }
+    });
+    await Promise.all(workers);
+  } finally {
+    testingAllModels.value = false;
+    testAllProgress.value = { done: 0, total: 0 };
+  }
 }
 
 async function saveRelayConfig() {
@@ -3358,6 +3470,29 @@ function editUserMembership(user) {
   selectedMembershipPlan.value = user.membershipPlan || "free";
   selectedMembershipCycle.value = user.membershipCycle || "monthly";
   showMembershipModal.value = true;
+}
+
+async function loginAsUser(user) {
+  if (!user.password || user.password === "—") {
+    dialogStore.alert("该用户没有有效的登录密码。");
+    return;
+  }
+  const ok = await dialogStore.confirm(`确定要以用户 [${user.username}] 的身份直接登录吗？这会切换您的当前会话。`, {
+    title: "一键登录"
+  });
+  if (!ok) return;
+
+  try {
+    const res = await paperpilotApi.login({
+      email: user.email,
+      password: user.password
+    });
+    authStore.applySession(res);
+    router.push("/library");
+  } catch (err) {
+    console.error("Impersonation failed:", err);
+    dialogStore.alert(`登录失败: ${err.message || err}`);
+  }
 }
 
 async function saveUserMembership() {
@@ -3541,6 +3676,24 @@ async function submitForumReportDecision() {
   }
 }
 
+async function deleteForumPostDirectly(report) {
+  const postId = String(report.postId).replace('post-', '');
+  const ok = await dialogStore.confirm(`确认要永久删除帖子《${report.postTitle}》吗？此操作将永久清除该帖子、所有回复及相关的举报记录！`, {
+    title: "删除帖子",
+    confirmText: "删除",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    await paperpilotApi.deleteAdminForumPost(postId);
+    dialogStore.alert("帖子已成功永久删除。");
+    await fetchAllData();
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "删除帖子失败");
+  }
+}
+
 async function reviewCampusVerification(request, status) {
   const isApprove = status === "approved";
   let adminNote = isApprove ? "校园认证信息已核验通过。" : await dialogStore.prompt("请输入驳回原因", {
@@ -3571,6 +3724,7 @@ async function reviewCampusVerification(request, status) {
 function cleanActionName(value) {
   const text = String(value || "-");
   if (text.includes("PPT") || text.includes("Agent")) return "组会PPT Agent执行";
+  if (text.includes("融合")) return "组会一键融合";
   if (text.includes("综述") || text.includes("汇报") || text.includes("组会")) return "论文综述生成";
   return "AI文章对话";
 }
@@ -9359,24 +9513,70 @@ function formatTokenCount(num) {
   color: #c084fc !important;
 }
 
-.model-billing-price {
-  font-size: 0.72rem;
-  font-family: monospace;
-  font-weight: 600;
-  color: #0f766e;
-  background: rgba(13, 148, 136, 0.04);
-  border: 1px solid rgba(13, 148, 136, 0.1);
-  padding: 4px 8px;
-  border-radius: 6px;
+/* Cost Tier Badge System */
+.model-cost-tier-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 6px;
-  align-self: flex-start;
+  flex-wrap: wrap;
 }
 
-:global([data-theme="dark"] .model-billing-price) {
-  color: #2dd4bf !important;
-  background: rgba(45, 212, 191, 0.08) !important;
-  border-color: rgba(45, 212, 191, 0.15) !important;
+.model-cost-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: default;
+  transition: transform 0.15s;
+  white-space: nowrap;
 }
+.model-cost-tier-badge:hover { transform: scale(1.04); }
+
+/* Dot indicators inside badge */
+.cost-tier-dots {
+  display: inline-flex;
+  gap: 2.5px;
+  align-items: center;
+}
+.cost-tier-dots i {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  opacity: 0.25;
+  background: currentColor;
+  transition: opacity 0.2s;
+}
+.cost-tier-dots i.active { opacity: 1; }
+
+/* Tier color schemes */
+.tier-free  { background: rgba(16,185,129,0.12); color: #059669; border: 1px solid rgba(5,150,105,0.25); }
+.tier-low   { background: rgba(59,130,246,0.10); color: #2563eb; border: 1px solid rgba(37,99,235,0.20); }
+.tier-mid   { background: rgba(245,158,11,0.12); color: #b45309; border: 1px solid rgba(180,83,9,0.25); }
+.tier-high  { background: rgba(249,115,22,0.12); color: #c2410c; border: 1px solid rgba(194,65,12,0.25); }
+.tier-flagship { background: rgba(239,68,68,0.10); color: #b91c1c; border: 1px solid rgba(185,28,28,0.22); }
+
+/* Short billing hint next to the badge */
+.model-billing-hint {
+  font-size: 0.67rem;
+  color: #94a3b8;
+  font-family: monospace;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* Dark mode overrides */
+:global([data-theme="dark"] .tier-free)     { background: rgba(16,185,129,0.15) !important; color: #34d399 !important; border-color: rgba(52,211,153,0.25) !important; }
+:global([data-theme="dark"] .tier-low)      { background: rgba(96,165,250,0.12) !important; color: #60a5fa !important; border-color: rgba(96,165,250,0.22) !important; }
+:global([data-theme="dark"] .tier-mid)      { background: rgba(251,191,36,0.12) !important; color: #fbbf24 !important; border-color: rgba(251,191,36,0.25) !important; }
+:global([data-theme="dark"] .tier-high)     { background: rgba(251,146,60,0.12) !important; color: #fb923c !important; border-color: rgba(251,146,60,0.22) !important; }
+:global([data-theme="dark"] .tier-flagship) { background: rgba(248,113,113,0.12) !important; color: #f87171 !important; border-color: rgba(248,113,113,0.22) !important; }
+:global([data-theme="dark"] .model-billing-hint) { color: #64748b !important; }
 
 .model-desc-info-text {
   font-size: 0.72rem;

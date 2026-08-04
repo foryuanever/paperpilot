@@ -53,6 +53,7 @@ MEMORY.md
 .trash/
 backups/
 reports/
+release/remote/
 *.bak
 *.bak-*
 *-bak-*

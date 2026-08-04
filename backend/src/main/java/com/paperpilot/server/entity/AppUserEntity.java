@@ -266,4 +266,37 @@ public class AppUserEntity {
     public void setCampusVerified(boolean campusVerified) {
         this.campusVerified = campusVerified;
     }
+
+    @Column(name = "qq_openid", length = 128, unique = true)
+    private String qqOpenid;
+
+    public String getQqOpenid() {
+        return qqOpenid;
+    }
+
+    public void setQqOpenid(String qqOpenid) {
+        this.qqOpenid = qqOpenid;
+    }
+
+    @Column(name = "qq", length = 32)
+    private String qq;
+
+    @Column(name = "wechat", length = 64)
+    private String wechat;
+
+    public String getQq() {
+        return qq;
+    }
+
+    public void setQq(String qq) {
+        this.qq = qq;
+    }
+
+    public String getWechat() {
+        return wechat;
+    }
+
+    public void setWechat(String wechat) {
+        this.wechat = wechat;
+    }
 }

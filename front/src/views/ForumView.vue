@@ -163,6 +163,9 @@
                 <button :disabled="moderationBusy[post.id]" :class="{ active: post.pinned }" @click="toggleModeration(post, 'pin')">
                   {{ post.pinned ? "取消置顶" : "置顶" }}
                 </button>
+                <button :disabled="moderationBusy[post.id]" class="danger" @click="removeAdminPost(post)">
+                  删除
+                </button>
               </div>
             </div>
           </article>
@@ -1194,6 +1197,29 @@ async function removeMyPost(post) {
   if (!ok) return;
   await forumStore.deletePost(post.id);
   window.dispatchEvent(new Event("paperpilot:forum-posts-changed"));
+}
+
+async function removeAdminPost(post) {
+  const ok = await dialogStore.confirm(`确认以管理员身份强制永久删除帖子“${post.title}”吗？此操作将永久清除该帖子及所有回复！`, {
+    title: "强制删除帖子",
+    confirmText: "删除",
+    cancelText: "取消",
+    danger: true,
+  });
+  if (!ok) return;
+  moderationBusy[post.id] = true;
+  try {
+    const postId = String(post.id).replace('post-', '');
+    await paperpilotApi.deleteAdminForumPost(postId);
+    dialogStore.alert("帖子已强制删除。");
+    // Remove from local list
+    forumStore.state.posts = forumStore.state.posts.filter(item => item.id !== post.id);
+    window.dispatchEvent(new Event("paperpilot:forum-posts-changed"));
+  } catch (error) {
+    dialogStore.alert(error.response?.data?.message || "强制删除失败");
+  } finally {
+    moderationBusy[post.id] = false;
+  }
 }
 
 async function toggleModeration(post, action) {

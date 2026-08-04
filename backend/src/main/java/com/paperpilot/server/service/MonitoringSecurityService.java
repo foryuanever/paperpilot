@@ -69,6 +69,18 @@ public class MonitoringSecurityService {
     private final ConcurrentHashMap<Long, String> userIdToUsername = new ConcurrentHashMap<>();
     private final RequestMonitorRecordRepository requestMonitorRecordRepository;
 
+    @org.springframework.beans.factory.annotation.Value("${paperpilot.security.firewall.enabled:true}")
+    private boolean firewallEnabled = true;
+
+    @org.springframework.beans.factory.annotation.Value("${paperpilot.security.firewall.limit-ip-count:1000}")
+    private int limitIpCount = 1000;
+
+    @org.springframework.beans.factory.annotation.Value("${paperpilot.security.firewall.limit-ip-ban:1500}")
+    private int limitIpBan = 1500;
+
+    @org.springframework.beans.factory.annotation.Value("${paperpilot.security.firewall.limit-user-count:500}")
+    private int limitUserCount = 500;
+
     public MonitoringSecurityService(RequestMonitorRecordRepository requestMonitorRecordRepository) {
         this.requestMonitorRecordRepository = requestMonitorRecordRepository;
     }
@@ -79,21 +91,23 @@ public class MonitoringSecurityService {
         boolean trustedLocalIp = isTrustedLocalIp(ipAddress);
 
         // 1. Check bans
-        if (!trustedLocalIp && ipAddress != null && bannedIps.containsKey(ipAddress)) {
-            logSecurityAlert("ATTACK_ATTEMPT", ipAddress, "已被封禁的IP尝试访问接口: " + url);
-            log.blocked = true;
-            log.status = 403;
-            requestHistory.add(log);
-            cleanupOldRequests();
-            return new RequestDecision(false, log);
-        }
-        if (userId != null && isUserBanned(userId)) {
-            logSecurityAlert("ATTACK_ATTEMPT", "user-" + userId, "已被封禁的账号尝试访问接口: " + url);
-            log.blocked = true;
-            log.status = 403;
-            requestHistory.add(log);
-            cleanupOldRequests();
-            return new RequestDecision(false, log);
+        if (firewallEnabled) {
+            if (!trustedLocalIp && ipAddress != null && bannedIps.containsKey(ipAddress)) {
+                logSecurityAlert("ATTACK_ATTEMPT", ipAddress, "已被封禁的IP尝试访问接口: " + url);
+                log.blocked = true;
+                log.status = 403;
+                requestHistory.add(log);
+                cleanupOldRequests();
+                return new RequestDecision(false, log);
+            }
+            if (userId != null && isUserBanned(userId)) {
+                logSecurityAlert("ATTACK_ATTEMPT", "user-" + userId, "已被封禁的账号尝试访问接口: " + url);
+                log.blocked = true;
+                log.status = 403;
+                requestHistory.add(log);
+                cleanupOldRequests();
+                return new RequestDecision(false, log);
+            }
         }
 
         // 2. Log request
@@ -106,7 +120,7 @@ public class MonitoringSecurityService {
 
         // 4. Rate checks
         cleanupOldRequests();
-        if (!trustedLocalIp) {
+        if (firewallEnabled && !trustedLocalIp) {
             checkRateLimits(userId, ipAddress);
         }
 
@@ -139,10 +153,10 @@ public class MonitoringSecurityService {
             long ipCount = requestHistory.stream()
                 .filter(log -> ipAddress.equals(log.ipAddress) && log.timestamp >= oneMinuteAgo)
                 .count();
-            if (ipCount > 100) { // Limit: 100 requests per minute
+            if (ipCount > limitIpCount) { // Configured limit
                 logSecurityAlert("IP_ABUSE", ipAddress, "IP请求速率过高: " + ipCount + "次/分钟，系统已拦截其高频动作。");
-                if (ipCount > 150) {
-                    banIp(ipAddress, "系统自动风控：每分钟请求超150次");
+                if (ipCount > limitIpBan) { // Configured ban threshold
+                    banIp(ipAddress, "系统自动风控：每分钟请求超" + limitIpBan + "次");
                 }
             }
         }
@@ -151,7 +165,7 @@ public class MonitoringSecurityService {
             long userCount = requestHistory.stream()
                 .filter(log -> userId.equals(log.userId) && log.timestamp >= oneMinuteAgo)
                 .count();
-            if (userCount > 50) { // Limit: 50 requests per minute
+            if (userCount > limitUserCount) { // Configured limit
                 logSecurityAlert("USER_ABUSE", "user-" + userId, "用户账号频次异常: " + userCount + "次/分钟，请核对是否在使用刷单脚本。");
             }
         }

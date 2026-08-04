@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld("paperSolverDesktop", {
   importZoteroLocal: (options) => ipcRenderer.invoke("desktop:zotero-import-local", options),
   readZoteroPdf: (pdfRef) => ipcRenderer.invoke("desktop:read-zotero-pdf", pdfRef),
   cachePdf: (payload) => ipcRenderer.invoke("desktop:cache-pdf", payload),
+  savePptDeck: (payload) => ipcRenderer.invoke("desktop:save-ppt-deck", payload),
   getCachedPdf: (payload) => ipcRenderer.invoke("desktop:get-cached-pdf", payload),
   getCacheInfo: () => ipcRenderer.invoke("desktop:get-cache-info"),
   clearPdfCache: () => ipcRenderer.invoke("desktop:clear-pdf-cache"),
@@ -35,5 +36,6 @@ contextBridge.exposeInMainWorld("paperSolverDesktop", {
   startStructuredParse: (payload) => ipcRenderer.invoke("desktop:structured-parse-start", payload),
   getStructuredParseStatus: (payload) => ipcRenderer.invoke("desktop:structured-parse-status", payload),
   getStructuredDocument: (payload) => ipcRenderer.invoke("desktop:structured-document", payload),
-  getStructuredAsset: (payload) => ipcRenderer.invoke("desktop:structured-asset", payload)
+  getStructuredAsset: (payload) => ipcRenderer.invoke("desktop:structured-asset", payload),
+  oauthQQ: (qqAuthUrl) => ipcRenderer.invoke("desktop:oauth-qq", qqAuthUrl),
 });

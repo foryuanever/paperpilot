@@ -33,7 +33,7 @@
               <h1>{{ authStore.profile.name }}</h1>
               <span class="role-pill" :class="getRoleClass(currentUserMember.role)">{{ currentUserMember.role }}</span>
             </div>
-            <p>{{ authStore.profile.email }}</p>
+            <p v-if="!String(authStore.profile.email || '').startsWith('qq_user_')">{{ authStore.profile.email }}</p>
             <span v-if="authStore.profile.campusVerified && authStore.profile.schoolName" class="school-badge">
               {{ authStore.profile.schoolName }}
             </span>
@@ -80,7 +80,7 @@
               </div>
               <div class="summary-item">
                 <span>邀请码</span>
-                <strong>{{ authStore.profile.inviteCode || "PAPERSLOVER2026" }}</strong>
+                <strong>{{ authStore.profile.inviteCode || '—' }}</strong>
               </div>
               <div class="summary-item">
                 <span>团队角色</span>
@@ -154,13 +154,21 @@
                 </label>
                 <label>
                   <span>电子邮箱</span>
-                  <input :value="authStore.profile.email" type="email" disabled autocomplete="email" />
+                  <input :value="String(authStore.profile.email || '').startsWith('qq_user_') ? 'QQ 快捷登录账号' : authStore.profile.email" type="text" disabled autocomplete="email" />
+                </label>
+                <label>
+                  <span>QQ 号码</span>
+                  <input v-model="tempQq" type="text" placeholder="输入您的 QQ 号码" />
+                </label>
+                <label>
+                  <span>微信号码</span>
+                  <input v-model="tempWechat" type="text" placeholder="输入您的微信号码" />
                 </label>
               </div>
 
               <label>
                 <span>邀请码</span>
-                <input :value="authStore.profile.inviteCode || 'PAPERSLOVER2026'" type="text" disabled />
+                <input :value="authStore.profile.inviteCode" type="text" disabled />
               </label>
 
               <div class="form-actions">
@@ -378,6 +386,8 @@ const teamStore = useTeamStore();
 const forumStore = useForumStore();
 
 const tempName = ref(authStore.profile.name);
+const tempQq = ref("");
+const tempWechat = ref("");
 const profileSuccess = ref("");
 const oldPassword = ref("");
 const newPassword = ref("");
@@ -484,6 +494,8 @@ const currentCheckinStreak = computed(() => {
 
 onMounted(() => {
   tempName.value = authStore.profile.name;
+  tempQq.value = authStore.profile.qq || "";
+  tempWechat.value = authStore.profile.wechat || "";
   loadCheckinHistory();
   loadContactRequests();
 });
@@ -544,7 +556,11 @@ async function saveProfileData() {
     return;
   }
   try {
-    await authStore.updateProfileFields({ name: tempName.value.trim() });
+    await authStore.updateProfileFields({
+      name: tempName.value.trim(),
+      qq: tempQq.value.trim(),
+      wechat: tempWechat.value.trim(),
+    });
     flash(profileSuccess, "个人资料已保存");
   } catch (error) {
     dialogStore.alert(error?.response?.data?.message || "个人资料保存失败");
@@ -640,18 +656,7 @@ async function loadCheckinHistory() {
   (history || []).forEach(item => { if (item.date) mergedMap.set(item.date, item); });
   (localCheckins || []).forEach(item => { if (item.date) mergedMap.set(item.date, item); });
 
-  // If map is empty or has very few entries, populate authentic activity dates based on fruitScore & activeTime
-  if (mergedMap.size === 0) {
-    const today = new Date();
-    const activeDaysCount = Math.max(1, Math.min(30, Math.floor((authStore.profile.fruitScore || 42) / 3) + 2));
-    for (let i = 0; i < activeDaysCount; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - (i * 2 + (i % 3)));
-      const dateStr = formatDateKey(d);
-      const fruitAward = Math.min(10, Math.max(1, (i % 4) * 2 + 1));
-      mergedMap.set(dateStr, { date: dateStr, fruitAward });
-    }
-  }
+
 
   checkinHistory.value = Array.from(mergedMap.values());
 }

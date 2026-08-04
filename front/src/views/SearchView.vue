@@ -67,7 +67,7 @@
             >
               <i class="source-site-icon">
                 <img v-if="source.icon" :src="source.icon" :alt="`${source.name} logo`" loading="lazy" />
-                <b>{{ source.initial }}</b>
+                <b v-else>{{ source.initial }}</b>
               </i>
               <strong>{{ source.name }}</strong>
               <span>{{ source.desc }}</span>

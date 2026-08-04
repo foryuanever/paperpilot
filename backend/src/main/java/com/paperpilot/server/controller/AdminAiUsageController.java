@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -49,6 +50,13 @@ public class AdminAiUsageController {
     public Map<String, Object> clearCalls(HttpServletRequest request) {
         Map<String, Object> result = aiUsageService.clearAdminCalls();
         authService.logAction("管理员清空 AI 调用记录", "warn", getClientIp(request));
+        return result;
+    }
+
+    @DeleteMapping("/calls/{id}")
+    public Map<String, Object> deleteCall(@PathVariable("id") Long id, HttpServletRequest request) {
+        Map<String, Object> result = aiUsageService.deleteAdminCall(id);
+        authService.logAction("管理员删除 AI 调用记录 ID: " + id, "warn", getClientIp(request));
         return result;
     }
 

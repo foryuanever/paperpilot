@@ -891,7 +891,7 @@ function blockPoints(value) {
       .flatMap(line => line.split(/(?=[·•]\s)|(?=\d+[.、]\s*)/g))
       .map(item => item.replace(/^[·•\-\s*]+/, "").replace(/^\d+[.、]\s*/, "").trim())
       .filter(item => item.length > 3)
-      .slice(0, 5);
+      .slice(0, 4);
   }
   if (text.length <= 72) return [text];
   const chunks = [];

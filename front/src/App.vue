@@ -72,7 +72,7 @@
                   <span class="profile-popover-role-badge" :class="getRoleClass(currentUserMember.role)">{{ currentUserMember.role }}</span>
                   <span class="profile-popover-role-badge badge-vip">{{ membershipName }}</span>
                 </div>
-                <div class="profile-popover-email">{{ authStore.profile.email }}</div>
+                <div class="profile-popover-email" v-if="!String(authStore.profile.email || '').startsWith('qq_user_')">{{ authStore.profile.email }}</div>
               </div>
             </div>
 
@@ -134,8 +134,8 @@
 
     <main :class="mainClass" @click="uiStore.closeOverlays">
       <router-view v-slot="{ Component, route: viewRoute }">
-        <Transition name="workspace-route" mode="out-in">
-          <component :is="Component" :key="`${viewRoute.fullPath}:${desktopRefreshKey}`" />
+        <Transition name="workspace-route">
+          <component :is="Component" :key="routeComponentKey(viewRoute)" />
         </Transition>
       </router-view>
     </main>
@@ -374,14 +374,14 @@ const navItems = computed(() => {
   if (authStore.session.role === "管理员") {
     return [
       { to: "/admin", label: "后台" },
+      { to: "/search", label: "文献检索" },
       { to: "/library", label: "文献库" },
       { to: "/reading", label: "文献阅读" },
+      { to: "/topics", label: "选题大厅" },
       { to: "/meeting-report", label: "组会汇报" },
-      { to: "/search", label: "检索" },
-      { to: "/topics", label: "选题广场" },
-      { to: "/forum", label: "学术论坛" },
-      { to: "/models", label: "用量" },
-      { to: "/team", label: "团队" }
+      { to: "/forum", label: "学术贴吧" },
+      { to: "/models", label: "额度管理" },
+      { to: "/team", label: "我的team" }
     ];
   }
   return pageNavItems;
@@ -454,6 +454,11 @@ function handleBrandRefresh() {
   window.setTimeout(() => {
     desktopRefreshing.value = false;
   }, 760);
+}
+
+function routeComponentKey(viewRoute) {
+  const params = viewRoute?.params ? JSON.stringify(viewRoute.params) : "";
+  return `${viewRoute?.name || viewRoute?.path || "view"}:${params}:${desktopRefreshKey.value}`;
 }
 
 function forumSeenKey() {

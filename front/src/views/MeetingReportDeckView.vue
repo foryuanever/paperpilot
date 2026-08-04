@@ -6,7 +6,7 @@
         <h1>按时间沉淀每一次组会材料</h1>
         <p>每张卡片是一场组会：选择汇报文献、补充重点内容、生成论文综述，并把 PPT 任务留在后台执行。</p>
       </div>
-      <button type="button" class="add-meeting-button" @click="addMeeting">
+      <button type="button" class="add-meeting-button" @click="triggerNewMeetingPicker">
         <span aria-hidden="true">+</span>
         添加组会
       </button>
@@ -78,7 +78,24 @@
 
 
     <main class="timeline-shell">
-      <section class="timeline-list" aria-label="组会时间轴">
+      <div v-if="sortedMeetings.length === 0" class="timeline-empty-state">
+        <div class="empty-icon-box">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="empty-svg">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+            <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"></path>
+          </svg>
+        </div>
+        <h2>开启您的第一次学术组会</h2>
+        <p>这里将按时间沉淀每一次汇报的文献和综述，让您的汇报准备井井有条。</p>
+        <button type="button" class="btn-empty-add" @click="triggerNewMeetingPicker">
+          <span>+</span> 创建新组会安排
+        </button>
+      </div>
+
+      <section v-else class="timeline-list" aria-label="组会时间轴">
         <article
           v-for="(meeting, index) in sortedMeetings"
           :key="meeting.id"
@@ -90,17 +107,47 @@
           </div>
 
           <div class="meeting-card-head">
-            <div class="meeting-date-block">
-              <div class="date-summary">
-                <span>组会时间</span>
-                <strong>{{ formatMeetingDate(meeting.meetingTime) }}</strong>
+            <div class="meeting-date-block-premium">
+              <div class="date-info-group">
+                <div class="calendar-icon-wrapper">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="calendar-svg">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                  </svg>
+                </div>
+                <div class="date-text-wrapper">
+                  <span class="date-main-label">组会日期</span>
+                  <span class="date-sub-value">{{ formatMeetingDateOnly(meeting.meetingTime) }}</span>
+                </div>
               </div>
-              <input
-                v-model="meeting.meetingTime"
-                type="datetime-local"
-                aria-label="组会时间"
-                @change="persistMeetings"
-              />
+
+              <div class="time-divider" aria-hidden="true"></div>
+
+              <div class="time-info-group">
+                <span class="time-clock-value">{{ getMeetingHourMin(meeting.meetingTime) }}</span>
+                <span class="countdown-badge" :class="meetingCountdownClass(meeting.meetingTime)">
+                  {{ meetingCountdownText(meeting.meetingTime) }}
+                </span>
+              </div>
+
+              <div class="picker-trigger-wrapper" @click="triggerDatePicker($event)">
+                <button type="button" class="btn-time-edit" aria-label="调整组会时间">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 20h9"></path>
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                  </svg>
+                  <span>调整</span>
+                </button>
+                <input
+                  v-model="meeting.meetingTime"
+                  type="datetime-local"
+                  class="hidden-datetime-picker"
+                  aria-label="选择组会时间"
+                  @change="persistMeetings"
+                />
+              </div>
             </div>
             <div class="meeting-head-actions">
               <div class="meeting-status" :data-status="meetingStatus(meeting)">
@@ -218,15 +265,14 @@
                   </div>
                   <p class="deck-paper-scope">{{ deckPaperScope(meeting) }}</p>
                   <div class="deck-action-row">
-                    <a
-                      v-if="deckJobs[meeting.id]?.confirmUrl && isDeckBusy(meeting)"
+                    <button
+                      v-if="deckJobs[meeting.id]?.confirmUrl && !deckJobs[meeting.id]?.downloadUrl && Number(deckJobs[meeting.id]?.progress || 0) <= 28"
+                      type="button"
                       class="confirm-link-button"
-                      :href="deckJobs[meeting.id].confirmUrl"
-                      target="_blank"
-                      rel="noreferrer"
+                      @click="openDeckConfirmPage(deckJobs[meeting.id].confirmUrl)"
                     >
                       打开参数页
-                    </a>
+                    </button>
                     <a
                       v-if="deckJobs[meeting.id]?.downloadUrl"
                       class="download-button"
@@ -237,7 +283,25 @@
                       下载 PPT
                     </a>
                     <button
-                      v-else
+                      v-if="deckJobs[meeting.id]?.downloadUrl && canSaveDeckToDesktop()"
+                      type="button"
+                      class="local-save-button"
+                      :disabled="savingLocalDecks.has(meeting.id) || Boolean(deckJobs[meeting.id]?.localPath)"
+                      @click="saveDeckToDesktop(meeting)"
+                    >
+                      {{ deckJobs[meeting.id]?.localPath ? "已保存本机" : savingLocalDecks.has(meeting.id) ? "保存中" : "保存到本机" }}
+                    </button>
+                    <button
+                      v-if="deckJobs[meeting.id]?.downloadUrl"
+                      type="button"
+                      class="regenerate-deck-button"
+                      :disabled="!canMakePpt(meeting) || isDeckBusy(meeting)"
+                      @click="makePpt(meeting)"
+                    >
+                      重新生成
+                    </button>
+                    <button
+                      v-if="!deckJobs[meeting.id]?.downloadUrl"
                       type="button"
                       class="primary-button"
                       :disabled="!canMakePpt(meeting) || isDeckBusy(meeting)"
@@ -347,6 +411,10 @@
                 <div class="review-point-meta">
                   <strong>{{ section.title }}</strong>
                   <small>{{ section.hint }}</small>
+                  <div class="review-point-badge">
+                    <span class="dot"></span>
+                    <span>已精读整理</span>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -377,6 +445,53 @@
         </section>
       </div>
     </Transition>
+    <Transition name="modal-fade">
+      <div v-if="newMeetingModal.open" class="modal-backdrop picker-modal-backdrop" @click.self="newMeetingModal.open = false">
+        <div class="custom-picker-card">
+          <div class="picker-card-header">
+            <h3>新建组会安排</h3>
+            <p>请设置组会的召开日期与具体时间</p>
+          </div>
+          
+          <div class="picker-card-body">
+            <div class="picker-field-group">
+              <label for="new-meeting-date">选择日期</label>
+              <div class="input-with-icon">
+                <span class="icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                </span>
+                <input
+                  id="new-meeting-date"
+                  v-model="newMeetingModal.date"
+                  type="date"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div class="picker-field-group">
+              <label for="new-meeting-time">选择时间</label>
+              <div class="input-with-icon">
+                <span class="icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </span>
+                <input
+                  id="new-meeting-time"
+                  v-model="newMeetingModal.time"
+                  type="time"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div class="picker-card-footer">
+            <button type="button" class="btn-picker-cancel" @click="newMeetingModal.open = false">取消</button>
+            <button type="button" class="btn-picker-confirm" @click="confirmNewMeeting">确定</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <Transition name="toast-slide">
       <div v-if="toastMessage" class="meeting-toast">{{ toastMessage }}</div>
@@ -395,6 +510,8 @@ const DECK_STORAGE_KEY = "paperpilot-meeting-deck-jobs-v1";
 const REVIEW_STORAGE_KEY = "paperpilot-meeting-review-jobs-v1";
 const DEFAULT_MEETING_TITLE = "新组会汇报";
 const MAX_MEETING_PAPERS = 3;
+const MAX_DECK_SLIDES = 10;
+const DEFAULT_DECK_SLIDE_COUNT = "10";
 const DEFAULT_MEETING_NOTES = "本次重点：先讲清研究问题，再讨论方法路线、证据质量和后续可推进方向。";
 const DEFAULT_MEETING_DETAILS = {
   objective: "",
@@ -420,6 +537,11 @@ const reviewSections = [
 ];
 
 const meetings = ref([]);
+const newMeetingModal = reactive({
+  open: false,
+  date: "",
+  time: "",
+});
 const papers = ref([]);
 const keyword = ref("");
 const loadingPapers = ref(false);
@@ -431,6 +553,7 @@ const dialogStore = useDialogStore();
 const deckJobs = reactive({});
 const reviewJobs = reactive({});
 const importJobs = reactive({});
+const savingLocalDecks = reactive(new Set());
 const paperPicker = reactive({ open: false, meeting: null });
 const reviewModal = reactive({
   open: false,
@@ -549,11 +672,11 @@ function createMeeting(paperIds = []) {
     advisorAdvice: "",
     tags: ["待汇报"],
     tagDraft: "",
-    params: {
-      reportType: "paper",
-      audience: "导师与课题组",
-      slideCount: "10-12",
-    },
+	    params: {
+	      reportType: "paper",
+	      audience: "导师与课题组",
+	      slideCount: DEFAULT_DECK_SLIDE_COUNT,
+	    },
     papers: paperIds,
     primaryPaperId: paperIds[0] || "",
   };
@@ -570,11 +693,11 @@ function normalizeMeeting(meeting = {}) {
     advisorAdvice: meeting.advisorAdvice || "",
     tags: Array.isArray(meeting.tags) ? meeting.tags : [],
     tagDraft: "",
-    params: {
-      reportType: meeting.params?.reportType || "paper",
-      audience: meeting.params?.audience || "导师与课题组",
-      slideCount: meeting.params?.slideCount || "10-12",
-    },
+	    params: {
+	      reportType: meeting.params?.reportType || "paper",
+	      audience: meeting.params?.audience || "导师与课题组",
+	      slideCount: normalizeDeckSlideCount(meeting.params?.slideCount),
+	    },
     papers: paperIds,
     primaryPaperId: meeting.primaryPaperId || paperIds[0] || "",
   };
@@ -620,11 +743,37 @@ function formatMeetingBullets(items, maxItems = 3, itemLength = 130) {
     .join("\n");
 }
 
-function addMeeting() {
+function triggerNewMeetingPicker() {
+  const now = new Date();
+  newMeetingModal.date = now.toISOString().slice(0, 10);
+  // Round minutes to next 15-minute mark
+  const rawMins = now.getMinutes();
+  let roundedMins = Math.ceil(rawMins / 15) * 15;
+  let hours = now.getHours();
+  if (roundedMins >= 60) {
+    roundedMins = 0;
+    hours = (hours + 1) % 24;
+  }
+  newMeetingModal.time = `${String(hours).padStart(2, "0")}:${String(roundedMins).padStart(2, "0")}`;
+  newMeetingModal.open = true;
+}
+
+function confirmNewMeeting() {
+  if (!newMeetingModal.date || !newMeetingModal.time) {
+    showToast("请先选择日期和时间");
+    return;
+  }
+  
+  const selectedTime = `${newMeetingModal.date}T${newMeetingModal.time}`;
+  
   const meeting = createMeeting();
+  meeting.meetingTime = selectedTime;
   meetings.value.unshift(meeting);
   activeMeetingId.value = meeting.id;
-  showToast("已添加一场空白组会，请选择本次汇报文献");
+  persistMeetings();
+  
+  newMeetingModal.open = false;
+  showToast("已成功添加组会，请选择本次汇报文献");
 }
 
 function cleanupAutoSeededMeetings() {
@@ -692,6 +841,84 @@ function formatMeetingDate(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function formatMeetingDateOnly(value) {
+  if (!value) return "未定日期";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "未定日期";
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "long",
+    day: "numeric",
+  }).format(date);
+}
+
+function getMonthName(value) {
+  if (!value) return "07";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "07";
+  return `${date.getMonth() + 1}月`;
+}
+
+function getDayNum(value) {
+  if (!value) return "08";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "08";
+  return String(date.getDate()).padStart(2, "0");
+}
+
+function getMeetingHourMin(value) {
+  if (!value) return "23:00";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "23:00";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function meetingCountdownText(value) {
+  if (!value) return "待排期";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "待排期";
+  const diff = date.getTime() - Date.now();
+  if (diff < 0) {
+    if (diff > -10800000) return "进行中";
+    return "已召开";
+  }
+  const mins = Math.round(diff / 60000);
+  if (mins < 60) return `即将开始 (${mins}m)`;
+  const hours = Math.round(diff / 3600000);
+  if (hours < 24) return `今天 (${hours}h后)`;
+  const days = Math.ceil(diff / 86400000);
+  return `${days}天后`;
+}
+
+function meetingCountdownClass(value) {
+  if (!value) return "status-draft";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "status-draft";
+  const diff = date.getTime() - Date.now();
+  if (diff < 0) {
+    if (diff > -10800000) return "status-active";
+    return "status-past";
+  }
+  const mins = Math.round(diff / 60000);
+  if (mins < 60) return "status-soon";
+  return "status-future";
+}
+
+function triggerDatePicker(event) {
+  const parent = event.currentTarget.closest(".picker-trigger-wrapper");
+  const input = parent ? parent.querySelector(".hidden-datetime-picker") : null;
+  if (input) {
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+      } catch (err) {
+        input.click();
+      }
+    } else {
+      input.click();
+    }
+  }
 }
 
 function toDatetimeLocal(date) {
@@ -918,9 +1145,9 @@ function deckStepText(meeting) {
   if (missing) return `${missing} 篇文献缺少 PDF，补齐后可合并生成`;
   if (!job) return "等待启动 PPT 任务";
   if (job.status === "generated") return "已生成，可下载";
-  if (job.status === "failed") return job.message || "生成失败";
-  if (job.confirmUrl && Number(job.progress || 0) <= 24) return "等待参数确认 · 请打开参数页后继续";
-  return [job.stage, job.message].filter(Boolean).join(" · ") || "后台生成中";
+  if (job.status === "failed") return publicDeckText(job.message || "生成失败");
+  if (job.confirmUrl && Number(job.progress || 0) <= 28) return "参数页已弹出，请在新窗口确认生成参数";
+  return [job.stage, job.message].map(publicDeckText).filter(Boolean).join(" · ") || "后台生成中";
 }
 
 function importStepText(meeting) {
@@ -1081,9 +1308,21 @@ async function saveReview() {
 
 function applyReviewData(data = {}) {
   reviewModal.sections = formatReviewSections({ ...emptySections(), ...(data.sections || {}) });
+  
+  const paperInfo = data.paper || reviewModal.paper || {};
   if (!hasUsefulSection(reviewModal.sections.basicInfo)) {
-    reviewModal.sections.basicInfo = buildBasicInfoFallback(data.paper || reviewModal.paper || {});
+    reviewModal.sections.basicInfo = buildBasicInfoFallback(paperInfo);
   }
+  if (!hasUsefulSection(reviewModal.sections.background)) {
+    reviewModal.sections.background = buildBackgroundFallback(reviewModal.sections, paperInfo);
+  }
+  if (!hasUsefulSection(reviewModal.sections.conclusion)) {
+    reviewModal.sections.conclusion = buildConclusionFallback(reviewModal.sections, paperInfo);
+  }
+  if (!hasUsefulSection(reviewModal.sections.datasets)) {
+    reviewModal.sections.datasets = buildDatasetsFallback(reviewModal.sections, paperInfo);
+  }
+  
   reviewModal.generated = Boolean(data.generated);
   reviewModal.modelName = data.modelName || "";
   reviewModal.progress = data.generated ? 100 : reviewModal.progress;
@@ -1094,7 +1333,14 @@ function applyReviewData(data = {}) {
 function hasUsefulSection(value = "") {
   const text = String(value || "").replace(/\s+/g, "");
   if (text.length < 12) return false;
-  return !/^(作者、年份、期刊\/会议、研究对象、数据来源。?|作者年份期刊会议研究对象数据来源)$/.test(text);
+  return !/^(作者、年份、期刊\/会议、研究对象、数据来源。?|作者年份期刊会议研究对象数据来源|贡献、边界、局限、后续研究方向。?|关键概念、相关理论、与既有工作的关系。?)$/.test(text);
+}
+
+function splitIntoSentences(text = "") {
+  return String(text || "")
+    .split(/[。！；？!\n;]/)
+    .map(s => s.trim())
+    .filter(s => s.length > 5 && !s.includes("生成状态") && !s.includes("未完成") && !s.includes("接口返回") && !s.includes("保存可编辑"));
 }
 
 function buildBasicInfoFallback(paper = {}) {
@@ -1103,6 +1349,64 @@ function buildBasicInfoFallback(paper = {}) {
     `发表信息：作者为 ${paper.authors || "作者信息未补全"}；来源为 ${paper.source || "来源未记录"}；年份为 ${paper.publishYear || "年份未知"}。`,
     `汇报价值：适合从研究对象、问题动机、方法设计、结果证据和局限边界几个角度组织汇报。`,
   ].join("\n\n"));
+}
+
+function buildBackgroundFallback(sections, paper = {}) {
+  const sourceText = [sections.synthesis, sections.overview, paper.abstractText].filter(Boolean).join("\n");
+  const sentences = splitIntoSentences(sourceText);
+  
+  const currentStatus = sentences.filter(s => /现状|目前|已有|传统|通常|近年来/i.test(s)).slice(0, 2);
+  const keyGap = sentences.filter(s => /挑战|限制|不足|瓶颈|然而|但是|面临/i.test(s)).slice(0, 2);
+  const objective = sentences.filter(s => /旨在|提出|设计|目的|目标|研究/i.test(s)).slice(0, 2);
+  
+  const blocks = [];
+  if (currentStatus.length) blocks.push(`研究背景：${currentStatus.join("；")}。`);
+  if (keyGap.length) blocks.push(`现有不足：${keyGap.join("；")}。`);
+  if (objective.length) blocks.push(`研究问题：${objective.join("；")}。`);
+  
+  if (!blocks.length && sentences.length) {
+    blocks.push(`研究背景：${sentences.slice(0, 3).join("；")}。`);
+  } else if (!blocks.length) {
+    blocks.push(`研究背景：本研究围绕题目所涉核心科学问题展开。主要探讨对应背景及当前领域面临的性能/合规痛点。`);
+  }
+  
+  return formatReviewParagraphs(blocks.join("\n\n"));
+}
+
+function buildConclusionFallback(sections, paper = {}) {
+  const sourceText = [sections.synthesis, sections.results, sections.overview].filter(Boolean).join("\n");
+  const sentences = splitIntoSentences(sourceText);
+  
+  const innovation = sentences.filter(s => /创新|贡献|首次|提出|价值|意义/i.test(s)).slice(0, 2);
+  const limit = sentences.filter(s => /局限|不足|限制|未来|展望|有待/i.test(s)).slice(0, 2);
+  
+  const blocks = [];
+  if (innovation.length) blocks.push(`主要贡献：${innovation.join("；")}。`);
+  if (limit.length) blocks.push(`局限性：${limit.join("；")}。`);
+  
+  if (!blocks.length && sentences.length) {
+    blocks.push(`主要贡献：${sentences.slice(0, 2).join("；")}。`);
+  } else if (!blocks.length) {
+    blocks.push(`主要贡献：提出并验证了所述模型及技术方案，为后续同类研究提供了有价值的参考和经验。`);
+    blocks.push(`局限性：受限于实验样本和评估环境，后续可在更大规模场景下进行深入测试与验证。`);
+  }
+  
+  return formatReviewParagraphs(blocks.join("\n\n"));
+}
+
+function buildDatasetsFallback(sections, paper = {}) {
+  const sourceText = [sections.method, sections.results, sections.synthesis].filter(Boolean).join("\n");
+  const sentences = splitIntoSentences(sourceText);
+  
+  const datasets = sentences.filter(s => /数据|样本|实验|评测|指标|数据集|评估/i.test(s)).slice(0, 3);
+  
+  const blocks = [];
+  if (datasets.length) {
+    blocks.push(`数据与评测：${datasets.join("；")}。`);
+  } else {
+    blocks.push(`数据与评测：本研究的实验设计与评价指标需参考方法与结果部分，建议重点关注模型对比及消融实验设置。`);
+  }
+  return formatReviewParagraphs(blocks.join("\n\n"));
 }
 
 function formatReviewSections(sections) {
@@ -1150,21 +1454,33 @@ function resizeAllReviewTextareas() {
 function highlightedReviewHtml(value = "") {
   const text = String(value || "");
   if (!text.trim()) return "";
-  return text
-    .split("\n")
-    .map((line) => {
-      if (!line.trim()) return "<br>";
-      const escaped = escapeHtml(line);
-      if (/^[\u4e00-\u9fa5A-Za-z（）()、与及\s]{2,24}\s*[：:]$/.test(line.trim())) {
-        return `<span class="review-inline-heading">${escaped}</span>`;
+  
+  const lines = text.split("\n").map(l => l.trim());
+  const processed = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isHeading = /^[\u4e00-\u9fa5A-Za-z（）()、与及\s]{2,24}\s*[：:]$/.test(line);
+    
+    if (isHeading) {
+      while (processed.length && processed[processed.length - 1] === "") {
+        processed.pop();
       }
-      return highlightLatinAndNumbers(escaped);
-    })
-    .join("<br>");
+      processed.push(`<span class="review-inline-heading">${escapeHtml(line)}</span>`);
+    } else if (!line) {
+      if (processed.length && processed[processed.length - 1] !== "" && !processed[processed.length - 1].startsWith("<span class=\"review-inline-heading\"")) {
+        processed.push("");
+      }
+    } else {
+      processed.push(highlightLatinAndNumbers(escapeHtml(line)));
+    }
+  }
+  
+  return processed.join("<br>");
 }
 
 function highlightLatinAndNumbers(escapedLine = "") {
-  return escapedLine.replace(/([A-Za-z][A-Za-z0-9._/-]*|[+-]?\d+(?:[.,]\d+)*(?:\.\d+)?%?)/g, '<span class="review-number">$1</span>');
+  return escapedLine.replace(/([+-]?\d+(?:[.,]\d+)*(?:\.\d+)?%?)/g, '<span class="review-number">$1</span>');
 }
 
 function escapeHtml(value = "") {
@@ -1379,6 +1695,17 @@ function cleanMeetingField(value = "") {
     .trim();
 }
 
+function normalizeDeckSlideCount(value = DEFAULT_DECK_SLIDE_COUNT) {
+  const numbers = String(value || "")
+    .match(/\d+/g)
+    ?.map(Number)
+    .filter(Number.isFinite) || [];
+  if (!numbers.length) return DEFAULT_DECK_SLIDE_COUNT;
+  const first = Math.min(MAX_DECK_SLIDES, Math.max(1, numbers[0]));
+  const last = Math.min(MAX_DECK_SLIDES, Math.max(first, numbers[numbers.length - 1]));
+  return first === last ? String(first) : `${first}-${last}`;
+}
+
 async function makePpt(meeting) {
   const selected = selectedMeetingPapers(meeting);
   const paper = primaryPaper(meeting) || selected[0];
@@ -1386,6 +1713,11 @@ async function makePpt(meeting) {
   if (missingPdfCount(meeting)) {
     showToast("请先补齐本次组会文献的 PDF");
     return;
+  }
+  confirmOpened.value = "";
+  if (deckTimers.has(meeting.id)) {
+    window.clearTimeout(deckTimers.get(meeting.id));
+    deckTimers.delete(meeting.id);
   }
   pendingConfirmWindow = openPendingConfirmWindow();
   activeMeetingId.value = meeting.id;
@@ -1399,15 +1731,16 @@ async function makePpt(meeting) {
     jobId: "",
     confirmUrl: "",
     downloadUrl: "",
+    localPath: "",
   };
   persistDeckJobs();
   try {
     const result = await paperpilotApi.generateMeetingDeck({
-      engine: "ppt-master-skill",
-      reportWorkspaceId: paper.workspaceId,
-      paperIds: selected.map(item => item.workspaceId),
-      slideCount: meeting.params.slideCount,
-      audience: meeting.params.audience,
+	      engine: "ppt-master-skill",
+	      reportWorkspaceId: paper.workspaceId,
+	      paperIds: selected.map(item => item.workspaceId),
+	      slideCount: normalizeDeckSlideCount(meeting.params.slideCount),
+	      audience: meeting.params.audience,
       focus: meetingFocusText(meeting),
       templateName: meeting.params.reportType,
     });
@@ -1419,30 +1752,33 @@ async function makePpt(meeting) {
       showToast("PPT 已生成，可以下载");
     }
   } catch (error) {
-    closePendingConfirmWindow();
     deckJobs[meeting.id] = {
       ...deckJobs[meeting.id],
       status: "failed",
       progress: deckJobs[meeting.id]?.progress || 0,
       stage: "生成失败",
-      message: error?.response?.data?.message || "PPT 制作失败",
+      message: publicDeckText(error?.response?.data?.message || "PPT 制作失败"),
     };
     showToast(deckJobs[meeting.id].message);
+    closePendingConfirmWindow();
   }
 }
 
 function openPendingConfirmWindow() {
   try {
     const win = window.open("about:blank", "_blank");
-    if (!win) return null;
+    if (!win) {
+      showToast("参数页弹窗被浏览器拦截，请允许弹窗后重试");
+      return null;
+    }
     win.document.write(`
       <!doctype html>
       <html lang="zh-CN">
-        <head><meta charset="utf-8"><title>PPT Master 参数页准备中</title></head>
+        <head><meta charset="utf-8"><title>PPT 参数页准备中</title></head>
         <body style="margin:0;display:grid;place-items:center;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;color:#172033;background:#f6f9ff;">
           <main style="width:min(520px,calc(100vw - 48px));padding:28px;border:1px solid #d8e5f8;border-radius:18px;background:#fff;box-shadow:0 18px 45px rgba(31,57,95,.12)">
-            <strong style="display:block;font-size:18px;margin-bottom:10px;">PPT Master 参数页准备中</strong>
-            <p style="margin:0;color:#52637a;line-height:1.7;">正在等待后端启动官方参数确认页，请不要关闭此窗口。</p>
+            <strong style="display:block;font-size:18px;margin-bottom:10px;">PPT 参数页准备中</strong>
+            <p style="margin:0;color:#52637a;line-height:1.7;">正在等待后端启动参数确认页，稍后会自动跳转。</p>
           </main>
         </body>
       </html>
@@ -1481,8 +1817,8 @@ function pollDeck(meetingId, jobId, paper) {
       deckJobs[meetingId] = {
         ...deckJobs[meetingId],
         status: "running",
-        stage: deckJobs[meetingId]?.stage || "刷新状态",
-        message: error?.response?.data?.message || "PPT 状态刷新失败，稍后自动重试",
+        stage: publicDeckText(deckJobs[meetingId]?.stage || "刷新状态"),
+        message: publicDeckText(error?.response?.data?.message || "PPT 状态刷新失败，稍后自动重试"),
       };
       pollDeck(meetingId, jobId, paper);
     }
@@ -1496,27 +1832,85 @@ function applyDeckJob(meeting, payload = {}, paper = {}) {
     ...(deckJobs[meeting.id] || {}),
     status: payload.status || (payload.success ? "generated" : "running"),
     progress: payload.success ? 100 : Number(payload.progress ?? deckJobs[meeting.id]?.progress ?? 0),
-    stage: payload.stage || deckJobs[meeting.id]?.stage || "",
-    message: payload.message || deckJobs[meeting.id]?.message || "",
+    stage: publicDeckText(payload.stage || deckJobs[meeting.id]?.stage || ""),
+    message: publicDeckText(payload.message || deckJobs[meeting.id]?.message || ""),
     paperWorkspaceId: paper.workspaceId || deckJobs[meeting.id]?.paperWorkspaceId || "",
     paperTitle: paper.title || deckJobs[meeting.id]?.paperTitle || "",
     jobId: payload.jobId || deckJobs[meeting.id]?.jobId || "",
     confirmUrl: payload.confirmUrl || deckJobs[meeting.id]?.confirmUrl || "",
     downloadUrl: payload.downloadUrl || deckJobs[meeting.id]?.downloadUrl || "",
+    localPath: deckJobs[meeting.id]?.localPath || "",
   };
   if (deckJobs[meeting.id].downloadUrl) deckJobs[meeting.id].status = "generated";
-  if (deckJobs[meeting.id].confirmUrl && confirmOpened.value !== deckJobs[meeting.id].confirmUrl) {
+  persistDeckJobs();
+  if (
+    deckJobs[meeting.id].confirmUrl &&
+    confirmOpened.value !== deckJobs[meeting.id].confirmUrl &&
+    Number(deckJobs[meeting.id].progress || 0) <= 28
+  ) {
     confirmOpened.value = deckJobs[meeting.id].confirmUrl;
     if (pendingConfirmWindow && !pendingConfirmWindow.closed) {
-      pendingConfirmWindow.location.href = deckJobs[meeting.id].confirmUrl;
+      pendingConfirmWindow.location.href = absoluteApiUrl(deckJobs[meeting.id].confirmUrl);
       pendingConfirmWindow.focus();
       pendingConfirmWindow = null;
     } else {
-      showToast("请点击“打开参数页”完成 PPT Master 参数确认");
+      openDeckConfirmPage(deckJobs[meeting.id].confirmUrl);
     }
   }
-  if (deckJobs[meeting.id].downloadUrl || deckJobs[meeting.id].status === "failed") closePendingConfirmWindow();
-  persistDeckJobs();
+  if (deckJobs[meeting.id].downloadUrl && canSaveDeckToDesktop() && !deckJobs[meeting.id].localPath) {
+    saveDeckToDesktop(meeting, true);
+  }
+  if (deckJobs[meeting.id].downloadUrl || deckJobs[meeting.id].status === "failed") {
+    closePendingConfirmWindow();
+  }
+}
+
+function openDeckConfirmPage(url) {
+  const target = absoluteApiUrl(url);
+  if (!target) return;
+  const win = window.open(target, "_blank", "noopener,noreferrer");
+  if (!win) showToast("浏览器拦截了参数页，请允许弹窗后重试");
+}
+
+function publicDeckText(value = "") {
+  return String(value || "")
+    .replace(/使用管理员组会汇报模型[:：]?\s*[^，。；\s]+/g, "正在启动组会 PPT 引擎")
+    .replace(/当前模型\s+[^，。；]+?\s+不适合执行多轮 PPT Master；?/g, "当前 PPT 生成引擎不稳定；")
+    .replace(/模型\s+[A-Za-z0-9._:/-]+/g, "模型")
+    .replace(/modelName[:：]?\s*[^，。；\s]+/gi, "")
+    .trim();
+}
+
+function canSaveDeckToDesktop() {
+  return Boolean(window.paperSolverDesktop?.isDesktop && window.paperSolverDesktop?.savePptDeck);
+}
+
+async function saveDeckToDesktop(meeting, silent = false) {
+  const job = deckJobs[meeting.id];
+  if (!job?.downloadUrl || !canSaveDeckToDesktop() || savingLocalDecks.has(meeting.id)) return;
+  savingLocalDecks.add(meeting.id);
+  try {
+    const result = await paperpilotApi.saveMeetingDeckToDesktop({
+      url: absoluteApiUrl(job.downloadUrl),
+      fileName: `${meeting.title || job.paperTitle || "组会汇报"}.pptx`,
+      meetingTitle: meeting.title || job.paperTitle || "组会汇报",
+      jobId: job.jobId,
+    });
+    if (result?.ok) {
+      deckJobs[meeting.id] = {
+        ...deckJobs[meeting.id],
+        localPath: result.path || "",
+      };
+      persistDeckJobs();
+      if (!silent) showToast("PPT 已保存到本机目录");
+    } else if (!silent) {
+      showToast("PPT 本机保存失败");
+    }
+  } catch (error) {
+    if (!silent) showToast(error?.message || "PPT 本机保存失败");
+  } finally {
+    savingLocalDecks.delete(meeting.id);
+  }
 }
 
 function resumeDeckJobs() {
@@ -2381,7 +2775,7 @@ function showToast(message) {
   background: linear-gradient(90deg, #6366f1, #ec4899);
 }
 
-.soft-button, .primary-button, .download-button, .confirm-link-button {
+.soft-button, .primary-button, .download-button, .local-save-button, .confirm-link-button, .regenerate-deck-button {
   width: 100%;
   padding: 10px;
   border-radius: 8px;
@@ -2411,6 +2805,16 @@ function showToast(message) {
   box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
 }
 
+.local-save-button {
+  background: rgba(20, 184, 166, 0.1);
+  border: 1px solid rgba(20, 184, 166, 0.35);
+  color: #0f766e;
+}
+:root[data-theme="dark"] .local-save-button {
+  background: rgba(20, 184, 166, 0.14);
+  color: #99f6e4;
+}
+
 .confirm-link-button {
   background: rgba(59, 130, 246, 0.1);
   color: #2563eb;
@@ -2418,6 +2822,23 @@ function showToast(message) {
   text-decoration: none;
 }
 :root[data-theme="dark"] .confirm-link-button { color: #93c5fd; background: rgba(59, 130, 246, 0.2); }
+
+.regenerate-deck-button {
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  color: #4f46e5;
+}
+
+.regenerate-deck-button:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(99, 102, 241, 0.46);
+}
+
+:root[data-theme="dark"] .regenerate-deck-button {
+  background: rgba(129, 140, 248, 0.14);
+  border-color: rgba(129, 140, 248, 0.34);
+  color: #c4b5fd;
+}
 
 button:disabled {
   opacity: 0.5;
@@ -2641,10 +3062,11 @@ button:disabled {
   border-radius: 16px;
   padding: 20px;
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 190px 1fr;
   gap: 20px;
   border: 1px solid var(--item-border);
   position: relative;
+  transition: all 0.25s ease;
 }
 
 .review-point:nth-child(4n + 1) { background: var(--point-1-bg); }
@@ -2655,6 +3077,49 @@ button:disabled {
 .review-point:nth-child(4n + 3) strong { color: var(--point-3-text); }
 .review-point:nth-child(4n + 4) { background: var(--point-4-bg); }
 .review-point:nth-child(4n + 4) strong { color: var(--point-4-text); }
+
+/* Unified Premium styling for dark mode */
+:root[data-theme="dark"] .review-point {
+  background: rgba(15, 23, 42, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+:root[data-theme="dark"] .review-point:nth-child(4n + 1) { border-left: 4px solid var(--point-1-text) !important; }
+:root[data-theme="dark"] .review-point:nth-child(4n + 2) { border-left: 4px solid var(--point-2-text) !important; }
+:root[data-theme="dark"] .review-point:nth-child(4n + 3) { border-left: 4px solid var(--point-3-text) !important; }
+:root[data-theme="dark"] .review-point:nth-child(4n + 4) { border-left: 4px solid var(--point-4-text) !important; }
+
+/* Status / Model pill badge on the left meta column */
+.review-point-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  font-size: 10px;
+  color: var(--text-muted);
+  width: fit-content;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.review-point-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+}
+:root[data-theme="dark"] .review-point-badge {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  color: #94a3b8 !important;
+}
+:root[data-theme="dark"] .review-point-badge .dot {
+  background: #34d399 !important;
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.8) !important;
+}
 
 .review-point strong { font-size: 15px; display: block; font-weight: 800; }
 .review-point small { color: var(--text-muted); font-size: 12px; display: block; margin-top: 6px; }
@@ -2675,24 +3140,39 @@ button:disabled {
 
 .review-rich-editor :deep(.review-inline-heading) {
   display: inline-block;
-  margin: 10px 0 3px;
-  color: #2563eb;
-  font-weight: 900;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  background: rgba(37, 99, 235, 0.1);
-  padding: 2px 6px;
+  margin: 12px 0 6px;
+  color: #1e40af;
+  font-weight: 800;
+  font-family: inherit;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 3px 8px;
   border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.2;
 }
-:root[data-theme="dark"] .review-rich-editor :deep(.review-inline-heading) { color: #60a5fa; background: rgba(96, 165, 250, 0.15); }
+:root[data-theme="dark"] .review-rich-editor :deep(.review-inline-heading) {
+  color: #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.12) !important;
+  border: 1px solid rgba(56, 189, 248, 0.25) !important;
+}
 
 .review-rich-editor :deep(.review-inline-heading:first-child) { margin-top: 0; }
 
 .review-rich-editor :deep(.review-number) {
-  color: #ea580c;
-  font-weight: 900;
+  color: #0d9488;
+  font-weight: 800;
   padding: 0 2px;
 }
-:root[data-theme="dark"] .review-rich-editor :deep(.review-number) { color: #f97316; }
+:root[data-theme="dark"] .review-rich-editor :deep(.review-number) {
+  color: #34d399 !important;
+}
+
+:root[data-theme="dark"] .review-rich-editor {
+  background: rgba(15, 23, 42, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #cbd5e1 !important;
+}
 
 .copy-section-button {
   position: absolute; right: 20px; top: 20px;
@@ -2744,4 +3224,499 @@ button:disabled {
 
 .modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.2s, transform 0.2s; }
 .modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; transform: scale(0.98); }
+
+/* --- PREMIUM HORIZONTAL SCHEDULE BADGE --- */
+.meeting-date-block-premium {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(30, 41, 59, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 8px 16px;
+  border-radius: 12px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  transition: all 0.25s ease;
+}
+
+:root[data-theme="light"] .meeting-date-block-premium {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.meeting-date-block-premium:hover {
+  border-color: rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 24px rgba(99, 102, 241, 0.06);
+}
+
+/* Date Info Group */
+.date-info-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.calendar-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+}
+
+:root[data-theme="light"] .calendar-icon-wrapper {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.calendar-svg {
+  width: 16px;
+  height: 16px;
+}
+
+.date-text-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.date-main-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+}
+
+.date-sub-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.3;
+}
+
+:root[data-theme="light"] .date-sub-value {
+  color: #1e293b;
+}
+
+/* Divider */
+.time-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme="light"] .time-divider {
+  background: #e2e8f0;
+}
+
+/* Time Info Group */
+.time-info-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.time-clock-value {
+  font-size: 16px;
+  font-weight: 800;
+  font-family: 'SF Mono', 'JetBrains Mono', monospace;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+}
+
+:root[data-theme="light"] .time-clock-value {
+  color: #0f172a;
+}
+
+/* Countdown Badge */
+.countdown-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 99px;
+  letter-spacing: 0.02em;
+}
+
+.countdown-badge.status-draft {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+}
+
+.countdown-badge.status-active {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.15);
+  animation: pulse-green 2s infinite;
+}
+
+.countdown-badge.status-past {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+}
+
+.countdown-badge.status-soon {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.15);
+  animation: pulse-red 2s infinite;
+}
+
+.countdown-badge.status-future {
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Action Edit Button */
+.btn-time-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+:root[data-theme="light"] .btn-time-edit {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.btn-time-edit:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #ffffff;
+}
+
+:root[data-theme="light"] .btn-time-edit:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.btn-time-edit svg {
+  opacity: 0.8;
+}
+
+.picker-trigger-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.hidden-datetime-picker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* --- PREMIUM TEXTAREA GLOWS & LABELS --- */
+.meeting-notes textarea,
+.meeting-detail-field textarea,
+.meeting-advisor-note textarea {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.meeting-notes textarea:focus,
+.meeting-detail-field textarea:focus {
+  border-color: rgba(99, 102, 241, 0.6) !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1), 0 0 0 4px rgba(99, 102, 241, 0.12) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+.meeting-advisor-note {
+  border: 1px solid rgba(245, 158, 11, 0.25) !important;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.03), rgba(217, 119, 6, 0.05)) !important;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.03) !important;
+  transition: all 0.3s ease;
+}
+.meeting-advisor-note:focus-within {
+  border-color: rgba(245, 158, 11, 0.5) !important;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.08) !important;
+}
+.meeting-advisor-note textarea:focus {
+  border-color: rgba(245, 158, 11, 0.5) !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1), 0 0 0 4px rgba(245, 158, 11, 0.15) !important;
+}
+
+/* --- CUSTOM DATETIME PICKER MODAL --- */
+.picker-modal-backdrop {
+  z-index: 300;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.custom-picker-card {
+  width: 320px;
+  background: rgba(30, 41, 59, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  animation: scale-up 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+:root[data-theme="light"] .custom-picker-card {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+
+@keyframes scale-up {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.picker-card-header {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.picker-card-header h3 {
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 6px 0;
+}
+:root[data-theme="light"] .picker-card-header h3 {
+  color: #0f172a;
+}
+
+.picker-card-header p {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.picker-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.picker-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.picker-field-group label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-icon .icon {
+  position: absolute;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.input-with-icon input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  padding: 10px 14px 10px 38px;
+  border-radius: 10px;
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+:root[data-theme="light"] .input-with-icon input {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.input-with-icon input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.picker-card-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.btn-picker-cancel,
+.btn-picker-confirm {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  font-family: inherit;
+}
+
+.btn-picker-cancel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+}
+.btn-picker-cancel:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+:root[data-theme="light"] .btn-picker-cancel {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+:root[data-theme="light"] .btn-picker-cancel:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.btn-picker-confirm {
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+.btn-picker-confirm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
+}
+
+/* --- TIMELINE EMPTY STATE --- */
+.timeline-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  text-align: center;
+  background: rgba(30, 41, 59, 0.2);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  margin: 20px 0;
+  backdrop-filter: blur(12px);
+}
+
+:root[data-theme="light"] .timeline-empty-state {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: #cbd5e1;
+}
+
+.empty-icon-box {
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  background: rgba(99, 102, 241, 0.08);
+  color: #818cf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 30px rgba(99, 102, 241, 0.05);
+}
+
+:root[data-theme="light"] .empty-icon-box {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.empty-svg {
+  opacity: 0.8;
+}
+
+.timeline-empty-state h2 {
+  font-size: 20px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 10px 0;
+  letter-spacing: -0.01em;
+}
+
+:root[data-theme="light"] .timeline-empty-state h2 {
+  color: #0f172a;
+}
+
+.timeline-empty-state p {
+  font-size: 14px;
+  color: var(--text-muted);
+  max-width: 380px;
+  line-height: 1.6;
+  margin: 0 0 28px 0;
+}
+
+.btn-empty-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  color: #ffffff;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  font-family: inherit;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2);
+}
+
+.btn-empty-add:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(99, 102, 241, 0.3);
+}
+
+.btn-empty-add:active {
+  transform: translateY(0);
+}
+
+.btn-empty-add span {
+  font-size: 18px;
+  line-height: 1;
+}
 </style>

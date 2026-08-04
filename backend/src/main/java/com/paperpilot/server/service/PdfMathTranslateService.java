@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -63,10 +64,16 @@ public class PdfMathTranslateService {
             .map(job -> job.getExternalTaskId())
             .orElseGet(() -> tasksByWorkspace.get(workspaceId));
         if (existingTask != null) {
-            Map<String, Object> existingStatus = status(workspaceId);
-            String state = String.valueOf(existingStatus.getOrDefault("state", ""));
-            if (!"FAILURE".equalsIgnoreCase(state) && !"REVOKED".equalsIgnoreCase(state)) {
-                return Map.of("taskId", existingTask, "state", state, "reused", true);
+            try {
+                Map<String, Object> existingStatus = status(workspaceId);
+                String state = String.valueOf(existingStatus.getOrDefault("state", ""));
+                if (!"FAILURE".equalsIgnoreCase(state) && !"REVOKED".equalsIgnoreCase(state)) {
+                    return Map.of("taskId", existingTask, "state", state, "reused", true);
+                }
+            } catch (ResponseStatusException error) {
+                if (!isStaleRemoteTask(error)) throw error;
+                tasksByWorkspace.remove(workspaceId);
+                backendJobService.externalTask("PDF_MATH_TRANSLATE", userId, workspaceId, "", "FAILURE", 100, "旧的双栏翻译任务已失效，正在重新提交");
             }
         }
 
@@ -122,7 +129,12 @@ public class PdfMathTranslateService {
                 .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 400) {
-                throw unavailable("对照翻译状态查询失败（HTTP " + response.statusCode() + "）：" + serviceErrorBody(response.body()));
+                ResponseStatusException error = unavailable("对照翻译状态查询失败（HTTP " + response.statusCode() + "）：" + serviceErrorBody(response.body()));
+                if (isStaleRemoteTask(error)) {
+                    tasksByWorkspace.remove(workspaceId);
+                    backendJobService.externalTask("PDF_MATH_TRANSLATE", userId, workspaceId, "", "FAILURE", 100, "旧的双栏翻译任务已失效，请重新发起");
+                }
+                throw error;
             }
             Map<String, Object> payload = objectMapper.readValue(response.body(), new TypeReference<>() {});
             payload.put("taskId", taskId);
@@ -199,11 +211,18 @@ public class PdfMathTranslateService {
         return cacheDir.resolve(workspaceId + "-dual.pdf");
     }
 
+    private boolean isStaleRemoteTask(ResponseStatusException error) {
+        String message = String.valueOf(error.getReason()).toLowerCase();
+        return error.getStatusCode().value() == 404
+            || message.contains("task not found")
+            || message.contains("任务不存在");
+    }
+
     private byte[] readPaperPdf(PaperEntity paper) throws IOException, InterruptedException {
         String source = paper.getPaperUrl() == null ? "" : paper.getPaperUrl().trim();
         if (source.startsWith("/api/papers/uploads/")) {
-            Path path = Path.of("uploads").resolve(paper.getWorkspaceId() + ".pdf");
-            if (!Files.exists(path)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "本地 PDF 不存在");
+            Path path = resolveLocalUploadPdf(paper.getWorkspaceId());
+            if (path == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "本地 PDF 不存在");
             return Files.readAllBytes(path);
         }
         if (!source.startsWith("http://") && !source.startsWith("https://")) {
@@ -220,6 +239,20 @@ public class PdfMathTranslateService {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "无法获取论文 PDF");
         }
         return response.body();
+    }
+
+    private Path resolveLocalUploadPdf(String workspaceId) {
+        String fileName = workspaceId + ".pdf";
+        List<Path> candidates = List.of(
+            Path.of("uploads").resolve(fileName),
+            Path.of("backend").resolve("uploads").resolve(fileName),
+            Path.of("../uploads").resolve(fileName)
+        );
+        for (Path candidate : candidates) {
+            Path normalized = candidate.toAbsolutePath().normalize();
+            if (Files.isRegularFile(normalized)) return normalized;
+        }
+        return null;
     }
 
     private byte[] multipartBody(String boundary, byte[] pdf, String fileName, String data) throws IOException {

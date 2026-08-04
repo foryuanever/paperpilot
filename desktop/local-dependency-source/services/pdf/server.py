@@ -15,6 +15,8 @@ from flask import Flask, jsonify, request, send_file
 app = Flask(__name__)
 tasks = {}
 tasks_lock = threading.Lock()
+layout_model = None
+layout_model_lock = threading.Lock()
 work_root = Path(os.environ.get("PAPER_SOLVER_DEPENDENCY_WORKDIR", Path.home() / "Library" / "Application Support" / "PaperSolver" / "dependency-work"))
 work_root.mkdir(parents=True, exist_ok=True)
 
@@ -110,6 +112,7 @@ def run_translate_task(task_id, data):
             lang_out=lang_out,
             service=service,
             thread=thread,
+            model=get_layout_model(),
             skip_subset_fonts=bool(data.get("skip_subset_fonts", True))
         )
         state = task_state(task_id)
@@ -124,6 +127,15 @@ def run_translate_task(task_id, data):
             message=str(error) or "translation failed",
             error=traceback.format_exc(limit=8)
         )
+
+
+def get_layout_model():
+    global layout_model
+    with layout_model_lock:
+        if layout_model is None:
+            from pdf2zh.doclayout import OnnxModel
+            layout_model = OnnxModel.from_pretrained()
+        return layout_model
 
 
 def bytes_from_pdf_result(value):

@@ -10,7 +10,7 @@ const frontDir = path.join(repoRoot, "front");
 
 const apiBase = process.env.PAPER_SOLVER_API_BASE
   || process.env.VITE_API_BASE_URL
-  || "http://127.0.0.1:8080";
+  || "https://papersolver.cn/api";
 
 if (!existsSync(path.join(frontDir, "package.json"))) {
   console.error("没有找到 front/package.json，请确认 desktop 文件夹位于项目根目录下。");

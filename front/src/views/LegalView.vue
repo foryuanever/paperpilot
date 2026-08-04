@@ -3,7 +3,7 @@
     <section class="legal-shell">
       <router-link class="legal-brand" to="/">
         <span class="legal-brand-mark">P</span>
-        <span>PaperSlover</span>
+        <span>PaperSolver</span>
       </router-link>
 
       <nav class="legal-tabs" aria-label="Legal documents">
@@ -45,7 +45,7 @@ const pages = {
       {
         title: "服务范围",
         lines: [
-          "PaperSlover 为文献管理、PDF 阅读、AI 研读、学术论坛、会员权益和桌面端本地依赖管理提供软件服务。",
+          "PaperSolver 为文献管理、PDF 阅读、AI 研读、学术论坛、会员权益和桌面端本地依赖管理提供软件服务。",
           "你应保证上传、导入、发布或处理的内容来源合法，不侵犯第三方版权、隐私权或其他合法权益。",
         ],
       },
@@ -97,7 +97,7 @@ const pages = {
       {
         title: "学术辅助定位",
         lines: [
-          "PaperSlover 的 AI 输出仅用于文献阅读、思路整理和研究辅助，不构成投稿、署名、实验、医学、法律或投资等专业结论。",
+          "PaperSolver 的 AI 输出仅用于文献阅读、思路整理和研究辅助，不构成投稿、署名、实验、医学、法律或投资等专业结论。",
           "AI 可能出现事实错误、引用遗漏、翻译偏差或格式不完整，正式使用前需要用户自行核验原文、数据和引用。",
         ],
       },

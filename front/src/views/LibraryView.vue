@@ -157,7 +157,24 @@
                 <th>我的笔记</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody v-if="filteredDocuments.length === 0">
+              <tr>
+                <td colspan="10" class="library-empty-state-cell">
+                  <div class="library-empty-state-container">
+                    <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                      <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    <h3>暂无文献数据</h3>
+                    <p>您可以点击上方按钮“导入文献”或关联本地 PDF 文件开始使用</p>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+            <tbody v-else>
               <tr v-for="paper in paginatedDocuments" :key="paper.id">
                 <td class="doc-title-cell">
                   <div
@@ -611,10 +628,41 @@
     </div>
     </div>
   </div>
+
+    <!-- Onboarding Guide Overlay -->
+    <Teleport to="body">
+      <div v-if="onboardingActive" class="reader-tour-layer">
+        <div class="reader-tour-shade" @click="closeOnboarding"></div>
+        <div
+          v-if="highlightRect"
+          class="reader-tour-focus"
+          :style="{
+            left: `${highlightRect.left - 6}px`,
+            top: `${highlightRect.top - 6}px`,
+            width: `${highlightRect.width + 12}px`,
+            height: `${highlightRect.height + 12}px`,
+          }"
+        ></div>
+        <section class="reader-tour-card">
+          <header class="tour-card-head">
+            <span class="tour-step-badge">第 {{ onboardingStep + 1 }} 步 / {{ onboardingSteps.length }}</span>
+            <button class="tour-skip-btn" title="跳过新手指引" @click="closeOnboarding">跳过指引 ×</button>
+          </header>
+          <h2>{{ onboardingSteps[onboardingStep].title }}</h2>
+          <p>{{ onboardingSteps[onboardingStep].description }}</p>
+          <div class="tour-card-actions">
+            <button v-if="onboardingStep > 0" class="tour-btn-prev" @click="prevOnboardingStep">上一步</button>
+            <button class="tour-btn-next" @click="nextOnboardingStep">
+              {{ onboardingStep === onboardingSteps.length - 1 ? "完成指引" : "下一步" }}
+            </button>
+          </div>
+        </section>
+      </div>
+    </Teleport>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useScrollReveal } from "../composables/useScrollReveal";
 import { useLibraryStore } from "../stores/library";
@@ -1708,6 +1756,12 @@ onMounted(async () => {
   window.addEventListener("focus", refreshLibraryFromBackend);
   document.addEventListener("visibilitychange", handleVisibilityRefresh);
   document.addEventListener("click", handleDocumentClick);
+  window.addEventListener("resize", updateOnboardingLayout);
+  window.addEventListener("scroll", updateOnboardingLayout);
+
+  if (!localStorage.getItem('library_onboarding_completed')) {
+    setTimeout(startOnboarding, 800);
+  }
 });
 
 watch(
@@ -1720,10 +1774,136 @@ onUnmounted(() => {
   window.removeEventListener("focus", refreshLibraryFromBackend);
   document.removeEventListener("visibilitychange", handleVisibilityRefresh);
   document.removeEventListener("click", handleDocumentClick);
+  window.removeEventListener("resize", updateOnboardingLayout);
+  window.removeEventListener("scroll", updateOnboardingLayout);
+});
+
+// Onboarding Guide Logic
+const onboardingActive = ref(false);
+const onboardingStep = ref(0);
+const onboardingSteps = [
+  {
+    selector: '.library-subnav',
+    title: '文献库分类导航',
+    description: '在“全部文献”、“个人文献添加”与“Zotero 导入”之间快速切换。支持一键导入文献与 PDF 附件。'
+  },
+  {
+    selector: '.library-toolbar',
+    title: '智能筛选与检索',
+    description: '支持按标题、作者、备注等进行全局关键词过滤，或通过文献类型、分区、影响因子和索引一键快速筛选。'
+  },
+  {
+    selector: '.library-table th:nth-child(4), .journal-metric-row',
+    title: '期刊分区与等级',
+    description: '系统会自动匹配期刊的分区与等级。如果遇到未识别的文章，您可以直接点击对应的单元格，手动进行修改与设置，使文献属性更准确。'
+  },
+  {
+    selector: '.action-cell',
+    title: '沉浸与对照翻译',
+    description: '提供强大的 AI 级“沉浸翻译”（智能分段及学术术语标注，首选）与“对照翻译”（左右双栏对照），助您极速攻克英文文献。'
+  },
+  {
+    selector: '.note-edit-btn',
+    title: '阅读笔记与文献阅读同步',
+    description: '点击添加或查看深度阅读笔记。此处的笔记与文献阅读界面的笔记保持实时同步，同时也会在生成组会汇报 PPT 时被自动提炼使用。'
+  }
+];
+
+const highlightRect = ref(null);
+
+const updateOnboardingLayout = (attempt = 0) => {
+  if (!onboardingActive.value) return;
+  const step = onboardingSteps[onboardingStep.value];
+  if (!step) return;
+  
+  const el = document.querySelector(step.selector);
+  if (el) {
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  const rect = el?.getBoundingClientRect();
+  
+  if (!rect || rect.width < 2 || rect.height < 2) {
+    highlightRect.value = null;
+    if (attempt < 20) {
+      window.setTimeout(() => updateOnboardingLayout(attempt + 1), 120);
+    }
+    return;
+  }
+  
+  const left = Math.max(4, rect.left);
+  const top = Math.max(4, rect.top);
+  const right = Math.min(window.innerWidth - 4, rect.right);
+  const bottom = Math.min(window.innerHeight - 4, rect.bottom);
+  highlightRect.value = { left, top, width: right - left, height: bottom - top };
+};
+
+const startOnboarding = () => {
+  onboardingStep.value = 0;
+  onboardingActive.value = true;
+  nextTick(updateOnboardingLayout);
+};
+
+const closeOnboarding = () => {
+  onboardingActive.value = false;
+  localStorage.setItem('library_onboarding_completed', 'true');
+};
+
+const nextOnboardingStep = () => {
+  if (onboardingStep.value === onboardingSteps.length - 1) {
+    closeOnboarding();
+  } else {
+    onboardingStep.value++;
+    nextTick(updateOnboardingLayout);
+  }
+};
+
+const prevOnboardingStep = () => {
+  if (onboardingStep.value > 0) {
+    onboardingStep.value--;
+    nextTick(updateOnboardingLayout);
+  }
+};
+
+watch([onboardingActive, onboardingStep], () => {
+  if (onboardingActive.value) {
+    nextTick(() => {
+      setTimeout(updateOnboardingLayout, 80);
+    });
+  }
 });
 </script>
 
 <style scoped>
+.library-empty-state-cell {
+  text-align: center;
+  padding: 80px 24px !important;
+  background: rgba(30, 34, 48, 0.4);
+  border-radius: 8px;
+}
+.library-empty-state-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--c-text-muted, #7e8299);
+}
+.library-empty-state-container .empty-icon {
+  width: 48px;
+  height: 48px;
+  stroke: var(--c-text-muted, #7e8299);
+  margin-bottom: 8px;
+}
+.library-empty-state-container h3 {
+  font-size: 1.1rem;
+  color: var(--c-text, #ffffff);
+  margin: 0;
+}
+.library-empty-state-container p {
+  font-size: 0.9rem;
+  margin: 0;
+}
+
 .library-spatial .spatial-chapter {
   margin: 0;
   padding-left: 0;
@@ -4498,5 +4678,192 @@ onUnmounted(() => {
 :root[data-theme="dark"] .library-note-markdown-line em,
 :root[data-theme="dark"] .library-note-markdown-text {
   color: #cbd5e1 !important;
+}
+
+/* Onboarding Guide Styles (Literature Reading Style) */
+.library-help-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.library-help-btn:hover {
+  color: #2563eb;
+  border-color: #bfdbfe;
+  background: #f8fafc;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+}
+
+:root[data-theme="dark"] .library-help-btn {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(30, 41, 59, 0.6);
+  color: #94a3b8;
+}
+
+:root[data-theme="dark"] .library-help-btn:hover {
+  color: #818cf8;
+  border-color: rgba(129, 140, 248, 0.3);
+  background: rgba(30, 41, 59, 0.8);
+}
+
+.reader-tour-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000000;
+  pointer-events: auto;
+}
+.reader-tour-shade {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+}
+.reader-tour-focus {
+  position: fixed;
+  z-index: 1;
+  border: 2px solid #3b82f6;
+  border-radius: 11px;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, .18), 0 0 0 100vmax rgba(10, 16, 26, .7);
+  pointer-events: none;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.reader-tour-card {
+  position: absolute;
+  z-index: 10;
+  left: 50%;
+  bottom: 46px;
+  width: min(460px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  padding: 22px 24px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.22), 0 4px 16px rgba(0, 0, 0, 0.08);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tour-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.tour-step-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(129, 140, 248, 0.25);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.tour-skip-btn {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.tour-skip-btn:hover {
+  color: #64748b;
+  background: rgba(0, 0, 0, 0.05);
+}
+.reader-tour-card h2 {
+  margin: 4px 0 8px;
+  color: #0f172a;
+  font-size: 16.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+.reader-tour-card p {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.tour-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+.tour-btn-prev {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  color: #475569;
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tour-btn-prev:hover {
+  color: #0f172a;
+  background: #e2e8f0;
+}
+.tour-btn-next {
+  height: 36px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 10px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #6366f1, #3b82f6);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  transition: all 0.22s;
+}
+.tour-btn-next:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.5);
+}
+
+:root[data-theme="dark"] .reader-tour-card {
+  background: rgba(15, 23, 42, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6) !important;
+}
+:root[data-theme="dark"] .reader-tour-card h2 {
+  color: #f8fafc !important;
+}
+:root[data-theme="dark"] .reader-tour-card p {
+  color: #cbd5e1 !important;
+}
+:root[data-theme="dark"] .tour-step-badge {
+  color: #a5b4fc !important;
+  background: rgba(165, 180, 252, 0.1) !important;
+  border-color: rgba(165, 180, 252, 0.2) !important;
+}
+:root[data-theme="dark"] .tour-skip-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+:root[data-theme="dark"] .tour-btn-prev {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: #1e293b;
+  color: #cbd5e1;
+}
+:root[data-theme="dark"] .tour-btn-prev:hover {
+  background: #334155;
+  color: #f8fafc;
 }
 </style>

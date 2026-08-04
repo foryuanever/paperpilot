@@ -453,9 +453,10 @@
                       :class="`mark-${segment.annotation.style || 'highlight'}`"
                       :style="{ '--mark-color': segment.annotation.color || '#fef08a' }"
                       :title="segment.note"
+                      :data-annotation-id="segment.annotation.id"
                       @click="editAnnotation(segment.annotation, $event)"
                     >
-                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span v-if="segment.note" class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
+                      {{ segment.text }}
                     </span>
                     <template v-else>{{ segment.text }}</template>
                   </template>
@@ -522,9 +523,10 @@
                       :class="`mark-${segment.annotation.style || 'highlight'}`"
                       :style="{ '--mark-color': segment.annotation.color || '#fef08a' }"
                       :title="segment.note"
+                      :data-annotation-id="segment.annotation.id"
                       @click="editAnnotation(segment.annotation, $event)"
                     >
-                      {{ segment.text }}<button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span v-if="segment.note" class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
+                      {{ segment.text }}
                     </span>
                     <template v-else>{{ segment.text }}</template>
                   </template>
@@ -537,12 +539,13 @@
                       :class="`mark-${segment.annotation.style || 'highlight'}`"
                       :style="{ '--mark-color': segment.annotation.color || '#fef08a' }"
                       :title="segment.note"
+                      :data-annotation-id="segment.annotation.id"
                       @click="editAnnotation(segment.annotation, $event)"
                     >
                       <template v-for="fragment in inlineCitationSegments(segment.text)" :key="fragment.key">
                         <sup v-if="fragment.citation" class="paper-citation-sup">{{ fragment.text }}</sup>
                         <template v-else>{{ fragment.text }}</template>
-                      </template><button type="button" class="annotation-delete" title="删除这条标注" aria-label="删除这条标注" @click.stop="removeAnnotation(segment.annotation.id)">×</button><span v-if="segment.note" class="annotation-inline-note" @click.stop="editAnnotation(segment.annotation, $event)">{{ segment.note }}</span>
+                      </template>
                     </span>
                     <template v-else>
                       <template v-for="fragment in inlineCitationSegments(segment.text)" :key="fragment.key">
@@ -618,55 +621,39 @@
             </g>
           </svg>
 
-          <!-- WPS 1:1 绿折线引用批注层 (参照图 2) -->
-          <div v-if="noteAnnotations.length" class="wps-comments-container">
-            <svg class="wps-leader-lines-svg">
-              <g v-for="anno in noteAnnotations" :key="`wps-group-${anno.id}`">
-                <line
-                  :x1="anno.x1 || 10"
-                  :y1="(anno.y1 || 40) - 8"
-                  :x2="anno.x1 || 10"
-                  :y2="(anno.y1 || 40) + 10"
-                  stroke="#16a34a"
-                  stroke-width="2"
-                />
-                <path
-                  :d="`M ${anno.x1 || 10} ${anno.y1 || 40} L ${(anno.x1 || 10) + 50} ${anno.y1 || 40} L ${(anno.x2 || 220) - 10} ${anno.y2 || (anno.y1 || 40) + 20} L ${anno.x2 || 220} ${anno.y2 || (anno.y1 || 40) + 20}`"
-                  fill="none"
-                  stroke="#16a34a"
-                  stroke-width="1.8"
-                />
-              </g>
-            </svg>
+          <!-- WPS 批注层：引线已移除，仅保留右侧批注卡片 -->
+          <template v-if="noteAnnotations.length">
 
-            <div
-              v-for="anno in noteAnnotations"
-              :key="anno.id"
-              class="wps-comment-card"
-              :style="{ top: `${anno.top || 40}px` }"
-              @click="selectedAnnotationId = anno.id"
-            >
-              <header class="wps-comment-head">
-                <div class="wps-avatar-box">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+            <div class="wps-comments-container">
+              <div
+                v-for="anno in noteAnnotations"
+                :key="anno.id"
+                class="wps-comment-card"
+                :style="{ top: `${anno.top || 40}px` }"
+                @click="selectedAnnotationId = anno.id"
+              >
+                <header class="wps-comment-head">
+                  <div class="wps-avatar-box">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                  </div>
+                  <div class="wps-comment-meta">
+                    <time>{{ anno.createdAt || '2026-07-20 23:20' }}</time>
+                    <button class="wps-del-btn" title="删除批注" @click.stop="removeAnnotation(anno.id)">×</button>
+                  </div>
+                </header>
+                <div class="wps-comment-body">
+                  <p v-if="anno.preview" class="wps-target-quote">“{{ anno.preview }}”</p>
+                  <input
+                    v-model="anno.note"
+                    class="wps-comment-input"
+                    placeholder="编辑批注内容…"
+                    @blur="persistAnnotations"
+                    @keyup.enter="persistAnnotations"
+                  />
                 </div>
-                <div class="wps-comment-meta">
-                  <time>{{ anno.createdAt || '2026-07-20 23:20' }}</time>
-                  <button class="wps-del-btn" title="删除批注" @click.stop="removeAnnotation(anno.id)">×</button>
-                </div>
-              </header>
-              <div class="wps-comment-body">
-                <p v-if="anno.preview" class="wps-target-quote">“{{ anno.preview }}”</p>
-                <input
-                  v-model="anno.note"
-                  class="wps-comment-input"
-                  placeholder="编辑批注内容…"
-                  @blur="persistAnnotations"
-                  @keyup.enter="persistAnnotations"
-                />
               </div>
             </div>
-          </div>
+          </template>
         </div>
       </main>
 
@@ -784,14 +771,16 @@
       </div>
       <div v-if="selectionTranslator.loading || selectionTranslator.result || selectionTranslator.error" class="selection-result" :class="{ pending: selectionTranslator.loading, error: selectionTranslator.error, 'is-ai-mode': selectionTranslator.resultTitle === 'AI 解读' }">
         <span v-if="selectionTranslator.loading" class="selection-spinner"></span>
-        <div>
+        <div style="flex: 1; min-width: 0;">
           <header>
             <strong>{{ selectionTranslator.resultTitle || "处理结果" }}</strong>
             <small>{{ selectionTranslator.source.length }} 字符</small>
           </header>
           <p v-if="selectionTranslator.wasCompacted && !selectionTranslator.loading && !selectionTranslator.error" class="selection-compact-note">选区较长，已结合开头、结尾和所在段落进行摘要式解读。</p>
           <p v-if="selectionTranslator.loading && paperAiQueue.visible" class="selection-queue-note">{{ paperChatQueueLabel }}</p>
-          <p>{{ selectionTranslator.loading ? selectionTranslator.loadingText : selectionTranslator.error || selectionTranslator.result }}</p>
+          <p v-if="selectionTranslator.loading">{{ selectionTranslator.loadingText }}</p>
+          <p v-else-if="selectionTranslator.error" class="error-text">{{ selectionTranslator.error }}</p>
+          <div v-else-if="selectionTranslator.result" class="selection-result-markdown" v-html="renderMarkdown(selectionTranslator.result)"></div>
         </div>
       </div>
       <div v-if="selectionTranslator.annotating" class="selection-annotation-editor">
@@ -889,6 +878,11 @@
                 </button>
               </div>
             </div>
+
+            <!-- User Chat Avatar -->
+            <div v-if="message.role === 'user'" class="user-chat-avatar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
           </article>
 
           <article v-if="paperChat.loading" class="paper-chat-message assistant thinking">
@@ -905,18 +899,16 @@
           </article>
         </div>
 
-        <div class="void-quick-prompts">
-          <button type="button" @click="insertQuickPrompt('总结此论文的核心创新点与贡献')">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-            <span>核心创新</span>
+        <div class="void-quick-prompts" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: 100%;">
+          <button v-for="prompt in quickPromptGroups[quickPromptBatch]" :key="prompt.label" type="button" @click="insertQuickPrompt(prompt.text)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path :d="prompt.icon" />
+            </svg>
+            <span>{{ prompt.label }}</span>
           </button>
-          <button type="button" @click="insertQuickPrompt('详细拆解论文使用的研究方法与实验设计')">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-            <span>实验方法</span>
-          </button>
-          <button type="button" @click="insertQuickPrompt('指出论文可能存在的局限性与未来方向')">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m12 8 4 4-4 4M8 12h8"/></svg>
-            <span>局限突破</span>
+          <button type="button" class="btn-refresh-prompts" @click="rotateQuickPrompts" style="margin-left: auto; background: transparent; border: none; color: #818cf8; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='rgba(129,140,248,0.1)'" onmouseout="this.style.background='transparent'">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            换一批
           </button>
         </div>
 
@@ -1092,6 +1084,7 @@ const assistantExpanded = ref(false);
 const assistantTab = ref("chat");
 const showZoomPresets = ref(false);
 const zoomPresetList = [
+  { label: "40%", scale: 0.4 },
   { label: "50%", scale: 0.5 },
   { label: "75%", scale: 0.75 },
   { label: "100% (标准)", scale: 1.0 },
@@ -1099,6 +1092,8 @@ const zoomPresetList = [
   { label: "150%", scale: 1.5 },
   { label: "175%", scale: 1.75 },
   { label: "200%", scale: 2.0 },
+  { label: "250%", scale: 2.5 },
+  { label: "300%", scale: 3.0 },
 ];
 
 const showStylePopover = ref(false);
@@ -1793,12 +1788,14 @@ function fitWidth() {
 }
 
 function zoomReaderIn() {
-  contentScale.value = Math.min(1.6, Number((contentScale.value + 0.1).toFixed(2)));
+  const step = contentScale.value < 1.0 ? 0.1 : contentScale.value < 2.0 ? 0.1 : 0.25;
+  contentScale.value = Math.min(3.0, Number((contentScale.value + step).toFixed(2)));
   showReaderToast(`正文缩放 ${Math.round(contentScale.value * 100)}%`);
 }
 
 function zoomReaderOut() {
-  contentScale.value = Math.max(0.8, Number((contentScale.value - 0.1).toFixed(2)));
+  const step = contentScale.value <= 1.0 ? 0.1 : contentScale.value <= 2.0 ? 0.1 : 0.25;
+  contentScale.value = Math.max(0.4, Number((contentScale.value - step).toFixed(2)));
   showReaderToast(`正文缩放 ${Math.round(contentScale.value * 100)}%`);
 }
 
@@ -1903,6 +1900,30 @@ const paperAiQueue = reactive({
   timer: null,
   status: null,
 });
+
+const quickPromptBatch = ref(0)
+const quickPromptGroups = [
+  [
+    { label: '核心创新', text: '总结此论文的核心创新点与贡献', icon: 'm12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z' },
+    { label: '实验方法', text: '详细拆解论文使用的研究方法与实验设计', icon: 'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z' },
+    { label: '局限突破', text: '指出论文可能存在的局限性与未来方向', icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M12 8v4 M12 16h.01' }
+  ],
+  [
+    { label: '背景意义', text: '用中文通俗解释这篇论文的研究背景、动机和意义', icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M12 16h.01 M12 8v4' },
+    { label: '核心图表', text: '分析论文中最核心的实验图表及其传达的关键结论', icon: 'M3 3v18h18 M18.7 8l-5.1 5.2-2.8-2.7L7 14.3' },
+    { label: '工程应用', text: '这篇论文的成果有何潜在的工程应用或产业落地价值？', icon: 'M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6' }
+  ],
+  [
+    { label: '同行对比', text: '该研究与同领域的其他经典工作相比，主要优势是什么？', icon: 'M16 3h5v5 M4 20L20 4 M18 21h3v-3 M21 3l-7 7' },
+    { label: '争议挑战', text: '论文中的假设或推导过程，是否有值得商榷或改进的地方？', icon: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z M12 9v4 M12 17h.01' },
+    { label: '衍生课题', text: '基于本论文的研究，可以衍生出哪些新的具体科研课题或方向？', icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M12 8v8 M8 12h8' }
+  ]
+]
+
+function rotateQuickPrompts() {
+  quickPromptBatch.value = (quickPromptBatch.value + 1) % quickPromptGroups.length
+}
+
 const paperChatQueueLabel = computed(() => formatPaperAiQueueStatus(paperAiQueue.status, paperAiQueue.visible));
 const paperChatWindow = reactive({
   x: null,
@@ -2655,6 +2676,16 @@ watch(isDarkTheme, () => {
   }
 });
 
+watch(contentScale, () => {
+  updateWpsAnnotationCoordinates();
+});
+
+watch(loadingPdf, (val) => {
+  if (!val) {
+    updateWpsAnnotationCoordinates();
+  }
+});
+
 function normalizeText(text) {
   return String(text || "").replace(/\s+/g, " ").trim();
 }
@@ -3162,6 +3193,10 @@ function closeSelectionTranslator() {
 
 function toggleSelectionProviderPanel() {
   if (selectionTranslator.loading) return;
+  
+  // Close annotation editor to prevent overlaps
+  selectionTranslator.annotating = false;
+
   selectionTranslator.providerMenuOpen = !selectionTranslator.providerMenuOpen;
   nextTick(() => fitSelectionPopover(false));
 }
@@ -3196,7 +3231,7 @@ function formatPaperAiQueueStatus(status, visible = false) {
     return `AI 排队中：当前等待队列约 ${waiting} 个请求${seconds}`;
   }
   if (visible && running > 0) {
-    return `正在处理：当前 ${running} 个 AI 请求并行运行`;
+    return `解读需慢慢品，心急则偏差～`;
   }
   return "NEURAL COMPUTING // 正在解析论文神经元...";
 }
@@ -3275,6 +3310,11 @@ async function translateSelection(providerId = abstractProvider.value || "google
 async function explainSelection() {
   const text = selectionTranslator.source;
   if (!text || selectionTranslator.loading) return;
+  
+  // Close annotation editor and translation providers to prevent overlaps
+  selectionTranslator.annotating = false;
+  selectionTranslator.providerMenuOpen = false;
+
   const selected = compactForSelectionAi(text, 3600);
   const context = compactForSelectionAi(selectionTranslator.paragraph || selectionTranslator.sentence || text, 6400);
   selectionTranslator.loading = true;
@@ -3586,6 +3626,7 @@ function loadAnnotations() {
   try {
     const stored = JSON.parse(localStorage.getItem(annotationStorageKey()) || "[]");
     if (Array.isArray(stored)) annotations.push(...stored);
+    updateWpsAnnotationCoordinates();
   } catch {
     // 忽略损坏的本地批注缓存。
   }
@@ -3593,6 +3634,43 @@ function loadAnnotations() {
 
 function persistAnnotations() {
   localStorage.setItem(annotationStorageKey(), JSON.stringify(annotations));
+}
+
+function updateWpsAnnotationCoordinates() {
+  nextTick(() => {
+    const docElement = document.querySelector(".reading-column");
+    if (!docElement) return;
+    const doc = docElement.getBoundingClientRect();
+    
+    // Step 1: Calculate raw positions relative to the highlighted text elements
+    annotations.forEach(anno => {
+      if (anno.type !== "note") return;
+      const el = document.querySelector(`[data-annotation-id="${anno.id}"]`);
+      if (el) {
+        const r = el.getBoundingClientRect();
+        const relativeTop = Math.max(10, r.top - doc.top);
+        const relativeLeft = Math.max(10, r.right - doc.left);
+        anno.x1 = relativeLeft;
+        anno.y1 = relativeTop + r.height + 2; // In the gap below text line
+        anno.x2 = doc.width - 10;
+        anno.rawTop = relativeTop;
+      } else {
+        anno.rawTop = anno.top || 40;
+      }
+    });
+
+    // Step 2: Sort notes by rawTop and resolve overlaps (stacking algorithm)
+    const notes = annotations.filter(anno => anno.type === "note");
+    notes.sort((a, b) => a.rawTop - b.rawTop);
+
+    let currentOffset = 10;
+    notes.forEach(anno => {
+      const targetTop = Math.max(currentOffset, anno.rawTop);
+      anno.top = targetTop;
+      anno.y2 = targetTop + 24;
+      currentOffset = targetTop + 110; // 110px accounts for card height (approx 85px) + 25px gap
+    });
+  });
 }
 
 function showReaderToast(message) {
@@ -3607,6 +3685,7 @@ function removeAnnotation(id) {
   clearedAnnotationSnapshot.value = [];
   annotations.splice(index, 1);
   persistAnnotations();
+  updateWpsAnnotationCoordinates();
   closeSelectionTranslator();
 }
 
@@ -3726,6 +3805,9 @@ function getSelectionOffsets(paragraphElement, range) {
 }
 
 function openAnnotationEditor() {
+  // Close translation providers dropdown to prevent overlaps
+  selectionTranslator.providerMenuOpen = false;
+
   selectionTranslator.annotating = true;
   selectionTranslator.annotationDraft = "";
   selectionTranslator.editingAnnotationId = "";
@@ -3753,14 +3835,14 @@ function saveAnnotation() {
   let coords = { x1: 20, y1: 40, x2: 230, y2: 50, top: 40 };
   if (range) {
     const r = range.getBoundingClientRect();
-    const doc = document.querySelector(".reflow-document")?.getBoundingClientRect() || { left: 0, top: 0 };
+    const doc = document.querySelector(".reading-column")?.getBoundingClientRect() || { left: 0, top: 0, width: 800 };
     const relativeTop = Math.max(10, r.top - doc.top);
     const relativeLeft = Math.max(10, r.right - doc.left);
     coords = {
       x1: relativeLeft,
-      y1: relativeTop + 8,
-      x2: 230,
-      y2: relativeTop + 16,
+      y1: relativeTop + r.height + 2,
+      x2: (doc.width || 800) - 10,
+      y2: relativeTop + 24,
       top: relativeTop,
     };
   }
@@ -3785,6 +3867,7 @@ function saveAnnotation() {
     });
   }
   persistAnnotations();
+  updateWpsAnnotationCoordinates();
   closeSelectionTranslator();
   showReaderToast("已添加 WPS 绿折线引线批注");
 }
@@ -4163,9 +4246,27 @@ async function loadTranslationProviders() {
         configured: String(provider.configured) === "true"
       }))
       .filter(provider => !hiddenProviders.has(provider.id))
-      .filter(provider => provider.configured)
       .filter((provider, index, list) => list.findIndex(item => item.id === provider.id) === index);
-    if (normalized.length) translationProviders.value = normalized;
+
+    // Baseline engines that are always available
+    const baseProviders = [
+      { id: "google", label: "谷歌翻译", configured: true },
+      { id: "baidu", label: "百度翻译", configured: true },
+      { id: "youdao", label: "有道翻译", configured: true }
+    ];
+
+    // Merge baseline with server list
+    const merged = [...baseProviders];
+    normalized.forEach(srv => {
+      const existing = merged.find(b => b.id === srv.id);
+      if (existing) {
+        existing.configured = srv.configured;
+      } else {
+        merged.push(srv);
+      }
+    });
+
+    translationProviders.value = merged.filter(provider => provider.configured);
     const selectable = translationProviders.value.filter(provider => provider.configured !== false);
     if (!selectable.some(provider => provider.id === abstractProvider.value)) {
       abstractProvider.value = selectable[0]?.id || "google";
@@ -4504,6 +4605,7 @@ function openOriginalPdf() {
 function handleReaderResize() {
   updateTourRect();
   resizeDrawingCanvas();
+  updateWpsAnnotationCoordinates();
   if (paperChat.open && !paperChatWindow.userMoved) {
     resetPaperChatWindowPosition();
   }
@@ -6710,7 +6812,7 @@ onBeforeUnmount(() => {
   position: fixed;
   z-index: 75;
   width: max-content;
-  max-width: min(720px, calc(100vw - 28px));
+  max-width: min(580px, calc(100vw - 28px));
   max-height: calc(100dvh - 28px);
   overflow: visible;
   color: #263244;
@@ -6898,8 +7000,8 @@ onBeforeUnmount(() => {
 }
 .selection-mark-dots button::after { position: absolute; inset: 4px; border-radius: 50%; content: ""; background: var(--swatch); }
 .selection-result {
-  width: min(420px, calc(100vw - 28px));
-  max-height: min(46vh, 360px);
+  width: min(440px, calc(100vw - 28px));
+  max-height: min(52vh, 480px);
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -6912,6 +7014,10 @@ onBeforeUnmount(() => {
   box-shadow: 0 16px 42px rgba(30, 41, 59, .14);
   backdrop-filter: blur(16px);
 }
+.selection-result.is-ai-mode {
+  width: min(560px, calc(100vw - 28px));
+  max-height: min(72vh, 620px);
+}
 .selection-result header {
   display: flex;
   align-items: baseline;
@@ -6921,8 +7027,19 @@ onBeforeUnmount(() => {
 }
 .selection-result strong { color: #172033; font-size: 13px; font-weight: 800; }
 .selection-result small { color: #8a96a7; font-size: 10px; font-weight: 650; white-space: nowrap; }
-.selection-result p { margin: 0; color: #243147; font: 12px/1.72 "Songti SC", "STSong", serif; white-space: pre-wrap; }
-.selection-result.error p { color: #b42318; }
+.selection-result p { margin: 0; color: #243147; font: 13px/1.75 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; white-space: pre-wrap; }
+.selection-result .error-text { color: #b42318; }
+.selection-result-markdown { color: #243147; font: 13px/1.75 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; }
+.selection-result-markdown h1,.selection-result-markdown h2,.selection-result-markdown h3 { font-size: 14px; font-weight: 700; margin: 10px 0 4px; color: #0f172a; }
+.selection-result-markdown h4,.selection-result-markdown h5,.selection-result-markdown h6 { font-size: 13px; font-weight: 600; margin: 8px 0 3px; color: #1e293b; }
+.selection-result-markdown p { margin: 0 0 8px; padding: 0; background: transparent !important; }
+.selection-result-markdown ul,.selection-result-markdown ol { margin: 4px 0 8px; padding-left: 18px; }
+.selection-result-markdown li { margin-bottom: 3px; }
+.selection-result-markdown code { background: rgba(99,102,241,.08); border-radius: 4px; padding: 1px 5px; font-family: monospace; font-size: 12px; }
+.selection-result-markdown pre { background: rgba(30,41,59,.06); border-radius: 8px; padding: 10px; overflow-x: auto; margin: 6px 0; }
+.selection-result-markdown strong { font-weight: 700; color: #0f172a; }
+.selection-result-markdown em { color: #4f46e5; font-style: italic; }
+.selection-result-markdown blockquote { border-left: 3px solid #6366f1; margin: 6px 0; padding: 4px 10px; background: rgba(99,102,241,.05); border-radius: 0 6px 6px 0; color: #475569; }
 .selection-queue-note {
   display: inline-flex;
   width: fit-content;
@@ -8139,9 +8256,21 @@ onBeforeUnmount(() => {
 :root[data-theme="dark"] .selection-result p,
 :root[data-theme="dark"] .selection-annotation-editor textarea {
   color: #e2e2e6 !important;
-  background: #141e2e !important;
+  background: transparent !important;
   border-color: rgba(255, 255, 255, 0.1) !important;
 }
+:root[data-theme="dark"] .selection-result-markdown {
+  color: #dde4f0 !important;
+}
+:root[data-theme="dark"] .selection-result-markdown h1,
+:root[data-theme="dark"] .selection-result-markdown h2,
+:root[data-theme="dark"] .selection-result-markdown h3,
+:root[data-theme="dark"] .selection-result-markdown strong { color: #f1f5ff !important; }
+:root[data-theme="dark"] .selection-result-markdown p { background: transparent !important; }
+:root[data-theme="dark"] .selection-result-markdown code { background: rgba(139, 92, 246, .18) !important; color: #c4b5fd !important; }
+:root[data-theme="dark"] .selection-result-markdown pre { background: rgba(15,23,42,.6) !important; }
+:root[data-theme="dark"] .selection-result-markdown blockquote { border-left-color: #7c6df8; background: rgba(109,89,248,.1) !important; color: #94a3b8 !important; }
+:root[data-theme="dark"] .selection-result-markdown em { color: #a5b4fc !important; }
 
 :root[data-theme="dark"] .selection-provider-header { color: #f4f7ff; }
 :root[data-theme="dark"] .selection-provider-header small { color: #9aa8c3; }
@@ -8203,19 +8332,71 @@ onBeforeUnmount(() => {
   padding: 28px clamp(30px, 5vw, 72px) !important;
 }
 
-.paper-chat-panel.futuristic-void-panel .paper-chat-message.assistant,
-.paper-chat-panel.futuristic-void-panel .paper-chat-message.user {
-  width: min(940px, 100%) !important;
+.paper-chat-panel.futuristic-void-panel .paper-chat-message.assistant {
+  width: 100% !important;
+  max-width: none !important;
+  margin-inline: 0 !important;
+  display: flex !important;
+  justify-content: flex-start !important;
 }
 
-.paper-chat-panel.futuristic-void-panel .paper-chat-message p,
-.paper-chat-panel.futuristic-void-panel .message-content-wrapper {
+.paper-chat-panel.futuristic-void-panel .paper-chat-message.user {
+  width: 100% !important;
+  max-width: none !important;
+  margin-inline: 0 !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+}
+
+.paper-chat-panel.futuristic-void-panel .paper-chat-message.user .message-content-wrapper {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  width: auto !important;
+  max-width: min(760px, 85%) !important;
+}
+
+.paper-chat-panel.futuristic-void-panel .paper-chat-message.assistant .message-content-wrapper {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  width: auto !important;
+  max-width: min(760px, 85%) !important;
+}
+
+.paper-chat-panel.futuristic-void-panel .paper-chat-message p {
   max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.paper-chat-panel.futuristic-void-panel .user-chat-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #818cf8, #c084fc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 0 10px rgba(129, 140, 248, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  margin-top: 4px;
+  margin-left: 10px;
+}
+
+.paper-chat-panel.futuristic-void-panel .user-chat-avatar svg {
+  width: 14px;
+  height: 14px;
+  color: #fff;
 }
 
 .paper-chat-panel.futuristic-void-panel form,
 .paper-chat-panel.futuristic-void-panel .void-input-form {
-  width: min(940px, calc(100% - 64px)) !important;
+  width: calc(100% - 64px) !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+  margin-inline: auto !important;
 }
 
 .paper-chat-panel.futuristic-void-panel .markdown-rendered strong,
