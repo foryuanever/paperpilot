@@ -318,6 +318,8 @@
                   <label>AI问答总额<input v-model.number="plan.chatQuota" type="number" min="0" /></label>
                   <label>对照/天<input v-model.number="plan.translateQuota" type="number" min="0" /></label>
                   <label>沉浸/天<input v-model.number="plan.immersiveQuota" type="number" min="0" /></label>
+                  <label>调研总额<input v-model.number="plan.researchQuota" type="number" min="0" /></label>
+                  <label>汇报/月<input v-model.number="plan.reportQuota" type="number" min="0" /></label>
                   <label>团队席位<input v-model.number="plan.teamSeats" type="number" min="0" /></label>
                 </div>
               </div>
@@ -2639,6 +2641,8 @@ async function saveMembershipPlan(plan) {
       chatQuota: Number(plan.chatQuota || 0),
       translateQuota: Number(plan.translateQuota || 0),
       immersiveQuota: Number(plan.immersiveQuota || 0),
+      researchQuota: Number(plan.researchQuota || 0),
+      reportQuota: Number(plan.reportQuota || 0),
       teamSeats: Number(plan.teamSeats || 0),
       teamShared: Boolean(plan.teamShared),
       forumSpecial: Boolean(plan.forumSpecial),

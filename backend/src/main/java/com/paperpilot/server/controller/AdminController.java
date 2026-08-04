@@ -237,6 +237,10 @@ public class AdminController {
                 map.put("pptUsed", user.getPptUsed());
                 map.put("chatQuota", user.getChatQuota());
                 map.put("chatUsed", user.getChatUsed());
+                map.put("researchQuota", user.getResearchQuota());
+                map.put("researchUsed", user.getResearchUsed());
+                map.put("reportQuota", user.getReportQuota());
+                map.put("reportUsed", user.getReportUsed());
                 map.put("fruitScore", user.getFruitScore());
                 map.put("lastIp", user.getLastIp());
                 map.put("createdAt", user.getCreatedAt());
@@ -283,6 +287,10 @@ public class AdminController {
             user.setPptUsed(0);
             user.setChatQuota(0);
             user.setChatUsed(0);
+            user.setResearchQuota(0);
+            user.setResearchUsed(0);
+            user.setReportQuota(0);
+            user.setReportUsed(0);
             AppUserEntity saved = appUserRepository.save(user);
             authService.logAction("管理员取消用户会员: " + saved.getUsername() + "，套餐 " + oldPlan + " → free", "warn", getClientIp(request));
             return saved;

@@ -25,7 +25,7 @@
           :class="{ active: route.path === item.to }"
         >
           {{ item.label }}
-          <span v-if="item.to === '/forum' && forumUnreadCount" class="nav-forum-alert" aria-label="学术论坛有新动态"></span>
+          <span v-if="item.to === '/forum' && forumUnreadCount" class="nav-forum-alert" aria-label="学术论坛有新动态">{{ forumUnreadCount }}</span>
         </router-link>
       </nav>
 
@@ -1142,17 +1142,21 @@ async function submitPasswordChange() {
   position: absolute;
   top: 7px;
   right: 6px;
-  width: 7px;
-  height: 7px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
   display: grid;
   place-items: center;
-  padding: 0;
   border: 2px solid #fff;
   border-radius: 999px;
   background: #e11d48;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
   box-shadow: 0 0 0 2px rgba(225, 29, 72, .14);
-  transform: translate(70%, -65%);
+  transform: translate(75%, -60%);
   pointer-events: none;
+  line-height: 1;
 }
 
 .theme-toggle-btn {

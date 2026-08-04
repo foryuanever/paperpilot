@@ -698,7 +698,7 @@ async function renderSingleCanvas(doc, pageNum, canvas) {
   try {
     const page = await doc.getPage(pageNum);
     const baseViewport = page.getViewport({ scale: 1 });
-    const targetWidth = Math.min(820, Math.max(420, (window.innerWidth - 72) / 2)) * dualScale.value;
+    const targetWidth = Math.max(420, (window.innerWidth - 72) / 2) * dualScale.value;
     const scale = targetWidth / baseViewport.width;
     const viewport = page.getViewport({ scale });
     const outputScale = Math.min(2.5, window.devicePixelRatio || 1);
@@ -1400,8 +1400,8 @@ onBeforeUnmount(() => {
 .spread-head { position: sticky; top: 0; z-index: 3; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 7px 0; background: #dfe4eb; }
 .spread-head span { padding: 7px 12px; border-radius: 7px; color: #445064; background: #f7f8fa; font-size: 11px; font-weight: 750; text-align: center; }
 .page-spread { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; margin-bottom: 14px; }
-.page-spread figure { min-width: 0; margin: 0; overflow: hidden; background: #fff; box-shadow: 0 2px 7px rgba(20, 31, 48, .16); }
-.page-spread canvas { display: block; max-width: 100%; height: auto !important; margin: 0 auto; background: #fff; }
+.page-spread figure { min-width: 0; margin: 0; overflow-x: auto; overflow-y: hidden; background: #fff; box-shadow: 0 2px 7px rgba(20, 31, 48, .16); }
+.page-spread canvas { display: block; max-width: none; height: auto !important; margin: 0 auto; background: #fff; }
 .page-spread figcaption { padding: 6px 10px; border-top: 1px solid #e5e8ed; color: #7a8494; font-size: 10px; text-align: center; }
 .empty-page { min-height: 420px; display: grid; place-items: center; color: #98a2b3; font-size: 12px; }
 .translation-state { width: min(520px, calc(100% - 40px)); margin: 0 auto; padding-top: min(18vh, 170px); text-align: center; }

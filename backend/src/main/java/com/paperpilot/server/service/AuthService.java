@@ -512,6 +512,9 @@ public class AuthService {
         String finalOpenid = openid;
         String finalNickname = nickname;
         String finalAvatarUrl = avatarUrl;
+        if (finalOpenid == null || finalOpenid.trim().isEmpty() || "null".equalsIgnoreCase(finalOpenid.trim())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "QQ登录失败：无效的OpenID");
+        }
         AppUserEntity user = appUserRepository.findByQqOpenid(finalOpenid)
             .orElseGet(() -> {
                 String email = "qq_user_" + finalOpenid + "@qq.com";
@@ -608,6 +611,9 @@ public class AuthService {
         String finalOpenid = openid;
         String finalNickname = nickname;
         String finalAvatarUrl = avatarUrl;
+        if (finalOpenid == null || finalOpenid.trim().isEmpty() || "null".equalsIgnoreCase(finalOpenid.trim())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "微信登录失败：无效的OpenID");
+        }
         AppUserEntity user = appUserRepository.findByQqOpenid(finalOpenid)
             .orElseGet(() -> {
                 String email = "wechat_user_" + finalOpenid + "@papersolver.cn";

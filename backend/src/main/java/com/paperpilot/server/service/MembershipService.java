@@ -59,6 +59,8 @@ public class MembershipService {
             "review", allowance(owner.getReviewQuota(), owner.getReviewUsed()),
             "ppt", allowance(owner.getPptQuota(), owner.getPptUsed()),
             "chat", allowance(owner.getChatQuota(), owner.getChatUsed()),
+            "research", allowance(owner.getResearchQuota(), owner.getResearchUsed()),
+            "report", allowance(owner.getReportQuota(), owner.getReportUsed()),
             "teamSeats", Map.of("quota", teamSeats(id), "shared", isTeamPlan(id))
         ));
         return result;
@@ -90,6 +92,10 @@ public class MembershipService {
         user.setPptUsed(0);
         user.setChatQuota((Integer) plan.get("chatQuota"));
         user.setChatUsed(0);
+        user.setResearchQuota((Integer) plan.get("researchQuota"));
+        user.setResearchUsed(0);
+        user.setReportQuota((Integer) plan.get("reportQuota"));
+        user.setReportUsed(0);
         users.save(user);
     }
 
@@ -105,11 +111,15 @@ public class MembershipService {
         int quota = switch (kind) {
             case "review" -> number(owner.getReviewQuota());
             case "ppt" -> number(owner.getPptQuota());
+            case "research" -> number(owner.getResearchQuota());
+            case "report" -> number(owner.getReportQuota());
             default -> number(owner.getChatQuota());
         };
         int used = switch (kind) {
             case "review" -> number(owner.getReviewUsed());
             case "ppt" -> number(owner.getPptUsed());
+            case "research" -> number(owner.getResearchUsed());
+            case "report" -> number(owner.getReportUsed());
             default -> number(owner.getChatUsed());
         };
         if (used >= quota) {
@@ -117,6 +127,8 @@ public class MembershipService {
         }
         if ("review".equals(kind)) owner.setReviewUsed(used + 1);
         else if ("ppt".equals(kind)) owner.setPptUsed(used + 1);
+        else if ("research".equals(kind)) owner.setResearchUsed(used + 1);
+        else if ("report".equals(kind)) owner.setReportUsed(used + 1);
         else owner.setChatUsed(used + 1);
         users.save(owner);
     }
@@ -132,8 +144,16 @@ public class MembershipService {
         if (owner.getId() != null && !owner.getId().equals(user.getId())) {
             expireIfNeeded(owner);
         }
-        int quota = "review".equals(kind) ? number(owner.getReviewQuota()) : "ppt".equals(kind) ? number(owner.getPptQuota()) : number(owner.getChatQuota());
-        int used = "review".equals(kind) ? number(owner.getReviewUsed()) : "ppt".equals(kind) ? number(owner.getPptUsed()) : number(owner.getChatUsed());
+        int quota = "review".equals(kind) ? number(owner.getReviewQuota())
+            : "ppt".equals(kind) ? number(owner.getPptQuota())
+            : "research".equals(kind) ? number(owner.getResearchQuota())
+            : "report".equals(kind) ? number(owner.getReportQuota())
+            : number(owner.getChatQuota());
+        int used = "review".equals(kind) ? number(owner.getReviewUsed())
+            : "ppt".equals(kind) ? number(owner.getPptUsed())
+            : "research".equals(kind) ? number(owner.getResearchUsed())
+            : "report".equals(kind) ? number(owner.getReportUsed())
+            : number(owner.getChatUsed());
         if (used >= quota) {
             throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED, planName(safe(owner.getMembershipPlan(), "free")) + "不含可用的" + label(kind) + "额度，请升级或续费后继续使用。");
         }
@@ -145,6 +165,8 @@ public class MembershipService {
             user.setReviewQuota(0); user.setReviewUsed(0);
             user.setPptQuota(0); user.setPptUsed(0);
             user.setChatQuota(0); user.setChatUsed(0);
+            user.setResearchQuota(0); user.setResearchUsed(0);
+            user.setReportQuota(0); user.setReportUsed(0);
             users.save(user);
         }
     }
@@ -178,6 +200,8 @@ public class MembershipService {
         if (body.containsKey("chatQuota")) entity.setChatQuota(integer(body.get("chatQuota"), entity.getChatQuota()));
         if (body.containsKey("translateQuota")) entity.setTranslateQuota(integer(body.get("translateQuota"), entity.getTranslateQuota()));
         if (body.containsKey("immersiveQuota")) entity.setImmersiveQuota(integer(body.get("immersiveQuota"), entity.getImmersiveQuota()));
+        if (body.containsKey("researchQuota")) entity.setResearchQuota(integer(body.get("researchQuota"), entity.getResearchQuota()));
+        if (body.containsKey("reportQuota")) entity.setReportQuota(integer(body.get("reportQuota"), entity.getReportQuota()));
         if (body.containsKey("teamSeats")) entity.setTeamSeats(integer(body.get("teamSeats"), entity.getTeamSeats()));
         if (body.containsKey("teamShared")) entity.setTeamShared(bool(body.get("teamShared"), entity.getTeamShared()));
         if (body.containsKey("forumSpecial")) entity.setForumSpecial(bool(body.get("forumSpecial"), entity.getForumSpecial()));
@@ -248,8 +272,8 @@ public class MembershipService {
         return Math.round(base * 100D) / 100D;
     }
     private int cycleMonths(String cycle) { return 1; }
-    private String entitlementFor(String action) { String a = safe(action, ""); if (a.contains("PPT")) return "ppt"; if (a.contains("综述") || a.contains("汇报")) return "review"; if (a.contains("问答") || a.contains("对话")) return "chat"; return null; }
-    private String label(String kind) { return Map.of("review", "论文综述", "ppt", "PPT 生成", "chat", "AI 问答").get(kind); }
+    private String entitlementFor(String action) { String a = safe(action, ""); if (a.contains("PPT")) return "ppt"; if (a.contains("综述")) return "review"; if (a.contains("问答") || a.contains("对话")) return "chat"; if (a.contains("调研") || a.contains("广场")) return "research"; if (a.contains("汇报")) return "report"; return null; }
+    private String label(String kind) { return Map.of("review", "论文综述", "ppt", "PPT 生成", "chat", "AI 问答", "research", "调研广场", "report", "组会一键汇报").get(kind); }
     private Map<String, Object> allowance(Integer quota, Integer used) { int q = number(quota); int u = number(used); return Map.of("quota", q, "used", u, "remaining", Math.max(0, q - u)); }
     private int number(Integer value) { return value == null ? 0 : value; }
     private String safe(String value, String fallback) { return value == null || value.isBlank() ? fallback : value; }
@@ -297,8 +321,23 @@ public class MembershipService {
         defaults.add(defaultPlan(PLAN_TEAM_PLUS, 4));
         defaults.add(defaultPlan(PLAN_TEAM_PRO, 5));
         for (MembershipPlanEntity item : defaults) {
-            if (!planRepository.existsById(item.getId())) {
+            java.util.Optional<MembershipPlanEntity> existingOpt = planRepository.findById(item.getId());
+            if (existingOpt.isEmpty()) {
                 planRepository.save(item);
+            } else {
+                MembershipPlanEntity existing = existingOpt.get();
+                boolean changed = false;
+                if (existing.getResearchQuota() == null || existing.getResearchQuota() == 0) {
+                    existing.setResearchQuota(item.getResearchQuota());
+                    changed = true;
+                }
+                if (existing.getReportQuota() == null || existing.getReportQuota() == 0) {
+                    existing.setReportQuota(item.getReportQuota());
+                    changed = true;
+                }
+                if (changed) {
+                    planRepository.save(existing);
+                }
             }
         }
     }
@@ -315,28 +354,35 @@ public class MembershipService {
         if ("free".equals(id)) {
             item.setName("个人 Free"); item.setSubtitle("永久免费版"); item.setMonthlyPrice(0D);
             item.setReviewQuota(90); item.setPptQuota(0); item.setChatQuota(150); item.setTranslateQuota(5); item.setImmersiveQuota(3);
+            item.setResearchQuota(90); item.setReportQuota(1);
         } else if (PLAN_LITE.equals(id)) {
             item.setName("个人 Lite"); item.setSubtitle("一杯瑞幸咖啡价"); item.setMonthlyPrice(9.9D);
             item.setReviewQuota(450); item.setPptQuota(2); item.setChatQuota(900); item.setTranslateQuota(10); item.setImmersiveQuota(10);
+            item.setResearchQuota(300); item.setReportQuota(5);
         } else if (PLAN_PLUS.equals(id)) {
             item.setName("个人 Plus"); item.setSubtitle("热销推荐"); item.setMonthlyPrice(19.9D);
             item.setReviewQuota(900); item.setPptQuota(4); item.setChatQuota(1800); item.setTranslateQuota(20); item.setImmersiveQuota(20);
+            item.setResearchQuota(600); item.setReportQuota(10);
             item.setForumSpecial(true);
         } else if (PLAN_PRO.equals(id)) {
             item.setName("个人 Pro"); item.setSubtitle("极速进阶"); item.setMonthlyPrice(29.9D);
             item.setReviewQuota(1800); item.setPptQuota(6); item.setChatQuota(3600); item.setTranslateQuota(50); item.setImmersiveQuota(50);
+            item.setResearchQuota(1200); item.setReportQuota(20);
             item.setForumSpecial(true); item.setForumTopDaily(1); item.setPeakPriority(true);
         } else if (PLAN_TEAM_PLUS.equals(id)) {
             item.setName("课题组团队 Plus"); item.setSubtitle("导师购买分配"); item.setMonthlyPrice(17.91D);
             item.setReviewQuota(900); item.setPptQuota(4); item.setChatQuota(1800); item.setTranslateQuota(20); item.setImmersiveQuota(20);
+            item.setResearchQuota(600); item.setReportQuota(10);
             item.setTeamShared(true); item.setTeamSeats(10); item.setForumSpecial(true); item.setPeakPriority(true);
         } else if (PLAN_TEAM_PRO.equals(id)) {
             item.setId(PLAN_TEAM_PRO); item.setName("课题组团队 Pro"); item.setSubtitle("实验室旗舰"); item.setMonthlyPrice(26.91D);
             item.setReviewQuota(1800); item.setPptQuota(6); item.setChatQuota(3600); item.setTranslateQuota(50); item.setImmersiveQuota(50);
+            item.setResearchQuota(1200); item.setReportQuota(20);
             item.setTeamShared(true); item.setTeamSeats(20); item.setForumSpecial(true); item.setForumTopDaily(1); item.setPeakPriority(true);
         } else {
             item.setName("新会员套餐"); item.setSubtitle("自定义上架套餐"); item.setMonthlyPrice(19.9D);
             item.setReviewQuota(900); item.setPptQuota(4); item.setChatQuota(1800); item.setTranslateQuota(20); item.setImmersiveQuota(20);
+            item.setResearchQuota(600); item.setReportQuota(10);
             item.setForumSpecial(true);
         }
         return item;
@@ -364,11 +410,15 @@ public class MembershipService {
         item.put("chatQuota", integer(entity.getChatQuota(), 0));
         item.put("translateQuota", integer(entity.getTranslateQuota(), 0));
         item.put("immersiveQuota", integer(entity.getImmersiveQuota(), 0));
+        item.put("researchQuota", integer(entity.getResearchQuota(), 0));
+        item.put("reportQuota", integer(entity.getReportQuota(), 0));
         item.put("reviewQuotaDaily", Math.max(0, integer(entity.getReviewQuota(), 0) / 30));
         item.put("pptQuotaMonthly", integer(entity.getPptQuota(), 0));
         item.put("chatQuotaDaily", Math.max(0, integer(entity.getChatQuota(), 0) / 30));
         item.put("translateQuotaDaily", integer(entity.getTranslateQuota(), 0));
         item.put("immersiveQuotaDaily", integer(entity.getImmersiveQuota(), 0));
+        item.put("researchQuotaDaily", Math.max(0, integer(entity.getResearchQuota(), 0) / 30));
+        item.put("reportQuotaMonthly", integer(entity.getReportQuota(), 0));
         item.put("teamSeats", integer(entity.getTeamSeats(), 0));
         item.put("teamShared", Boolean.TRUE.equals(entity.getTeamShared()));
         item.put("forumSpecial", Boolean.TRUE.equals(entity.getForumSpecial()));

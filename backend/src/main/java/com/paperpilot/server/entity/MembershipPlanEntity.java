@@ -25,6 +25,8 @@ public class MembershipPlanEntity {
     private Integer chatQuota;
     private Integer translateQuota;
     private Integer immersiveQuota;
+    private Integer researchQuota;
+    private Integer reportQuota;
     private Integer teamSeats;
     private Boolean teamShared;
     private Boolean forumSpecial;
@@ -39,7 +41,7 @@ public class MembershipPlanEntity {
     private String seckillLabel;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-
+ 
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
@@ -47,13 +49,13 @@ public class MembershipPlanEntity {
         updatedAt = now;
         applyDefaults();
     }
-
+ 
     @PreUpdate
     public void preUpdate() {
         updatedAt = LocalDateTime.now();
         applyDefaults();
     }
-
+ 
     private void applyDefaults() {
         if (monthlyPrice == null) monthlyPrice = 0D;
         if (originalMonthlyPrice == null) originalMonthlyPrice = monthlyPrice;
@@ -62,6 +64,8 @@ public class MembershipPlanEntity {
         if (chatQuota == null) chatQuota = 0;
         if (translateQuota == null) translateQuota = 0;
         if (immersiveQuota == null) immersiveQuota = 0;
+        if (researchQuota == null) researchQuota = 0;
+        if (reportQuota == null) reportQuota = 0;
         if (teamSeats == null) teamSeats = 0;
         if (teamShared == null) teamShared = false;
         if (forumSpecial == null) forumSpecial = false;
@@ -71,7 +75,7 @@ public class MembershipPlanEntity {
         if (sortOrder == null) sortOrder = 99;
         if (seckillEnabled == null) seckillEnabled = false;
     }
-
+ 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getName() { return name; }
@@ -92,6 +96,10 @@ public class MembershipPlanEntity {
     public void setTranslateQuota(Integer translateQuota) { this.translateQuota = translateQuota; }
     public Integer getImmersiveQuota() { return immersiveQuota; }
     public void setImmersiveQuota(Integer immersiveQuota) { this.immersiveQuota = immersiveQuota; }
+    public Integer getResearchQuota() { return researchQuota; }
+    public void setResearchQuota(Integer researchQuota) { this.researchQuota = researchQuota; }
+    public Integer getReportQuota() { return reportQuota; }
+    public void setReportQuota(Integer reportQuota) { this.reportQuota = reportQuota; }
     public Integer getTeamSeats() { return teamSeats; }
     public void setTeamSeats(Integer teamSeats) { this.teamSeats = teamSeats; }
     public Boolean getTeamShared() { return teamShared; }

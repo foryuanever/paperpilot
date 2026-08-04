@@ -166,6 +166,18 @@ public class AppUserEntity {
     @Column(name = "chat_used")
     private Integer chatUsed = 0;
 
+    @Column(name = "research_quota")
+    private Integer researchQuota = 0;
+
+    @Column(name = "research_used")
+    private Integer researchUsed = 0;
+
+    @Column(name = "report_quota")
+    private Integer reportQuota = 0;
+
+    @Column(name = "report_used")
+    private Integer reportUsed = 0;
+
     @Column(name = "fruit_score")
     private Integer fruitScore = 0;
 
@@ -187,6 +199,14 @@ public class AppUserEntity {
     public void setChatQuota(Integer chatQuota) { this.chatQuota = chatQuota; }
     public Integer getChatUsed() { return chatUsed; }
     public void setChatUsed(Integer chatUsed) { this.chatUsed = chatUsed; }
+    public Integer getResearchQuota() { return researchQuota; }
+    public void setResearchQuota(Integer researchQuota) { this.researchQuota = researchQuota; }
+    public Integer getResearchUsed() { return researchUsed; }
+    public void setResearchUsed(Integer researchUsed) { this.researchUsed = researchUsed; }
+    public Integer getReportQuota() { return reportQuota; }
+    public void setReportQuota(Integer reportQuota) { this.reportQuota = reportQuota; }
+    public Integer getReportUsed() { return reportUsed; }
+    public void setReportUsed(Integer reportUsed) { this.reportUsed = reportUsed; }
     public Integer getFruitScore() { return fruitScore; }
     public void setFruitScore(Integer fruitScore) { this.fruitScore = fruitScore; }
 

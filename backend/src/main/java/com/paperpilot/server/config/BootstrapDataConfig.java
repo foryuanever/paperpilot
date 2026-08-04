@@ -496,25 +496,10 @@ public class BootstrapDataConfig {
     }
 
     private void seedAnnouncements(AnnouncementRepository repo) {
-        if (repo.count() > 0) {
-            return;
-        }
-
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-
-        AnnouncementEntity a1 = new AnnouncementEntity();
-        a1.setTitle("关于实验室值班与安全的通知");
-        a1.setContent("请离校前关闭工位设备电源，检查服务器运行温度。如有突发情况请联系值班管理员。");
-        a1.setPublishTime(LocalDateTime.now().minusDays(2).format(formatter));
-        a1.setCreatedAt(LocalDateTime.now().minusDays(2));
-        repo.save(a1);
-
-        AnnouncementEntity a2 = new AnnouncementEntity();
-        a2.setTitle("本周五下午 14:00 举行实验室大组会");
-        a2.setContent("请同学们提前上传本周工作报告，准备 10 分钟的工作展示 PPT。导师将进行工作进度点评。");
-        a2.setPublishTime(LocalDateTime.now().minusDays(3).format(formatter));
-        a2.setCreatedAt(LocalDateTime.now().minusDays(3));
-        repo.save(a2);
+        // Clean up mock announcements if they exist in the database, and do not seed them
+        repo.findAll().stream()
+            .filter(a -> "关于实验室值班与安全的通知".equals(a.getTitle()) || "本周五下午 14:00 举行实验室大组会".equals(a.getTitle()))
+            .forEach(repo::delete);
     }
 
     private void seedSharedResources(SharedResourceRepository repo) {
