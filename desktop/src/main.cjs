@@ -16,7 +16,7 @@ app.commandLine.appendSwitch("enable-zero-copy");
 
 const isPackaged = app.isPackaged;
 const ZOTERO_LOCAL_BASE = "http://127.0.0.1:23119";
-const DEFAULT_API_BASE_URL = normalizeApiBaseUrl(process.env.PAPER_SOLVER_API_BASE) || "http://127.0.0.1:8080";
+const DEFAULT_API_BASE_URL = normalizeApiBaseUrl(process.env.PAPER_SOLVER_API_BASE) || "https://papersolver.cn";
 const DEFAULT_PDFMATH_BASE_URL = normalizeApiBaseUrl(process.env.PAPER_SOLVER_PDFMATH_BASE) || "http://127.0.0.1:11008";
 const DESKTOP_TRANSLATION_LABELS = {
   "google-web": "谷歌翻译",
@@ -83,10 +83,15 @@ function createMainWindow() {
 
   window.webContents.on("will-navigate", (event, url) => {
     const currentUrl = window.webContents.getURL();
+    console.log(`[Main Window] will-navigate to: ${url}`);
     if (/^https?:\/\//i.test(url) && url !== currentUrl) {
       event.preventDefault();
       shell.openExternal(url);
     }
+  });
+
+  window.webContents.on("console-message", (event, level, message, line, sourceId) => {
+    console.log(`[Renderer Console] LEVEL ${level}: ${message} (at ${sourceId}:${line})`);
   });
 
   const indexPath = appIndexPath();
@@ -146,6 +151,15 @@ app.whenReady().then(() => {
   startLocalCaptureServer();
   createMainWindow();
 
+  // Auto-start local dependency if configured
+  const settings = readDesktopSettings();
+  if (settings.setupCompleted && localDependencyInstalled()) {
+    console.log("[Local Dependency] Setup completed. Auto-starting local services...");
+    startLocalDependencyServices({ waitForReady: false }).catch((err) => {
+      console.error("[Local Dependency] Auto-start failed:", err.message);
+    });
+  }
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow();
@@ -163,7 +177,53 @@ app.on("window-all-closed", () => {
   }
 });
 
+ipcMain.handle("desktop:oauth-qq", async (_event, qqAuthUrl) => {
+  return new Promise((resolve, reject) => {
+    const popup = new BrowserWindow({
+      width: 900,
+      height: 680,
+      title: "使用 QQ 登录 PaperSolver",
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
+    });
+
+    let settled = false;
+    function checkUrl(url) {
+      console.log(`[QQ Popup] Navigated to: ${url}`);
+      if (settled) return;
+      try {
+        const u = new URL(url);
+        if (u.pathname === "/login" &&
+            (u.hostname.includes("papersolver.cn") || u.hostname === "106.53.136.108")) {
+          const qqSession = u.searchParams.get("qqSession");
+          const error = u.searchParams.get("error");
+          console.log(`[QQ Popup] Match found! qqSession length: ${qqSession ? qqSession.length : 0}, error: ${error}`);
+          settled = true;
+          popup.close();
+          if (qqSession) resolve({ qqSession });
+          else reject(new Error(decodeURIComponent(error || "QQ 授权失败")));
+        }
+      } catch (err) {
+        console.error(`[QQ Popup] checkUrl exception: ${err.message}`);
+      }
+    }
+
+    popup.webContents.on("will-navigate", (_e, url) => checkUrl(url));
+    popup.webContents.on("did-navigate", (_e, url) => checkUrl(url));
+    popup.webContents.on("did-navigate-in-page", (_e, url) => checkUrl(url));
+
+    popup.on("closed", () => {
+      if (!settled) {
+        settled = true;
+        reject(new Error("用户关闭了 QQ 授权窗口"));
+      }
+    });
+
+    popup.loadURL(qqAuthUrl);
+  });
+});
+
 ipcMain.handle("desktop:get-runtime-info", () => ({
+
   platform: process.platform,
   version: app.getVersion(),
   channel: "beta",
@@ -208,13 +268,13 @@ ipcMain.handle("desktop:check-update", async () => {
 
 ipcMain.handle("desktop:get-backend-config", () => readDesktopSettings());
 
-ipcMain.handle("desktop:set-capture-session", (_event, payload = {}) => {
+ipcMain.handle("desktop:set-capture-session", (_event, payload) => {
+  if (!payload || !payload.userId) {
+    return writeDesktopSettings({ captureSession: null });
+  }
   const userId = textValue(payload.userId);
   const userName = textValue(payload.userName);
   const email = textValue(payload.email);
-  if (!userId) {
-    return writeDesktopSettings({ captureSession: null });
-  }
   return writeDesktopSettings({
     captureSession: {
       userId,
@@ -290,6 +350,10 @@ ipcMain.handle("desktop:cache-pdf", async (_event, payload = {}) => {
   return cachePdf(payload);
 });
 
+ipcMain.handle("desktop:save-ppt-deck", async (_event, payload = {}) => {
+  return savePptDeck(payload);
+});
+
 ipcMain.handle("desktop:get-cached-pdf", async (_event, payload = {}) => {
   return getCachedPdf(payload);
 });
@@ -361,6 +425,9 @@ ipcMain.handle("desktop:local-dependency-status", async () => {
 });
 
 ipcMain.handle("desktop:download-local-dependency", async (event, payload = {}) => {
+  if (payload.liteMode !== undefined) {
+    writeDesktopSettings({ localDependencyLiteMode: Boolean(payload.liteMode) });
+  }
   return downloadAndInstallLocalDependency(event.sender, payload);
 });
 
@@ -761,6 +828,7 @@ async function getLocalDependencyStatus() {
       installed: true,
       running: true,
       structuredParserAvailable,
+      liteMode: settings.localDependencyLiteMode,
       latencyMs: Date.now() - startedAt,
       label: "PaperSolver 本机依赖包",
       message: response.ok
@@ -774,6 +842,7 @@ async function getLocalDependencyStatus() {
       installed: installed || structuredParserAvailable,
       running: false,
       structuredParserAvailable,
+      liteMode: settings.localDependencyLiteMode,
       latencyMs: Date.now() - startedAt,
       label: "PaperSolver 本机依赖包",
       dependencyDir: localDependencyDir(),
@@ -784,6 +853,45 @@ async function getLocalDependencyStatus() {
         : "未检测到本机依赖。沉浸翻译会先尝试备用模式，建议安装依赖包以获得完整体验。"
     };
   }
+}
+
+async function getDirectorySize(dirPath) {
+  let size = 0;
+  try {
+    const files = await fs.promises.readdir(dirPath, { withFileTypes: true });
+    for (const file of files) {
+      const filePath = path.join(dirPath, file.name);
+      if (file.isDirectory()) {
+        size += await getDirectorySize(filePath);
+      } else if (file.isFile() && !file.name.endsWith('.tmp') && !file.name.endsWith('.part')) {
+        const stat = await fs.promises.stat(filePath).catch(() => null);
+        if (stat) size += stat.size;
+      }
+    }
+  } catch (err) {
+    // dir might not exist yet
+  }
+  return size;
+}
+
+function runSpawnCommand(cmd, args, options, onLog) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, options);
+    let errAccumulator = "";
+    child.stdout.on("data", (chunk) => {
+      if (onLog) onLog(chunk.toString());
+    });
+    child.stderr.on("data", (chunk) => {
+      const str = chunk.toString();
+      errAccumulator += str;
+      if (onLog) onLog(str);
+    });
+    child.on("error", (err) => reject(err));
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(errAccumulator.trim() || `Command exited with code ${code}`));
+    });
+  });
 }
 
 async function downloadAndInstallLocalDependency(webContents, options = {}) {
@@ -800,41 +908,149 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
   const force = Boolean(options?.force);
   const emit = (payload) => emitDependencyProgress(webContents, payload);
   await fs.promises.mkdir(tempRoot, { recursive: true });
+  
   try {
     if (force) {
       stopLocalDependencyProcesses();
       await fs.promises.rm(localDependencyLogPath(), { force: true }).catch(() => {});
     }
+
+    // --- Phase 1: Download & Extract base zip framework (0% - 15%) ---
     if (bundledArchive) {
-      emit({ stage: "prepare", progress: 12, message: "正在读取内置 PaperSolver 本机依赖包..." });
+      emit({ stage: "prepare", progress: 5, message: "正在读取内置 PaperSolver 本机依赖包..." });
     } else {
-      emit({ stage: "download", progress: 3, message: "正在连接 PaperSolver 依赖服务..." });
+      emit({ stage: "download", progress: 2, message: "正在连接 PaperSolver 依赖服务..." });
       await downloadFileToPath(url, archivePath, (progress) => {
         emit({
           stage: "download",
-          progress: Math.max(4, Math.min(72, Math.round(progress * 0.68 + 4))),
-          message: `正在下载本机依赖包 ${Math.round(progress)}%`
+          progress: Math.max(3, Math.min(12, Math.round(progress * 0.10 + 2))),
+          message: `正在下载依赖包引导环境 ${Math.round(progress)}%`
         });
-      });
+      }, "依赖包");
     }
-    emit({ stage: "verify", progress: 76, message: "正在校验依赖包..." });
+    
+    emit({ stage: "verify", progress: 13, message: "正在校验依赖包..." });
     const stat = await fs.promises.stat(archivePath);
-    if (!stat.size || stat.size < 1024 * 100) {
-      throw new Error("依赖包下载不完整，请稍后重试。");
+    if (!stat.size || stat.size < 1024 * 10) {
+      throw new Error("依赖包引导环境下载不完整，请稍后重试。");
     }
-    emit({ stage: "extract", progress: 82, message: force ? "正在重新安装到用户本机目录..." : "正在安装到用户本机目录..." });
-    await fs.promises.rm(installDir, { recursive: true, force: true });
+    
+    emit({ stage: "extract", progress: 15, message: force ? "正在重新部署基础目录..." : "正在部署基础目录..." });
+    if (force) {
+      await fs.promises.rm(installDir, { recursive: true, force: true });
+    }
     await fs.promises.mkdir(installDir, { recursive: true });
     await extractArchive(archivePath, installDir);
     await normalizeInstalledDependencyLayout(installDir);
-    emit({ stage: "start", progress: 92, message: "正在启动本机依赖服务..." });
+
+    // --- Path resolutions for Python Virtual Env & UV ---
+    const isWin = process.platform === "win32";
+    const uvBin = path.join(installDir, "tools", isWin ? "uv.exe" : "uv");
+    const venvDir = path.join(installDir, ".runtime-venv");
+    const pythonBin = path.join(venvDir, isWin ? "Scripts" : "bin", isWin ? "python.exe" : "python");
+    
+    // --- Phase 2: Setup Python & Install pip dependencies (15% - 50%) ---
+    emit({ stage: "python-env", progress: 18, message: "正在自检本地人工智能运行环境..." });
+    
+    const settings = readDesktopSettings();
+    const liteMode = settings.localDependencyLiteMode;
+
+    // Check if python venv exists, if not, create it
+    if (!fs.existsSync(pythonBin)) {
+      emit({ stage: "python-env", progress: 20, message: "正在创建 Python 虚拟计算隔离沙箱..." });
+      await runSpawnCommand(uvBin, ["python", "install", "3.12"], { cwd: installDir });
+      await runSpawnCommand(uvBin, ["venv", "--python", "3.12", ".runtime-venv"], { cwd: installDir });
+    }
+
+    // Force install pip dependencies if not ready
+    const pdfReadyMarker = path.join(venvDir, ".papersolver-pdf-ready");
+    const structuredReadyMarker = path.join(venvDir, ".papersolver-structured-ready");
+    
+    if (force || !fs.existsSync(pdfReadyMarker) || !fs.existsSync(structuredReadyMarker)) {
+      emit({ stage: "python-env", progress: 25, message: "正在下载并安装核心算法依赖包（第一阶段）..." });
+      
+      // Install PDF service requirements
+      await runSpawnCommand(
+        uvBin, 
+        ["pip", "install", "--python", pythonBin, "-r", path.join(installDir, "services", "pdf", "requirements.txt")], 
+        { cwd: installDir },
+        (log) => {
+          const match = log.match(/Downloading\s+([^\s]+)/i);
+          if (match) {
+            const pkg = match[1].split("-")[0];
+            emit({ stage: "python-env", progress: 28, message: `正在下载算法组件: ${pkg}...` });
+          } else if (log.includes("Installing")) {
+            emit({ stage: "python-env", progress: 32, message: "正在解压并安装组件..." });
+          }
+        }
+      );
+      
+      emit({ stage: "python-env", progress: 38, message: "正在下载并安装版面解析依赖包（第二阶段）..." });
+      
+      // Install Structured parser requirements
+      await runSpawnCommand(
+        uvBin, 
+        ["pip", "install", "--python", pythonBin, "-r", path.join(installDir, "services", "structured", "requirements.txt")], 
+        { cwd: installDir },
+        (log) => {
+          const match = log.match(/Downloading\s+([^\s]+)/i);
+          if (match) {
+            const pkg = match[1].split("-")[0];
+            emit({ stage: "python-env", progress: 42, message: `正在下载解析组件: ${pkg}...` });
+          } else if (log.includes("Installing")) {
+            emit({ stage: "python-env", progress: 46, message: "正在解压并安装版面解析组件..." });
+          }
+        }
+      );
+    }
+
+    // --- Phase 3: Pre-download AI Layout & Translation Models (50% - 90%) ---
+    emit({ stage: "models", progress: 50, message: "正在连接 AI 离线大模型仓库..." });
+    
+    // Check downloaded models folder size to monitor progress
+    const modelscopeCacheDir = path.join(os.homedir(), ".cache", "modelscope", "hub", "models", "OpenDataLab", "PDF-Extract-Kit-1___0");
+    const expectedSize = liteMode ? 256 * 1024 * 1024 : 1000 * 1024 * 1024;
+    
+    let modelDownloadCompleted = false;
+    const progressTimer = setInterval(async () => {
+      if (modelDownloadCompleted) return;
+      const size = await getDirectorySize(modelscopeCacheDir);
+      const percentage = Math.min(99, Math.round((size / expectedSize) * 100));
+      emit({
+        stage: "models",
+        progress: Math.max(52, Math.min(88, Math.round(50 + percentage * 0.38))),
+        message: `正在下载论文版面解析大模型 ${percentage}%`
+      });
+    }, 2000);
+
+    try {
+      const args = [path.join(installDir, "services", "structured", "download_models.py")];
+      if (liteMode) {
+        args.push("--lite");
+      }
+      
+      await runSpawnCommand(pythonBin, args, { cwd: installDir });
+    } finally {
+      modelDownloadCompleted = true;
+      clearInterval(progressTimer);
+    }
+
+    // --- Phase 4: Write ready markers & Start local services (90% - 100%) ---
+    emit({ stage: "start", progress: 90, message: "正在对算法模型包进行最终校验与签名..." });
+    await fs.promises.writeFile(pdfReadyMarker, new Date().toISOString());
+    await fs.promises.writeFile(structuredReadyMarker, new Date().toISOString());
+    
+    emit({ stage: "start", progress: 94, message: "正在启动本机翻译与解析进程服务..." });
     await startLocalDependencyServices({ waitForReady: true });
+    
     const status = await getLocalDependencyStatus();
     if (!status.running) {
       throw new Error(status.message || "依赖已安装，但服务启动失败。");
     }
-    emit({ stage: "done", progress: 100, message: "本机依赖包安装完成。" });
+    
+    emit({ stage: "done", progress: 100, message: "本机依赖服务已全部安装并正常运行！" });
     return { ok: true, ...status };
+    
   } catch (error) {
     const logTail = await tailFile(localDependencyLogPath(), 2200);
     const detail = logTail ? `\n\n最近日志：\n${logTail.slice(-1200)}` : "";
@@ -889,7 +1105,9 @@ function emitDependencyProgress(webContents, payload) {
 function localDependencyDownloadUrl() {
   const explicit = textValue(process.env.PAPER_SOLVER_DEPENDENCY_URL);
   if (explicit) return explicit;
-  return "";
+  const platform = process.platform === "darwin" ? "macos" : process.platform === "win32" ? "windows" : "linux";
+  const arch = process.arch === "arm64" ? "arm64" : "x64";
+  return `http://papersolver.cn/downloads/dependencies/papersolver-local-dependency-${platform}-${arch}.zip`;
 }
 
 function bundledLocalDependencyArchive() {
@@ -1017,7 +1235,7 @@ function localDependencyLogPath() {
   return path.join(app.getPath("userData"), "logs", "local-dependency.log");
 }
 
-function downloadFileToPath(url, targetPath, onProgress) {
+function downloadFileToPath(url, targetPath, onProgress, label = "文件") {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const client = parsed.protocol === "http:" ? http : https;
@@ -1029,12 +1247,12 @@ function downloadFileToPath(url, targetPath, onProgress) {
     }, (response) => {
       if ([301, 302, 303, 307, 308].includes(response.statusCode) && response.headers.location) {
         response.resume();
-        downloadFileToPath(new URL(response.headers.location, url).toString(), targetPath, onProgress).then(resolve, reject);
+        downloadFileToPath(new URL(response.headers.location, url).toString(), targetPath, onProgress, label).then(resolve, reject);
         return;
       }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         response.resume();
-        reject(new Error(`依赖包下载失败（HTTP ${response.statusCode}）`));
+        reject(new Error(`${label}下载失败（HTTP ${response.statusCode}）`));
         return;
       }
       const total = Number(response.headers["content-length"]) || 0;
@@ -2214,10 +2432,81 @@ async function cachePdf(payload) {
   return { ok: true, workspaceId, size: buffer.length };
 }
 
+async function savePptDeck(payload = {}) {
+  const url = textValue(payload.url);
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error("PPT 下载地址无效，无法保存到本机。");
+  }
+  const baseDir = path.join(pdfCacheDir(), "PPT");
+  await fs.promises.mkdir(baseDir, { recursive: true });
+  const rawName = payload.fileName || payload.meetingTitle || payload.jobId || `meeting-deck-${Date.now()}`;
+  const fileName = uniquePptName(baseDir, normalizedPptName(rawName));
+  const targetPath = path.join(baseDir, fileName);
+  await downloadFileToPath(url, targetPath, null, "PPT 文件");
+  const stat = await fs.promises.stat(targetPath);
+  if (stat.size <= 0) {
+    await fs.promises.rm(targetPath, { force: true });
+    throw new Error("PPT 文件为空，保存失败。");
+  }
+  return {
+    ok: true,
+    path: targetPath,
+    fileName,
+    size: stat.size,
+  };
+}
+
 async function getCachedPdf(payload) {
   const workspaceId = safeCacheKey(payload.workspaceId);
   if (!workspaceId) return { found: false };
   const pdfPath = path.join(pdfCacheDir(), `${workspaceId}.pdf`);
+  
+  let exists = false;
+  try {
+    const stat = await fs.promises.stat(pdfPath);
+    if (stat.isFile()) exists = true;
+  } catch {}
+  
+  if (!exists) {
+    try {
+      const settings = readDesktopSettings();
+      const apiBaseUrl = normalizeApiBaseUrl(settings.apiBaseUrl) || "https://papersolver.cn";
+      const downloadUrl = `${apiBaseUrl}/api/papers/uploads/${workspaceId}.pdf`;
+      
+      console.log(`[Local Cache] PDF not found. Downloading from: ${downloadUrl}`);
+      await fs.promises.mkdir(path.dirname(pdfPath), { recursive: true });
+      
+      await new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(pdfPath);
+        const req = https.get(downloadUrl, (res) => {
+          if (res.statusCode !== 200) {
+            reject(new Error(`Failed to download PDF: HTTP ${res.statusCode}`));
+            return;
+          }
+          res.pipe(file);
+          file.on("finish", () => {
+            file.close(resolve);
+          });
+        });
+        req.on("error", (err) => {
+          fs.unlink(pdfPath, () => reject(err));
+        });
+        req.end();
+      });
+      console.log(`[Local Cache] PDF downloaded successfully for workspace: ${workspaceId}`);
+      
+      await fs.promises.writeFile(
+        path.join(pdfCacheDir(), `${workspaceId}.json`),
+        JSON.stringify({ fileName: `${workspaceId}.pdf` }),
+        "utf8"
+      );
+    } catch (err) {
+      console.error(`[Local Cache] Failed to download PDF for workspace ${workspaceId}:`, err.message);
+      await fs.promises.rm(pdfPath, { force: true }).catch(() => {});
+      return { found: false };
+    }
+  }
+  
   try {
     const buffer = await fs.promises.readFile(pdfPath);
     if (!looksLikePdfBuffer(buffer)) return { found: false };
@@ -2334,6 +2623,7 @@ function readDesktopSettings() {
     captureSession: null,
     pdfMathTranslateBaseUrl: DEFAULT_PDFMATH_BASE_URL,
     setupCompleted: false,
+    localDependencyLiteMode: true,
     translationEndpoints: defaultTranslationEndpoints()
   };
   try {
@@ -2346,6 +2636,7 @@ function readDesktopSettings() {
       pdfStorageDir: normalizePdfStorageDir(parsed.pdfStorageDir || fallback.pdfStorageDir),
       pdfMathTranslateBaseUrl: normalizeApiBaseUrl(parsed.pdfMathTranslateBaseUrl) || fallback.pdfMathTranslateBaseUrl,
       setupCompleted: Boolean(parsed.setupCompleted),
+      localDependencyLiteMode: parsed.localDependencyLiteMode !== undefined ? Boolean(parsed.localDependencyLiteMode) : fallback.localDependencyLiteMode,
       translationEndpoints: normalizeTranslationEndpoints(parsed.translationEndpoints)
     };
   } catch {
@@ -2362,6 +2653,7 @@ function writeDesktopSettings(settings) {
   nextSettings.pdfStorageDir = normalizePdfStorageDir(nextSettings.pdfStorageDir);
   nextSettings.pdfMathTranslateBaseUrl = normalizeApiBaseUrl(nextSettings.pdfMathTranslateBaseUrl) || DEFAULT_PDFMATH_BASE_URL;
   nextSettings.setupCompleted = Boolean(nextSettings.setupCompleted);
+  nextSettings.localDependencyLiteMode = Boolean(nextSettings.localDependencyLiteMode);
   nextSettings.translationEndpoints = normalizeTranslationEndpoints(nextSettings.translationEndpoints);
   fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
   fs.writeFileSync(settingsPath(), JSON.stringify(nextSettings, null, 2));
@@ -2408,6 +2700,27 @@ function fileUrlToPath(url) {
 function normalizedPdfName(name) {
   const clean = textValue(name).replace(/[\\/:*?"<>|]+/g, "_") || "zotero-attachment.pdf";
   return clean.toLowerCase().endsWith(".pdf") ? clean : `${clean}.pdf`;
+}
+
+function normalizedPptName(name) {
+  const clean = textValue(name)
+    .replace(/[\\/:*?"<>|]+/g, "_")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120) || "meeting-deck";
+  return clean.toLowerCase().endsWith(".pptx") ? clean : `${clean}.pptx`;
+}
+
+function uniquePptName(dir, fileName) {
+  const ext = path.extname(fileName) || ".pptx";
+  const base = path.basename(fileName, ext) || "meeting-deck";
+  let candidate = `${base}${ext}`;
+  let index = 2;
+  while (fs.existsSync(path.join(dir, candidate))) {
+    candidate = `${base}-${index}${ext}`;
+    index += 1;
+  }
+  return candidate;
 }
 
 function assertReasonablePdfSize(size) {

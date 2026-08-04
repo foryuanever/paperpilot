@@ -1,38 +1,23 @@
 <template>
-  <div class="home-root">
+  <div class="home-root" @mousemove="handleMouseMove" :style="{ '--mouse-x': mouseX + 'px', '--mouse-y': mouseY + 'px' }">
 
     <!-- ═══ NAV ═══ -->
     <header class="home-nav" :class="{ scrolled: navScrolled }">
       <div class="nav-inner">
         <router-link class="brand" to="/">
-          <div class="brand-mark">
-            <svg viewBox="0 0 40 40" fill="none">
-              <rect width="40" height="40" rx="10" fill="url(#bg)"/>
-              <path d="M11 29 L15.5 11 L25 11 Q32 11 32 18 Q32 24 25 25 L20 25 L22.5 29Z" fill="white" opacity="0.92"/>
-              <path d="M15.5 24 L18 29" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
-              <defs>
-                <linearGradient id="bg" x1="0" y1="0" x2="40" y2="40">
-                  <stop offset="0%" stop-color="#2563eb"/><stop offset="100%" stop-color="#7c3aed"/>
-                </linearGradient>
-              </defs>
-            </svg>
+          <div class="brand-mark" style="display: flex; align-items: center;">
+            <img src="/brand/papersolver-mark-v2.png" alt="PaperSolver" style="width: 36px; height: 36px; object-fit: contain;" />
           </div>
-          <span class="brand-name">PaperSlover</span>
+          <span class="brand-name">PaperSolver</span>
           <span class="brand-tag">beta</span>
         </router-link>
-        <nav class="nav-links">
+        <nav v-if="!isDesktopApp" class="nav-links">
           <a href="#features">功能</a>
           <a href="#workflow">使用流程</a>
           <a href="#why">为什么选我们</a>
-
+          <a href="javascript:;" @click="guideModalOpen = true">安装教程</a>
         </nav>
-        <div class="nav-ctas">
-          <button class="btn-ghost" @click="openModal('login')">登录</button>
-          <button class="btn-solid" @click="openModal('register')">
-            免费开始
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-          </button>
-        </div>
+
       </div>
     </header>
 
@@ -60,17 +45,35 @@
 
         <!-- Sub caption -->
         <p class="hero-sub">
-          导入 PDF、精读标注、智能综述、准备汇报，<br class="hide-sm">
-          整条工作流连续衔接，无需在多个工具之间来回搬运。
+          零散文献一键规整，前沿算法精细解析，智能模型综述提炼，成果直出组会幻灯片——研读全生命周期无缝流转，让思考更纯粹。
         </p>
 
         <!-- CTAs -->
-        <div class="hero-actions">
-          <button class="cta-primary" @click="openModal('register')">
-            免费开始使用
+        <div v-if="!isDesktopApp" class="hero-actions download-actions" style="display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 24px; margin-bottom: 24px;">
+          <a href="/downloads/PaperSolver.dmg" class="cta-primary download-btn mac-btn" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 14px 28px; font-weight: 600; background: linear-gradient(135deg, #2563eb, #7c3aed); border-radius: 8px; color: #fff; box-shadow: var(--sh-md);">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" style="display: block; flex-shrink: 0;">
+              <path d="M12.03 5.41c.83-1.05 1.4-2.52 1.25-3.97-1.22.05-2.73.83-3.6 1.88-.77.9-1.44 2.41-1.25 3.82 1.36.1 2.76-.68 3.6-1.73zm4.5 5.86c-.05-2.24 1.79-3.32 1.87-3.37-1.03-1.54-2.63-1.75-3.2-1.81-1.37-.15-2.69.83-3.39.83-.71 0-1.79-.81-2.94-.79-1.51.02-2.92.89-3.69 2.27-1.57 2.78-.4 6.89 1.13 9.15.75 1.1 1.63 2.32 2.78 2.28 1.11-.05 1.54-.73 2.87-.73 1.33 0 1.73.73 2.89.7 1.2-.02 1.98-1.1 2.72-2.2 1.01-1.48 1.42-2.91 1.44-2.98-.03-.02-2.45-.96-2.48-3.76z"/>
+            </svg>
+            下载 macOS 客户端
+          </a>
+          <a href="/downloads/PaperSolver.exe" class="cta-primary download-btn win-btn" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 14px 28px; font-weight: 600; background: linear-gradient(135deg, #10b981, #059669); border-radius: 8px; color: #fff; box-shadow: var(--sh-md);">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+              <path d="M0 3.449L9.75 2.1v9.45H0V3.449zM0 12.45h9.75v9.45L0 20.551v-8.1zM10.8 1.95L24 0v11.55H10.8V1.95zM10.8 12.45H24v11.55l-13.2-1.95v-9.6z"/>
+            </svg>
+            下载 Windows 客户端
+          </a>
+        </div>
+
+        <!-- Desktop app: login/register entry -->
+        <div v-else class="hero-actions">
+          <button class="cta-primary" @click="openModal('login')">
+            开始体验
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
           </button>
-          <button class="cta-outline" @click="elScrollTo('#workflow')">了解工作流程</button>
+          <button class="cta-outline" @click="showContactModal = true">
+            联系我们
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          </button>
         </div>
 
         <!-- Social proof -->
@@ -81,25 +84,26 @@
 
         <!-- Stats bar -->
         <div class="hero-stats">
-          <div class="stat"><strong>本地存储</strong><span>PDF 文献安全留存本地</span></div>
+          <div class="stat"><strong>本地私密库</strong><span>文献原档驻留本地，从源头保障知识产权与机密安全</span></div>
           <div class="stat-div"></div>
-          <div class="stat"><strong>轻量同步</strong><span>云端仅同步笔记与对话</span></div>
+          <div class="stat"><strong>多端云同步</strong><span>仅同步结构化笔记与对话脑图，轻量化架构跨端流转</span></div>
           <div class="stat-div"></div>
-          <div class="stat"><strong>AI 精读</strong><span>深度提炼方法与局限</span></div>
+          <div class="stat"><strong>专家级精读</strong><span>深度解构公式、图表与实验方法，秒懂同行评议局限性</span></div>
           <div class="stat-div"></div>
-          <div class="stat"><strong>一键汇报</strong><span>快速生成组会 PPT</span></div>
+          <div class="stat"><strong>一键生成汇报</strong><span>秒级提炼核心观点至学术幻灯片，轻松驾驭组会答辩</span></div>
         </div>
 
       </div>
     </section>
 
+    <div v-if="!isDesktopApp">
     <!-- ═══ FEATURES ═══ -->
     <section id="features" class="section" ref="featRef">
       <div class="section-wrap">
         <div class="s-head" :class="{ in: featIn }">
-          <span class="eyebrow"><i class="ew-dot"></i>六大模块</span>
-          <h2>从入库到汇报，每一步都有对应工具</h2>
-          <p>不是把功能堆在一起，而是让每一步的结果自然流入下一步</p>
+          <span class="eyebrow"><i class="ew-dot"></i>核心模块</span>
+          <h2>六大核心模块，覆盖科研工作流全周期</h2>
+          <p>从文献获取、智能阅读到组会 PPT 汇报，每一步都为您准备了破局的专业工具</p>
         </div>
         <div class="feat-grid" :class="{ in: featIn }">
           <div v-for="(f, i) in features" :key="f.title" class="feat-card" :style="{ '--c': f.color, '--delay': i * 0.06 + 's' }">
@@ -139,7 +143,7 @@
           >
             <!-- Left Side: Large Viewport Screenshot -->
             <div class="full-slide-media">
-              <div class="media-container">
+              <div class="media-container" @click="openImagePreview(step.img)" title="点击查看高清大图">
                 <img :src="step.img" :alt="step.title" loading="lazy" />
                 <div class="media-fade-overlay"></div>
                 <div class="media-step-badge">STEP 0{{ i + 1 }}</div>
@@ -215,68 +219,121 @@
           <p>不只是一个 PDF 阅读器，而是一套从阅读到汇报的完整工作台</p>
         </div>
 
-        <div class="why-claims" :class="{ in: whyIn }">
-          <div v-for="c in whyClaims" :key="c.title" class="why-card" :style="{ '--c': c.color }">
-            <div class="wc-icon">
-              <svg :viewBox="c.vb" fill="none" stroke="currentColor" stroke-width="1.7" v-html="c.path"></svg>
+        <div class="why-danmaku-container" :class="{ in: whyIn }">
+          <!-- Track 1: Left Scroll -->
+          <div class="danmaku-track track-left">
+            <div class="danmaku-content">
+              <div v-for="(c, idx) in track1Items" :key="'t1-' + idx" class="danmaku-pill" :style="{ '--c': c.color }">
+                <span class="dm-icon">
+                  <svg :viewBox="c.vb" fill="none" stroke="currentColor" stroke-width="1.8" v-html="c.path"></svg>
+                </span>
+                <span class="dm-pain">{{ c.pain }}</span>
+                <span class="dm-arrow">➜</span>
+                <span class="dm-solution">{{ c.solution }}</span>
+              </div>
             </div>
-            <strong class="wc-title">{{ c.title }}</strong>
-            <p class="wc-desc">{{ c.desc }}</p>
+            <div class="danmaku-content" aria-hidden="true">
+              <div v-for="(c, idx) in track1Items" :key="'t1-dup-' + idx" class="danmaku-pill" :style="{ '--c': c.color }">
+                <span class="dm-icon">
+                  <svg :viewBox="c.vb" fill="none" stroke="currentColor" stroke-width="1.8" v-html="c.path"></svg>
+                </span>
+                <span class="dm-pain">{{ c.pain }}</span>
+                <span class="dm-arrow">➜</span>
+                <span class="dm-solution">{{ c.solution }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Track 2: Right Scroll -->
+          <div class="danmaku-track track-right">
+            <div class="danmaku-content">
+              <div v-for="(c, idx) in track2Items" :key="'t2-' + idx" class="danmaku-pill" :style="{ '--c': c.color }">
+                <span class="dm-icon">
+                  <svg :viewBox="c.vb" fill="none" stroke="currentColor" stroke-width="1.8" v-html="c.path"></svg>
+                </span>
+                <span class="dm-pain">{{ c.pain }}</span>
+                <span class="dm-arrow">➜</span>
+                <span class="dm-solution">{{ c.solution }}</span>
+              </div>
+            </div>
+            <div class="danmaku-content" aria-hidden="true">
+              <div v-for="(c, idx) in track2Items" :key="'t2-dup-' + idx" class="danmaku-pill" :style="{ '--c': c.color }">
+                <span class="dm-icon">
+                  <svg :viewBox="c.vb" fill="none" stroke="currentColor" stroke-width="1.8" v-html="c.path"></svg>
+                </span>
+                <span class="dm-pain">{{ c.pain }}</span>
+                <span class="dm-arrow">➜</span>
+                <span class="dm-solution">{{ c.solution }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Track 3: Left Scroll Slow -->
+          <div class="danmaku-track track-left-slow">
+            <div class="danmaku-content">
+              <div v-for="(c, idx) in track3Items" :key="'t3-' + idx" class="danmaku-pill" :style="{ '--c': c.color }">
+                <span class="dm-icon">
+                  <svg :viewBox="c.vb" fill="none" stroke="currentColor" stroke-width="1.8" v-html="c.path"></svg>
+                </span>
+                <span class="dm-pain">{{ c.pain }}</span>
+                <span class="dm-arrow">➜</span>
+                <span class="dm-solution">{{ c.solution }}</span>
+              </div>
+            </div>
+            <div class="danmaku-content" aria-hidden="true">
+              <div v-for="(c, idx) in track3Items" :key="'t3-dup-' + idx" class="danmaku-pill" :style="{ '--c': c.color }">
+                <span class="dm-icon">
+                  <svg :viewBox="c.vb" fill="none" stroke="currentColor" stroke-width="1.8" v-html="c.path"></svg>
+                </span>
+                <span class="dm-pain">{{ c.pain }}</span>
+                <span class="dm-arrow">➜</span>
+                <span class="dm-solution">{{ c.solution }}</span>
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- Quote banner -->
-        <div class="why-banner" :class="{ in: whyIn }">
-          <div class="wb-left">
-            <div class="wb-q">"</div>
-            <p class="wb-text">做学术本来就很难了，<br>工具不应该再给你添堵。</p>
-            <p class="wb-by">— PaperSlover 产品理念</p>
+        <div class="why-banner-premium" :class="{ in: whyIn }">
+          <div class="wbp-quote-mark-start">“</div>
+          <div class="wbp-content">
+            <p class="wbp-text">做学术本来就很难了，工具不应该再给你添堵。</p>
+            <p class="wbp-by">—— PaperSolver 产品理念</p>
           </div>
-          <div class="wb-right">
-            <div v-for="b in whyBadges" :key="b.label" class="wb-badge" :style="{ '--c': b.color }">
-              <svg :viewBox="b.vb" fill="none" stroke="currentColor" stroke-width="2" v-html="b.path"></svg>
-              <span>{{ b.label }}</span>
-            </div>
-          </div>
+          <div class="wbp-quote-mark-end">”</div>
         </div>
       </div>
     </section>
 
     <!-- ═══ COMPARISON ═══ -->
-    <section class="section section-alt" id="comparison" ref="cmpRef">
+    <section class="section section-alt" id="comparison">
       <div class="section-wrap">
         <div class="s-head" :class="{ in: cmpIn }">
           <span class="eyebrow"><i class="ew-dot"></i>横向对比</span>
           <h2>全方位对比，看清真正的技术底色</h2>
           <p>对比行业常见竞品，我们坚持在数据隐私安全、核心文献精读与高质量成果产出上做深做透</p>
         </div>
-        <div class="cmp-table" :class="{ in: cmpIn }" style="overflow-x: auto;">
+        <div class="cmp-table" :class="{ in: cmpIn }" ref="cmpRef" style="overflow-x: auto;">
           <div class="cmp-header">
             <span>对比维度</span>
-            <span>云端翻译/阅读器 (A 类竞品)</span>
-            <span>传统文献管理工具 (B 类竞品)</span>
-            <span>重度云端 AI 助手 (C 类竞品)</span>
+            <span>云端翻译/阅读器 (A 类产品)</span>
+            <span>重度云端 AI 助手 (B 类产品)</span>
             <span class="cmp-good-h">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
-              我们的产品 (PaperPilot)
+              我们的产品 (PaperSolver)
             </span>
           </div>
           <div v-for="row in comparisons" :key="row.feature" class="cmp-row">
             <b>{{ row.feature }}</b>
             <span class="cmp-bad">
-              <span class="ci bad"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+              <span class="ci bad"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
               {{ row.a }}
             </span>
             <span class="cmp-bad">
-              <span class="ci bad"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+              <span class="ci bad"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
               {{ row.b }}
             </span>
-            <span class="cmp-bad">
-              <span class="ci bad"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
-              {{ row.c }}
-            </span>
             <span class="cmp-good">
-              <span class="ci good"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span>
+              <span class="ci good"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span>
               {{ row.our }}
             </span>
           </div>
@@ -289,124 +346,205 @@
     <!-- ═══ FOOTER ═══ -->
     <footer class="home-footer">
       <div class="footer-inner">
-        <span class="footer-logo">PaperSlover</span>
+        <span class="footer-logo">PaperSolver</span>
         <div class="footer-links">
           <a href="#features">功能</a>
           <a href="#workflow">流程</a>
           <a href="#why">为什么选我们</a>
-          <router-link to="/terms">用户协议</router-link>
-          <router-link to="/privacy">隐私政策</router-link>
-          <router-link to="/disclaimer">免责声明</router-link>
-          <a href="#" @click.prevent="openModal('login')">登录</a>
+          <a href="javascript:;" @click="openLegalModal('terms')">用户协议</a>
+          <a href="javascript:;" @click="openLegalModal('privacy')">隐私政策</a>
+          <a href="javascript:;" @click="openLegalModal('disclaimer')">免责声明</a>
         </div>
-        <p class="footer-copy">© 2026 PaperSlover · 为每一位科研人设计</p>
+        <p class="footer-copy">© 2026 PaperSolver · 为每一位科研人设计</p>
       </div>
     </footer>
+    </div>
 
     <!-- ═══ AUTH MODAL ═══ -->
+    <!-- ═══ CONTACT US MODAL ═══ -->
+    <Transition name="mfade">
+      <div v-if="showContactModal" class="modal-mask" @click="showContactModal = false">
+        <div class="modal-box contact-modal-box" @click.stop style="max-width: 620px; width: 95%; padding: 32px; border-radius: 20px; background: rgba(20, 20, 30, 0.95); border: 1px solid rgba(165, 180, 252, 0.2); backdrop-filter: blur(25px); color: #fff; text-align: center; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6); position: relative;">
+          <button class="modal-x" @click="showContactModal = false" style="background: transparent; border: none; color: #a1a1aa; cursor: pointer; position: absolute; right: 20px; top: 20px; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#a1a1aa'">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+          <h3 style="font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, #ffffff 40%, #c7d2fe 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px;">联系我们</h3>
+          <p style="color: #94a3b8; font-size: 0.88rem; margin-bottom: 28px;">关注官方账号，获取最新动态与专属学术支持</p>
+          
+          <div style="display: flex; gap: 24px; justify-content: center; flex-wrap: wrap;">
+            <!-- QQ QR Card -->
+            <div style="flex: 1; min-width: 240px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+              <img src="/contact/qq-contact.jpg" alt="QQ" @click="openImagePreview('/contact/qq-contact.jpg')" style="width: 160px; height: 260px; object-fit: contain; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); cursor: zoom-in;" />
+              <div style="font-weight: 700; color: #f0f0f4; font-size: 0.95rem; margin-top: 4px;">QQ 官方交流群</div>
+              <div style="color: #64748b; font-size: 0.8rem;">群号: 1095440623</div>
+            </div>
+            
+            <!-- Douyin QR Card -->
+            <div style="flex: 1; min-width: 240px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+              <img src="/contact/douyin-contact.jpg" alt="Douyin" @click="openImagePreview('/contact/douyin-contact.jpg')" style="width: 160px; height: 260px; object-fit: contain; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); cursor: zoom-in;" />
+              <div style="font-weight: 700; color: #f0f0f4; font-size: 0.95rem; margin-top: 4px;">抖音官方账号</div>
+              <div style="color: #64748b; font-size: 0.8rem;">抖音号: 76517306980</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ═══ LEGAL DOCUMENTS MODAL ═══ -->
+    <Transition name="mfade">
+      <div v-if="showLegalModal" class="modal-mask" @click="showLegalModal = false">
+        <div class="modal-box legal-modal-box" @click.stop style="max-width: 680px; width: 90%; max-height: 80vh; display: flex; flex-direction: column; padding: 0; border-radius: 20px; background: rgba(20, 20, 30, 0.95); border: 1px solid rgba(165, 180, 252, 0.2); backdrop-filter: blur(25px); color: #fff; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6); overflow: hidden; position: relative;">
+          <button class="modal-x" @click="showLegalModal = false" style="background: transparent; border: none; color: #a1a1aa; cursor: pointer; position: absolute; right: 20px; top: 20px; z-index: 10; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#a1a1aa'">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+          
+          <!-- Tabs header -->
+          <div style="display: flex; gap: 4px; padding: 24px 24px 0; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15);">
+            <button v-for="tab in ['terms', 'privacy', 'disclaimer']" :key="tab" @click="legalModalTab = tab" :style="{
+              background: 'transparent',
+              border: 'none',
+              borderBottom: legalModalTab === tab ? '2px solid #6366f1' : '2px solid transparent',
+              color: legalModalTab === tab ? '#ffffff' : '#94a3b8',
+              padding: '12px 16px',
+              fontSize: '0.95rem',
+              fontWeight: legalModalTab === tab ? '700' : '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }">
+              {{ legalContent[tab].title }}
+            </button>
+          </div>
+          
+          <!-- Content area -->
+          <div style="flex: 1; overflow-y: auto; padding: 28px 24px; text-align: left; line-height: 1.7;">
+            <div v-for="block in legalContent[legalModalTab].blocks" :key="block.title" style="margin-bottom: 24px;">
+              <h4 style="font-size: 1.15rem; font-weight: 700; color: #f0f0f4; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                <span style="width: 4px; height: 16px; background: #6366f1; border-radius: 2px;"></span>
+                {{ block.title }}
+              </h4>
+              <p v-for="line in block.lines" :key="line" style="color: #cbd5e1; font-size: 0.92rem; margin-bottom: 8px; text-align: justify;">{{ line }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="mfade">
+      <div v-if="showDownloadPromptModal" class="modal-mask" @click="showDownloadPromptModal = false">
+        <div class="modal-box download-prompt-box" @click.stop style="max-width: 480px; padding: 32px; border-radius: 16px; background: #18181b; border: 1px solid #27272a; text-align: center; color: #fff;">
+          <button class="modal-x" @click="showDownloadPromptModal = false" style="background: transparent; border: none; color: #a1a1aa; cursor: pointer; position: absolute; right: 16px; top: 16px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+          <div class="download-prompt-content" style="display: flex; flex-direction: column; align-items: center; gap: 20px;">
+            <div style="background: rgba(37, 99, 235, 0.1); padding: 16px; border-radius: 50%; color: #2563eb; display: inline-flex;">
+              <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+              </svg>
+            </div>
+            <h3 style="font-size: 1.3rem; margin: 0; font-weight: bold; background: linear-gradient(135deg, #fff, #a1a1aa); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">请下载使用 PaperSolver 桌面端</h3>
+            <p style="font-size: 0.95rem; color: #a1a1aa; line-height: 1.6; margin: 0; text-align: left;">
+              为保障学术交流与数据安全，PaperSolver 采用了本地优先架构，完整的 **PDF 沉浸式翻译、Zotero 本地附件同步、文献解析** 等核心功能均运行于客户端。网页端仅用作产品介绍与客户端分发。
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 10px;">
+              <a href="/downloads/PaperSolver.dmg" class="cta-primary" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; color: #fff; background: linear-gradient(135deg, #2563eb, #7c3aed);">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-.1 3.81 1.5.65.27 2.48 1.05 3.32 2.29a7.35 7.35 0 0 0-3.66 6.44c.03 3.83 3.32 5.09 3.36 5.12-.03.09-.53 1.8-1.73 3.4M15.97 4.17c.66-.81 1.11-1.93.99-3.06-1 .04-2.2.67-2.92 1.5-.63.73-1.18 1.87-1.03 2.99 1.11.09 2.24-.59 2.96-1.43"/>
+                </svg>
+                下载 macOS 客户端
+              </a>
+              <a href="/downloads/PaperSolver.exe" class="cta-primary" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; color: #fff; background: linear-gradient(135deg, #10b981, #059669);">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                  <path d="M0 3.449L9.75 2.1v9.45H0V3.449zM0 12.45h9.75v9.45L0 20.551v-8.1zM10.8 1.95L24 0v11.55H10.8V1.95zM10.8 12.45H24v11.55l-13.2-1.95v-9.6z"/>
+                </svg>
+                下载 Windows 客户端
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <Transition name="mfade">
       <div v-if="showAuthModal" class="modal-mask" @click="closeModal">
         <div class="modal-box" @click.stop>
           <button class="modal-x" @click="closeModal">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
-          <!-- LOGIN -->
-          <div v-if="authMode === 'login'" class="auth-pane">
-            <div class="auth-label">LOG IN</div>
-            <h3 class="auth-title">进入工作台</h3>
-            <div class="auth-form">
-              <label>邮箱</label>
-              <input v-model="email" type="email" placeholder="student@paperslover.app" />
-              <label>密码</label>
-              <div class="pw-wrap">
-                <input v-model="password" :type="showPassword ? 'text' : 'password'" placeholder="输入密码" />
-                <button type="button" class="pw-eye" @click="showPassword = !showPassword" v-html="showPassword ? eyeOffIcon : eyeIcon"></button>
+          <!-- OAUTH ONLY LOGIN & REGISTER -->
+          <div v-if="authMode === 'login' || authMode === 'register' || authMode === 'forgot_password'" class="auth-pane oauth-only-pane">
+            
+            <!-- Brand section with glowing logo and gradient title -->
+            <div class="oauth-brand-header">
+              <div class="oauth-logo-glow" style="display: flex; align-items: center; justify-content: center; background: transparent;">
+                <img src="/brand/papersolver-mark-v2.png" alt="PaperSolver" style="width: 44px; height: 44px; object-fit: contain;" />
               </div>
-              <div v-if="errorText" class="auth-err">{{ errorText }}</div>
-              <button class="auth-submit" :disabled="loading" @click="submitLogin">{{ loading ? '登录中…' : '进入 PaperSlover' }}</button>
-              <div class="auth-links">
-                <a href="#" @click.prevent="authMode='register'">没有账号？去注册</a>
-                <a href="#" @click.prevent="authMode='forgot_password'" class="dim">忘记密码</a>
+              <h2 class="oauth-brand-title">PaperSolver</h2>
+              <p class="oauth-brand-subtitle">下一代 AI 论文辅助研读平台</p>
+            </div>
+
+            <!-- Login option card -->
+            <!-- Login option card -->
+            <div class="oauth-card">
+              <!-- QQ Login Method -->
+              <div v-if="loginMethod === 'qq'">
+                <p class="oauth-hint">为保障学术交流与数据安全，当前支持通过 QQ 一键安全登录与注册，免密且更安全。</p>
+                <div v-if="errorText" class="auth-err" style="margin-bottom: 20px;">{{ errorText }}</div>
+                
+                <button type="button" class="btn-oauth-premium qq" @click="loginWithQQ">
+                  <svg class="icon-qq-svg" viewBox="0 0 64 64" width="24" height="24" style="margin-right: 10px;">
+                    <ellipse cx="22" cy="54" rx="8" ry="4" fill="#FFAE00" />
+                    <ellipse cx="42" cy="54" rx="8" ry="4" fill="#FFAE00" />
+                    <ellipse cx="32" cy="31" rx="20" ry="22" fill="#1C1F21" />
+                    <ellipse cx="32" cy="19" rx="14" ry="12" fill="#1C1F21" />
+                    <ellipse cx="32" cy="35" rx="15" ry="16" fill="#FFFFFF" />
+                    <ellipse cx="32" cy="19" rx="12" ry="10" fill="#FFFFFF" />
+                    <circle cx="27" cy="18" r="2.5" fill="#1C1F21" />
+                    <circle cx="37" cy="18" r="2.5" fill="#1C1F21" />
+                    <path d="M26,22 C26,22 32,27 38,22 C38,20 26,20 26,22 Z" fill="#FFAE00" />
+                    <path d="M16,30 Q32,36 48,30 C50,35 46,35 44,35 L48,46 L42,46 L40,35 Q32,37 24,35 L20,46 L16,46 Z" fill="#FF3B30" />
+                  </svg>
+                  <span style="font-size: 1.02rem; letter-spacing: 1px;">使用 QQ 安全登录 / 注册</span>
+                </button>
+                
+                <div style="text-align: center; margin-top: 24px;">
+                  <a href="javascript:;" @click="loginMethod = 'password'" style="font-size: 0.65rem; color: rgba(255,255,255,0.08); text-decoration: none; transition: color 0.2s;" onmouseover="this.style.color='rgba(255,255,255,0.3)'" onmouseout="this.style.color='rgba(255,255,255,0.08)'">— 内测通道 —</a>
+                </div>
               </div>
-              <div v-if="isDesktopApp" class="desktop-connection-card">
-                <span>后端服务</span>
-                <strong>{{ desktopApiBase }}</strong>
-                <button type="button" @click="openDesktopSettings">连接设置</button>
+
+              <!-- Password Login Method -->
+              <div v-else-if="loginMethod === 'password'">
+                <p class="oauth-hint" style="margin-bottom: 16px;">使用邮箱与密码登录：</p>
+                <div v-if="errorText" class="auth-err" style="margin-bottom: 20px;">{{ errorText }}</div>
+                
+                <form @submit.prevent="submitLogin" style="display: flex; flex-direction: column; gap: 14px;">
+                  <div class="input-group">
+                    <input type="email" v-model="email" placeholder="邮箱账号" required style="width: 100%; padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; box-sizing: border-box; outline: none; font-size: 0.9rem;" />
+                  </div>
+                  <div class="input-group">
+                    <input type="password" v-model="password" placeholder="登录密码" required style="width: 100%; padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; box-sizing: border-box; outline: none; font-size: 0.9rem;" />
+                  </div>
+                  <button type="submit" class="btn-oauth-premium" style="background: linear-gradient(135deg, #2563eb, #7c3aed); border: none; padding: 12px; border-radius: 8px; color: #fff; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 100%;">
+                    立即登录
+                  </button>
+                </form>
+                
+                <div style="text-align: center; margin-top: 20px;">
+                  <a href="javascript:;" @click="loginMethod = 'qq'" style="font-size: 0.82rem; color: #71717a; text-decoration: none; border-bottom: 1px dashed rgba(255,255,255,0.2);">返回 QQ 登录</a>
+                </div>
+              </div>
+
+              <div class="oauth-footer-agreement" style="margin-top: 20px;">
+                登录即代表您已同意 <a href="javascript:;" @click="openLegalModal('terms')">用户协议</a> 和 <a href="javascript:;" @click="openLegalModal('privacy')">隐私政策</a>
               </div>
             </div>
-          </div>
-          <!-- REGISTER -->
-          <div v-else-if="authMode === 'register'" class="auth-pane">
-            <div class="auth-label">REGISTER</div>
-            <h3 class="auth-title">创建账号</h3>
-            <div class="auth-form scroll-form">
-              <label>QQ 邮箱</label>
-              <div class="row-input">
-                <input v-model="email" type="email" placeholder="123456@qq.com" />
-                <button type="button" class="code-btn" :disabled="sendingRegisterCode || registerCodeCooldown > 0" @click="sendRegisterCode">{{ registerCodeButtonText }}</button>
-              </div>
-              <label>验证码</label>
-              <input v-model="verificationCode" inputmode="numeric" maxlength="6" placeholder="6 位邮箱验证码" />
-              <label>昵称</label>
-              <input v-model="name" placeholder="你的昵称" />
-              <label>密码</label>
-              <div class="pw-wrap">
-                <input v-model="password" :type="showPassword ? 'text' : 'password'" placeholder="设置密码" />
-                <button type="button" class="pw-eye" @click="showPassword = !showPassword" v-html="showPassword ? eyeOffIcon : eyeIcon"></button>
-              </div>
-              <label>邀请码 <span class="opt">可选</span></label>
-              <input v-model="inviteCode" placeholder="有邀请码可填" />
-              <label>身份</label>
-              <div class="role-group">
-                <button type="button" :class="{ on: role==='学生' }" @click="role='学生'">学生</button>
-                <button type="button" :class="{ on: role==='导师' }" @click="role='导师'">导师</button>
-                <button type="button" :class="{ on: role==='管理员' }" @click="role='管理员'">管理员</button>
-              </div>
-              <template v-if="role==='导师'">
-                <label>导师邀请码</label>
-                <input v-model="mentorInviteCode" type="password" placeholder="TUTOR2026" />
-              </template>
-              <template v-if="role==='管理员'">
-                <label>管理员邀请码</label>
-                <input v-model="mentorInviteCode" type="password" placeholder="ADMIN2026" />
-              </template>
-              <div v-if="registerSuccessText" class="auth-ok">{{ registerSuccessText }}</div>
-              <div v-if="errorText" class="auth-err">{{ errorText }}</div>
-              <button class="auth-submit" :disabled="loading" @click="submitRegister">{{ loading ? '创建中…' : '创建账号并进入' }}</button>
-              <div class="auth-links"><a href="#" @click.prevent="authMode='login'">已有账号？登录</a></div>
-              <div v-if="isDesktopApp" class="desktop-connection-card">
-                <span>后端服务</span>
-                <strong>{{ desktopApiBase }}</strong>
-                <button type="button" @click="openDesktopSettings">连接设置</button>
-              </div>
-            </div>
-          </div>
-          <!-- FORGOT -->
-          <div v-else-if="authMode === 'forgot_password'" class="auth-pane">
-            <div class="auth-label">RESET</div>
-            <h3 class="auth-title">找回密码</h3>
-            <div class="auth-form">
-              <label>邮箱</label>
-              <div class="row-input">
-                <input v-model="forgotEmail" type="email" placeholder="you@paperslover.app" />
-                <button type="button" class="code-btn" :disabled="sendingCode" @click="sendForgotCode">{{ sendingCode ? '发送中…' : '获取验证码' }}</button>
-              </div>
-              <label>验证码</label>
-              <input v-model="forgotCode" placeholder="输入验证码" />
-              <label>新密码</label>
-              <div class="pw-wrap">
-                <input v-model="forgotNewPassword" :type="showPassword ? 'text' : 'password'" placeholder="至少 6 位" />
-                <button type="button" class="pw-eye" @click="showPassword = !showPassword" v-html="showPassword ? eyeOffIcon : eyeIcon"></button>
-              </div>
-              <div v-if="forgotSuccessText" class="auth-ok">{{ forgotSuccessText }}</div>
-              <div v-if="errorText" class="auth-err">{{ errorText }}</div>
-              <button class="auth-submit" :disabled="loading" @click="submitResetPassword">{{ loading ? '重置中…' : '确认重置' }}</button>
-              <div class="auth-links"><a href="#" @click.prevent="authMode='login'">返回登录</a></div>
-              <div v-if="isDesktopApp" class="desktop-connection-card">
-                <span>后端服务</span>
-                <strong>{{ desktopApiBase }}</strong>
-                <button type="button" @click="openDesktopSettings">连接设置</button>
-              </div>
+
+            <!-- Optional Desktop Settings card -->
+            <div v-if="isDesktopApp" class="desktop-connection-card oauth-desktop-card">
+              <span>桌面端状态</span>
+              <strong :class="desktopSetupReady ? 'ok' : 'bad'">
+                <i></i>{{ desktopSetupReady ? '配置就绪' : '需要配置连接' }}
+              </strong>
+              <button type="button" @click="openDesktopSettings">设置</button>
             </div>
           </div>
         </div>
@@ -419,76 +557,91 @@
           <button class="modal-x" @click="closeDesktopSettings">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
-          <div class="auth-pane">
-            <div class="auth-label">DESKTOP SERVER</div>
-            <h3 class="auth-title">后端连接设置</h3>
-            <p class="desktop-settings-desc">内测可用本机地址；正式分发时填写你的线上 HTTPS 后端域名。</p>
+          <div class="auth-pane desktop-settings-pane">
+            <div class="auth-label">DESKTOP SETUP</div>
+            <h3 class="auth-title">首次使用配置</h3>
+            <p class="desktop-settings-desc">登录前请完成本机保存目录、依赖服务和云端连接检测。配置只保存在这台电脑。</p>
             <div class="auth-form">
-              <label>后端 API 地址</label>
-              <input v-model="desktopApiDraft" type="url" placeholder="https://api.papersolver.cn" />
-              <div class="desktop-settings-section desktop-update-section">
-                <div class="desktop-settings-section-head">
-                  <span>客户端版本</span>
-                  <small>{{ desktopRuntime.version ? `v${desktopRuntime.version}` : '读取中' }}</small>
+              <div class="desktop-setup-status-grid">
+                <div :class="['desktop-setup-status-card', desktopConnectionOk ? 'ok' : 'bad']">
+                  <span class="status-dot"></span>
+                  <strong>云端服务</strong>
+                  <small>{{ desktopConnectionOk ? '已验证' : '待检测' }}</small>
                 </div>
-                <p>{{ desktopUpdateMessage }}</p>
-                <div class="desktop-update-row">
-                  <span :class="['desktop-update-badge', desktopUpdateStatus.updateAvailable ? 'available' : 'stable']">
-                    {{ desktopUpdateStatus.updateAvailable ? '发现更新' : 'Beta 通道' }}
-                  </span>
-                  <button type="button" :disabled="desktopUpdateChecking" @click="checkDesktopUpdate">
-                    {{ desktopUpdateChecking ? '检测中…' : '检测更新' }}
+                <div :class="['desktop-setup-status-card', desktopPdfDirDraft ? 'ok' : 'bad']">
+                  <span class="status-dot"></span>
+                  <strong>PDF 目录</strong>
+                  <small>{{ desktopPdfDirDraft ? '已选择' : '待选择' }}</small>
+                </div>
+                <div :class="['desktop-setup-status-card', localDependencyState.running ? 'ok' : 'bad']">
+                  <span class="status-dot"></span>
+                  <strong>本机依赖</strong>
+                  <small>{{ localDependencyState.running ? '运行中' : localDependencyState.installed ? '待启动' : '待安装' }}</small>
+                </div>
+              </div>
+
+              <div class="desktop-settings-section desktop-dependency-section">
+                <div class="desktop-settings-section-head">
+                  <span>PaperSolver 本机依赖</span>
+                  <small>{{ localDependencyState.running ? '可用' : localDependencyState.installed ? '已安装' : '未安装' }}</small>
+                </div>
+                <p>{{ localDependencyState.message || '用于沉浸翻译和 PDF 结构化解析。请先检测，未安装时可直接安装内置依赖。' }}</p>
+
+                <!-- Lite Mode vs Full Mode selection radio options -->
+                <div v-if="!localDependencyState.running" class="lite-mode-selector">
+                  <label class="lite-mode-label">
+                    <input type="radio" :value="true" v-model="liteModeSelected" />
+                    <span>极速精简版（推荐，极速启动，仅下必要模型，日常阅读翻译首选）</span>
+                  </label>
+                  <label class="lite-mode-label">
+                    <input type="radio" :value="false" v-model="liteModeSelected" />
+                    <span>专业完整版（需要1.2GB，支持复杂公式与表格重构，下载时间较长）</span>
+                  </label>
+                </div>
+
+                <div v-if="localDependencyProgress.active" class="desktop-progress">
+                  <div class="desktop-progress-bar">
+                    <span :style="{ width: `${localDependencyProgress.progress}%` }"></span>
+                  </div>
+                  <small>{{ localDependencyProgress.message }}</small>
+                </div>
+                <div class="desktop-dependency-actions">
+                  <button type="button" :disabled="localDependencyBusy" @click="refreshLocalDependencyStatus">
+                    <span v-if="localDependencyBusy" class="mini-spinner"></span>
+                    {{ localDependencyBusy ? '检测中' : '重新检测' }}
+                  </button>
+                  <button type="button" :disabled="localDependencyBusy" @click="installLocalDependency(false)">
+                    {{ localDependencyState.installed ? '修复依赖' : '安装依赖' }}
+                  </button>
+                  <button type="button" :disabled="localDependencyBusy || !localDependencyState.installed" @click="startLocalDependency">
+                    启动依赖
                   </button>
                 </div>
               </div>
+
+              <div class="desktop-settings-section desktop-api-section" style="display: none;">
+                <div class="desktop-settings-section-head">
+                  <span>云端服务地址</span>
+                  <small>连接您的私有部署或公网服务</small>
+                </div>
+                <p>客户端需要与后端服务通信以获取数据与调用 AI 功能。默认主通道为：https://papersolver.cn</p>
+                <div class="desktop-pdf-dir-row">
+                  <input v-model="desktopApiDraft" type="text" placeholder="例如 https://papersolver.cn" style="color: #fff; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); padding: 8px 12px; border-radius: 6px; flex: 1; font-family: monospace; font-size: 0.85rem;" />
+                </div>
+              </div>
+
               <div class="desktop-settings-section desktop-pdf-section">
                 <div class="desktop-settings-section-head">
                   <span>PDF 保存目录</span>
                   <small>首次使用先配置</small>
                 </div>
-                <p>导入、Zotero 同步和手动上传的 PDF 会保存到用户电脑这个目录；后端只记录文献信息和本机缓存标记。</p>
+                <p>导入、Zotero 同步和手动上传 of PDF 会保存到用户电脑这个目录；后端只记录文献信息和本机缓存标记。</p>
                 <div class="desktop-pdf-dir-row">
                   <input v-model="desktopPdfDirDraft" type="text" readonly placeholder="请选择 PDF 保存目录" />
                   <button type="button" :disabled="desktopSettingsSaving" @click="chooseDesktopPdfDir">选择目录</button>
                 </div>
               </div>
-              <div class="desktop-settings-section">
-                <div class="desktop-settings-section-head">
-                  <span>本机翻译服务</span>
-                  <small>可选，填写后启用</small>
-                </div>
-                <label>DeepLX 地址</label>
-                <div class="desktop-translation-row">
-                  <input v-model="desktopTranslationDraft.deeplxEndpoint" type="url" placeholder="http://127.0.0.1:1188" />
-                  <button type="button" :disabled="desktopTranslationTesting.deeplx" @click="testDesktopTranslationProvider('deeplx')">
-                    {{ desktopTranslationTesting.deeplx ? '检测中' : '检测' }}
-                  </button>
-                </div>
-                <div v-if="desktopTranslationStatus.deeplx" :class="['desktop-translation-status', desktopTranslationStatus.deeplx.ok ? 'ok' : 'bad']">
-                  {{ desktopTranslationStatus.deeplx.message }}
-                </div>
-                <label>LibreTranslate 地址</label>
-                <div class="desktop-translation-row">
-                  <input v-model="desktopTranslationDraft.libreTranslateEndpoint" type="url" placeholder="http://127.0.0.1:5000" />
-                  <button type="button" :disabled="desktopTranslationTesting.libretranslate" @click="testDesktopTranslationProvider('libretranslate')">
-                    {{ desktopTranslationTesting.libretranslate ? '检测中' : '检测' }}
-                  </button>
-                </div>
-                <div v-if="desktopTranslationStatus.libretranslate" :class="['desktop-translation-status', desktopTranslationStatus.libretranslate.ok ? 'ok' : 'bad']">
-                  {{ desktopTranslationStatus.libretranslate.message }}
-                </div>
-                <label>MTranServer 地址</label>
-                <div class="desktop-translation-row">
-                  <input v-model="desktopTranslationDraft.mtranServerEndpoint" type="url" placeholder="http://127.0.0.1:8989" />
-                  <button type="button" :disabled="desktopTranslationTesting.mtranserver" @click="testDesktopTranslationProvider('mtranserver')">
-                    {{ desktopTranslationTesting.mtranserver ? '检测中' : '检测' }}
-                  </button>
-                </div>
-                <div v-if="desktopTranslationStatus.mtranserver" :class="['desktop-translation-status', desktopTranslationStatus.mtranserver.ok ? 'ok' : 'bad']">
-                  {{ desktopTranslationStatus.mtranserver.message }}
-                </div>
-                <p>这些地址只保存在本机。切换翻译引擎时，桌面端会直接请求用户电脑上的服务。</p>
-              </div>
+
               <div class="desktop-settings-section desktop-cache-section">
                 <div class="desktop-settings-section-head">
                   <span>本机 PDF 缓存</span>
@@ -509,19 +662,33 @@
                   <button type="button" class="danger" :disabled="desktopCacheLoading" @click="clearDesktopPdfCache">清理缓存</button>
                 </div>
               </div>
+
+              <div class="desktop-settings-section desktop-update-section compact">
+                <div class="desktop-settings-section-head">
+                  <span>客户端版本</span>
+                  <small>{{ desktopRuntime.version ? `v${desktopRuntime.version}` : '读取中' }}</small>
+                </div>
+                <div class="desktop-update-row">
+                  <span :class="['desktop-update-badge', desktopUpdateStatus.updateAvailable ? 'available' : 'stable']">
+                    {{ desktopUpdateStatus.updateAvailable ? '发现更新' : 'Beta 通道' }}
+                  </span>
+                  <button type="button" :disabled="desktopUpdateChecking" @click="checkDesktopUpdate">
+                    {{ desktopUpdateChecking ? '检测中…' : '检测更新' }}
+                  </button>
+                </div>
+                <p>{{ desktopUpdateMessage }}</p>
+              </div>
               <div v-if="desktopSettingsMessage" class="auth-ok">{{ desktopSettingsMessage }}</div>
               <div v-if="desktopSettingsError" class="auth-err">{{ desktopSettingsError }}</div>
               <div class="desktop-settings-actions">
                 <button class="desktop-test-btn" type="button" :disabled="desktopSettingsSaving || desktopTesting" @click="testDesktopConnection">
-                  {{ desktopTesting ? '测试中…' : '测试连接' }}
+                  <span v-if="desktopTesting" class="mini-spinner"></span>
+                  {{ desktopTesting ? '检测中' : '检测云端' }}
                 </button>
                 <button class="auth-submit" :disabled="desktopSettingsSaving || desktopTesting" @click="saveDesktopSettings">
-                  {{ desktopSettingsSaving ? '保存中…' : '保存并切换' }}
+                  {{ desktopSettingsSaving ? '保存中…' : '保存并继续登录' }}
                 </button>
               </div>
-              <button class="desktop-reset-btn" type="button" :disabled="desktopSettingsSaving || desktopTesting" @click="resetDesktopSettings">
-                恢复默认地址
-              </button>
             </div>
           </div>
         </div>
@@ -566,11 +733,89 @@
         </div>
       </div>
     </Transition>
+    <!-- Screenshot Preview Modal -->
+    <Transition name="preview-fade">
+      <div v-if="previewImage" class="img-preview-overlay" @click="previewImage = null">
+        <div class="img-preview-container" @click.stop>
+          <img :src="previewImage" alt="Preview Image" class="preview-img-full" />
+          <button class="preview-close-btn" @click="previewImage = null">✕</button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Detailed Guide Modal -->
+    <Transition name="mfade">
+      <div v-if="guideModalOpen" class="modal-mask" @click="guideModalOpen = false" style="z-index: 10001; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px);">
+        <div class="modal-box" @click.stop style="max-width: 680px; width: 90%; background: #0f172a; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 32px; position: relative; box-shadow: var(--sh-xl);">
+          <button class="modal-x" @click="guideModalOpen = false" style="position: absolute; right: 20px; top: 20px; font-size: 24px; color: #94a3b8; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+          
+          <h2 style="margin-top: 0; margin-bottom: 24px; color: #fff; font-size: 20px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; font-weight: 600;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #6366f1; flex-shrink: 0;">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/>
+              <path d="M6 6h10M6 10h10"/>
+            </svg>
+            PaperSolver 客户端安装与运行配置指引
+          </h2>
+          
+          <div class="guide-scroll-container" style="max-height: 420px; overflow-y: auto; padding-right: 8px;">
+            <!-- macOS Guide -->
+            <div style="margin-bottom: 28px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" style="color: #60a5fa; flex-shrink: 0;">
+                  <path d="M12.03 5.41c.83-1.05 1.4-2.52 1.25-3.97-1.22.05-2.73.83-3.6 1.88-.77.9-1.44 2.41-1.25 3.82 1.36.1 2.76-.68 3.6-1.73zm4.5 5.86c-.05-2.24 1.79-3.32 1.87-3.37-1.03-1.54-2.63-1.75-3.2-1.81-1.37-.15-2.69.83-3.39.83-.71 0-1.79-.81-2.94-.79-1.51.02-2.92.89-3.69 2.27-1.57 2.78-.4 6.89 1.13 9.15.75 1.1 1.63 2.32 2.78 2.28 1.11-.05 1.54-.73 2.87-.73 1.33 0 1.73.73 2.89.7 1.2-.02 1.98-1.1 2.72-2.2 1.01-1.48 1.42-2.91 1.44-2.98-.03-.02-2.45-.96-2.48-3.76z"/>
+                </svg>
+                <h3 style="margin: 0; color: #f8fafc; font-size: 15.5px; font-weight: 600;">macOS 客户端安装步骤</h3>
+              </div>
+              <ol style="margin: 0; padding-left: 20px; color: #cbd5e1; font-size: 14px; line-height: 1.8;">
+                <li>下载 <strong>PaperSolver.dmg</strong> 镜像文件。</li>
+                <li>双击打开 DMG 镜像文件，将 <strong>PaperSolver.app</strong> 拖拽至右侧的 <strong>Applications (应用程序)</strong> 文件夹中。</li>
+                <li>若双击运行时系统拦截并提示 <span style="color: #f43f5e; font-weight: bold;">“已损坏，无法打开。你应该将它移到废纸篓”</span>：
+                  <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(244, 63, 94, 0.2); padding: 12px; border-radius: 8px; margin-top: 10px; margin-bottom: 10px; font-size: 13.5px; color: #cbd5e1;">
+                    <div style="display: flex; align-items: center; gap: 8px; color: #f43f5e; font-weight: 600; margin-bottom: 6px; font-size: 13px;">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      Gatekeeper 策略绕过方案
+                    </div>
+                    打开 Mac 的 <strong>终端 (Terminal)</strong> 应用程序，复制并运行以下命令，接着输入开机锁屏密码并按回车（输密码时屏幕上不会显示字符，直接输完回车即可）：
+                    <code style="display: block; background: #020617; padding: 8px 12px; border-radius: 6px; color: #10b981; font-family: monospace; font-size: 12.5px; margin-top: 8px; border: 1px solid rgba(255,255,255,0.05); word-break: break-all;">xattr -cr /Applications/PaperSolver.app</code>
+                  </div>
+                </li>
+                <li>执行命令后重新双击应用，即可完美启动配置并进入系统。</li>
+              </ol>
+            </div>
+            
+            <!-- Windows Guide -->
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" style="color: #34d399; flex-shrink: 0;">
+                  <path d="M0 3.449L9.75 2.1v9.45H0V3.449zM0 12.45h9.75v9.45L0 20.551v-8.1zM10.8 1.95L24 0v11.55H10.8V1.95zM10.8 12.45H24v11.55l-13.2-1.95v-9.6z"/>
+                </svg>
+                <h3 style="margin: 0; color: #f8fafc; font-size: 15.5px; font-weight: 600;">Windows 客户端安装步骤</h3>
+              </div>
+              <ol style="margin: 0; padding-left: 20px; color: #cbd5e1; font-size: 14px; line-height: 1.8;">
+                <li>下载 <strong>PaperSolver Setup.exe</strong> 一键安装包。</li>
+                <li>双击启动安装，程序会自动释放并生成桌面和开始菜单的快捷方式。</li>
+                <li>若系统弹出 Windows SmartScreen 安全警告 <span style="color: #fbbf24; font-weight: bold;">“已阻止无法识别的应用”</span>：
+                  <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(251, 191, 36, 0.2); padding: 12px; border-radius: 8px; margin-top: 10px; margin-bottom: 10px; font-size: 13px; color: #cbd5e1;">
+                    点击提示框中的 <strong>“更多信息”</strong> 链接，此时右下角会露出 <strong>“仍要运行”</strong> 按钮，点击即可继续安装。
+                  </div>
+                </li>
+              </ol>
+            </div>
+          </div>
+          
+          <div style="margin-top: 24px; text-align: right; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
+            <button class="btn-solid" @click="guideModalOpen = false" style="background: #fff; border: none; padding: 10px 24px; border-radius: 8px; color: #09090b; font-weight: 600; cursor: pointer; transition: background 0.2s;">我知道了</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { billingPlans } from '../constants/pages'
@@ -580,6 +825,16 @@ import { getCurrentApiBaseUrl, normalizeApiBaseUrl, setApiBaseUrl, testApiBaseUr
 const authStore = useAuthStore()
 const router    = useRouter()
 const route     = useRoute()
+
+function decodeBase64Utf8(base64Str) {
+  const binaryString = atob(base64Str.replace(/-/g, '+').replace(/_/g, '/'));
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  const decoder = new TextDecoder("utf-8");
+  return decoder.decode(bytes);
+}
 
 /* ── Nav scroll ── */
 const navScrolled = ref(false)
@@ -612,6 +867,16 @@ function initIO() {
 
 /* ── Workflow full-slide carousel ── */
 const wfActive   = ref(0)
+const previewImage = ref(null)
+
+function openImagePreview(url) {
+  // In Electron (file:// protocol), absolute paths like /contact/xxx need ./ prefix
+  if (isDesktopApp && url && url.startsWith('/')) {
+    previewImage.value = '.' + url;
+  } else {
+    previewImage.value = url;
+  }
+}
 const wfProgress = ref(0)
 const WF_DURATION = 5000   // ms per slide
 const TICK        = 60     // progress update interval
@@ -646,6 +911,92 @@ function elScrollTo(hash) {
 
 /* ── Auth ── */
 const showAuthModal      = ref(false)
+const showDownloadPromptModal = ref(false)
+const showLegalModal      = ref(false)
+const legalModalTab      = ref('terms')
+const showContactModal    = ref(false)
+
+function openLegalModal(tab) {
+  legalModalTab.value = tab
+  showLegalModal.value = true
+}
+
+const legalContent = {
+  terms: {
+    title: "用户协议",
+    blocks: [
+      {
+        title: "服务范围",
+        lines: [
+          "PaperSolver 为文献管理、PDF 阅读、AI 研读、学术论坛、会员权益和桌面端本地依赖管理提供软件服务。",
+          "你应保证上传、导入、发布或处理的内容来源合法，不侵犯第三方版权、隐私权或其他合法权益。"
+        ]
+      },
+      {
+        title: "账号与权限",
+        lines: [
+          "账号仅限本人使用。管理员、导师、学生等身份会对应不同操作权限，后台关键操作会记录审计日志。",
+          "如出现刷量、攻击、恶意请求、违规发布内容或绕过额度限制等行为，平台可限制、封禁或终止相关账号能力。"
+        ]
+      },
+      {
+        title: "会员与付费",
+        lines: [
+          "会员套餐、限时优惠、额度和权益以购买页与管理员后台实际配置为准。",
+          "涉及人工审核、支付异常、退款或权益补发时，请以平台公告、订单记录和客服处理结果为准。"
+        ]
+      }
+    ]
+  },
+  privacy: {
+    title: "隐私政策",
+    blocks: [
+      {
+        title: "数据保存",
+        lines: [
+          "桌面端导入 of PDF 优先保存在用户本机目录；服务器主要保存题录、笔记、标注索引、会员权益和必要的运行记录。",
+          "论坛图片、头像、背景图等用户主动上传的资源会用于页面展示和内容审核。"
+        ]
+      },
+      {
+        title: "AI 与第三方服务",
+        lines: [
+          "AI 研读、综述、PPT、审核或翻译功能可能调用平台配置的模型服务、翻译服务或本机依赖服务。",
+          "平台会记录必要的调用时间、模块、模型标识、消耗额度、状态和错误摘要，用于计费、排障和风控，不用于公开展示个人隐私。"
+        ]
+      },
+      {
+        title: "安全与删除",
+        lines: [
+          "我们会对管理员关键操作、异常访问、可疑 IP、异常请求量进行记录 and 监控。",
+          "你可以在产品提供的入口管理个人资料和本地缓存；法律法规要求或安全风控需要保留的记录除外。"
+        ]
+      }
+    ]
+  },
+  disclaimer: {
+    title: "免责声明",
+    blocks: [
+      {
+        title: "学术辅助定位",
+        lines: [
+          "PaperSolver 的 AI 输出仅用于文献阅读、思路整理和研究辅助，不构成投稿、署名、实验、医学、法律或投资等专业结论。",
+          "AI 可能出现事实错误、引用遗漏、翻译偏差或格式不完整，正式使用前需要用户自行核验原文、数据和引用。"
+        ]
+      },
+      {
+        title: "版权与来源",
+        lines: [
+          "用户应确认自己有权下载、导入和处理相关论文、图片、附件或网页内容。",
+          "因用户未经授权传播、下载、分享或公开他人内容产生的责任，由用户自行承担。"
+        ]
+      }
+    ]
+  }
+}
+
+const loginMethod        = ref('qq')
+const isLocal            = ref(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
 const authMode           = ref('login')
 const email              = ref('')
 const password           = ref('')
@@ -666,6 +1017,13 @@ const sendingCode        = ref(false)
 const forgotSuccessText  = ref('')
 const showPassword       = ref(false)
 const isDesktopApp       = Boolean(window.paperSolverDesktop?.isDesktop)
+const guideModalOpen     = ref(false)
+const mouseX             = ref(-999)
+const mouseY             = ref(-999)
+function handleMouseMove(e) {
+  mouseX.value = e.clientX
+  mouseY.value = e.clientY
+}
 const desktopApiBase     = ref(getCurrentApiBaseUrl())
 const desktopApiDraft    = ref(desktopApiBase.value)
 const desktopPdfDirDraft = ref('')
@@ -686,6 +1044,29 @@ const desktopUpdateStatus = reactive({
   updateAvailable: false,
   latestVersion: '',
   message: '',
+})
+const desktopConnectionOk = ref(false)
+const desktopSetupCompleted = ref(false)
+const localDependencyBusy = ref(false)
+const liteModeSelected = ref(true)
+watch(liteModeSelected, (newVal) => {
+  if (window.paperSolverDesktop?.setBackendConfig) {
+    window.paperSolverDesktop.setBackendConfig({ localDependencyLiteMode: newVal }).catch(() => {})
+  }
+})
+const localDependencyState = reactive({
+  ok: false,
+  installed: false,
+  running: false,
+  structuredParserAvailable: false,
+  message: '',
+  latencyMs: 0,
+})
+const localDependencyProgress = reactive({
+  active: false,
+  progress: 0,
+  message: '',
+  stage: '',
 })
 const desktopCacheInfo = reactive({
   label: '',
@@ -711,6 +1092,12 @@ const desktopTranslationStatus = reactive({
 })
 const DESKTOP_GUIDE_KEY = 'papersolver_desktop_first_setup_seen'
 let rcTimer = null
+let unsubscribeDependencyProgress = null
+
+const desktopSetupReady = computed(() => {
+  if (!isDesktopApp) return true
+  return Boolean(desktopConnectionOk.value && desktopPdfDirDraft.value && localDependencyState.running)
+})
 
 const eyeIcon    = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
 const eyeOffIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
@@ -720,7 +1107,7 @@ const registerCodeButtonText = computed(() => {
   if (registerCodeCooldown.value > 0) return `${registerCodeCooldown.value}s`
   return '获取验证码'
 })
-function isQqEmail(v) { return /^[1-9][0-9]{4,11}@qq\.com$/i.test(String(v||'').trim()) }
+function isQqEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(String(v||'').trim()) }
 function startCooldown() {
   registerCodeCooldown.value = 60
   if (rcTimer) clearInterval(rcTimer)
@@ -728,7 +1115,7 @@ function startCooldown() {
 }
 async function sendRegisterCode() {
   const e = email.value.trim().toLowerCase()
-  if (!isQqEmail(e)) { errorText.value = '请填写 QQ 邮箱，例如 123456@qq.com'; return }
+  if (!isQqEmail(e)) { errorText.value = '请填写有效的邮箱地址'; return }
   sendingRegisterCode.value = true; errorText.value = ''; registerSuccessText.value = ''
   try { await paperpilotApi.sendRegisterCode(e); email.value = e; registerSuccessText.value = '验证码已发送，10 分钟内有效。'; startCooldown() }
   catch (err) { errorText.value = err.response?.data?.message || err.message }
@@ -753,7 +1140,7 @@ async function submitResetPassword() {
 }
 function openModal(mode) {
   authMode.value = mode; errorText.value = ''; registerSuccessText.value = ''; forgotSuccessText.value = ''; showPassword.value = false
-  if (mode === 'login') { email.value = 'student@paperslover.app'; password.value = 'Student2026!' }
+  if (mode === 'login') { email.value = 'student@papersolver.app'; password.value = 'Student2026!' }
   else { email.value = ''; password.value = ''; verificationCode.value = ''; inviteCode.value = ''; name.value = '' }
   showAuthModal.value = true
 }
@@ -766,12 +1153,25 @@ async function loadDesktopBackendConfig() {
     const nextUrl = normalizeApiBaseUrl(config?.apiBaseUrl) || getCurrentApiBaseUrl()
     applyDesktopTranslationConfig(config?.translationEndpoints)
     desktopPdfDirDraft.value = config?.pdfStorageDir || ''
+    desktopSetupCompleted.value = Boolean(config?.setupCompleted)
+    if (config?.localDependencyLiteMode !== undefined) {
+      liteModeSelected.value = Boolean(config.localDependencyLiteMode)
+    }
     desktopApiBase.value = nextUrl
     desktopApiDraft.value = nextUrl
     setApiBaseUrl(nextUrl, { persist: true })
+    await Promise.allSettled([
+      refreshLocalDependencyStatus({ silent: true }),
+      testDesktopConnection({ silent: true }),
+      refreshDesktopCacheInfo(),
+    ])
   } catch {
     desktopApiBase.value = getCurrentApiBaseUrl()
     desktopApiDraft.value = desktopApiBase.value
+  } finally {
+    if (isDesktopApp) {
+      setTimeout(() => openDesktopSettings(), 500)
+    }
   }
 }
 async function loadDesktopRuntimeInfo() {
@@ -811,11 +1211,13 @@ async function checkDesktopUpdate() {
   }
 }
 function openDesktopSettings() {
-  desktopApiDraft.value = desktopApiBase.value || getCurrentApiBaseUrl()
+  desktopApiDraft.value = "https://papersolver.cn"
+  desktopConnectionOk.value = true
   desktopSettingsError.value = ''
   desktopSettingsMessage.value = ''
   desktopSettingsOpen.value = true
   refreshDesktopCacheInfo()
+  refreshLocalDependencyStatus({ silent: true })
 }
 async function chooseDesktopPdfDir() {
   if (!window.paperSolverDesktop?.selectPdfStorageDir) {
@@ -848,20 +1250,24 @@ function openDesktopSettingsFromGuide() {
   closeDesktopGuide()
   openDesktopSettings()
 }
-async function testDesktopConnection() {
+async function testDesktopConnection(options = {}) {
   const apiBaseUrl = normalizeApiBaseUrl(desktopApiDraft.value)
   if (!apiBaseUrl) {
     desktopSettingsError.value = '请输入有效地址，例如 https://api.papersolver.cn'
     return
   }
   desktopTesting.value = true
-  desktopSettingsError.value = ''
-  desktopSettingsMessage.value = ''
+  if (!options.silent) {
+    desktopSettingsError.value = ''
+    desktopSettingsMessage.value = ''
+  }
   try {
     await testApiBaseUrl(apiBaseUrl)
-    desktopSettingsMessage.value = '连接成功，可以保存并登录。'
+    desktopConnectionOk.value = true
+    if (!options.silent) desktopSettingsMessage.value = '云端连接正常。'
   } catch (err) {
-    desktopSettingsError.value = err?.message || '连接失败'
+    desktopConnectionOk.value = false
+    if (!options.silent) desktopSettingsError.value = err?.message || '连接失败'
   } finally {
     desktopTesting.value = false
   }
@@ -914,6 +1320,80 @@ async function refreshDesktopCacheInfo() {
     desktopCacheLoading.value = false
   }
 }
+function applyLocalDependencyStatus(status = {}) {
+  localDependencyState.ok = Boolean(status.ok)
+  localDependencyState.installed = Boolean(status.installed)
+  localDependencyState.running = Boolean(status.running)
+  localDependencyState.structuredParserAvailable = Boolean(status.structuredParserAvailable)
+  localDependencyState.message = status.message || ''
+  localDependencyState.latencyMs = Number(status.latencyMs) || 0
+  if (status.liteMode !== undefined) {
+    liteModeSelected.value = Boolean(status.liteMode)
+  }
+}
+async function refreshLocalDependencyStatus(options = {}) {
+  if (!window.paperSolverDesktop?.getLocalDependencyStatus) return
+  localDependencyBusy.value = true
+  if (!options.silent) {
+    desktopSettingsError.value = ''
+    desktopSettingsMessage.value = ''
+  }
+  try {
+    const status = await window.paperSolverDesktop.getLocalDependencyStatus()
+    applyLocalDependencyStatus(status)
+    if (!options.silent) {
+      desktopSettingsMessage.value = status.running ? '本机依赖运行正常。' : status.message || '检测完成。'
+    }
+  } catch (err) {
+    applyLocalDependencyStatus({ ok: false, installed: false, running: false, message: err?.message || '依赖检测失败。' })
+    if (!options.silent) desktopSettingsError.value = err?.message || '依赖检测失败。'
+  } finally {
+    localDependencyBusy.value = false
+  }
+}
+async function installLocalDependency(force = false) {
+  if (!window.paperSolverDesktop?.downloadLocalDependency) return
+  localDependencyBusy.value = true
+  desktopSettingsError.value = ''
+  desktopSettingsMessage.value = ''
+  localDependencyProgress.active = true
+  localDependencyProgress.progress = 4
+  localDependencyProgress.message = force ? '正在重新安装本机依赖...' : '正在安装本机依赖...'
+  try {
+    const status = await window.paperSolverDesktop.downloadLocalDependency({ force, liteMode: liteModeSelected.value })
+    applyLocalDependencyStatus(status)
+    desktopSettingsMessage.value = '本机依赖已安装并启动。'
+  } catch (err) {
+    desktopSettingsError.value = err?.message || '安装依赖失败。'
+  } finally {
+    localDependencyBusy.value = false
+    setTimeout(() => {
+      localDependencyProgress.active = false
+    }, 900)
+  }
+}
+async function startLocalDependency() {
+  if (!window.paperSolverDesktop?.startLocalDependency) return
+  localDependencyBusy.value = true
+  desktopSettingsError.value = ''
+  desktopSettingsMessage.value = ''
+  localDependencyProgress.active = true
+  localDependencyProgress.progress = 35
+  localDependencyProgress.message = '正在启动本机依赖...'
+  try {
+    await window.paperSolverDesktop.startLocalDependency()
+    await refreshLocalDependencyStatus({ silent: true })
+    desktopSettingsMessage.value = '本机依赖已启动。'
+  } catch (err) {
+    desktopSettingsError.value = err?.message || '启动依赖失败。'
+  } finally {
+    localDependencyBusy.value = false
+    localDependencyProgress.progress = localDependencyState.running ? 100 : localDependencyProgress.progress
+    setTimeout(() => {
+      localDependencyProgress.active = false
+    }, 900)
+  }
+}
 async function openDesktopCacheDir() {
   if (!window.paperSolverDesktop?.openCacheDir) return
   desktopCacheLoading.value = true
@@ -949,25 +1429,31 @@ function applyDesktopCacheInfo(info = {}) {
   desktopCacheInfo.path = info.path || ''
 }
 async function saveDesktopSettings() {
-  const apiBaseUrl = normalizeApiBaseUrl(desktopApiDraft.value)
-  if (!apiBaseUrl) {
-    desktopSettingsError.value = '请输入有效地址，例如 https://api.papersolver.cn'
-    return
-  }
+  const apiBaseUrl = "https://papersolver.cn"
   desktopSettingsSaving.value = true
   desktopSettingsError.value = ''
   desktopSettingsMessage.value = ''
   try {
+    desktopConnectionOk.value = true
+    await refreshLocalDependencyStatus({ silent: true })
+    if (!desktopPdfDirDraft.value) {
+      throw new Error('请先选择 PDF 保存目录。')
+    }
+    if (!localDependencyState.running) {
+      throw new Error('本机依赖未运行，请先安装或启动依赖。')
+    }
     if (window.paperSolverDesktop?.setBackendConfig) {
       await window.paperSolverDesktop.setBackendConfig({
         apiBaseUrl,
         pdfStorageDir: desktopPdfDirDraft.value,
         translationEndpoints: normalizedDesktopTranslationDraft(),
+        setupCompleted: true,
       })
     }
     setApiBaseUrl(apiBaseUrl, { persist: true })
     desktopApiBase.value = apiBaseUrl
-    desktopSettingsMessage.value = '已保存后端连接和本机翻译配置。'
+    desktopSetupCompleted.value = true
+    desktopSettingsMessage.value = '配置已完成，可以继续登录。'
     setTimeout(() => { desktopSettingsOpen.value = false }, 900)
   } catch (err) {
     desktopSettingsError.value = err?.message || '保存失败'
@@ -982,8 +1468,8 @@ async function resetDesktopSettings() {
   try {
     const config = window.paperSolverDesktop?.resetBackendConfig
       ? await window.paperSolverDesktop.resetBackendConfig()
-      : { apiBaseUrl: 'http://127.0.0.1:8080' }
-    const nextUrl = normalizeApiBaseUrl(config?.apiBaseUrl) || 'http://127.0.0.1:8080'
+      : { apiBaseUrl: 'https://papersolver.cn' }
+    const nextUrl = normalizeApiBaseUrl(config?.apiBaseUrl) || 'https://papersolver.cn'
     applyDesktopTranslationConfig(config?.translationEndpoints)
     desktopPdfDirDraft.value = config?.pdfStorageDir || ''
     setApiBaseUrl(nextUrl, { persist: true })
@@ -1008,14 +1494,54 @@ function normalizedDesktopTranslationDraft() {
     mtranServerEndpoint: normalizeApiBaseUrl(desktopTranslationDraft.mtranServerEndpoint) || '',
   }
 }
+async function loginWithQQ() {
+  const appId = '1905318043';
+  const redirectUri = encodeURIComponent('https://papersolver.cn/api/auth/qq/callback');
+  const qqAuthUrl = `https://graph.qq.com/oauth2.0/authorize?response_type=code&client_id=${appId}&redirect_uri=${redirectUri}&state=papersolver`;
+  if (isDesktopApp && window.paperSolverDesktop?.oauthQQ) {
+    console.log("[LoginView] oauthQQ desktop flow started with url:", qqAuthUrl);
+    try {
+      const result = await window.paperSolverDesktop.oauthQQ(qqAuthUrl);
+      console.log("[LoginView] oauthQQ resolved. Result:", result);
+      if (result?.qqSession) {
+        const json = decodeBase64Utf8(result.qqSession);
+        console.log("[LoginView] Decoded JSON:", json);
+        const user = JSON.parse(json);
+        console.log("[LoginView] Applying session for user:", user);
+        authStore.applySession(user);
+        console.log("[LoginView] Session applied. Routing to library...");
+        router.push(authStore.session.role === '管理员' ? '/admin' : '/library');
+      } else {
+        console.warn("[LoginView] oauthQQ resolved but qqSession was missing:", result);
+      }
+    } catch (e) {
+      console.error("[LoginView] oauthQQ catch block error:", e);
+      errorText.value = e.message || 'QQ 登录失败，请重试。';
+      openModal('login');
+    }
+    return;
+  }
+  // Web browser flow
+  window.location.href = qqAuthUrl;
+}
 async function submitLogin() {
+  if (isDesktopApp && !desktopSetupReady.value) {
+    errorText.value = '请先完成桌面端首次配置。'
+    openDesktopSettings()
+    return
+  }
   loading.value = true; errorText.value = ''
   try { await authStore.login({ email: email.value, password: password.value }); router.push(authStore.session.role === '管理员' ? '/admin' : '/library') }
   catch (err) { errorText.value = authErrorMessage(err) }
   finally { loading.value = false }
 }
 async function submitRegister() {
-  if (!isQqEmail(email.value)) { errorText.value = '请使用 QQ 邮箱注册'; return }
+  if (isDesktopApp && !desktopSetupReady.value) {
+    errorText.value = '请先完成桌面端首次配置。'
+    openDesktopSettings()
+    return
+  }
+  if (!isQqEmail(email.value)) { errorText.value = '请填写有效的邮箱地址'; return }
   if (!verificationCode.value || verificationCode.value.length !== 6) { errorText.value = '请输入 6 位验证码'; return }
   loading.value = true; errorText.value = ''
   try { await authStore.register({ inviteCode: inviteCode.value, name: name.value, email: email.value, password: password.value, role: role.value, mentorInviteCode: mentorInviteCode.value, verificationCode: verificationCode.value }); router.push(authStore.session.role === '管理员' ? '/admin' : '/library') }
@@ -1043,74 +1569,121 @@ const features = [
 const workflowSteps = [
   {
     id: 'lib',
-    title: '统一文献归纳与题录沉淀',
-    desc: '支持快速导入本地 PDF 论文，或一键导入 Zotero 题录数据。系统会自动补全作者、期刊与出版年份，保持元数据完整。',
+    title: '全部文献归纳与题录沉淀',
+    desc: '支持快速导入本地 PDF 论文，或一键从 Zotero 题录导入。系统会自动识别并智能补全作者、期刊、中科院分区与影响因子标签。',
     highlights: [
-      '⚡️ <b>无缝接轨 Zotero</b>：一键同步导出文件，免去手动输录',
-      '🏷️ <b>多维度标签分类</b>：按开题、复现、组会自定义标记',
-      '📂 <b>全局云端同步</b>：阅读进度与分类跨终端时刻保存'
+      '<b>无缝同步 Zotero 题录</b>：快速拉取分类与元数据，免去手动键入',
+      '<b>核心分区指标一览</b>：直观查看文献的 IF、JCR 分区与中科院等级',
+      '<b>文献生命周期管理</b>：阅读进度、个人批注与笔记一目了然'
     ],
-    tags: ['PDF 导入', 'Zotero 同步', '元数据自动补全'],
+    tags: ['PDF 导入', 'Zotero 同步', '文献属性自动补全'],
     img: '/workflow/library.png'
   },
   {
     id: 'read',
-    title: '双栏对齐与选区精准批注',
-    desc: '双栏并行对比阅读，左侧展示原文，右侧实时对照机器翻译。支持句子级别的选区精准高亮，不会涂乱正文版面。',
+    title: '学术助手 PaperSolver 深度对话',
+    desc: '内置专门优化的自研 PaperSolver 学术大模型。支持对论文全文、特定选区段落或图表进行智能多轮追问，瞬间理解复杂学术概念。',
     highlights: [
-      '🔍 <b>选区级高亮划线</b>：精确锁定到句子，随时撤销独立批注',
-      '🧩 <b>结构化拆解视图</b>：背景、方法、实验结果与局限分开阅读',
-      '🌐 <b>即时高保真翻译</b>：保持学术专业词汇表达准确'
+      '<b>自研学术大模型</b>：专门针对学术论文及图表解析进行定制优化',
+      '<b>划词/选区智能追问</b>：选中复杂数学公式或实验方法，即可一键追问',
+      '<b>提问与生成时间标记</b>：消息时间精确记录，阅读进度更清晰'
     ],
-    tags: ['原文对照', '选区划线批注', '结构化深度解析'],
+    tags: ['AI 研读助手', '多轮追问', 'PaperSolver 模型'],
     img: '/workflow/reader.png'
   },
   {
     id: 'review',
-    title: '核心要点整理与智能综述',
-    desc: '系统自动提炼研究背景、关键发现、方法亮点与汇报价值。对核心数字、百分比及英文指标进行智能高亮显示。',
+    title: '文献结构化提炼与综述生成',
+    desc: '自动从文献中深度萃取主要发现、对比证据、机制阐释、贡献价值与核心创新，生成高保真结构化解析大纲。',
     highlights: [
-      '📊 <b>关键指标高亮</b>：关键数据集与实验增幅一目了然',
-      '📝 <b>结构化综述生成</b>：包含主要贡献、局限与可拓展点',
-      '🔗 <b>直接流转至组会</b>：一键导入组会模块，免去复制粘贴'
+      '<b>研究发现智能提取</b>：提炼核心立论与机制演变路径',
+      '<b>对比证据全面捕获</b>：系统归纳实验数据与关键增幅比例',
+      '<b>一键流转至组会</b>：综述内容直接对接汇报主线，免去复制粘贴'
     ],
-    tags: ['结构化综述', '关键数据高亮', '一键转流组会'],
+    tags: ['文献结构化综述', '数据要点高亮', '一键转流组会'],
     img: '/workflow/review.png'
   },
   {
     id: 'meet',
-    title: '多篇文献融合与 PPT 自动生成',
-    desc: '打破单篇文献局限，支持最多同时选择三篇论文合成为统一的组会汇报主线，并自动输出讲稿、导师 Q&A 与完整 PPT。',
+    title: '组会汇报与原生 PPTX 极速导出',
+    desc: '将日常阅读的文献笔记与精读记录，一键转化为组会汇报主线。基于原生 PPTmaster 引擎自动排版，快速导出完整幻灯片。',
     highlights: [
-      '🔀 <b>多论文主线融合</b>：自动提取多篇文献的关联与对比逻辑',
-      '🎙️ <b>讲稿与问题准备</b>：预估导师可能提问并生成答辩建议',
-      '🖥️ <b>一键导出 PPTX</b>：生成排版规范的高质量演示文稿'
+      '<b>笔记记录一键流转</b>：从多篇精读论文笔记秒级转为组会主线大纲',
+      '<b>原生 PPT 引擎制作</b>：高保真还原精美排版，一键导出 PPTX 文件',
+      '<b>自动生成宣讲讲稿</b>：系统预估汇报用时，提供针对性的导师问答建议'
     ],
-    tags: ['多篇文献融合', '汇报讲稿提炼', '一键导出 PPT'],
+    tags: ['多文献融合', '原生 PPT 导出', '汇报讲稿提炼'],
     img: '/workflow/meeting.png'
   },
   {
     id: 'forum',
-    title: '实名校园圈与学术讨论交流',
-    desc: '完成高校校园认证后，可进入专属校园板块参与同校同行的深度学术探讨。内置智能审核机制与站内实时通知。',
+    title: '选题大厅与研究方向规划',
+    desc: '开题找不到方向？根据您的研究兴趣和投递定位，智能规划具有高可行性与高创新度的科研选题，并系统梳理现有研究空白。',
     highlights: [
-      '🎓 <b>高校认证身份</b>：保障学术圈子真实纯粹',
-      '🛡️ <b>智能合规审核</b>：自动化过滤垃圾信息与敏感内容',
-      '🔔 <b>站内消息直达</b>：回复、点赞与认证提醒即时送达'
+      '<b>创新度与可行性量化</b>：评估选题发表成功率与落地难易度分数',
+      '<b>研究问题与空白梳理</b>：罗列该选题需解答的核心学术疑问',
+      '<b>推荐研究方向推荐</b>：提供文献调研结构与针对性的实验方案'
     ],
-    tags: ['校园认证', '同行学术探讨', '站内实时通知'],
+    tags: ['科研选题评分', '研究空白梳理', '推荐方向生成'],
     img: '/workflow/forum.png'
   }
 ]
 
 const whyClaims = [
-  { title:'整条流程一条线，不再分散',    desc:'从导入 PDF 到输出 PPT，每一步的结果自动流入下一步，节省大量重复劳动。',              color:'#3b82f6', vb:'0 0 24 24', path:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/><circle cx="5" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>'                          },
-  { title:'批注精确到句子，不涂乱整段',  desc:'选中任意一段文字即可保存批注，只落在选区，可单独删除，也可一键清空。',                color:'#8b5cf6', vb:'0 0 24 24', path:'<path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/>'},
-  { title:'组会材料不需要手动拼接',      desc:'最多三篇文献合并成汇报主线，讲稿、关键问题和 PPT 一起生成，不需要手动复制摘要。',    color:'#10b981', vb:'0 0 24 24', path:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m7 10 3 3 5-5"/>'                     },
-  { title:'学校认证，讨论不再丢失',      desc:'按学校筛选帖子，同校同行的经验更容易找到。回复和认证反馈全部推送到站内消息。',        color:'#ec4899', vb:'0 0 24 24', path:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 16.92z"/>'},
-  { title:'按实际使用计费，看得清',      desc:'不同操作用不同配置，基础阅读免费，综述和 PPT 按次数展示。剩余次数随时查看。',        color:'#f59e0b', vb:'0 0 24 24', path:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'                               },
-  { title:'数据留在你自己手里',          desc:'批注、综述、汇报讲稿全部保存在你的账号下，随时导出。你的研究材料永远属于你。',        color:'#06b6d4', vb:'0 0 24 24', path:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'                                     },
+  {
+    pain: '苦恼文献需要一个个手动下载？',
+    solution: 'PaperSolver 自带智能浏览器插件，精准识别网页文献，一键极速导入工作台。',
+    color: '#38bdf8',
+    vb: '0 0 24 24',
+    path: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'
+  },
+  {
+    pain: '苦恼无法订阅 ChatGPT、用不上高质量学术模型？',
+    solution: '内置专门针对论文优化的自研大模型，开箱即用，精准解析文献，无需魔法，不用再丢 PDF 给网页。',
+    color: '#818cf8',
+    vb: '0 0 24 24',
+    path: '<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>'
+  },
+  {
+    pain: '苦恼 PDF 阅读太单一、排版不喜欢？',
+    solution: '提供三大阅读模式：1. PDF 原生排版全文对照看；2. 逐段翻译分拆精细读；3. 沉浸原生英文手动划词译。',
+    color: '#34d399',
+    vb: '0 0 24 24',
+    path: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>'
+  },
+  {
+    pain: '苦恼看完长篇大论依然一头雾水？',
+    solution: '左侧边栏提供一键生成高质量论文综述与核心贡献总结，论点脉络一目了然。',
+    color: '#fb7185',
+    vb: '0 0 24 24',
+    path: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>'
+  },
+  {
+    pain: '苦恼看完论文要花大量时间写讲稿、做组会 PPT？',
+    solution: '内置 Codex 原生大模型引擎并无缝对接 PPTMaster，帮您一键梳理组会主线并产出精美 PPT。',
+    color: '#fbbf24',
+    vb: '0 0 24 24',
+    path: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m7 10 3 3 5-5"/>'
+  },
+  {
+    pain: '苦恼选题开题没有方向、找不到研究空白？',
+    solution: '开放智能“选题大厅”，汇集前沿科研灵感并结合 AI 助力，量身定制生成属于您自己的选题方向。',
+    color: '#a78bfa',
+    vb: '0 0 24 24',
+    path: '<circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>'
+  },
+  {
+    pain: '苦恼找不到实验数据集？论文卡壳没人讨论？',
+    solution: '开放高质化学术论坛，供您共享数据集、交流讨论学术瓶颈，在研究道路上结识同行知己。',
+    color: '#22d3ee',
+    vb: '0 0 24 24',
+    path: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'
+  }
 ]
+
+const track1Items = computed(() => [whyClaims[0], whyClaims[1], whyClaims[2], whyClaims[3]])
+const track2Items = computed(() => [whyClaims[4], whyClaims[5], whyClaims[6], whyClaims[0]])
+const track3Items = computed(() => [whyClaims[2], whyClaims[3], whyClaims[4], whyClaims[5]])
 
 const whyBadges = [
   { label:'永久免费基础功能',    color:'#22c55e', vb:'0 0 24 24', path:'<path d="M20 6 9 17l-5-5"/>'                                                                                    },
@@ -1123,44 +1696,38 @@ const comparisons = [
   {
     feature: '数据存储与隐私安全',
     a: '云端强制上传文件，有严重泄露学术成果和机密的风险',
-    b: '完全本地单机，无云端同步和任何 AI 深度大模型协同',
-    c: 'PDF 全文托管在第三方云服务器，学术成果受制于平台',
+    b: 'PDF 全文托管在第三方云服务器，学术成果受制于平台',
     our: '100% 本地物理留存，云端仅加密同步轻量级笔记与对话，无隐私泄露风险'
   },
   {
     feature: '文献对照翻译体验',
     a: '覆盖原排版的粗糙机翻，排版极易错乱，且中英对照割裂',
-    b: '需自行配置外部插件，速度慢且无选区智能对照',
-    c: '翻译需每次重复上传文件并反复产生计费，加载排版受限',
+    b: '翻译需每次重复上传文件并反复产生计费，加载排版受限',
     our: '双栏高保真对照翻译，选区精准批注，流畅沉浸且永不破版'
   },
   {
     feature: '大模型对话提问交互',
     a: '仅支持简单的全局聊天，无法针对选区特定词句定向追问',
-    b: '完全不支持任何 AI 提问或学术问答功能',
-    c: '限制使用云端固定大模型，调用按次收费非常昂贵',
+    b: '限制使用云端固定大模型，调用按次收费非常昂贵',
     our: '支持选区一键定向提问，内置自研大模型，支持极低成本自主配置'
   },
   {
     feature: '组会汇报与幻灯片输出',
     a: '仅生成纯文本综述大纲，无法辅助排版设计和输出 PPT',
-    b: '完全不支持，需用户全程手动翻阅文献并自己手写 PPT',
-    c: '套用通用模板转换，内容逻辑较平，排版呆板且后期难修改',
+    b: '套用通用模板转换，内容逻辑较平，排版呆板且后期难修改',
     our: '深度融合多篇文献主线，采用原生 PPTmaster 制作，自动输出高美感幻灯片'
   },
   {
     feature: '选题调研与空白敏锐捕捉',
     a: '无相关功能，无法进行深度的选题开拓',
-    b: '无相关功能，仅能依靠人工逐一阅读整理',
-    c: '提供极高价格且数据源受限的文献脉络分析图',
+    b: '提供极高价格且数据源受限的文献脉络分析图',
     our: '独创“调研广场”，全自动提炼代表作、生成选题卡并寻找现有工作空白'
   },
   {
-    feature: '托管与私有化部署成本',
-    a: '云端闭源平台，无法在个人或团队服务器独立部署',
-    b: '本地单机版，没有多端同步和团队共享云端后台',
-    c: '依赖昂贵的大显存 GPU 云服务器，部署与维护成本高昂',
-    our: '核心极度轻量化，完美适配 2核4G 的低配服务器独立自主部署运行'
+    feature: '学术交流',
+    a: '仅限制于展示静态文本，不支持对数据集与核心方法的深度关联探究',
+    b: 'AI 对话仅限于常规聊天，无法直接解析及探讨特定的公式算法与外部数据集',
+    our: '内置学术问答与社区模块，支持直接针对数据集细节提问、探讨论文核心方法与公式逻辑'
   }
 ]
 
@@ -1169,16 +1736,41 @@ onMounted(() => {
   setTimeout(() => { heroIn.value = true }, 80)
   setTimeout(initIO, 200)
   setTimeout(resetWfAuto, 1200)
+  if (isDesktopApp && window.paperSolverDesktop?.onLocalDependencyProgress) {
+    unsubscribeDependencyProgress = window.paperSolverDesktop.onLocalDependencyProgress((payload = {}) => {
+      localDependencyProgress.active = true
+      localDependencyProgress.progress = Math.max(0, Math.min(100, Number(payload.progress) || 0))
+      localDependencyProgress.message = payload.message || '正在处理本机依赖...'
+      localDependencyProgress.stage = payload.stage || ''
+    })
+  }
   loadDesktopBackendConfig()
   if (isDesktopApp) {
     try {
-      if (localStorage.getItem(DESKTOP_GUIDE_KEY) !== '1') {
+      if (localStorage.getItem(DESKTOP_GUIDE_KEY) !== '1' && desktopSetupCompleted.value) {
         setTimeout(() => { desktopGuideOpen.value = true }, 650)
       }
     } catch {
       setTimeout(() => { desktopGuideOpen.value = true }, 650)
     }
   }
+  if (route.query.qqSession) {
+    try {
+      const base64 = route.query.qqSession;
+      const json = decodeBase64Utf8(base64);
+      const user = JSON.parse(json);
+      authStore.applySession(user);
+      router.push(authStore.session.role === '管理员' ? '/admin' : '/library');
+    } catch (e) {
+      console.error("Failed to parse QQ login session:", e);
+      errorText.value = "QQ 登录会话解析失败，请重试。";
+      openModal('login');
+    }
+  } else if (route.query.error) {
+    errorText.value = route.query.error;
+    openModal('login');
+  }
+
   if (route.query.auth === 'register' || route.query.show === 'register') openModal('register')
   else if (route.query.auth === 'login'  || route.query.show === 'login')  openModal('login')
 })
@@ -1188,10 +1780,41 @@ onUnmounted(() => {
   clearTimeout(wfSlideTimer)
   clearInterval(wfProgressTimer)
   if (rcTimer) clearInterval(rcTimer)
+  unsubscribeDependencyProgress?.()
 })
 </script>
 
 <style scoped>
+.lite-mode-selector {
+  margin: 10px 0 14px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.lite-mode-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  transition: color 0.15s ease;
+}
+.lite-mode-label input {
+  margin-top: 3px;
+  cursor: pointer;
+}
+.lite-mode-label span {
+  line-height: 1.3;
+  text-align: left;
+}
+.lite-mode-label:hover {
+  color: #f1f5f9;
+}
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
@@ -1202,6 +1825,18 @@ onUnmounted(() => {
   font-family: 'Geist', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  position: relative;
+}
+.home-root::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: radial-gradient(350px circle at var(--mouse-x, -999px) var(--mouse-y, -999px), rgba(99, 102, 241, 0.11), rgba(168, 85, 247, 0.04), transparent 70%);
+  z-index: 99;
 }
 
 /* ══ NAV ══ */
@@ -1213,12 +1848,45 @@ onUnmounted(() => {
 .home-nav.scrolled { background: rgba(8,8,12,.84); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); border-bottom-color: rgba(255,255,255,.055); }
 .nav-inner { max-width: 100%; margin: 0 auto; padding: 0 48px; height: 62px; display: flex; align-items: center; gap: 24px; }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; flex-shrink: 0; }
-.brand-mark svg { width: 36px; height: 36px; }
-.brand-name { font-size: 1.05rem; font-weight: 700; color: #f0f0f4; letter-spacing: -.025em; }
-.brand-tag  { font-size: .6rem; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: #71717a; border: 1px solid rgba(255,255,255,.1); border-radius: 99px; padding: 2px 7px; }
+.brand-mark img {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), filter 0.3s ease;
+  filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.35));
+}
+.brand:hover .brand-mark img {
+  transform: scale(1.08) rotate(3deg);
+  filter: drop-shadow(0 0 16px rgba(99, 102, 241, 0.7));
+}
+.brand-name {
+  font-size: 1.15rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffffff 40%, #c7d2fe 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 8px rgba(99, 102, 241, 0.25));
+  letter-spacing: -.025em;
+  transition: opacity 0.2s ease;
+}
+.brand:hover .brand-name {
+  opacity: 0.9;
+}
+.brand-tag  { font-size: .6rem; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: #a5b4fc; border: 1px solid rgba(165, 180, 252, 0.25); background: rgba(99, 102, 241, 0.08); border-radius: 99px; padding: 2px 7px; box-shadow: 0 0 10px rgba(99, 102, 241, 0.15); }
 .nav-links  { display: flex; gap: 2px; flex: 1; }
-.nav-links a { color: #71717a; text-decoration: none; font-size: .875rem; font-weight: 500; padding: 5px 13px; border-radius: 99px; transition: color .2s, background .2s; }
-.nav-links a:hover { color: #f0f0f4; background: rgba(255,255,255,.05); }
+.nav-links a {
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: .875rem;
+  font-weight: 500;
+  padding: 5px 13px;
+  border-radius: 99px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  text-shadow: 0 0 10px rgba(99, 102, 241, 0);
+}
+.nav-links a:hover {
+  color: #ffffff;
+  background: rgba(99, 102, 241, 0.12);
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.3), inset 0 0 0 1px rgba(165, 180, 252, 0.25);
+  text-shadow: 0 0 8px rgba(165, 180, 252, 0.6);
+}
 .nav-ctas { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .btn-ghost { background: transparent; border: 1px solid rgba(255,255,255,.1); color: #a1a1aa; font-size: .875rem; font-weight: 500; padding: 7px 18px; border-radius: 8px; cursor: pointer; transition: border-color .2s, color .2s; font-family: inherit; }
 .btn-ghost:hover { border-color: rgba(255,255,255,.22); color: #f0f0f4; }
@@ -1317,11 +1985,52 @@ onUnmounted(() => {
 .proof-avatars span:first-child { margin-left: 0; }
 .hero-proof strong { color: #a1a1aa; font-weight: 600; }
 
-.hero-stats { display: flex; align-items: center; justify-content: center; gap: 24px; padding: 16px 28px; border: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.02); border-radius: 14px; backdrop-filter: blur(8px); flex-wrap: wrap; }
-.stat { text-align: center; }
-.stat strong { display: block; font-size: 1.35rem; font-weight: 800; color: #f0f0f4; letter-spacing: -.04em; }
-.stat span   { font-size: .72rem; color: #52525b; font-weight: 500; margin-top: 2px; display: block; }
-.stat-div    { width: 1px; height: 32px; background: rgba(255,255,255,.08); }
+.hero-stats {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px 32px;
+  border: 1px solid rgba(165, 180, 252, 0.12);
+  background: linear-gradient(180deg, rgba(30, 30, 45, 0.45), rgba(15, 15, 25, 0.65));
+  border-radius: 20px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  max-width: 1120px;
+  margin: 0 auto;
+}
+.stat {
+  flex: 1;
+  text-align: left;
+  padding: 8px 12px;
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+.stat:hover {
+  transform: translateY(-2px);
+  filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.45));
+}
+.stat strong {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffffff 40%, #c7d2fe 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 6px;
+  letter-spacing: -0.02em;
+}
+.stat span {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  line-height: 1.55;
+  font-weight: 400;
+  display: block;
+}
+.stat-div {
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(165, 180, 252, 0.18) 50%, transparent);
+}
 
 /* ══ SECTIONS ══ */
 .section { padding: 88px 28px; }
@@ -1372,7 +2081,7 @@ onUnmounted(() => {
   width: 100vw;
   flex-shrink: 0;
   display: grid;
-  grid-template-columns: 55% 45%;
+  grid-template-columns: 60% 40%;
   align-items: center;
   padding: 0 max(28px, calc((100vw - 1160px) / 2));
   box-sizing: border-box;
@@ -1388,11 +2097,17 @@ onUnmounted(() => {
   overflow: hidden;
   box-shadow: 0 30px 100px rgba(0, 0, 0, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.07);
+  cursor: zoom-in;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.media-container:hover {
+  transform: scale(1.01);
+  box-shadow: 0 35px 110px rgba(99, 102, 241, 0.2);
 }
 .media-container img {
   width: 100%;
   height: 100%;
-  max-height: 480px;
+  max-height: 540px;
   object-fit: cover;
   object-position: top left;
   display: block;
@@ -1514,41 +2229,64 @@ onUnmounted(() => {
 .fc-progress-indicator circle:last-child { transition: stroke-dashoffset .08s linear; }
 
 /* ══ WHY CHOOSE US ══ */
-.why-claims { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 40px; opacity: 0; transform: translateY(18px); transition: opacity .65s ease .1s, transform .65s ease .1s; }
-.why-claims.in { opacity: 1; transform: translateY(0); }
-.why-card { display: flex; flex-direction: column; gap: 12px; background: rgba(14,14,20,.7); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; padding: 22px; transition: border-color .25s, transform .25s; }
-.why-card:hover { border-color: rgba(255,255,255,.1); transform: translateY(-3px); }
-.wc-icon { width: 42px; height: 42px; border-radius: 11px; background: color-mix(in srgb,var(--c) 10%,transparent); border: 1px solid color-mix(in srgb,var(--c) 20%,transparent); display: flex; align-items: center; justify-content: center; color: var(--c); }
-.wc-icon svg { width: 19px; height: 19px; }
-.wc-title { font-size: .93rem; font-weight: 650; color: #e2e2e6; }
-.wc-desc  { font-size: .8rem; color: #52525b; line-height: 1.68; }
+.why-danmaku-container { position: relative; width: 100%; margin-top: 50px; display: flex; flex-direction: column; gap: 20px; overflow: hidden; padding: 20px 0; mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%); -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%); opacity: 0; transform: translateY(20px); transition: opacity 0.8s cubic-bezier(0.25,1,0.5,1), transform 0.8s cubic-bezier(0.25,1,0.5,1); }
+.why-danmaku-container.in { opacity: 1; transform: translateY(0); }
+.danmaku-track { display: flex; width: max-content; gap: 24px; user-select: none; }
+.danmaku-content { display: flex; gap: 24px; width: max-content; }
+.track-left .danmaku-content { animation: marquee-left 85s linear infinite; }
+.track-left-slow .danmaku-content { animation: marquee-left 105s linear infinite; }
+.track-right .danmaku-content { animation: marquee-right 95s linear infinite; }
+.danmaku-track:hover .danmaku-content { animation-play-state: paused; }
+.danmaku-pill { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 99px; padding: 14px 28px; white-space: nowrap; transition: all 0.3s ease; cursor: pointer; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+.danmaku-pill:hover { border-color: var(--c); background: rgba(255,255,255,0.04); transform: scale(1.03); }
+.dm-icon { display: flex; align-items: center; justify-content: center; color: var(--c); flex-shrink: 0; }
+.dm-icon svg { width: 16px; height: 16px; }
+.dm-pain { font-size: 0.95rem; font-weight: 600; color: #e4e4e7; }
+.dm-arrow { font-size: 0.85rem; color: rgba(255,255,255,0.2); margin: 0 4px; }
+.dm-solution { font-size: 0.95rem; font-weight: 700; color: var(--c); }
+@keyframes marquee-left {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+@keyframes marquee-right {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(0); }
+}
 
-.why-banner { display: flex; gap: 48px; align-items: center; background: linear-gradient(135deg,rgba(37,99,235,.1),rgba(124,58,237,.08)); border: 1px solid rgba(59,130,246,.18); border-radius: 20px; padding: 40px 48px; opacity: 0; transform: translateY(16px); transition: opacity .65s ease .2s, transform .65s ease .2s; }
-.why-banner.in { opacity: 1; transform: translateY(0); }
-.wb-left { flex: 1; }
-.wb-q    { font-size: 5rem; font-weight: 800; line-height: .6; color: rgba(96,165,250,.25); margin-bottom: 10px; font-family: Georgia, serif; }
-.wb-text { font-size: 1.22rem; font-weight: 650; color: #e2e2e6; line-height: 1.55; letter-spacing: -.02em; margin-bottom: 14px; }
-.wb-by   { font-size: .82rem; color: #52525b; }
-.wb-right { display: flex; flex-direction: column; gap: 14px; flex-shrink: 0; }
-.wb-badge { display: flex; align-items: center; gap: 10px; font-size: .85rem; font-weight: 500; color: #a1a1aa; }
-.wb-badge svg { width: 16px; height: 16px; color: var(--c); flex-shrink: 0; }
+.why-banner-premium { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: linear-gradient(135deg, rgba(37,99,235,0.08) 0%, rgba(124,58,237,0.05) 50%, rgba(0,0,0,0) 100%); border: 1px solid rgba(124,58,237,0.15); border-radius: 24px; padding: 60px 48px; opacity: 0; transform: translateY(16px); transition: opacity 0.8s cubic-bezier(0.25,1,0.5,1), transform 0.8s cubic-bezier(0.25,1,0.5,1); overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
+.why-banner-premium.in { opacity: 1; transform: translateY(0); }
+.wbp-content { position: relative; z-index: 2; max-width: 720px; }
+.wbp-text { font-size: 1.8rem; font-weight: 700; line-height: 1.6; letter-spacing: -0.01em; background: linear-gradient(135deg, #ffffff 40%, #a5b4fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px; }
+.wbp-by { font-size: 0.95rem; font-weight: 600; color: #818cf8; letter-spacing: 0.05em; text-transform: uppercase; }
+.wbp-quote-mark-start, .wbp-quote-mark-end { position: absolute; font-family: Georgia, serif; font-size: 10rem; line-height: 1; font-weight: 900; color: rgba(124, 58, 237, 0.12); user-select: none; z-index: 1; }
+.wbp-quote-mark-start { top: -10px; left: 30px; }
+.wbp-quote-mark-end { bottom: -60px; right: 30px; }
 
 /* ══ COMPARISON ══ */
 .cmp-table { border: 1px solid rgba(255,255,255,.07); border-radius: 18px; overflow: hidden; opacity: 0; transform: translateY(18px); transition: opacity .65s ease .1s, transform .65s ease .1s; }
 .cmp-table.in { opacity: 1; transform: translateY(0); }
-.cmp-header { display: grid; grid-template-columns: 1.2fr 1.2fr 1.2fr 1.2fr 1.6fr; padding: 13px 24px; background: rgba(255,255,255,.022); border-bottom: 1px solid rgba(255,255,255,.055); font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; align-items: center; color: #a1a1aa; }
-.cmp-bad-h  { display: flex; align-items: center; gap: 6px; color: #f87171; }
-.cmp-good-h { display: flex; align-items: center; gap: 6px; color: #4ade80; }
-.cmp-row { display: grid; grid-template-columns: 1.2fr 1.2fr 1.2fr 1.2fr 1.6fr; padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,.038); align-items: start; transition: background .2s; }
+.cmp-header { display: grid; grid-template-columns: 1.2fr 1.3fr 1.3fr 1.8fr; padding: 14px 24px; background: rgba(255,255,255,.022); border-bottom: 1px solid rgba(255,255,255,.055); font-size: .95rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; align-items: center; color: #38bdf8; }
+.cmp-header span { display: flex; align-items: center; justify-content: flex-start; text-align: left; }
+.cmp-bad-h  { display: flex; align-items: center; justify-content: flex-start; gap: 6px; color: #f87171; }
+.cmp-good-h { display: flex; align-items: center; justify-content: flex-start; gap: 6px; color: #38bdf8; }
+.cmp-row { display: grid; grid-template-columns: 1.2fr 1.3fr 1.3fr 1.8fr; padding: 22px 24px; border-bottom: 1px solid rgba(255,255,255,.038); align-items: start; transition: background .2s; }
 .cmp-row:last-child { border-bottom: none; }
 .cmp-row:hover { background: rgba(255,255,255,.014); }
-.cmp-row b { font-size: .87rem; font-weight: 600; color: #d4d4d8; }
-.cmp-bad, .cmp-good { display: flex; gap: 8px; font-size: .82rem; line-height: 1.55; align-items: flex-start; padding-right: 12px; }
-.cmp-bad  { color: #9ca3af; }
-.cmp-good { color: #86efac; }
-.ci { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
-.ci.bad  { background: rgba(239,68,68,.12);  color: #f87171; border: 1px solid rgba(239,68,68,.22); }
-.ci.good { background: rgba(34,197,94,.1);   color: #4ade80; border: 1px solid rgba(34,197,94,.22); }
+.cmp-row b { font-size: 1.15rem; font-weight: 700; color: #f4f4f5; }
+.cmp-bad, .cmp-good { display: flex; gap: 10px; font-size: 1.05rem; line-height: 1.7; align-items: flex-start; justify-content: flex-start; text-align: left; padding-right: 12px; }
+.cmp-bad  { color: #d1d5db; }
+.cmp-good { color: #a7f3d0; }
+.ci { display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 5px; opacity: 0; transform: translateY(12px); transition: opacity 0.8s cubic-bezier(0.25, 1, 0.5, 1), transform 0.8s cubic-bezier(0.25, 1, 0.5, 1); }
+.ci.bad  { background: transparent; color: #f87171; border: none; }
+.ci.good { background: transparent; color: #4ade80; border: none; }
+.cmp-table.in .cmp-row .ci { opacity: 1; transform: translateY(0); }
+.cmp-row:hover .ci { transform: scale(1.12); }
+.cmp-table.in .cmp-row:nth-child(2) .ci { transition-delay: 0.1s; }
+.cmp-table.in .cmp-row:nth-child(3) .ci { transition-delay: 0.22s; }
+.cmp-table.in .cmp-row:nth-child(4) .ci { transition-delay: 0.34s; }
+.cmp-table.in .cmp-row:nth-child(5) .ci { transition-delay: 0.46s; }
+.cmp-table.in .cmp-row:nth-child(6) .ci { transition-delay: 0.58s; }
+.cmp-table.in .cmp-row:nth-child(7) .ci { transition-delay: 0.70s; }
 
 /* ══ FOOTER ══ */
 .home-footer { border-top: 1px solid rgba(255,255,255,.05); padding: 44px 28px; }
@@ -1598,6 +2336,43 @@ onUnmounted(() => {
 .auth-links a { font-size: .78rem; color: #71717a; text-decoration: none; transition: color .2s; }
 .auth-links a:hover { color: #a1a1aa; }
 .auth-links a.dim { color: #3f3f46; }
+.oauth-only-pane { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 15px 10px 10px; width: 100%; box-sizing: border-box; }
+.oauth-brand-header { display: flex; flex-direction: column; align-items: center; margin-bottom: 22px; text-align: center; }
+.oauth-logo-glow { display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 18px; background: rgba(124, 58, 237, 0.03); border: 1px solid rgba(124, 58, 237, 0.15); box-shadow: 0 0 20px rgba(37, 99, 235, 0.08); margin-bottom: 12px; transition: all 0.3s ease; }
+.oauth-logo-glow:hover { transform: translateY(-2px); box-shadow: 0 0 25px rgba(124, 58, 237, 0.2); background: rgba(124, 58, 237, 0.06); }
+.oauth-brand-title { font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, #ffffff 30%, #a1a1aa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0 0 4px; letter-spacing: -0.02em; }
+.oauth-brand-subtitle { font-size: 0.78rem; color: #71717a; margin: 0; font-weight: 500; letter-spacing: 0.05em; }
+.oauth-card { width: 100%; padding: 20px; border-radius: 16px; background: rgba(255, 255, 255, 0.015); border: 1px solid rgba(255, 255, 255, 0.05); box-sizing: border-box; }
+.oauth-hint { font-size: 0.8rem; color: #a1a1aa; line-height: 1.6; text-align: center; margin: 0 0 20px; }
+.btn-oauth-premium { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 14px; background: linear-gradient(135deg, #128eed 0%, #0066cc 100%); border: none; border-radius: 12px; color: #ffffff; font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease; box-shadow: 0 4px 15px rgba(18, 142, 237, 0.25); }
+.btn-oauth-premium:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(18, 142, 237, 0.4); filter: brightness(1.08); }
+.btn-oauth-premium:active { transform: translateY(1px); box-shadow: 0 2px 10px rgba(18, 142, 237, 0.2); }
+.btn-oauth-premium.qq {
+  background: rgba(18, 142, 237, 0.12) !important;
+  border: 1px solid rgba(18, 142, 237, 0.35) !important;
+  color: #7ad0ff !important;
+  box-shadow: 0 4px 15px rgba(18, 142, 237, 0.15) !important;
+  transition: all 0.2s ease;
+  padding: 12px;
+  border-radius: 8px;
+}
+.btn-oauth-premium.qq:hover {
+  background: rgba(18, 142, 237, 0.22) !important;
+  border: 1px solid rgba(18, 142, 237, 0.5) !important;
+  color: #a3e0ff !important;
+  box-shadow: 0 6px 20px rgba(18, 142, 237, 0.3) !important;
+  transform: translateY(-1px);
+}
+.btn-oauth-premium.qq:active {
+  transform: translateY(1px);
+}
+.icon-qq-svg { color: #ffffff; }
+.oauth-footer-agreement { font-size: 0.72rem; color: #52525b; text-align: center; margin-top: 18px; }
+.oauth-footer-agreement a { color: #71717a; text-decoration: none; border-bottom: 1px dotted #52525b; transition: all 0.2s; }
+.oauth-footer-agreement a:hover { color: #a1a1aa; border-bottom-color: #a1a1aa; }
+
+
+.oauth-desktop-card { margin-top: 15px; width: 100%; border: 1px solid rgba(255, 255, 255, 0.03) !important; background: rgba(255, 255, 255, 0.01) !important; }
 .desktop-connection-card {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -1617,14 +2392,33 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 .desktop-connection-card strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
   overflow: hidden;
   color: #c7d2fe;
-  font-family: 'Geist Mono', monospace;
-  font-size: .72rem;
+  font-size: .75rem;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.desktop-connection-card strong i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f87171;
+  box-shadow: 0 0 0 4px rgba(248, 113, 113, .12);
+}
+.desktop-connection-card strong.ok {
+  color: #bbf7d0;
+}
+.desktop-connection-card strong.ok i {
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, .14);
+}
+.desktop-connection-card strong.bad {
+  color: #fecaca;
 }
 .desktop-connection-card button {
   grid-row: 1 / span 2;
@@ -1645,15 +2439,82 @@ onUnmounted(() => {
 }
 .desktop-settings-mask {
   z-index: 560;
+  align-items: center;
+  padding: 28px;
 }
 .desktop-settings-box {
-  max-width: 540px;
+  max-width: 680px;
+  max-height: calc(100vh - 72px);
+  overflow: hidden;
+  padding: 0;
+}
+.desktop-settings-pane {
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
+  padding: 30px;
+}
+.desktop-settings-pane::-webkit-scrollbar {
+  width: 8px;
+}
+.desktop-settings-pane::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, .35);
+}
+.desktop-settings-pane::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, .28);
+  border-radius: 99px;
+  border: 2px solid rgba(15, 23, 42, .65);
 }
 .desktop-settings-desc {
-  margin: -6px 0 18px;
+  margin: -8px 0 16px;
   color: #71717a;
   font-size: .82rem;
   line-height: 1.65;
+}
+.desktop-setup-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.desktop-setup-status-card {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-height: 74px;
+  padding: 14px 14px 13px 36px;
+  border: 1px solid rgba(248, 113, 113, .18);
+  border-radius: 16px;
+  background: rgba(127, 29, 29, .12);
+}
+.desktop-setup-status-card .status-dot {
+  position: absolute;
+  left: 15px;
+  top: 18px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #f87171;
+  box-shadow: 0 0 0 5px rgba(248, 113, 113, .12);
+}
+.desktop-setup-status-card strong {
+  color: #f8fafc;
+  font-size: .86rem;
+  font-weight: 850;
+}
+.desktop-setup-status-card small {
+  color: #fca5a5;
+  font-size: .72rem;
+  font-weight: 800;
+}
+.desktop-setup-status-card.ok {
+  border-color: rgba(34, 197, 94, .2);
+  background: rgba(6, 78, 59, .16);
+}
+.desktop-setup-status-card.ok .status-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 5px rgba(34, 197, 94, .13);
+}
+.desktop-setup-status-card.ok small {
+  color: #86efac;
 }
 .desktop-settings-actions {
   display: grid;
@@ -1699,6 +2560,10 @@ onUnmounted(() => {
     linear-gradient(135deg, rgba(79, 70, 229, .14), rgba(14, 165, 233, .05)),
     rgba(15, 23, 42, .26);
 }
+.desktop-update-section.compact {
+  gap: 8px;
+  padding: 13px 15px;
+}
 .desktop-update-row {
   display: flex;
   align-items: center;
@@ -1743,6 +2608,74 @@ onUnmounted(() => {
 .desktop-update-row button:disabled {
   opacity: .55;
   cursor: not-allowed;
+}
+.desktop-dependency-section {
+  border-color: rgba(56, 189, 248, .22);
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, .11), rgba(14, 165, 233, .07)),
+    rgba(15, 23, 42, .36);
+}
+.desktop-progress {
+  display: grid;
+  gap: 6px;
+}
+.desktop-progress-bar {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, .16);
+}
+.desktop-progress-bar span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #6366f1, #06b6d4);
+  transition: width .22s ease;
+}
+.desktop-progress small {
+  color: #93c5fd;
+  font-size: .72rem;
+  font-weight: 700;
+}
+.desktop-dependency-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.desktop-dependency-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  border: 1px solid rgba(96, 165, 250, .24);
+  border-radius: 11px;
+  color: #dbeafe;
+  background: rgba(37, 99, 235, .12);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .77rem;
+  font-weight: 850;
+}
+.desktop-dependency-actions button:hover:not(:disabled) {
+  border-color: rgba(34, 211, 238, .44);
+  background: rgba(14, 165, 233, .18);
+}
+.desktop-dependency-actions button:disabled {
+  opacity: .48;
+  cursor: not-allowed;
+}
+.mini-spinner {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid rgba(191, 219, 254, .24);
+  border-top-color: #bfdbfe;
+  animation: miniSpin .72s linear infinite;
+}
+@keyframes miniSpin {
+  to { transform: rotate(360deg); }
 }
 .desktop-translation-row {
   display: grid;
@@ -1969,17 +2902,38 @@ onUnmounted(() => {
 @media (max-width: 1000px) {
   .nav-links { display: none; }
   .feat-grid { grid-template-columns: repeat(2,1fr); }
-  .why-claims { grid-template-columns: repeat(2,1fr); }
-  .why-banner { flex-direction: column; gap: 28px; padding: 28px; }
+
+  .why-banner-premium { padding: 40px 24px; }
+  .wbp-text { font-size: 1.4rem; }
+  .wbp-quote-mark-start { top: -20px; left: 10px; font-size: 8rem; }
+  .wbp-quote-mark-end { bottom: -50px; right: 10px; font-size: 8rem; }
   .full-slide-item { grid-template-columns: 1fr; padding: 0 24px; }
   .full-slide-media { padding-right: 0; margin-bottom: 24px; }
   .full-slide-info { padding-left: 0; }
   .info-title { font-size: 1.5rem; }
   .desktop-guide-grid { grid-template-columns: 1fr; }
 }
+@media (max-width: 720px) {
+  .desktop-settings-mask {
+    padding: 14px;
+  }
+  .desktop-settings-box,
+  .desktop-settings-pane {
+    max-height: calc(100vh - 28px);
+  }
+  .desktop-settings-pane {
+    padding: 24px 18px;
+  }
+  .desktop-setup-status-grid,
+  .desktop-dependency-actions,
+  .desktop-cache-actions,
+  .desktop-settings-actions {
+    grid-template-columns: 1fr;
+  }
+}
 @media (max-width: 640px) {
   .feat-grid { grid-template-columns: 1fr; }
-  .why-claims { grid-template-columns: 1fr; }
+
   .price-grid { grid-template-columns: 1fr; }
   .cmp-header { grid-template-columns: 1fr; }
   .cmp-header span:not(:first-child) { display: none; }
@@ -1987,6 +2941,63 @@ onUnmounted(() => {
   .hero-stats { gap: 16px; }
   .stat-div { display: none; }
   .h1-line-top { font-size: clamp(1.8rem, 7vw, 2.6rem); }
-  .h1-line-bot { font-size: clamp(2.1rem, 8.5vw, 3.2rem); }
+}
+
+/* Image Preview Overlay */
+.img-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(4, 4, 6, 0.94);
+  backdrop-filter: blur(20px);
+  display: grid;
+  place-items: center;
+  cursor: zoom-out;
+}
+.img-preview-container {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.preview-img-full {
+  max-width: 100%;
+  max-height: 90vh;
+  border-radius: 12px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  object-fit: contain;
+}
+.preview-close-btn {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all 0.2s;
+}
+.preview-close-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.preview-fade-enter-active,
+.preview-fade-leave-active {
+  transition: opacity 0.26s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.preview-fade-enter-from,
+.preview-fade-leave-to {
+  opacity: 0;
 }
 </style>
