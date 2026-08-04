@@ -976,6 +976,14 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
       // In liteMode, we only install PDF translation requirements (no PyTorch, no MinerU)
       if (force || !fs.existsSync(pdfReadyMarker)) {
         emit({ stage: "python-env", progress: 25, message: "正在载入系统组件..." });
+        if (process.platform === "win32") {
+          emit({ stage: "python-env", progress: 27, message: "正在优化极简计算引擎..." });
+          await runSpawnCommand(
+            uvBin,
+            ["pip", "install", "--python", pythonBin, "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cpu"],
+            { cwd: installDir }
+          );
+        }
         await runSpawnCommand(
           uvBin, 
           ["pip", "install", "--python", pythonBin, "-r", path.join(installDir, "services", "pdf", "requirements.txt")], 

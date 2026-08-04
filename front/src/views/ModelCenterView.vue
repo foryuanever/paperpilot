@@ -146,17 +146,7 @@
           <div v-if="plan.id === 'plus'" class="card-accent-line"></div>
 
           <!-- Badge -->
-          <div class="card-top-row">
-            <div class="plan-tier-icon">
-              <!-- Free: Leaf/Circle -->
-              <svg v-if="plan.id === 'free'" class="tier-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
-              <!-- Lite: Spark/Dollar -->
-              <svg v-else-if="plan.id === 'lite'" class="tier-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-              <!-- Plus: Star -->
-              <svg v-else-if="plan.id === 'plus'" class="tier-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              <!-- Pro: Diamond -->
-              <svg v-else-if="plan.id === 'pro'" class="tier-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/></svg>
-            </div>
+          <div class="card-top-row" style="justify-content: flex-end; min-height: 20px;">
             <span v-if="plan.id === usageStore.state.membership?.id" class="tier-badge badge-current">当前使用中</span>
             <span v-else-if="plan.id === 'plus'" class="tier-badge badge-hot">🔥 推荐</span>
           </div>
@@ -191,7 +181,8 @@
           <ul class="plan-feat-list">
             <li v-for="row in planRows(plan)" :key="row.label" :class="{ 'feat-off': !row.included }">
               <span class="feat-status-icon" :class="row.included ? 'status-ok' : 'status-no'">
-                {{ row.included ? '✓' : '✗' }}
+                <svg v-if="row.included" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" class="feat-svg-icon" style="width: 10px; height: 10px;"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" class="feat-svg-icon" style="width: 10px; height: 10px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </span>
               <span class="feat-label">{{ row.label }}</span>
               <span class="feat-val">{{ row.value }}</span>
@@ -217,13 +208,14 @@
         </div>
       </div>
 
-      <div class="packs-grid">
+      <div class="packs-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
         <article
           v-for="pack in powerPacks"
           :key="pack.id"
           class="pack-card-v2"
           :class="{ 'pack-v2-active': selectedPlan === pack.id }"
           @click="selectedPlan = pack.id"
+          style="display: flex; flex-direction: column; height: 100%; min-height: 380px;"
         >
           <!-- Left side colored strip -->
           <div class="pack-accent-bar" :class="pack.icon"></div>
@@ -233,18 +225,30 @@
               <svg v-if="pack.icon === 'review'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
               <svg v-else-if="pack.icon === 'ppt'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
               <svg v-else-if="pack.icon === 'chat'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              <svg v-else-if="pack.icon === 'translation'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-              <svg v-else-if="pack.icon === 'research'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <svg v-else-if="pack.icon === 'report'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             </div>
             <div class="pack-v2-info">
               <strong>{{ pack.name }}</strong>
               <span>{{ pack.desc }}</span>
             </div>
           </div>
-          <div class="pack-v2-bottom">
-            <div class="pack-v2-qty">+{{ pack.count }} {{ pack.unit }}</div>
-            <div class="pack-v2-price">¥{{ pack.price }}<span>/ 包</span></div>
+
+          <div class="card-hr" style="margin: 10px 0;"></div>
+
+          <!-- Pack Features -->
+          <ul class="plan-feat-list" style="margin-top: 4px; flex: 1;">
+            <li v-for="row in pack.benefits" :key="row.name" :class="{ 'feat-off': !row.included }">
+              <span class="feat-status-icon" :class="row.included ? 'status-ok' : 'status-no'">
+                <svg v-if="row.included" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" class="feat-svg-icon" style="width: 10px; height: 10px;"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" class="feat-svg-icon" style="width: 10px; height: 10px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </span>
+              <span class="feat-label">{{ row.name }}</span>
+              <span class="feat-val">{{ row.value }}</span>
+            </li>
+          </ul>
+
+          <div class="pack-v2-bottom" style="margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.04);">
+            <div class="pack-v2-price">¥<em>{{ pack.price }}</em><span>/ 包</span></div>
           </div>
           <button class="pack-v2-btn" :class="{ active: selectedPlan === pack.id }">
             {{ selectedPlan === pack.id ? '✓ 已选中' : '加入选择' }}
@@ -371,14 +375,76 @@ const filteredOrders = computed(() => {
 });
 const provider = ref("wechat");
 const selectedCycle = ref("monthly");
-const selectedPlan = ref("pack_review");
+const selectedPlan = ref("pack_tier_lite");
 const powerPacks = [
-  { id: "pack_review", name: "AI 综述加油包", desc: "增加 10 次文献综述生成额度", price: 9.9, count: 10, unit: "次", icon: "review", label: "综述加油包" },
-  { id: "pack_ppt", name: "组会 PPT 加油包", desc: "增加 3 次 PPT 自动汇报生成额度", price: 19.9, count: 3, unit: "次", icon: "ppt", label: "PPT加油包" },
-  { id: "pack_chat", name: "研读对话加油包", desc: "增加 50 次论文问答对话额度", price: 9.9, count: 50, unit: "次", icon: "chat", label: "对话加油包" },
-  { id: "pack_translation", name: "对照/沉浸翻译加油包", desc: "增加 30 篇全文翻译额度", price: 9.9, count: 30, unit: "篇", icon: "translation", label: "翻译加油包" },
-  { id: "pack_research", name: "调研广场加油包", desc: "增加 20 次热点调研分析额度", price: 9.9, count: 20, unit: "次", icon: "research", label: "调研加油包" },
-  { id: "pack_report", name: "组会一键汇报加油包", desc: "增加 5 次自动一键汇报大纲额度", price: 14.9, count: 5, unit: "次", icon: "report", label: "汇报加油包" }
+  {
+    id: "pack_tier_lite",
+    name: "学术启航加油包",
+    desc: "适合日常轻量文献阅读与基础翻译需求",
+    price: 19.9,
+    unit: "包",
+    icon: "review",
+    label: "启航包",
+    benefits: [
+      { name: "对照/沉浸翻译", value: "30万字符", included: true },
+      { name: "研读对话", value: "50次", included: true },
+      { name: "AI论文综述", value: "5次", included: true },
+      { name: "调研广场", value: "不包含", included: false },
+      { name: "组会PPT", value: "不包含", included: false },
+      { name: "组会一键汇报", value: "不包含", included: false }
+    ]
+  },
+  {
+    id: "pack_tier_standard",
+    name: "学术精进加油包",
+    desc: "适合高频文献精研与学术搜索用户",
+    price: 39.9,
+    unit: "包",
+    icon: "chat",
+    label: "精进包",
+    benefits: [
+      { name: "对照/沉浸翻译", value: "80万字符", included: true },
+      { name: "研读对话", value: "120次", included: true },
+      { name: "AI论文综述", value: "15次", included: true },
+      { name: "调研广场", value: "10次", included: true },
+      { name: "组会PPT", value: "不包含", included: false },
+      { name: "组会一键汇报", value: "不包含", included: false }
+    ]
+  },
+  {
+    id: "pack_tier_plus",
+    name: "学术大师加油包",
+    desc: "适合中大型论文写作与中度学术汇报制作",
+    price: 69.9,
+    unit: "包",
+    icon: "ppt",
+    label: "大师包",
+    benefits: [
+      { name: "对照/沉浸翻译", value: "180万字符", included: true },
+      { name: "研读对话", value: "250次", included: true },
+      { name: "AI论文综述", value: "35次", included: true },
+      { name: "调研广场", value: "25次", included: true },
+      { name: "组会PPT", value: "2次", included: true },
+      { name: "组会一键汇报", value: "不包含", included: false }
+    ]
+  },
+  {
+    id: "pack_tier_pro",
+    name: "学术至尊加油包",
+    desc: "全功能超大额度，终极文献分析与自动汇报套件",
+    price: 99.9,
+    unit: "包",
+    icon: "report",
+    label: "至尊包",
+    benefits: [
+      { name: "对照/沉浸翻译", value: "400万字符", included: true },
+      { name: "研读对话", value: "600次", included: true },
+      { name: "AI论文综述", value: "80次", included: true },
+      { name: "调研广场", value: "60次", included: true },
+      { name: "组会PPT", value: "5次", included: true },
+      { name: "组会一键汇报", value: "5次", included: true }
+    ]
+  }
 ];
 const paymentMessage = ref("");
 const ticketDialog = ref(null);
@@ -550,8 +616,12 @@ async function load() {
   loading.value = true;
   try {
     await usageStore.fetchSummary();
-    selectedPlan.value = normalizePlanId(selectedPlan.value);
-    if (!displayPlans.value.some((item) => item.id === selectedPlan.value)) selectedPlan.value = displayPlans.value[1]?.id || displayPlans.value[0]?.id || "plus";
+    if (!selectedPlan.value.startsWith("pack_")) {
+      selectedPlan.value = normalizePlanId(selectedPlan.value);
+      if (!displayPlans.value.some((item) => item.id === selectedPlan.value)) {
+        selectedPlan.value = displayPlans.value[1]?.id || displayPlans.value[0]?.id || "plus";
+      }
+    }
   } finally {
     loading.value = false;
   }

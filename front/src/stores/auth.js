@@ -141,6 +141,7 @@ export const useAuthStore = defineStore("auth", () => {
       role: payload.role || defaultRole,
       schoolName: "",
       campusVerified: false,
+      registerTime: new Date().toISOString().split('T')[0],
     };
   }
 

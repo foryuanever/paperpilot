@@ -292,94 +292,7 @@
             </div>
           </div>
 
-          <!-- Announcements publisher -->
-          <div class="admin-action-section">
-            <div class="section-title-bar">
-              <h4>重要通知公告</h4>
-              <button class="btn-toggle-form" @click="toggleAnnouncementForm">
-                {{ showAddAnnForm ? "收起表单" : "+ 发布公告" }}
-              </button>
-            </div>
-
-            <form v-if="showAddAnnForm" class="tutor-inline-form" @submit.prevent="submitAnnouncement">
-              <div class="form-row-grid">
-                <input v-model="newAnnTitle" type="text" placeholder="公告标题" required />
-                <input v-model="newAnnLink" type="url" placeholder="跳转链接（可选）" />
-              </div>
-              <textarea v-model="newAnnContent" placeholder="通知详细内容" required></textarea>
-              <div class="announcement-image-uploader" style="margin-top: 10px; margin-bottom: 10px;">
-                <label class="uploader-dropzone" style="padding: 10px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; border: 1px dashed rgba(0, 0, 0, 0.15); border-radius: 8px; background: rgba(0, 0, 0, 0.012);">
-                  <input type="file" accept="image/*" @change="handleAnnImageUpload" style="display: none;" />
-                  <span v-if="newAnnImage">已选配图: {{ newAnnImageName }}</span>
-                  <span v-else>+ 上传通知配图 (可选)</span>
-                </label>
-              </div>
-              <div class="announcement-attachment-uploader" style="margin-top: 10px; margin-bottom: 10px;">
-                <label class="uploader-dropzone" style="padding: 10px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; border: 1px dashed rgba(0, 0, 0, 0.15); border-radius: 8px; background: rgba(0, 0, 0, 0.012);">
-                  <input type="file" @change="handleAnnAttachmentUpload" style="display: none;" />
-                  <span v-if="newAnnAttachmentName">已选附件: {{ newAnnAttachmentName }} ({{ newAnnAttachmentSize }})</span>
-                  <span v-else>+ 上传附件 (可选)</span>
-                </label>
-              </div>
-              <div class="form-submit-row">
-                <button v-if="editingAnnouncementId" type="button" class="cancel-edit-btn" @click="resetAnnouncementForm">取消修改</button>
-                <button type="submit" class="submit-form-btn">{{ editingAnnouncementId ? "保存修改" : "发布通知" }}</button>
-              </div>
-            </form>
-
-            <div class="admin-items-list">
-              <div
-                v-for="ann in paginatedAnnouncements"
-                :key="ann.id"
-                class="admin-item-card task-card announcement-card"
-              >
-                <div class="item-main-content">
-                  <div class="item-title-row">
-                    <h5 @click="openDetailModal('announcement', ann)" style="cursor: pointer; text-decoration: underline; text-underline-offset: 4px;">{{ ann.title }}</h5>
-                    <div class="published-actions">
-                      <span class="status-tag published">已发布</span>
-                      <button type="button" class="published-action-btn" @click="startEditAnnouncement(ann)">修改</button>
-                      <button type="button" class="published-action-btn danger" @click="retractAnnouncement(ann)">撤回</button>
-                    </div>
-                  </div>
-                  <p class="task-desc-truncated" @click="openDetailModal('announcement', ann)">{{ ann.content || "暂无内容" }}</p>
-                  <div v-if="ann.image || ann.link || ann.attachmentName" class="task-attachments-list">
-                    <div v-if="ann.image" class="attachment-wrapper">
-                      <div class="image-attachment-card" @click="previewImage({ data: ann.image, name: ann.title })">
-                        <img :src="ann.image" class="task-attachment-img-preview" title="点击预览图片" />
-                        <span class="img-name">{{ ann.title }}配图</span>
-                      </div>
-                    </div>
-                    <a v-if="ann.link" :href="ann.link" target="_blank" class="document-link-row" @click.stop>
-                      <span class="file-format-badge">LINK</span>
-                      <span class="attachment-name">查看通知链接</span>
-                    </a>
-                    <button v-if="ann.attachmentName" type="button" class="document-file-row" @click="downloadAnnouncementAttachment(ann)">
-                      <span class="document-file-icon" :class="getDocumentIconClass(ann.attachmentName)">
-                        {{ getDocumentIconLabel(ann.attachmentName) }}
-                      </span>
-                      <span class="document-file-meta">
-                        <strong :title="ann.attachmentName">{{ ann.attachmentName }}</strong>
-                        <small>{{ getAnnouncementAttachmentSize(ann) }}</small>
-                      </span>
-                    </button>
-                  </div>
-                  <small>发布: {{ ann.publishTime }}</small>
-                </div>
-              </div>
-              <div v-if="!teamStore.announcements.length" class="empty-state-text">暂无公告，点击右上角发布公告。</div>
-            </div>
-            <!-- Pagination for announcements -->
-            <div class="pagination-bar" v-if="annTotalPages > 1">
-              <button type="button" class="pager-btn" :disabled="annPage === 1" @click="annPage--">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon"><polyline points="15 18 9 12 15 6"></polyline></svg>
-              </button>
-              <span class="pager-info">{{ annPage }} / {{ annTotalPages }}</span>
-              <button type="button" class="pager-btn" :disabled="annPage === annTotalPages" @click="annPage++">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon"><polyline points="9 18 15 12 9 6"></polyline></svg>
-              </button>
-            </div>
-          </div>
+          <!-- Announcements section removed -->
 
         </div>
       </div>
@@ -438,7 +351,10 @@
               </div>
             </div>
           </div>
+        </div>
 
+        <!-- Student: Right Column (My Workbench Tasks) -->
+        <div class="dashboard-col right-col">
           <!-- Team Tasks Assigned -->
           <div class="student-glass-card tasks-checklist-panel">
             <div class="checklist-header">
@@ -505,61 +421,6 @@
               </button>
             </div>
           </div>
-        </div>
-
-        <!-- Student: Right Column (Briefing) -->
-        <div class="dashboard-col right-col">
-          <!-- Announcements carousel style -->
-          <div class="student-glass-card announcements-briefing">
-            <div class="checklist-header">
-              <h3>重要公告通知</h3>
-              <span class="task-count-indicator">共 {{ teamStore.announcements.length }} 项</span>
-            </div>
-            <div class="student-task-list">
-              <article
-                v-for="ann in paginatedAnnouncements"
-                :key="ann.id"
-                class="student-task-item announcement-task-item"
-              >
-                <div class="task-info">
-                  <h4 @click="openDetailModal('announcement', ann)" style="cursor: pointer; text-decoration: underline; text-underline-offset: 4px;">{{ ann.title }}</h4>
-                  <p class="task-desc-truncated" @click="openDetailModal('announcement', ann)">{{ ann.content }}</p>
-                  <div v-if="ann.image || ann.link || ann.attachmentName" class="task-attachments-list">
-                    <div v-if="ann.image" class="image-attachment-card" @click="previewImage({ data: ann.image, name: ann.title })">
-                      <img :src="ann.image" class="task-attachment-img-preview" title="点击预览图片" />
-                      <span class="img-name">{{ ann.title }}配图</span>
-                    </div>
-                    <a v-if="ann.link" :href="ann.link" target="_blank" class="document-link-row" @click.stop>
-                      <span class="file-format-badge">LINK</span>
-                      <span class="attachment-name">查看通知链接</span>
-                    </a>
-                    <button v-if="ann.attachmentName" type="button" class="document-file-row" @click="downloadAnnouncementAttachment(ann)">
-                      <span class="document-file-icon" :class="getDocumentIconClass(ann.attachmentName)">
-                        {{ getDocumentIconLabel(ann.attachmentName) }}
-                      </span>
-                      <span class="document-file-meta">
-                        <strong :title="ann.attachmentName">{{ ann.attachmentName }}</strong>
-                        <small>{{ getAnnouncementAttachmentSize(ann) }}</small>
-                      </span>
-                    </button>
-                  </div>
-                  <small>发布时间: {{ ann.publishTime }}</small>
-                </div>
-              </article>
-              <div v-if="!teamStore.announcements.length" class="empty-state-text">暂无重要公告。</div>
-            </div>
-            <!-- Pagination Bar for Student Announcements -->
-            <div class="pagination-bar" v-if="annTotalPages > 1">
-              <button type="button" class="pager-btn" :disabled="annPage === 1" @click="annPage--">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon"><polyline points="15 18 9 12 15 6"></polyline></svg>
-              </button>
-              <span class="pager-info">{{ annPage }} / {{ annTotalPages }}</span>
-              <button type="button" class="pager-btn" :disabled="annPage === annTotalPages" @click="annPage++">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon"><polyline points="9 18 15 12 9 6"></polyline></svg>
-              </button>
-            </div>
-          </div>
-
         </div>
       </div>
 

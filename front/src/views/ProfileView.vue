@@ -402,9 +402,9 @@ const currentUserMember = computed(() => {
   return teamStore.members.find((member) => member.isCurrentUser) || teamStore.members[0] || {
     id: "local-user",
     name: authStore.profile.name || "用户",
-    role: authStore.session.role || "学生",
+    role: authStore.session.role || "普通用户",
     activeTime: 0,
-    registerTime: "2026-06-24",
+    registerTime: authStore.profile.registerTime || new Date().toISOString().split('T')[0],
     tokenUsed: 0,
     tokenLimit: 1,
     fruitScore: authStore.profile.fruitScore || 0,

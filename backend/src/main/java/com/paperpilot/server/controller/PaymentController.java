@@ -168,6 +168,10 @@ public class PaymentController {
                 case "pack_translation" -> 9.9;
                 case "pack_research" -> 9.9;
                 case "pack_report" -> 14.9;
+                case "pack_tier_lite" -> 19.9;
+                case "pack_tier_standard" -> 39.9;
+                case "pack_tier_plus" -> 69.9;
+                case "pack_tier_pro" -> 99.9;
                 default -> 0.0;
             };
         } else if (!"custom-recharge".equals(planId)) {
@@ -603,6 +607,28 @@ public class PaymentController {
             } else if ("pack_research".equals(pack)) {
                 user.setResearchQuota((user.getResearchQuota() == null ? 0 : user.getResearchQuota()) + 20);
             } else if ("pack_report".equals(pack)) {
+                user.setReportQuota((user.getReportQuota() == null ? 0 : user.getReportQuota()) + 5);
+            } else if ("pack_tier_lite".equals(pack)) {
+                user.setReviewQuota((user.getReviewQuota() == null ? 0 : user.getReviewQuota()) + 5);
+                user.setChatQuota((user.getChatQuota() == null ? 0 : user.getChatQuota()) + 50);
+                user.setTokenLimit((user.getTokenLimit() == null ? 0L : user.getTokenLimit()) + 300000L);
+            } else if ("pack_tier_standard".equals(pack)) {
+                user.setReviewQuota((user.getReviewQuota() == null ? 0 : user.getReviewQuota()) + 15);
+                user.setChatQuota((user.getChatQuota() == null ? 0 : user.getChatQuota()) + 120);
+                user.setTokenLimit((user.getTokenLimit() == null ? 0L : user.getTokenLimit()) + 800000L);
+                user.setResearchQuota((user.getResearchQuota() == null ? 0 : user.getResearchQuota()) + 10);
+            } else if ("pack_tier_plus".equals(pack)) {
+                user.setReviewQuota((user.getReviewQuota() == null ? 0 : user.getReviewQuota()) + 35);
+                user.setChatQuota((user.getChatQuota() == null ? 0 : user.getChatQuota()) + 250);
+                user.setTokenLimit((user.getTokenLimit() == null ? 0L : user.getTokenLimit()) + 1800000L);
+                user.setResearchQuota((user.getResearchQuota() == null ? 0 : user.getResearchQuota()) + 25);
+                user.setPptQuota((user.getPptQuota() == null ? 0 : user.getPptQuota()) + 2);
+            } else if ("pack_tier_pro".equals(pack)) {
+                user.setReviewQuota((user.getReviewQuota() == null ? 0 : user.getReviewQuota()) + 80);
+                user.setChatQuota((user.getChatQuota() == null ? 0 : user.getChatQuota()) + 600);
+                user.setTokenLimit((user.getTokenLimit() == null ? 0L : user.getTokenLimit()) + 4000000L);
+                user.setResearchQuota((user.getResearchQuota() == null ? 0 : user.getResearchQuota()) + 60);
+                user.setPptQuota((user.getPptQuota() == null ? 0 : user.getPptQuota()) + 5);
                 user.setReportQuota((user.getReportQuota() == null ? 0 : user.getReportQuota()) + 5);
             }
             appUserRepository.save(user);

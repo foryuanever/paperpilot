@@ -515,10 +515,10 @@ function logout() {
 const currentUserMember = computed(() => {
   return teamStore.members.find(m => m.isCurrentUser) || {
     id: "m-tutor",
-    name: "Yuan",
-    role: "导师",
+    name: authStore.profile.name || "Yuan",
+    role: authStore.profile.role || "普通用户",
     activeTime: 0,
-    registerTime: "2026-01-10",
+    registerTime: authStore.profile.registerTime || new Date().toISOString().split('T')[0],
     tokenUsed: 0,
     tokenLimit: 5000000
   };
