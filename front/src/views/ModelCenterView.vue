@@ -151,40 +151,42 @@
             <span v-else-if="plan.id === 'plus'" class="tier-badge badge-hot">推荐</span>
           </div>
 
-          <!-- Seckill Banner -->
-          <div v-if="isSeckillActive(plan)" class="seckill-countdown-banner" style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px; margin-bottom: 12px; padding: 6px 10px; border-radius: 8px; background: linear-gradient(90deg, #ef4444, #f97316); color: #fff; font-size: 11px; font-weight: 800; box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); border: 1px solid rgba(255,255,255,0.1);">
-            <span>⚡️ 限时秒杀中</span>
-            <span style="font-variant-numeric: tabular-nums;">{{ formatSeckillCountdown(plan) }}</span>
-          </div>
-
-          <!-- Name & desc -->
-          <div class="plan-name-block">
-            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-              <h3>{{ plan.name }}</h3>
-              <span v-if="plan.subtitle" style="font-size: 11px; font-weight: 800; color: var(--c-accent); padding: 2px 6px; background: rgba(99,102,241,0.08); border-radius: 4px; border: 1px solid rgba(99,102,241,0.15);">{{ plan.subtitle }}</span>
+          <!-- Header Content Wrapper with min-height to ensure perfect alignment -->
+          <div class="plan-card-header-wrap" style="display: flex; flex-direction: column; gap: 12px; min-height: 165px; justify-content: flex-start;">
+            <!-- Name & desc -->
+            <div class="plan-name-block">
+              <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                <h3>{{ plan.name }}</h3>
+                <span v-if="plan.subtitle" style="font-size: 11px; font-weight: 800; color: var(--c-accent); padding: 2px 6px; background: rgba(99,102,241,0.08); border-radius: 4px; border: 1px solid rgba(99,102,241,0.15);">{{ plan.subtitle }}</span>
+              </div>
+              <p style="margin-top: 8px; min-height: 36px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{{ planCopy(plan.id) }}</p>
             </div>
-            <p style="margin-top: 8px;">{{ planCopy(plan.id) }}</p>
-          </div>
 
-          <!-- Price -->
-          <div class="plan-price-row">
-            <template v-if="!plan.monthlyPrice">
-              <span class="price-main">免费</span>
-              <span class="price-sub">永久开放</span>
-            </template>
-            <template v-else>
-              <span class="price-main">¥<em>{{ planPrice(plan) }}</em></span>
-              <span class="price-sub">/ {{ cycleShortLabel(selectedCycle) }}</span>
-              <span v-if="isSeckillActive(plan)" class="price-original" style="text-decoration: line-through; margin-left: 8px; font-size: 13px; color: var(--c-muted); font-weight: 500;">
-                ¥{{ originalPlanPrice(plan) }}
-              </span>
-            </template>
-          </div>
+            <!-- Price -->
+            <div class="plan-price-row" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 32px;">
+              <template v-if="!plan.monthlyPrice">
+                <span class="price-main" style="font-size: 26px;">免费</span>
+                <span class="price-sub">永久开放</span>
+              </template>
+              <template v-else>
+                <span class="price-main">¥<em>{{ planPrice(plan) }}</em></span>
+                <span class="price-sub">/ {{ cycleShortLabel(selectedCycle) }}</span>
+                <span v-if="isSeckillActive(plan)" class="price-original" style="text-decoration: line-through; font-size: 13px; color: var(--c-muted); font-weight: 500;">
+                  ¥{{ originalPlanPrice(plan) }}
+                </span>
+                <!-- Inline Seckill Countdown Badge next to price -->
+                <span v-if="isSeckillActive(plan)" class="seckill-inline-countdown" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; background: linear-gradient(90deg, #ef4444, #f97316); color: #fff; font-size: 10px; font-weight: 800; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.25); border: 1px solid rgba(255,255,255,0.15); font-variant-numeric: tabular-nums; line-height: 1;">
+                  <span>⚡️秒杀</span>
+                  <span>{{ formatSeckillCountdown(plan) }}</span>
+                </span>
+              </template>
+            </div>
 
-          <!-- Luckin tag for Lite -->
-          <div v-if="plan.id === 'lite'" class="luckin-hint">
-            <img :src="luckinLogo" class="luckin-icon-sm" alt="luckin" />
-            <span>一杯瑞幸咖啡的价格</span>
+            <!-- Luckin tag for Lite -->
+            <div v-if="plan.id === 'lite'" class="luckin-hint">
+              <img :src="luckinLogo" class="luckin-icon-sm" alt="luckin" />
+              <span>一杯瑞幸咖啡的价格</span>
+            </div>
           </div>
 
           <div class="card-hr"></div>
@@ -289,9 +291,10 @@
       </div>
       <div class="checkout-actions">
         <div class="pay-methods">
-          <button class="active" disabled style="display: flex; align-items: center; justify-content: center; gap: 4px;">
-            <svg class="wechat-pay-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 18px; height: 18px; fill: #07C160;">
-              <path d="M8.2 12.3c0-.3.2-.5.5-.5s.5.2.5.5-.2.5-.5.5-.5-.2-.5-.5zm2.8 0c0-.3.2-.5.5-.5s.5.2.5.5-.2.5-.5.5-.5-.2-.5-.5zM17 9.5c0-3-3.1-5.5-7-5.5S3 6.5 3 9.5c0 1.7 1 3.2 2.6 4.2l-.5 1.5 1.9-1c.9.3 1.9.4 3 .4 3.9 0 7-2.5 7-5.1zm5.2 4.3c0-2.4-2.2-4.4-5.2-4.4-.3 0-.6 0-.8.1 1 1.1 1.5 2.6 1.5 4.1 0 2.2-1.1 4.1-2.9 5.2l.4 1.3 1.6-.9c.7.2 1.5.3 2.3.3 3.1 0 5.2-2 5.2-4.2l-.1-1.5zm-3.2 1.9c0-.2.2-.4.4-.4s.4.2.4.4-.2.4-.4.4-.4-.2-.4-.4zm1.9 0c0-.2.2-.4.4-.4s.4.2.4.4-.2.4-.4.4-.4-.2-.4-.4z" fill="#07C160"/>
+          <button class="active" disabled style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <svg class="wechat-pay-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 18px; height: 18px;">
+              <path d="M24 12c0 6.627-5.373 12-12 12S0 18.627 0 12 5.373 0 12 0s12 5.373 12 12z" fill="#09bb07"/>
+              <path d="M11.667 8.3c0-1.878-1.95-3.4-4.356-3.4-2.405 0-4.355 1.522-4.355 3.4 0 1.02.577 1.939 1.489 2.546l-.335 1.002 1.195-.595c.506.14.103.21.158.21.14 0 .278-.004.417-.013-.122-.392-.188-.805-.188-1.234 0-1.981 1.854-3.59 4.137-3.59.143 0 .284.006.423.017.005-.069.009-.138.009-.208c0-.12-.01-.24-.026-.358zm1.7 4.195c0-1.503-1.543-2.723-3.447-2.723-.253 0-.5.022-.738.064.527.564.85 1.306.85 2.115 0 1.444-1.04 2.666-2.546 3.185l.264.792.944-.471c.4.11.822.166 1.254.166 1.9 0 3.447-1.222 3.447-2.723l-.028-1.05zM5.327 7.797c0-.206.166-.372.372-.372s.373.166.373.372c0 .205-.167.371-.373.371a.372.372 0 01-.372-.371zm1.865 0c0-.206.166-.372.372-.372s.372.166.372.372c0 .205-.166.371-.372.371a.372.372 0 01-.372-.371zm4.721 4.793c0-.16.129-.29.29-.29a.29.29 0 01.29.29.29.29 0 01-.29.29.29.29 0 01-.29-.29zm1.155 0c0-.16.129-.29.29-.29a.29.29 0 01.29.29.29.29 0 01-.29.29.29.29 0 01-.29-.29z" fill="#fff"/>
             </svg>
             微信支付
           </button>

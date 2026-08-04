@@ -2531,7 +2531,10 @@ async function loadMembershipPlans(showLoading = true) {
   if (showLoading) membershipPlansLoading.value = true;
   try {
     const rows = await paperpilotApi.getAdminMembershipPlans();
-    membershipPlans.value = (rows || []).map(normalizeMembershipPlan);
+    // Exclude team plans from admin management list
+    membershipPlans.value = (rows || [])
+      .filter((plan) => plan.id !== "team_plus" && plan.id !== "team_pro")
+      .map(normalizeMembershipPlan);
   } catch (error) {
     console.error("Failed to load membership plans:", error);
     dialogStore.alert(error.response?.data?.message || "套餐配置加载失败");
