@@ -270,6 +270,34 @@ public class AdminController {
         authService.adminChangeQuota(id, quota, balanceAmount, ip);
     }
 
+    @PatchMapping("/users/{id}/quota-replenish")
+    @jakarta.transaction.Transactional
+    public AppUserEntity replenishUserQuota(@PathVariable("id") Long id, @RequestBody Map<String, Object> body, HttpServletRequest request) {
+        AppUserEntity user = appUserRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
+        String key = (String) body.get("key");
+        int amount = ((Number) body.getOrDefault("amount", 0)).intValue();
+        String ip = getClientIp(request);
+
+        if ("review".equals(key)) {
+            user.setReviewQuota(Math.max(0, (user.getReviewQuota() == null ? 0 : user.getReviewQuota()) + amount));
+        } else if ("ppt".equals(key)) {
+            user.setPptQuota(Math.max(0, (user.getPptQuota() == null ? 0 : user.getPptQuota()) + amount));
+        } else if ("chat".equals(key)) {
+            user.setChatQuota(Math.max(0, (user.getChatQuota() == null ? 0 : user.getChatQuota()) + amount));
+        } else if ("research".equals(key)) {
+            user.setResearchQuota(Math.max(0, (user.getResearchQuota() == null ? 0 : user.getResearchQuota()) + amount));
+        } else if ("report".equals(key)) {
+            user.setReportQuota(Math.max(0, (user.getReportQuota() == null ? 0 : user.getReportQuota()) + amount));
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无效的权益类型");
+        }
+        
+        AppUserEntity saved = appUserRepository.save(user);
+        authService.logAction("管理员补充用户 " + user.getUsername() + " 的 " + key + " 额度: " + (amount >= 0 ? "+" : "") + amount, "info", ip);
+        return saved;
+    }
+
     @PatchMapping("/users/{id}/membership")
     public AppUserEntity updateUserMembership(@PathVariable("id") Long id, @RequestBody Map<String, String> body, HttpServletRequest request) {
         AppUserEntity user = appUserRepository.findById(id)

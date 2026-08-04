@@ -198,10 +198,11 @@
                     </div>
                   </td>
                   <td>
-                    <div class="membership-usage-cell">
+                    <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
                       <span class="usage-badge review-tag">综述 <strong>{{ user.reviewUsed || 0 }}</strong>/{{ user.reviewQuota || 0 }}</span>
-                      <span class="usage-badge ppt-tag">PPT <strong>{{ user.pptUsed || 0 }}</strong>/{{ user.pptQuota || 0 }}</span>
-                      <span class="usage-badge chat-tag">对话 <strong>{{ user.chatUsed || 0 }}</strong>/{{ user.chatQuota || 0 }}</span>
+                      <button class="spatial-btn spatial-btn-ghost compact-btn" style="min-height: 24px; padding: 2px 6px; font-size: 0.7rem; border-color: rgba(99,102,241,0.35); color: var(--c-accent); background: rgba(99,102,241,0.03);" @click="openQuotaDetailModal(user)">
+                        🔍 详情与补给
+                      </button>
                     </div>
                   </td>
                   <td>{{ user.createdTime }}</td>
@@ -286,8 +287,10 @@
             </article>
           </div>
 
+          <!-- Subscription Membership Plans -->
+          <h4 style="margin: 24px 0 12px 0; font-size: 1.1rem; color: var(--c-accent); font-weight: 800; border-left: 3px solid var(--c-accent); padding-left: 8px;">订阅会员套餐</h4>
           <div class="membership-plan-admin-grid">
-            <article v-for="plan in membershipPlans" :key="plan.id" class="membership-plan-admin-card spatial-glass-panel" :class="{ inactive: plan.activeFlag === false, sale: plan.seckillEnabled }">
+            <article v-for="plan in subscriptionPlans" :key="plan.id" class="membership-plan-admin-card spatial-glass-panel" :class="{ inactive: plan.activeFlag === false, sale: plan.seckillEnabled }">
               <header>
                 <div>
                   <span class="plan-admin-id">{{ plan.id }}</span>
@@ -337,7 +340,7 @@
                 </div>
                 <div class="plan-admin-fields">
                   <label>秒杀标签<input v-model.trim="plan.seckillLabel" placeholder="限时秒杀" /></label>
-                  <label>秒杀月价<input v-model.number="plan.seckillPrice" type="number" min="0" step="0.01" /></label>
+                  <label>秒杀价格<input v-model.number="plan.seckillPrice" type="number" min="0" step="0.01" /></label>
                   <label>开始时间<input v-model="plan.seckillStartsAt" type="datetime-local" /></label>
                   <label>结束时间<input v-model="plan.seckillEndsAt" type="datetime-local" /></label>
                 </div>
@@ -356,6 +359,79 @@
                   </button>
                   <button class="spatial-btn spatial-btn-accent compact-btn" :disabled="savingMembershipPlanIds.has(plan.id)" @click="saveMembershipPlan(plan)">
                     {{ savingMembershipPlanIds.has(plan.id) ? "保存中..." : "保存套餐" }}
+                  </button>
+                </div>
+              </footer>
+            </article>
+          </div>
+
+          <!-- Top-up Power Packages -->
+          <h4 style="margin: 36px 0 12px 0; font-size: 1.1rem; color: var(--c-accent); font-weight: 800; border-left: 3px solid var(--c-accent); padding-left: 8px;">额度补充加油包</h4>
+          <div v-if="powerPackPlans.length === 0" style="padding: 24px; text-align: center; color: var(--c-muted); background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px dashed rgba(255,255,255,0.08); margin-top: 12px;">
+            暂无上架的额度加油包（重新启动后端或创建 `pack_` 开头的套餐ID即可自动录入）。
+          </div>
+          <div v-else class="membership-plan-admin-grid">
+            <article v-for="plan in powerPackPlans" :key="plan.id" class="membership-plan-admin-card spatial-glass-panel" :class="{ inactive: plan.activeFlag === false, sale: plan.seckillEnabled }">
+              <header>
+                <div>
+                  <span class="plan-admin-id" style="background: rgba(14,165,233,0.15); color: #0ea5e9;">{{ plan.id }}</span>
+                  <input v-model.trim="plan.name" class="plan-admin-name" placeholder="加油包名称" />
+                  <input v-model.trim="plan.subtitle" class="plan-admin-subtitle" placeholder="如：适合日常轻量文献阅读" />
+                </div>
+                <label class="plan-admin-switch">
+                  <input v-model="plan.activeFlag" type="checkbox" :disabled="savingMembershipPlanIds.has(plan.id)" @change="toggleMembershipPlanActive(plan)" />
+                  <span>{{ plan.activeFlag === false ? "隐藏" : "上架" }}</span>
+                </label>
+              </header>
+
+              <div class="plan-admin-section">
+                <strong>价格策略 (加油包一次性买断)</strong>
+                <div class="plan-admin-fields three">
+                  <label>售价<input v-model.number="plan.monthlyPrice" type="number" min="0" step="0.01" /></label>
+                  <label>原售价<input v-model.number="plan.originalMonthlyPrice" type="number" min="0" step="0.01" /></label>
+                  <label>排序<input v-model.number="plan.sortOrder" type="number" min="0" step="1" /></label>
+                </div>
+              </div>
+
+              <div class="plan-admin-section">
+                <strong>加油包补充额度 (购买时直接追加，永久有效)</strong>
+                <div class="plan-admin-fields">
+                  <label>补充综述<input v-model.number="plan.reviewQuota" type="number" min="0" /></label>
+                  <label>补充PPT<input v-model.number="plan.pptQuota" type="number" min="0" /></label>
+                  <label>补充AI问答<input v-model.number="plan.chatQuota" type="number" min="0" /></label>
+                  <label>补充对照翻译<input v-model.number="plan.translateQuota" type="number" min="0" /></label>
+                  <label>补充沉浸翻译<input v-model.number="plan.immersiveQuota" type="number" min="0" /></label>
+                  <label>补充调研额度<input v-model.number="plan.researchQuota" type="number" min="0" /></label>
+                  <label>补充汇报额度<input v-model.number="plan.reportQuota" type="number" min="0" /></label>
+                </div>
+              </div>
+
+              <div class="plan-admin-seckill">
+                <div class="seckill-head">
+                  <label><input v-model="plan.seckillEnabled" type="checkbox" /> 开启限时秒杀</label>
+                  <span v-if="plan.seckillActive" class="seckill-live">进行中 · {{ formatAdminCountdown(plan.seckillRemainingSeconds) }}</span>
+                </div>
+                <div class="plan-admin-fields">
+                  <label>秒杀标签<input v-model.trim="plan.seckillLabel" placeholder="限时秒杀" /></label>
+                  <label>秒杀价格<input v-model.number="plan.seckillPrice" type="number" min="0" step="0.01" /></label>
+                  <label>开始时间<input v-model="plan.seckillStartsAt" type="datetime-local" /></label>
+                  <label>结束时间<input v-model="plan.seckillEndsAt" type="datetime-local" /></label>
+                </div>
+              </div>
+
+              <footer>
+                <p>售价 ¥{{ plan.monthlyPrice }} · 综述 +{{ plan.reviewQuota }} · 问答 +{{ plan.chatQuota }} · 对照 +{{ plan.translateQuota }}</p>
+                <div class="plan-admin-footer-actions">
+                  <button
+                    v-if="canDeleteMembershipPlan(plan)"
+                    class="spatial-btn spatial-btn-ghost compact-btn danger-lite"
+                    :disabled="deletingMembershipPlanIds.has(plan.id)"
+                    @click="deleteMembershipPlan(plan)"
+                  >
+                    {{ deletingMembershipPlanIds.has(plan.id) ? "删除中..." : "删除" }}
+                  </button>
+                  <button class="spatial-btn spatial-btn-accent compact-btn" :disabled="savingMembershipPlanIds.has(plan.id)" @click="saveMembershipPlan(plan)">
+                    {{ savingMembershipPlanIds.has(plan.id) ? "保存中..." : "保存设置" }}
                   </button>
                 </div>
               </footer>
@@ -1233,6 +1309,63 @@
           <div class="modal-actions" style="margin-top: 24px;">
             <button class="spatial-btn spatial-btn-ghost" @click="showMembershipModal = false">取消</button>
             <button class="spatial-btn spatial-btn-accent" @click="saveUserMembership">保存会员</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Quota Detail & Replenish Modal -->
+    <Transition name="fade">
+      <div v-if="showQuotaDetailModal" class="admin-modal-overlay" @click="showQuotaDetailModal = false">
+        <div class="admin-modal-card spatial-glass-panel" @click.stop style="width: 480px; max-width: 95vw;">
+          <h4>权益使用详情与额度补给</h4>
+          <p>查看 {{ selectedUserForQuota?.username }} 的各项权益消耗并补充额外额度。</p>
+          <div class="quota-modal-snapshot" style="margin-bottom: 20px;">
+            <div>
+              <span>用户名</span>
+              <strong>{{ selectedUserForQuota?.username }}</strong>
+            </div>
+            <div>
+              <span>当前套餐</span>
+              <strong>{{ membershipPlanName(selectedUserForQuota?.membershipPlan) }}</strong>
+            </div>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto; padding-right: 4px;">
+            <div v-for="item in [
+              { key: 'review', name: 'AI论文综述', used: selectedUserForQuota?.reviewUsed, quota: selectedUserForQuota?.reviewQuota, unit: '次' },
+              { key: 'ppt', name: '组会PPT', used: selectedUserForQuota?.pptUsed, quota: selectedUserForQuota?.pptQuota, unit: '次' },
+              { key: 'chat', name: '研读对话', used: selectedUserForQuota?.chatUsed, quota: selectedUserForQuota?.chatQuota, unit: '次' },
+              { key: 'research', name: '调研广场', used: selectedUserForQuota?.researchUsed, quota: selectedUserForQuota?.researchQuota, unit: '次' },
+              { key: 'report', name: '组会一键汇报', used: selectedUserForQuota?.reportUsed, quota: selectedUserForQuota?.reportQuota, unit: '次' }
+            ]" :key="item.key" style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-weight: 700; font-size: 0.85rem;">{{ item.name }}</span>
+                <span style="font-size: 0.75rem; color: var(--c-muted);">
+                  已用 <strong style="color: var(--c-accent);">{{ item.used || 0 }}</strong> / 总计 <strong>{{ item.quota || 0 }}</strong> {{ item.unit }}
+                </span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input
+                  type="number"
+                  v-model.number="quotaReplenishAmounts[item.key]"
+                  placeholder="+ 数量"
+                  style="width: 76px; padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.25); color: #fff; font-size: 0.8rem; text-align: center;"
+                />
+                <button
+                  class="spatial-btn spatial-btn-accent compact-btn"
+                  style="min-height: 28px; font-size: 0.75rem; padding: 0 10px;"
+                  :disabled="replenishingKeys.has(`${selectedUserForQuota?.id}-${item.key}`)"
+                  @click="replenishQuota(item.key)"
+                >
+                  {{ replenishingKeys.has(`${selectedUserForQuota?.id}-${item.key}`) ? "中..." : "补给" }}
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="modal-actions" style="margin-top: 24px;">
+            <button class="spatial-btn spatial-btn-ghost" @click="showQuotaDetailModal = false" style="width: 100%;">关闭</button>
           </div>
         </div>
       </div>
@@ -2182,6 +2315,8 @@ const totalBenefitQuota = computed(() => totalReviewQuota.value + totalPptQuota.
 const totalBenefitUsed = computed(() => totalReviewUsed.value + totalPptUsed.value + totalChatUsed.value);
 const activeSeckillCount = computed(() => membershipPlans.value.filter((plan) => plan.seckillActive).length);
 const assignableMembershipPlans = computed(() => membershipPlans.value.filter((plan) => plan.id !== "free" && plan.activeFlag !== false));
+const subscriptionPlans = computed(() => membershipPlans.value.filter(plan => !plan.id.startsWith("pack_")));
+const powerPackPlans = computed(() => membershipPlans.value.filter(plan => plan.id.startsWith("pack_")));
 const userPageCount = computed(() => getPageCount(filteredUsers.value.length, userPageSize.value));
 const ticketPageCount = computed(() => getPageCount(paymentTickets.value.length, ticketPageSize.value));
 const orderPageCount = computed(() => getPageCount(paymentOrders.value.length, orderPageSize.value));
@@ -3473,6 +3608,56 @@ function editUserMembership(user) {
   selectedMembershipPlan.value = user.membershipPlan || "free";
   selectedMembershipCycle.value = user.membershipCycle || "monthly";
   showMembershipModal.value = true;
+}
+
+const showQuotaDetailModal = ref(false);
+const selectedUserForQuota = ref(null);
+const quotaReplenishAmounts = ref({
+  review: null,
+  ppt: null,
+  chat: null,
+  research: null,
+  report: null
+});
+const replenishingKeys = ref(new Set());
+
+function openQuotaDetailModal(user) {
+  selectedUserForQuota.value = user;
+  quotaReplenishAmounts.value = {
+    review: null,
+    ppt: null,
+    chat: null,
+    research: null,
+    report: null
+  };
+  showQuotaDetailModal.value = true;
+}
+
+async function replenishQuota(key) {
+  if (!selectedUserForQuota.value) return;
+  const amount = Number(quotaReplenishAmounts.value[key] || 0);
+  if (isNaN(amount) || amount === 0) {
+    dialogStore.alert("请输入有效的补充数（非零整数）");
+    return;
+  }
+  const replenishingId = `${selectedUserForQuota.value.id}-${key}`;
+  replenishingKeys.value.add(replenishingId);
+  try {
+    const updated = await paperpilotApi.replenishUserQuota(selectedUserForQuota.value.id, { key, amount });
+    // Update in list
+    const idx = systemUsers.value.findIndex(u => u.id === selectedUserForQuota.value.id);
+    if (idx >= 0) {
+      systemUsers.value[idx] = { ...systemUsers.value[idx], ...updated };
+    }
+    selectedUserForQuota.value = { ...selectedUserForQuota.value, ...updated };
+    quotaReplenishAmounts.value[key] = null;
+    dialogStore.toast(`成功补充额度 ${amount >= 0 ? "+" : ""}${amount}`);
+  } catch (err) {
+    console.error("Failed to replenish quota:", err);
+    dialogStore.alert(err.response?.data?.message || "额度补给失败");
+  } finally {
+    replenishingKeys.value.delete(replenishingId);
+  }
 }
 
 async function loginAsUser(user) {

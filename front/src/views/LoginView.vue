@@ -490,20 +490,15 @@
                 <p class="oauth-hint">为保障学术交流与数据安全，当前支持通过 QQ 一键安全登录与注册，免密且更安全。</p>
                 <div v-if="errorText" class="auth-err" style="margin-bottom: 20px;">{{ errorText }}</div>
                 
-                <button type="button" class="btn-oauth-premium qq" @click="loginWithQQ">
-                  <svg class="icon-qq-svg" viewBox="0 0 64 64" width="24" height="24" style="margin-right: 10px;">
-                    <ellipse cx="22" cy="54" rx="8" ry="4" fill="#FFAE00" />
-                    <ellipse cx="42" cy="54" rx="8" ry="4" fill="#FFAE00" />
-                    <ellipse cx="32" cy="31" rx="20" ry="22" fill="#1C1F21" />
-                    <ellipse cx="32" cy="19" rx="14" ry="12" fill="#1C1F21" />
-                    <ellipse cx="32" cy="35" rx="15" ry="16" fill="#FFFFFF" />
-                    <ellipse cx="32" cy="19" rx="12" ry="10" fill="#FFFFFF" />
-                    <circle cx="27" cy="18" r="2.5" fill="#1C1F21" />
-                    <circle cx="37" cy="18" r="2.5" fill="#1C1F21" />
-                    <path d="M26,22 C26,22 32,27 38,22 C38,20 26,20 26,22 Z" fill="#FFAE00" />
-                    <path d="M16,30 Q32,36 48,30 C50,35 46,35 44,35 L48,46 L42,46 L40,35 Q32,37 24,35 L20,46 L16,46 Z" fill="#FF3B30" />
+                <button type="button" class="btn-oauth-premium qq" @click="loginWithQQ" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                  <svg class="icon-qq-svg" viewBox="0 0 120 48" width="60" height="24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 4px;">
+                    <!-- Penguin Silhouette -->
+                    <path d="M22 6C14.268 6 8 12.268 8 20c0 3.328 1.155 6.386 3.09 8.814L6.924 35.84C5.972 37.498 7.159 39 9.076 39h25.848c1.917 0 3.104-1.502 2.152-3.16l-4.166-7.026C34.845 26.386 36 23.328 36 20c0-7.732-6.268-14-14-14zm0 24c-5.523 0-10-4.477-10-10s4.477-10 10-10 10 4.477 10 10-4.477 10-10 10z" fill="#12B7F5"/>
+                    <path d="M22 13c-3.866 0-7 3.134-7 7 0 1.298.353 2.513.97 3.559L13.1 28.508c-.42.731.1 1.492.946 1.492h15.908c.847 0 1.367-.761.946-1.492l-2.87-4.949c.617-1.046.97-2.261.97-3.559 0-3.866-3.134-7-7-7z" fill="#12B7F5"/>
+                    <!-- QQ Text -->
+                    <text x="44" y="32" fill="#12B7F5" font-family="system-ui, sans-serif" font-weight="900" font-size="28" letter-spacing="1">QQ</text>
                   </svg>
-                  <span style="font-size: 1.02rem; letter-spacing: 1px;">使用 QQ 安全登录 / 注册</span>
+                  <span style="font-size: 1.02rem; letter-spacing: 1px;">安全登录 / 注册</span>
                 </button>
                 
                 <div style="text-align: center; margin-top: 24px;">

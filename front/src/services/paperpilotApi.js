@@ -478,6 +478,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.get("/api/admin/membership-plans");
     return data;
   },
+  async replenishUserQuota(userId, payload) {
+    const { data } = await apiClient.patch(`/api/admin/users/${userId}/quota-replenish`, payload);
+    return data;
+  },
   async createAdminMembershipPlan(payload) {
     const { data } = await apiClient.post("/api/admin/membership-plans", payload);
     return data;

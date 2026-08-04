@@ -214,7 +214,7 @@
                 <div v-else class="announcement-empty">暂无版本更新公告。</div>
               </section>
 
-              <section v-else-if="activeAnnouncementTab === 'contact'" class="announcement-section">
+              <section v-else class="announcement-section">
                 <article class="announcement-intro">
                   <strong>联系方式申请</strong>
                   <span>别人申请你的联系方式时会出现在这里。同意前需要填写微信或 QQ，系统不会默认暴露邮箱。</span>
@@ -252,30 +252,6 @@
                   </button>
                 </div>
                 <div v-else class="announcement-empty">暂无待处理的联系方式申请。</div>
-              </section>
-
-              <section v-else class="announcement-section">
-                <article class="announcement-intro">
-                  <strong>组内通知</strong>
-                  <span>导师发布任务和任务截止时间提醒会在这里同步。</span>
-                </article>
-                <div v-if="teamNoticeItems.length" class="announcement-card-list">
-                  <router-link
-                    v-for="item in teamNoticeItems"
-                    :key="item.id"
-                    class="announcement-card team-notice-card"
-                    to="/team"
-                    @click="closeAnnouncementCenter"
-                  >
-                    <span class="announcement-card-mark">{{ item.mark }}</span>
-                    <span>
-                      <strong>{{ item.title }}</strong>
-                      <small>{{ item.desc }}</small>
-                      <time>{{ item.time }}</time>
-                    </span>
-                  </router-link>
-                </div>
-                <div v-else class="announcement-empty">暂无组内任务通知。</div>
               </section>
 
               <div v-if="activeAnnouncementTab === 'timeline' && unreadTimelineMessages.length > 1" class="announcement-switcher" aria-label="公告列表">
@@ -642,13 +618,11 @@ const teamNoticeItems = computed(() => {
 const announcementTabs = computed(() => [
   { key: "forum", label: "站内通知", icon: announcementIcons.forum, count: siteNoticeItems.value.length },
   { key: "timeline", label: "时间线", icon: announcementIcons.timeline, count: unreadTimelineMessages.value.length },
-  { key: "team", label: "组内通知", icon: announcementIcons.team, count: urgentTeamNoticeCount.value },
   { key: "contact", label: "联系申请", icon: announcementIcons.contact, count: contactRequestItems.value.length + contactResultNoticeItems.value.length },
 ]);
 
-const urgentTeamNoticeCount = computed(() => teamNoticeItems.value.filter(item => item.mark === "截" || item.mark === "逾").length);
 const unreadTimelineMessages = computed(() => timelineNoticeItems.value.filter(message => !readSiteMessageIds.value.has(siteMessageReadKey(message))));
-const announcementUnreadCount = computed(() => siteNoticeItems.value.length + unreadTimelineMessages.value.length + urgentTeamNoticeCount.value + contactRequestItems.value.length + contactResultNoticeItems.value.length);
+const announcementUnreadCount = computed(() => siteNoticeItems.value.length + unreadTimelineMessages.value.length + contactRequestItems.value.length + contactResultNoticeItems.value.length);
 const showAnnouncementCenter = computed(() => announcementCenterOpen.value || Boolean(activeSiteMessage.value));
 
 const unreadSiteMessages = computed(() => siteMessages.value.filter(
