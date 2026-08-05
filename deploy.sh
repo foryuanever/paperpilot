@@ -55,6 +55,17 @@ else
     echo "  ⚠️ 未找到依赖压缩包目录，跳过"
 fi
 
+# 4.7 同步微信支付证书到服务器 (如果本地存在)
+echo "🔒 正在检查本地微信支付证书并同步到服务器..."
+LOCAL_CERT_DIR="/Users/yuan/cert/1748953326_20260802_cert"
+if [ -d "$LOCAL_CERT_DIR" ]; then
+    ssh -o ControlPath=/tmp/ssh_mux root@106.53.136.108 "mkdir -p /www/wwwroot/papersolver/certs"
+    scp -o ControlPath=/tmp/ssh_mux "$LOCAL_CERT_DIR"/* root@106.53.136.108:/www/wwwroot/papersolver/certs/
+    echo "  ✅ 微信支付证书同步完成"
+else
+    echo "  ⚠️ 本地未找到微信支付证书目录，跳过证书同步"
+fi
+
 # 5. 上传后端 Java 服务 JAR 包
 echo "📤 正在上传后端 Java 程序包..."
 scp -o ControlPath=/tmp/ssh_mux "/Users/yuan/Desktop/Solve Paper/backend/target/paperpilot-server-0.0.1-SNAPSHOT.jar" root@106.53.136.108:/www/wwwroot/
