@@ -34,6 +34,10 @@
               <span class="role-pill" :class="authStore.profile.role === '管理员' ? 'role-admin' : 'role-student'">{{ authStore.profile.role === '管理员' ? '管理员' : '普通用户' }}</span>
             </div>
             <p v-if="!String(authStore.profile.email || '').startsWith('qq_user_')">{{ authStore.profile.email }}</p>
+            <p v-if="authStore.profile.numericId" class="profile-uid-row">
+              <span class="uid-label">专属ID:</span>
+              <strong class="uid-value">{{ authStore.profile.numericId }}</strong>
+            </p>
             <span v-if="authStore.profile.campusVerified && authStore.profile.schoolName" class="school-badge">
               {{ authStore.profile.schoolName }}
             </span>
@@ -767,6 +771,29 @@ async function removePost(post) {
 
 button, input, select, textarea { font: inherit; cursor: pointer; }
 .profile-backdrop { display: none; }
+
+.profile-uid-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--c-muted);
+}
+.uid-label {
+  opacity: 0.85;
+}
+.uid-value {
+  font-weight: 600;
+  color: var(--c-accent);
+  background: rgba(99, 102, 241, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+:root[data-theme="dark"] .uid-value {
+  color: #818cf8;
+  background: rgba(129, 140, 248, 0.15);
+}
 
 /* ── Outer shell ─────────────────────────────────────────── */
 .profile-shell {

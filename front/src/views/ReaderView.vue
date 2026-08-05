@@ -8393,7 +8393,7 @@ onBeforeUnmount(() => {
 
 .paper-chat-panel.futuristic-void-panel form,
 .paper-chat-panel.futuristic-void-panel .void-input-form {
-  width: calc(100% - 64px) !important;
+  width: 100% !important;
   max-width: none !important;
   box-sizing: border-box !important;
   margin-inline: auto !important;

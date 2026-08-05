@@ -400,7 +400,8 @@ public class AuthService {
             user.getQq(),
             user.getWechat(),
             user.getQqOpenid(),
-            regTime
+            regTime,
+            user.getNumericId()
         );
     }
 

@@ -105,6 +105,14 @@ public class TranslateService {
     @Value("${paperpilot.translate.google-api-key:}")
     private String googleApiKey;
 
+    private final Map<String, String> translationCache = java.util.Collections.synchronizedMap(
+        new java.util.LinkedHashMap<String, String>(1000, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+                return size() > 10000;
+            }
+        }
+    );
 
     public TranslateResultVO translate(TranslateRequest request) {
         String provider = normalizeProvider(request.getProvider());
@@ -115,6 +123,11 @@ public class TranslateService {
             throw new IllegalArgumentException("待翻译文本不能为空");
         }
 
+        String cacheKey = provider + "|" + sourceLang + "|" + targetLang + "|" + text;
+        if (translationCache.containsKey(cacheKey)) {
+            return result(provider, sourceLang, targetLang, translationCache.get(cacheKey), false);
+        }
+
         long startTime = System.currentTimeMillis();
         long charCount = text.length();
         Exception firstError = null;
@@ -123,6 +136,7 @@ public class TranslateService {
             String translated = translateWithProvider(provider, text, sourceLang, targetLang);
             long duration = System.currentTimeMillis() - startTime;
             saveRecord(provider, charCount, duration, true);
+            translationCache.put(cacheKey, translated);
             return result(provider, sourceLang, targetLang, translated, false);
         } catch (Exception error) {
             firstError = error;
@@ -135,6 +149,7 @@ public class TranslateService {
             try {
                 String translated = translateWithProvider(fallbackProvider, text, sourceLang, targetLang);
                 saveRecord(fallbackProvider, charCount, System.currentTimeMillis() - fallbackStart, true);
+                translationCache.put(cacheKey, translated);
                 return result(fallbackProvider, sourceLang, targetLang, translated, true);
             } catch (Exception error) {
                 saveRecord(fallbackProvider, charCount, System.currentTimeMillis() - fallbackStart, false);

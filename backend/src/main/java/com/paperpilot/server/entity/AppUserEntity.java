@@ -38,6 +38,9 @@ public class AppUserEntity {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }
+        if (numericId == null) {
+            numericId = 100000 + new java.util.Random().nextInt(900000);
+        }
     }
 
     public Long getId() {
@@ -318,5 +321,19 @@ public class AppUserEntity {
 
     public void setWechat(String wechat) {
         this.wechat = wechat;
+    }
+
+    @Column(name = "numeric_id", unique = true)
+    private Integer numericId;
+
+    public Integer getNumericId() {
+        if (numericId == null && id != null) {
+            numericId = 100000 + Math.abs(id.hashCode() % 900000);
+        }
+        return numericId;
+    }
+
+    public void setNumericId(Integer numericId) {
+        this.numericId = numericId;
     }
 }

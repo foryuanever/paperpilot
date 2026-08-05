@@ -449,10 +449,20 @@ async function refreshForumNavSignal() {
   }
   try {
     const posts = await paperpilotApi.getForumPosts();
-    const latest = [...(posts || [])].sort((a, b) => String(b.time || "").localeCompare(String(a.time || "")))[0];
+    const sortedPosts = [...(posts || [])].sort((a, b) => String(b.time || "").localeCompare(String(a.time || "")));
+    const latest = sortedPosts[0];
     latestForumSignature.value = latest ? `${latest.id}:${latest.time || ""}` : "";
     const seen = localStorage.getItem(forumSeenKey()) || "";
-    forumUnreadCount.value = latestForumSignature.value && latestForumSignature.value !== seen ? 1 : 0;
+    if (!seen) {
+      forumUnreadCount.value = 0;
+    } else {
+      const idx = sortedPosts.findIndex(p => `${p.id}:${p.time || ""}` === seen);
+      if (idx !== -1) {
+        forumUnreadCount.value = idx;
+      } else {
+        forumUnreadCount.value = 0;
+      }
+    }
     if (route.path.startsWith("/forum")) markForumSeen();
   } catch {
     forumUnreadCount.value = 0;
