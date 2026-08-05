@@ -172,7 +172,6 @@ public class AiChatService {
         ModelConfigEntity config = activeSceneConfig(scene);
         List<ModelRoute> routes = new ArrayList<>();
         List<ModelConfigEntity> pool = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(scene).stream()
-            .filter(ModelConfigEntity::isActive)
             .filter(row -> StringUtils.hasText(row.getApiKey()))
             .filter(row -> StringUtils.hasText(row.getModelName()))
             .filter(row -> StringUtils.hasText(row.getBaseUrl()))
@@ -208,7 +207,6 @@ public class AiChatService {
         // --- BACKUP POOL ---
         if (!"backup".equals(scene)) {
             List<ModelConfigEntity> backupPool = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc("backup").stream()
-                .filter(ModelConfigEntity::isActive)
                 .filter(row -> StringUtils.hasText(row.getApiKey()) && StringUtils.hasText(row.getModelName()) && StringUtils.hasText(row.getBaseUrl()))
                 .sorted(this::comparePoolRoute)
                 .toList();
@@ -331,7 +329,6 @@ public class AiChatService {
         }
         // --- BACKUP POOL ---
         List<ModelConfigEntity> backupConfigs = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc("backup").stream()
-            .filter(ModelConfigEntity::isActive)
             .filter(row -> StringUtils.hasText(row.getApiKey()) && StringUtils.hasText(row.getModelName()) && StringUtils.hasText(row.getBaseUrl()))
             .sorted(this::comparePoolRoute)
             .toList();
@@ -416,7 +413,6 @@ public class AiChatService {
         }
         // --- BACKUP POOL ---
         List<ModelConfigEntity> backupConfigs = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc("backup").stream()
-            .filter(ModelConfigEntity::isActive)
             .filter(row -> StringUtils.hasText(row.getApiKey()) && StringUtils.hasText(row.getModelName()) && StringUtils.hasText(row.getBaseUrl()))
             .sorted(this::comparePoolRoute)
             .toList();
