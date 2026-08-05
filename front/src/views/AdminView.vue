@@ -1304,12 +1304,18 @@
           
           <div style="display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto; padding-right: 4px;">
             <div v-for="item in [
-              { key: 'review', name: 'AI论文综述', used: selectedUserForQuota?.reviewUsed, quota: selectedUserForQuota?.reviewQuota, unit: '次' },
-              { key: 'ppt', name: '组会PPT', used: selectedUserForQuota?.pptUsed, quota: selectedUserForQuota?.pptQuota, unit: '次' },
-              { key: 'chat', name: '研读对话', used: selectedUserForQuota?.chatUsed, quota: selectedUserForQuota?.chatQuota, unit: '次' },
-              { key: 'research', name: '调研广场', used: selectedUserForQuota?.researchUsed, quota: selectedUserForQuota?.researchQuota, unit: '次' },
-              { key: 'report', name: '组会一键汇报', used: selectedUserForQuota?.reportUsed, quota: selectedUserForQuota?.reportQuota, unit: '次' }
-            ]" :key="item.key" style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+              { key: 'review', name: 'AI论文综述', used: selectedUserForQuota?.reviewUsed, quota: selectedUserForQuota?.reviewQuota, unit: '次', planKey: 'reviewQuota' },
+              { key: 'ppt', name: '组会PPT', used: selectedUserForQuota?.pptUsed, quota: selectedUserForQuota?.pptQuota, unit: '次', planKey: 'pptQuota' },
+              { key: 'chat', name: '研读对话', used: selectedUserForQuota?.chatUsed, quota: selectedUserForQuota?.chatQuota, unit: '次', planKey: 'chatQuota' },
+              { key: 'research', name: '调研广场', used: selectedUserForQuota?.researchUsed, quota: selectedUserForQuota?.researchQuota, unit: '次', planKey: 'researchQuota' },
+              { key: 'report', name: '组会一键汇报', used: selectedUserForQuota?.reportUsed, quota: selectedUserForQuota?.reportQuota, unit: '次', planKey: 'reportQuota' }
+            ].filter(i => {
+              if (Number(i.quota || 0) > 0) return true; // Show if they already have non-zero quota
+              const planId = selectedUserForQuota?.membershipPlan || 'free';
+              const plan = membershipPlans.find(p => p.id === planId);
+              if (!plan) return i.key !== 'ppt'; // Default Free does not show PPT
+              return Number(plan[i.planKey] || 0) > 0;
+            })" :key="item.key" style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
               <div style="display: flex; flex-direction: column; gap: 2px;">
                 <span style="font-weight: 700; font-size: 0.85rem;">{{ item.name }}</span>
                 <span style="font-size: 0.75rem; color: var(--c-muted);">
@@ -6358,27 +6364,18 @@ function formatTokenCount(num) {
 
 .quota-modal-snapshot > div {
   padding: 14px 16px;
-  border: 1px solid rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
-  background: #f8fbff;
-}
-
-.quota-modal-snapshot strong {
-  color: #0f172a;
-  font-size: 1.05rem;
-}
-
-:global(html[data-theme="dark"]) .quota-modal-snapshot > div {
   background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
 }
 
-:global(html[data-theme="dark"]) .quota-modal-snapshot span {
+.quota-modal-snapshot span {
   color: var(--c-muted);
 }
 
-:global(html[data-theme="dark"]) .quota-modal-snapshot strong {
+.quota-modal-snapshot strong {
   color: #e2e8f0;
+  font-size: 1.05rem;
 }
 /* AI usage ledger styles are now isolated in AdminAiUsagePanel.vue */
 

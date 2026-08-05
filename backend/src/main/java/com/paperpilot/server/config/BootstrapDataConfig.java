@@ -308,8 +308,12 @@ public class BootstrapDataConfig {
         // Only seed data for brand-new accounts to avoid resetting admin passwords on every restart.
         if (existingOpt.isPresent()) {
             AppUserEntity existing = existingOpt.get();
-            if (existing.getCreatedAt() == null || existing.getCreatedAt().getYear() < 2026 || (existing.getCreatedAt().getYear() == 2026 && existing.getCreatedAt().getMonthValue() == 1)) {
-                existing.setCreatedAt(LocalDateTime.now());
+            // If quotas are all 0, initialize them to default Free quotas
+            if (existing.getReviewQuota() == 0 && existing.getPptQuota() == 0 && existing.getChatQuota() == 0) {
+                existing.setReviewQuota(90);
+                existing.setChatQuota(150);
+                existing.setResearchQuota(90);
+                existing.setReportQuota(1);
                 appUserRepository.save(existing);
             }
             return;
@@ -325,6 +329,14 @@ public class BootstrapDataConfig {
         user.setActiveTime(activeTime);
         user.setTokenLimit(tokenLimit);
         user.setTokenUsed(tokenUsed);
+        
+        // Initialize default Free quotas
+        user.setReviewQuota(90);
+        user.setPptQuota(0);
+        user.setChatQuota(150);
+        user.setResearchQuota(90);
+        user.setReportQuota(1);
+        
         appUserRepository.save(user);
     }
 

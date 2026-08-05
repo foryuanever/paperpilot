@@ -115,6 +115,14 @@ public class AuthService {
         user.setPasswordHash(hash(request.getPassword()));
         user.setPlainPassword(request.getPassword());
         user.setLastIp(ipAddress);
+        
+        // Initialize default Free quotas
+        user.setReviewQuota(90);
+        user.setPptQuota(0);
+        user.setChatQuota(150);
+        user.setResearchQuota(90);
+        user.setReportQuota(1);
+        
         AppUserEntity saved = appUserRepository.save(user);
         consumeVerificationCode(email, "REGISTER");
 

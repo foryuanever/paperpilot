@@ -331,12 +331,40 @@ public class MembershipService {
             } else {
                 MembershipPlanEntity existing = existingOpt.get();
                 boolean changed = false;
+                if (!item.getName().equals(existing.getName())) {
+                    existing.setName(item.getName());
+                    changed = true;
+                }
+                if (existing.getSubtitle() == null || !existing.getSubtitle().equals(item.getSubtitle())) {
+                    existing.setSubtitle(item.getSubtitle());
+                    changed = true;
+                }
+                if (existing.getMonthlyPrice() == null || !existing.getMonthlyPrice().equals(item.getMonthlyPrice())) {
+                    existing.setMonthlyPrice(item.getMonthlyPrice());
+                    changed = true;
+                }
+                if (existing.getReviewQuota() == null || existing.getReviewQuota() == 0) {
+                    existing.setReviewQuota(item.getReviewQuota());
+                    changed = true;
+                }
+                if (existing.getPptQuota() == null || existing.getPptQuota() == 0) {
+                    existing.setPptQuota(item.getPptQuota());
+                    changed = true;
+                }
+                if (existing.getChatQuota() == null || existing.getChatQuota() == 0) {
+                    existing.setChatQuota(item.getChatQuota());
+                    changed = true;
+                }
                 if (existing.getResearchQuota() == null || existing.getResearchQuota() == 0) {
                     existing.setResearchQuota(item.getResearchQuota());
                     changed = true;
                 }
                 if (existing.getReportQuota() == null || existing.getReportQuota() == 0) {
                     existing.setReportQuota(item.getReportQuota());
+                    changed = true;
+                }
+                if (existing.getActiveFlag() == null || !existing.getActiveFlag()) {
+                    existing.setActiveFlag(true);
                     changed = true;
                 }
                 if (changed) {
