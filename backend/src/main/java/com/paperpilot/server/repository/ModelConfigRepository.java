@@ -20,6 +20,8 @@ public interface ModelConfigRepository extends JpaRepository<ModelConfigEntity, 
 
     List<ModelConfigEntity> findAllByOrderByActiveDescUpdatedAtDesc();
 
+    List<ModelConfigEntity> findAllByActiveTrueOrderByUpdatedAtDesc();
+
     List<ModelConfigEntity> findAllBySceneOrderByActiveDescUpdatedAtDesc(String scene);
 
     List<ModelConfigEntity> findByActiveFalse();

@@ -101,8 +101,8 @@ public class AiChatService {
     public ChatResult chatJson(String systemPrompt, String userPrompt, int maxOutputTokens) throws Exception {
         String scene = inferModelConfigScene(systemPrompt, userPrompt);
         ModelConfigEntity config = activeSceneConfig(scene);
-        if (config == null && shouldUseConfiguredPoolOnly(scene)) {
-            throw new IllegalStateException("当前入口未配置可用模型，请联系管理员配置。");
+        if (config == null) {
+            config = modelConfigRepository.findAllByActiveTrueOrderByUpdatedAtDesc().stream().findFirst().orElse(null);
         }
         return send(
             config == null ? "https://api.openai.com/v1" : config.getBaseUrl(),
@@ -181,6 +181,12 @@ public class AiChatService {
         if (pool.isEmpty() && config != null && config.isActive()) {
             pool = List.of(config);
         }
+        if (pool.isEmpty()) {
+            pool = modelConfigRepository.findAllByActiveTrueOrderByUpdatedAtDesc().stream()
+                .filter(row -> StringUtils.hasText(row.getApiKey()) && StringUtils.hasText(row.getModelName()) && StringUtils.hasText(row.getBaseUrl()))
+                .sorted(this::comparePoolRoute)
+                .toList();
+        }
         int routeCount = 0;
         for (ModelConfigEntity row : pool) {
             if (!StringUtils.hasText(row.getApiKey()) || !StringUtils.hasText(row.getModelName()) || !StringUtils.hasText(row.getBaseUrl())) continue;
@@ -220,11 +226,8 @@ public class AiChatService {
                 ));
             }
         }
-        if (routes.isEmpty() && config == null && !shouldUseConfiguredPoolOnly(scene)) {
-            routes.add(new ModelRoute("https://api.openai.com/v1", "", "gpt-4.1-mini", "openai_chat", "bearer", false, ""));
-        }
         if (routes.isEmpty()) {
-            throw new IllegalStateException("当前入口未配置可用模型，请联系管理员配置。");
+            routes.add(new ModelRoute("https://api.openai.com/v1", "", "gpt-4.1-mini", "openai_chat", "bearer", false, ""));
         }
         String lastError = "没有可用模型";
         LinkedHashSet<String> attempted = new LinkedHashSet<>();
@@ -1345,8 +1348,10 @@ public class AiChatService {
 
     private ModelConfigEntity activeSceneConfig(String scene) {
         ModelConfigEntity config = modelConfigRepository.findFirstBySceneAndActiveTrueOrderByUpdatedAtDesc(scene).orElse(null);
-        if (shouldUseConfiguredPoolOnly(scene)) return config;
-        return config == null ? activeGeneralConfig() : config;
+        if (config != null) return config;
+        ModelConfigEntity general = activeGeneralConfig();
+        if (general != null) return general;
+        return modelConfigRepository.findAllByActiveTrueOrderByUpdatedAtDesc().stream().findFirst().orElse(null);
     }
 
     private String normalizeFormat(String value) {
