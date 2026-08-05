@@ -2338,23 +2338,28 @@ onUnmounted(() => {
 .btn-oauth-premium:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(18, 142, 237, 0.4); filter: brightness(1.08); }
 .btn-oauth-premium:active { transform: translateY(1px); box-shadow: 0 2px 10px rgba(18, 142, 237, 0.2); }
 .btn-oauth-premium.qq {
-  background: rgba(18, 142, 237, 0.12) !important;
-  border: 1px solid rgba(18, 142, 237, 0.35) !important;
-  color: #7ad0ff !important;
-  box-shadow: 0 4px 15px rgba(18, 142, 237, 0.15) !important;
-  transition: all 0.2s ease;
-  padding: 12px;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+  backdrop-filter: blur(8px);
+  transition: all 0.22s ease;
+  padding: 13px;
+  border-radius: 10px;
+  letter-spacing: 0.5px;
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 .btn-oauth-premium.qq:hover {
-  background: rgba(18, 142, 237, 0.22) !important;
-  border: 1px solid rgba(18, 142, 237, 0.5) !important;
-  color: #a3e0ff !important;
-  box-shadow: 0 6px 20px rgba(18, 142, 237, 0.3) !important;
+  background: rgba(255, 255, 255, 0.10) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.12) !important;
   transform: translateY(-1px);
 }
 .btn-oauth-premium.qq:active {
-  transform: translateY(1px);
+  transform: translateY(0px);
+  background: rgba(255, 255, 255, 0.07) !important;
 }
 .icon-qq-svg { color: #ffffff; }
 .oauth-footer-agreement { font-size: 0.72rem; color: #52525b; text-align: center; margin-top: 18px; }
