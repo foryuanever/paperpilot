@@ -28,8 +28,8 @@ echo "⚙️ 正在配置服务器 Nginx 站点规则..."
 scp -o ControlPath=/tmp/ssh_mux "/Users/yuan/.gemini/antigravity/brain/368b68e2-c2cb-490b-bcef-66f576fed54e/scratch/papersolver.conf" root@106.53.136.108:/www/server/panel/vhost/nginx/
 ssh -o ControlPath=/tmp/ssh_mux root@106.53.136.108 "nginx -s reload || /etc/init.d/nginx reload"
 
-# 4.5 上传桌面端安装包
-echo "💾 正在上传桌面客户端安装包..."
+# 4.5 上传桌面端安装包与本地依赖引导程序
+echo "💾 正在上传桌面客户端安装包与依赖引导程序..."
 DMG_FILE=$(ls /Users/yuan/Desktop/PaperSolverReleases/*.dmg 2>/dev/null | head -1)
 EXE_FILE=$(ls /Users/yuan/Desktop/PaperSolverReleases/*.exe 2>/dev/null | head -1)
 if [ -n "$DMG_FILE" ]; then
@@ -43,6 +43,16 @@ if [ -n "$EXE_FILE" ]; then
     echo "  ✅ Windows EXE 上传完成"
 else
     echo "  ⚠️  未找到 EXE 文件，跳过"
+fi
+
+# 创建依赖存放目录并上传 zip 依赖包
+ssh -o ControlPath=/tmp/ssh_mux root@106.53.136.108 "mkdir -p /www/wwwroot/papersolver/downloads/dependencies"
+if [ -d "/Users/yuan/Desktop/Solve Paper/desktop/release/dependencies" ]; then
+    echo "📤 正在上传依赖引导程序到服务器..."
+    scp -o ControlPath=/tmp/ssh_mux "/Users/yuan/Desktop/Solve Paper/desktop/release/dependencies/"*.zip root@106.53.136.108:/www/wwwroot/papersolver/downloads/dependencies/
+    echo "  ✅ 依赖引导程序（Zip）上传完成"
+else
+    echo "  ⚠️ 未找到依赖压缩包目录，跳过"
 fi
 
 # 5. 上传后端 Java 服务 JAR 包
