@@ -1216,7 +1216,12 @@ async function startLocalDependencyServices({ waitForReady = false } = {}) {
       env: {
         ...process.env,
         PAPER_SOLVER_PDFMATH_BASE: baseUrl,
-        PAPER_SOLVER_PORT: String(new URL(baseUrl).port || 11008)
+        PAPER_SOLVER_PORT: String(new URL(baseUrl).port || 11008),
+        OMP_NUM_THREADS: "2",
+        MKL_NUM_THREADS: "2",
+        OPENBLAS_NUM_THREADS: "2",
+        VECLIB_MAXIMUM_THREADS: "2",
+        NUMEXPR_NUM_THREADS: "2"
       }
     });
     child.unref();
@@ -1741,7 +1746,12 @@ function runDesktopStructuredParser(parserBinary, inputPath, outputDir, logPath)
     const child = spawn(parserBinary, args, {
       env: {
         ...process.env,
-        MINERU_MODEL_SOURCE: process.env.PAPER_SOLVER_MODEL_SOURCE || "modelscope"
+        MINERU_MODEL_SOURCE: process.env.PAPER_SOLVER_MODEL_SOURCE || "modelscope",
+        OMP_NUM_THREADS: "2",
+        MKL_NUM_THREADS: "2",
+        OPENBLAS_NUM_THREADS: "2",
+        VECLIB_MAXIMUM_THREADS: "2",
+        NUMEXPR_NUM_THREADS: "2"
       },
       stdio: ["ignore", "pipe", "pipe"]
     });
