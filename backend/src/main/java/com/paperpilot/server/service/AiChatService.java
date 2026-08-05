@@ -102,7 +102,7 @@ public class AiChatService {
         String scene = inferModelConfigScene(systemPrompt, userPrompt);
         ModelConfigEntity config = activeSceneConfig(scene);
         if (config == null && shouldUseConfiguredPoolOnly(scene)) {
-            throw new IllegalStateException("当前入口未配置可用模型，请在管理员 AI 路由中为 " + scene + " 配置第三方 OpenAI 兼容中转。");
+            throw new IllegalStateException("当前入口未配置可用模型，请联系管理员配置。");
         }
         return send(
             config == null ? "https://api.openai.com/v1" : config.getBaseUrl(),
@@ -224,7 +224,7 @@ public class AiChatService {
             routes.add(new ModelRoute("https://api.openai.com/v1", "", "gpt-4.1-mini", "openai_chat", "bearer", false, ""));
         }
         if (routes.isEmpty()) {
-            throw new IllegalStateException("当前入口未配置可用模型，请在管理员 AI 路由中为 " + scene + " 配置第三方 OpenAI 兼容中转。");
+            throw new IllegalStateException("当前入口未配置可用模型，请联系管理员配置。");
         }
         String lastError = "没有可用模型";
         LinkedHashSet<String> attempted = new LinkedHashSet<>();

@@ -923,9 +923,9 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
 
     // --- Phase 1: Download & Extract base zip framework (0% - 15%) ---
     if (bundledArchive) {
-      emit({ stage: "prepare", progress: 5, message: "正在载入计算环境资源..." });
+      emit({ stage: "prepare", progress: 5, message: "正在准备环境..." });
     } else {
-      emit({ stage: "download", progress: 2, message: "正在连接核心服务..." });
+      emit({ stage: "download", progress: 2, message: "正在连接下载源..." });
       await downloadFileToPath(url, archivePath, (progress) => {
         emit({
           stage: "download",
@@ -935,13 +935,13 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
       }, "依赖包");
     }
     
-    emit({ stage: "verify", progress: 13, message: "正在校验核心文件..." });
+    emit({ stage: "verify", progress: 13, message: "正在校验安装包..." });
     const stat = await fs.promises.stat(archivePath);
     if (!stat.size || stat.size < 1024 * 10) {
       throw new Error("依赖包引导环境下载不完整，请稍后重试。");
     }
     
-    emit({ stage: "extract", progress: 15, message: "正在部署系统目录..." });
+    emit({ stage: "extract", progress: 15, message: "正在释放安装文件..." });
     if (force) {
       await fs.promises.rm(installDir, { recursive: true, force: true });
     }
@@ -956,14 +956,14 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
     const pythonBin = path.join(venvDir, isWin ? "Scripts" : "bin", isWin ? "python.exe" : "python");
     
     // --- Phase 2: Setup Python & Install pip dependencies (15% - 50%) ---
-    emit({ stage: "python-env", progress: 18, message: "正在自检本地运行环境..." });
+    emit({ stage: "python-env", progress: 18, message: "正在自检运行环境..." });
     
     const settings = readDesktopSettings();
     const liteMode = settings.localDependencyLiteMode;
 
     // Check if python venv exists, if not, create it
     if (!fs.existsSync(pythonBin)) {
-      emit({ stage: "python-env", progress: 20, message: "正在构建本地隔离沙箱..." });
+      emit({ stage: "python-env", progress: 20, message: "正在构建本地沙箱环境..." });
       await runSpawnCommand(uvBin, ["python", "install", "3.12"], { cwd: installDir });
       await runSpawnCommand(uvBin, ["venv", "--python", "3.12", ".runtime-venv"], { cwd: installDir });
     }
@@ -975,9 +975,9 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
     if (liteMode) {
       // In liteMode, we only install PDF translation requirements (no PyTorch, no MinerU)
       if (force || !fs.existsSync(pdfReadyMarker)) {
-        emit({ stage: "python-env", progress: 25, message: "正在载入系统组件..." });
+        emit({ stage: "python-env", progress: 25, message: "正在配置必要组件..." });
         if (process.platform === "win32") {
-          emit({ stage: "python-env", progress: 27, message: "正在优化极简计算引擎..." });
+          emit({ stage: "python-env", progress: 27, message: "正在部署系统组件..." });
           await runSpawnCommand(
             uvBin,
             ["pip", "install", "--python", pythonBin, "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cpu"],
@@ -990,7 +990,7 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
           { cwd: installDir },
           (log) => {
             if (log.includes("Downloading") || log.includes("Installing")) {
-              emit({ stage: "python-env", progress: 35, message: "正在部署系统组件..." });
+              emit({ stage: "python-env", progress: 35, message: "正在下载依赖包..." });
             }
           }
         );
@@ -1002,11 +1002,11 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
       await fs.promises.rm(mineruBin, { force: true }).catch(() => {});
       await fs.promises.rm(mineruCmd, { force: true }).catch(() => {});
       
-      emit({ stage: "python-env", progress: 50, message: "已部署极简运行环境" });
+      emit({ stage: "python-env", progress: 50, message: "配置必要组件已完成" });
     } else {
       // In full mode, we install both PDF and Structured requirements (requires PyTorch & MinerU)
       if (force || !fs.existsSync(pdfReadyMarker) || !fs.existsSync(structuredReadyMarker)) {
-        emit({ stage: "python-env", progress: 25, message: "正在载入核心算法组件..." });
+        emit({ stage: "python-env", progress: 25, message: "正在加载核心组件..." });
         
         // Install PDF service requirements
         await runSpawnCommand(
@@ -1015,13 +1015,13 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
           { cwd: installDir },
           (log) => {
             if (log.includes("Downloading") || log.includes("Installing")) {
-              emit({ stage: "python-env", progress: 28, message: "正在部署核心算法组件..." });
+              emit({ stage: "python-env", progress: 28, message: "正在部署配置依赖..." });
             }
           }
         );
         
         if (process.platform === "win32") {
-          emit({ stage: "python-env", progress: 39, message: "正在优化系统计算引擎..." });
+          emit({ stage: "python-env", progress: 39, message: "正在部署辅助计算库..." });
           await runSpawnCommand(
             uvBin,
             ["pip", "install", "--python", pythonBin, "torch", "torchvision", "--index-url", "https://download.pytorch.org/whl/cpu"],
@@ -1029,7 +1029,7 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
           );
         }
 
-        emit({ stage: "python-env", progress: 41, message: "正在加载图像与解析组件..." });
+        emit({ stage: "python-env", progress: 41, message: "正在进行系统优化配置..." });
         
         // Install Structured parser requirements
         await runSpawnCommand(
@@ -1038,17 +1038,17 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
           { cwd: installDir },
           (log) => {
             if (log.includes("Downloading") || log.includes("Installing")) {
-              emit({ stage: "python-env", progress: 42, message: "正在部署图像与解析组件..." });
+              emit({ stage: "python-env", progress: 42, message: "正在释放依赖包文件..." });
             }
           }
         );
       }
-      emit({ stage: "python-env", progress: 50, message: "已部署完整运行环境" });
+      emit({ stage: "python-env", progress: 50, message: "配置核心组件已完成" });
     }
 
     // --- Phase 3: Pre-download AI Layout & Translation Models (50% - 90%) ---
     if (!liteMode) {
-      emit({ stage: "models", progress: 50, message: "正在配置大模型运行环境..." });
+      emit({ stage: "models", progress: 50, message: "正在准备下载离线大模型..." });
       
       // Check downloaded models folder size to monitor progress
       const modelscopeCacheDir = path.join(os.homedir(), ".cache", "modelscope", "hub", "models", "OpenDataLab", "PDF-Extract-Kit-1___0");
@@ -1062,7 +1062,7 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
         emit({
           stage: "models",
           progress: Math.max(52, Math.min(88, Math.round(50 + percentage * 0.38))),
-          message: `正在载入离线算法模型 ${percentage}%`
+          message: `正在下载离线大模型 ${percentage}%`
         });
       }, 2000);
 
@@ -1074,17 +1074,17 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
         clearInterval(progressTimer);
       }
     } else {
-      emit({ stage: "models", progress: 85, message: "极简模式跳过大模型配置。" });
+      emit({ stage: "models", progress: 85, message: "正在进行最后的系统配置..." });
     }
 
     // --- Phase 4: Write ready markers & Start local services (90% - 100%) ---
-    emit({ stage: "start", progress: 90, message: "正在进行最后的系统配置优化..." });
+    emit({ stage: "start", progress: 90, message: "正在完成系统最后配置..." });
     await fs.promises.writeFile(pdfReadyMarker, new Date().toISOString());
     if (!liteMode) {
       await fs.promises.writeFile(structuredReadyMarker, new Date().toISOString());
     }
     
-    emit({ stage: "start", progress: 94, message: "正在启动本机翻译与解析进程服务..." });
+    emit({ stage: "start", progress: 94, message: "正在激活系统本地进程..." });
     await startLocalDependencyServices({ waitForReady: true });
     
     const status = await getLocalDependencyStatus();
@@ -1092,7 +1092,7 @@ async function downloadAndInstallLocalDependency(webContents, options = {}) {
       throw new Error(status.message || "依赖已安装，但服务启动失败。");
     }
     
-    emit({ stage: "done", progress: 100, message: "本机依赖服务已全部安装并正常运行！" });
+    emit({ stage: "done", progress: 100, message: "本机依赖服务已激活！" });
     return { ok: true, ...status };
     
   } catch (error) {
