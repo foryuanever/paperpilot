@@ -137,16 +137,59 @@ public class PaymentController {
         this.membershipService = membershipService;
     }
 
+    @GetMapping("/plans")
+    public List<Map<String, Object>> getPublicPlans() {
+        return membershipService.catalog();
+    }
+
     @GetMapping("/orders")
     public Map<String, Object> listOrders() {
         Long userId = currentUserService.getOrCreateDefaultUserId();
+        List<PaymentOrderEntity> orders = orderRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId);
+        for (PaymentOrderEntity order : orders) {
+            if ("pending_payment".equals(order.getStatus()) || "created".equals(order.getStatus())) {
+                checkAndSyncWechatOrder(order);
+            }
+        }
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("orders", orderRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId).stream().map(this::orderToMap).toList());
+        result.put("orders", orders.stream().map(this::orderToMap).toList());
         result.put("tickets", ticketRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId).stream()
             .filter(this::isUsableTicket)
             .map(this::ticketToMap)
             .toList());
         return result;
+    }
+
+    private void checkAndSyncWechatOrder(PaymentOrderEntity order) {
+        if (!"pending_payment".equals(order.getStatus()) && !"created".equals(order.getStatus())) {
+            return;
+        }
+        if (!wechatConfigured(false)) {
+            return;
+        }
+        try {
+            String path = "/v3/pay/transactions/out-trade-no/" + order.getOrderNo() + "?mchid=" + wechatMchId.trim();
+            URI uri = URI.create("https://api.mch.weixin.qq.com" + path);
+            HttpRequest request = HttpRequest.newBuilder(uri)
+                .header("Accept", "application/json")
+                .header("Authorization", wechatAuthorization("GET", path, ""))
+                .GET()
+                .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                JsonNode json = objectMapper.readTree(response.body());
+                String tradeState = json.path("trade_state").asText("");
+                if ("SUCCESS".equalsIgnoreCase(tradeState)) {
+                    String transactionId = json.path("transaction_id").asText("");
+                    int paidCents = json.path("amount").path("payer_total").asInt(json.path("amount").path("total").asInt(0));
+                    if (sameWechatAmount(order.getAmount(), paidCents)) {
+                        activatePaidOrder(order, transactionId);
+                        order.setNotifyPayload(truncate(response.body(), 1800));
+                        orderRepository.save(order);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     @PostMapping("/orders")

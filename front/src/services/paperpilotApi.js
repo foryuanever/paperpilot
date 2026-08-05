@@ -857,6 +857,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.get("/api/payments/orders");
     return data;
   },
+  async getPublicMembershipPlans() {
+    const { data } = await apiClient.get("/api/payments/plans");
+    return data;
+  },
   async createPaymentTicket(payload) {
     const { data } = await apiClient.post("/api/payments/tickets", payload);
     return data;

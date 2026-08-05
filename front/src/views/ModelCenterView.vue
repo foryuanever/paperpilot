@@ -459,12 +459,12 @@ const defaultPlans = [
   { id: "pack_tier_pro", name: "学术至尊加油包", subtitle: "终极文献分析汇报", monthlyPrice: 99.9, reviewQuota: 80, pptQuota: 5, chatQuota: 600, translateQuota: 40, immersiveQuota: 40, researchQuota: 60, reportQuota: 5, teamShared: false },
 ];
 
-const plans = computed(() => usageStore.state.plans || []);
+const fetchedPlans = ref([]);
 const planOrder = ["free", "lite", "plus", "pro", "team_plus", "team_pro", "pack_tier_lite", "pack_tier_standard", "pack_tier_plus", "pack_tier_pro"];
 const displayPlans = computed(() => {
   const byId = new Map(defaultPlans.map((plan) => [plan.id, plan]));
-  (plans.value || []).forEach((plan) => {
-    const id = normalizePlanId(plan.id);
+  (fetchedPlans.value || []).forEach((plan) => {
+    const id = plan.id && plan.id.startsWith("pack_") ? plan.id : normalizePlanId(plan.id);
     byId.set(id, { ...(byId.get(id) || {}), ...plan, id });
   });
   return Array.from(byId.values())
@@ -599,6 +599,11 @@ async function load() {
   loading.value = true;
   try {
     await usageStore.fetchSummary();
+    try {
+      fetchedPlans.value = await paperpilotApi.getPublicMembershipPlans();
+    } catch (e) {
+      console.warn("fetch public membership plans failed", e);
+    }
     if (!selectedPlan.value.startsWith("pack_")) {
       selectedPlan.value = normalizePlanId(selectedPlan.value);
       if (!displayPlans.value.some((item) => item.id === selectedPlan.value)) {

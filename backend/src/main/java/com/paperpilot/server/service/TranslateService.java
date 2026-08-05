@@ -269,7 +269,7 @@ public class TranslateService {
             String url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl="
                 + sl + "&tl=" + tl + "&dt=t&q=" + encoded;
             HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(20))
+                .timeout(Duration.ofSeconds(3))
                 .GET()
                 .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -432,25 +432,34 @@ public class TranslateService {
         List<String> chunks = splitText(text);
         StringBuilder builder = new StringBuilder();
         for (String chunk : chunks) {
-            String url = "https://dict.youdao.com/jsonapi_s?doctype=json&jsonversion=4&q="
+            String url = "https://fanyi.youdao.com/translate?doctype=json&type=AUTO&i="
                 + URLEncoder.encode(chunk, StandardCharsets.UTF_8);
             HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(20))
+                .timeout(Duration.ofSeconds(8))
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 .header("Accept", "application/json,text/plain,*/*")
                 .GET()
                 .build();
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() >= 400) {
                 throw new IllegalStateException("HTTP " + response.statusCode());
             }
             JsonNode root = objectMapper.readTree(response.body());
-            String translated = root.path("fanyi").path("tran").asText("");
-            if (!StringUtils.hasText(translated)) {
-                translated = firstJsonText(root, "tran", "translation", "translatedText", "value");
-            }
-            if (StringUtils.hasText(translated)) {
-                if (!builder.isEmpty()) builder.append("\n\n");
-                builder.append(translated.trim());
+            JsonNode resultArr = root.path("translateResult");
+            if (resultArr.isArray() && !resultArr.isEmpty()) {
+                StringBuilder chunkBuilder = new StringBuilder();
+                for (JsonNode line : resultArr) {
+                    if (line.isArray()) {
+                        for (JsonNode seg : line) {
+                            chunkBuilder.append(seg.path("tgt").asText(""));
+                        }
+                    }
+                }
+                String translated = chunkBuilder.toString().trim();
+                if (StringUtils.hasText(translated)) {
+                    if (!builder.isEmpty()) builder.append("\n\n");
+                    builder.append(translated);
+                }
             }
         }
         if (builder.isEmpty()) {
