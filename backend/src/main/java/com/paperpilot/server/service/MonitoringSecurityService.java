@@ -152,6 +152,7 @@ public class MonitoringSecurityService {
         if (ipAddress != null) {
             long ipCount = requestHistory.stream()
                 .filter(log -> ipAddress.equals(log.ipAddress) && log.timestamp >= oneMinuteAgo)
+                .filter(log -> log.url == null || (!log.url.contains("/api/translate") && !log.url.contains("/api/pdfmathtranslate")))
                 .count();
             if (ipCount > limitIpCount) { // Configured limit
                 logSecurityAlert("IP_ABUSE", ipAddress, "IP请求速率过高: " + ipCount + "次/分钟，系统已拦截其高频动作。");
