@@ -222,9 +222,8 @@ public class AdminController {
                 Map<String, Object> map = new java.util.LinkedHashMap<>();
                 map.put("id", user.getId());
                 map.put("username", user.getUsername());
-                map.put("email", user.getEmail());
+                map.put("numericId", user.getNumericId());
                 map.put("role", user.getRole());
-                map.put("plainPassword", user.getPlainPassword());
                 map.put("tokenLimit", user.getTokenLimit());
                 map.put("tokenUsed", user.getTokenUsed());
                 map.put("balanceAmount", user.getBalanceAmount());

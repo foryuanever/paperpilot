@@ -135,10 +135,9 @@
               <thead>
                 <tr>
                   <th>用户名称</th>
-                  <th>电子邮箱</th>
+                  <th>唯一 ID</th>
                   <th>IP 地址</th>
                   <th>当前角色</th>
-                  <th>明文密码</th>
                   <th>会员套餐</th>
                   <th>周期 / 到期</th>
                   <th>权益使用</th>
@@ -147,7 +146,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="user in paginatedUsers" :key="user.email">
+                <tr v-for="user in paginatedUsers" :key="user.id">
                   <td>
                     <div class="user-name-cell">
                       <span class="user-avatar" :data-user-id="user.id" :data-user-email="user.email" title="查看个人卡片" :style="{ backgroundColor: getAvatarColor(user.role) }">
@@ -174,17 +173,14 @@
                       </strong>
                     </div>
                   </td>
-                  <td>{{ user.email }}</td>
+                  <td>
+                    <code class="model-code-id" style="font-weight: 700; color: var(--c-accent);">{{ user.numericId || '—' }}</code>
+                  </td>
                   <td>{{ user.ip || '—' }}</td>
                   <td>
                     <span class="role-badge" :class="getRoleClass(user.role)">
                       {{ user.role }}
                     </span>
-                  </td>
-                  <td>
-                    <code class="user-password-code">
-                      {{ user.password }}
-                    </code>
                   </td>
                   <td style="min-width: 100px;">
                     <span class="membership-plan-pill" :class="membershipPlanClass(user.membershipPlan)">
@@ -1309,13 +1305,7 @@
               { key: 'chat', name: '研读对话', used: selectedUserForQuota?.chatUsed, quota: selectedUserForQuota?.chatQuota, unit: '次', planKey: 'chatQuota' },
               { key: 'research', name: '调研广场', used: selectedUserForQuota?.researchUsed, quota: selectedUserForQuota?.researchQuota, unit: '次', planKey: 'researchQuota' },
               { key: 'report', name: '组会一键汇报', used: selectedUserForQuota?.reportUsed, quota: selectedUserForQuota?.reportQuota, unit: '次', planKey: 'reportQuota' }
-            ].filter(i => {
-              if (Number(i.quota || 0) > 0) return true; // Show if they already have non-zero quota
-              const planId = selectedUserForQuota?.membershipPlan || 'free';
-              const plan = membershipPlans.find(p => p.id === planId);
-              if (!plan) return i.key !== 'ppt'; // Default Free does not show PPT
-              return Number(plan[i.planKey] || 0) > 0;
-            })" :key="item.key" style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+            ]" :key="item.key" style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
               <div style="display: flex; flex-direction: column; gap: 2px;">
                 <span style="font-weight: 700; font-size: 0.85rem;">{{ item.name }}</span>
                 <span style="font-size: 0.75rem; color: var(--c-muted);">
@@ -2539,10 +2529,9 @@ async function fetchAllData() {
     systemUsers.value = usersData.map(u => ({
       id: u.id,
       username: u.username || "—",
-      email: u.email,
+      numericId: u.numericId || "—",
       ip: u.lastIp || "—",
       role: u.role || "普通用户",
-      password: u.plainPassword || "—",
       tokenLimit: u.tokenLimit || 5000000,
       tokenUsed: u.tokenUsed || 0,
       balanceAmount: u.balanceAmount || 0,

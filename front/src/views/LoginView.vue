@@ -49,19 +49,44 @@
         </p>
 
         <!-- CTAs -->
-        <div v-if="!isDesktopApp" class="hero-actions download-actions" style="display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 24px; margin-bottom: 24px;">
-          <a href="/downloads/PaperSolver.dmg" class="cta-primary download-btn mac-btn" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 14px 28px; font-weight: 600; background: linear-gradient(135deg, #2563eb, #7c3aed); border-radius: 8px; color: #fff; box-shadow: var(--sh-md);">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" style="display: block; flex-shrink: 0;">
-              <path d="M12.03 5.41c.83-1.05 1.4-2.52 1.25-3.97-1.22.05-2.73.83-3.6 1.88-.77.9-1.44 2.41-1.25 3.82 1.36.1 2.76-.68 3.6-1.73zm4.5 5.86c-.05-2.24 1.79-3.32 1.87-3.37-1.03-1.54-2.63-1.75-3.2-1.81-1.37-.15-2.69.83-3.39.83-.71 0-1.79-.81-2.94-.79-1.51.02-2.92.89-3.69 2.27-1.57 2.78-.4 6.89 1.13 9.15.75 1.1 1.63 2.32 2.78 2.28 1.11-.05 1.54-.73 2.87-.73 1.33 0 1.73.73 2.89.7 1.2-.02 1.98-1.1 2.72-2.2 1.01-1.48 1.42-2.91 1.44-2.98-.03-.02-2.45-.96-2.48-3.76z"/>
-            </svg>
-            下载 macOS 客户端
-          </a>
-          <a href="/downloads/PaperSolver.exe" class="cta-primary download-btn win-btn" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 14px 28px; font-weight: 600; background: linear-gradient(135deg, #10b981, #059669); border-radius: 8px; color: #fff; box-shadow: var(--sh-md);">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-              <path d="M0 3.449L9.75 2.1v9.45H0V3.449zM0 12.45h9.75v9.45L0 20.551v-8.1zM10.8 1.95L24 0v11.55H10.8V1.95zM10.8 12.45H24v11.55l-13.2-1.95v-9.6z"/>
-            </svg>
-            下载 Windows 客户端
-          </a>
+        <div v-if="!isDesktopApp" class="hero-actions download-actions" style="display: flex; flex-direction: column; gap: 16px; align-items: center; margin-top: 24px; margin-bottom: 24px; width: 100%; max-width: 640px; margin-inline: auto;">
+          <!-- Mac Section -->
+          <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+            <span style="font-size: 0.8rem; color: #a1a1aa; font-weight: 600; text-align: center; text-transform: uppercase; letter-spacing: 0.05em;">下载 macOS 客户端 (分芯片类型)</span>
+            <div style="display: flex; gap: 12px; width: 100%;">
+              <a href="/downloads/PaperSolver-arm64.dmg" class="cta-primary download-btn mac-btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 12px; font-size: 0.9rem; font-weight: 600; background: linear-gradient(135deg, #2563eb, #7c3aed); border-radius: 8px; color: #fff; box-shadow: var(--sh-md);">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style="display: block; flex-shrink: 0;">
+                  <path d="M12.03 5.41c.83-1.05 1.4-2.52 1.25-3.97-1.22.05-2.73.83-3.6 1.88-.77.9-1.44 2.41-1.25 3.82 1.36.1 2.76-.68 3.6-1.73zm4.5 5.86c-.05-2.24 1.79-3.32 1.87-3.37-1.03-1.54-2.63-1.75-3.2-1.81-1.37-.15-2.69.83-3.39.83-.71 0-1.79-.81-2.94-.79-1.51.02-2.92.89-3.69 2.27-1.57 2.78-.4 6.89 1.13 9.15.75 1.1 1.63 2.32 2.78 2.28 1.11-.05 1.54-.73 2.87-.73 1.33 0 1.73.73 2.89.7 1.2-.02 1.98-1.1 2.72-2.2 1.01-1.48 1.42-2.91 1.44-2.98-.03-.02-2.45-.96-2.48-3.76z"/>
+                </svg>
+                Apple Silicon (M系列芯片)
+              </a>
+              <a href="/downloads/PaperSolver-x64.dmg" class="cta-primary download-btn mac-btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 12px; font-size: 0.9rem; font-weight: 600; background: linear-gradient(135deg, #4f46e5, #818cf8); border-radius: 8px; color: #fff; box-shadow: var(--sh-md);">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style="display: block; flex-shrink: 0;">
+                  <path d="M12.03 5.41c.83-1.05 1.4-2.52 1.25-3.97-1.22.05-2.73.83-3.6 1.88-.77.9-1.44 2.41-1.25 3.82 1.36.1 2.76-.68 3.6-1.73zm4.5 5.86c-.05-2.24 1.79-3.32 1.87-3.37-1.03-1.54-2.63-1.75-3.2-1.81-1.37-.15-2.69.83-3.39.83-.71 0-1.79-.81-2.94-.79-1.51.02-2.92.89-3.69 2.27-1.57 2.78-.4 6.89 1.13 9.15.75 1.1 1.63 2.32 2.78 2.28 1.11-.05 1.54-.73 2.87-.73 1.33 0 1.73.73 2.89.7 1.2-.02 1.98-1.1 2.72-2.2 1.01-1.48 1.42-2.91 1.44-2.98-.03-.02-2.45-.96-2.48-3.76z"/>
+                </svg>
+                Intel 芯片
+              </a>
+            </div>
+          </div>
+
+          <!-- Windows Section -->
+          <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+            <span style="font-size: 0.8rem; color: #a1a1aa; font-weight: 600; text-align: center; text-transform: uppercase; letter-spacing: 0.05em;">下载 Windows 客户端 (分系统位数)</span>
+            <div style="display: flex; gap: 12px; width: 100%;">
+              <a href="/downloads/PaperSolver-x64.exe" class="cta-primary download-btn win-btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 12px; font-size: 0.9rem; font-weight: 600; background: linear-gradient(135deg, #10b981, #059669); border-radius: 8px; color: #fff; box-shadow: var(--sh-md);">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                  <path d="M0 3.449L9.75 2.1v9.45H0V3.449zM0 12.45h9.75v9.45L0 20.551v-8.1zM10.8 1.95L24 0v11.55H10.8V1.95zM10.8 12.45H24v11.55l-13.2-1.95v-9.6z"/>
+                </svg>
+                Windows 64位 (推荐)
+              </a>
+              <a href="/downloads/PaperSolver-ia32.exe" class="cta-primary download-btn win-btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 12px; font-size: 0.9rem; font-weight: 600; background: linear-gradient(135deg, #0d9488, #0f766e); border-radius: 8px; color: #fff; box-shadow: var(--sh-md);">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                  <path d="M0 3.449L9.75 2.1v9.45H0V3.449zM0 12.45h9.75v9.45L0 20.551v-8.1zM10.8 1.95L24 0v11.55H10.8V1.95zM10.8 12.45H24v11.55l-13.2-1.95v-9.6z"/>
+                </svg>
+                Windows 32位 (兼容)
+              </a>
+            </div>
+          </div>
         </div>
 
         <!-- Desktop app: login/register entry -->
@@ -445,19 +470,29 @@
             <p style="font-size: 0.95rem; color: #a1a1aa; line-height: 1.6; margin: 0; text-align: left;">
               为保障学术交流与数据安全，PaperSolver 采用了本地优先架构，完整的 **PDF 沉浸式翻译、Zotero 本地附件同步、文献解析** 等核心功能均运行于客户端。网页端仅用作产品介绍与客户端分发。
             </p>
-            <div style="display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 10px;">
-              <a href="/downloads/PaperSolver.dmg" class="cta-primary" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; color: #fff; background: linear-gradient(135deg, #2563eb, #7c3aed);">
-                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-.1 3.81 1.5.65.27 2.48 1.05 3.32 2.29a7.35 7.35 0 0 0-3.66 6.44c.03 3.83 3.32 5.09 3.36 5.12-.03.09-.53 1.8-1.73 3.4M15.97 4.17c.66-.81 1.11-1.93.99-3.06-1 .04-2.2.67-2.92 1.5-.63.73-1.18 1.87-1.03 2.99 1.11.09 2.24-.59 2.96-1.43"/>
-                </svg>
-                下载 macOS 客户端
-              </a>
-              <a href="/downloads/PaperSolver.exe" class="cta-primary" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 12px; border-radius: 8px; font-weight: bold; color: #fff; background: linear-gradient(135deg, #10b981, #059669);">
-                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                  <path d="M0 3.449L9.75 2.1v9.45H0V3.449zM0 12.45h9.75v9.45L0 20.551v-8.1zM10.8 1.95L24 0v11.55H10.8V1.95zM10.8 12.45H24v11.55l-13.2-1.95v-9.6z"/>
-                </svg>
-                下载 Windows 客户端
-              </a>
+            <div style="display: flex; flex-direction: column; gap: 14px; width: 100%; margin-top: 10px;">
+              <!-- Mac -->
+              <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
+                <div style="display: flex; gap: 8px; width: 100%;">
+                  <a href="/downloads/PaperSolver-arm64.dmg" class="cta-primary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 10px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; color: #fff; background: linear-gradient(135deg, #2563eb, #7c3aed);">
+                    macOS (M系列芯片)
+                  </a>
+                  <a href="/downloads/PaperSolver-x64.dmg" class="cta-primary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 10px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; color: #fff; background: linear-gradient(135deg, #4f46e5, #818cf8);">
+                    macOS (Intel芯片)
+                  </a>
+                </div>
+              </div>
+              <!-- Win -->
+              <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
+                <div style="display: flex; gap: 8px; width: 100%;">
+                  <a href="/downloads/PaperSolver-x64.exe" class="cta-primary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 10px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; color: #fff; background: linear-gradient(135deg, #10b981, #059669);">
+                    Windows 64位
+                  </a>
+                  <a href="/downloads/PaperSolver-ia32.exe" class="cta-primary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 10px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; color: #fff; background: linear-gradient(135deg, #0d9488, #0f766e);">
+                    Windows 32位
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -493,10 +528,6 @@
                 <button type="button" class="btn-oauth-premium qq" @click="loginWithQQ">
                   QQ 登录
                 </button>
-                
-                <div style="text-align: center; margin-top: 24px;">
-                  <a href="javascript:;" @click="loginMethod = 'password'" style="font-size: 0.65rem; color: rgba(255,255,255,0.08); text-decoration: none; transition: color 0.2s;" onmouseover="this.style.color='rgba(255,255,255,0.3)'" onmouseout="this.style.color='rgba(255,255,255,0.08)'">— 内测通道 —</a>
-                </div>
               </div>
 
               <!-- Password Login Method -->
