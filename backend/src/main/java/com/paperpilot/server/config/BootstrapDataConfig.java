@@ -12,6 +12,7 @@ import com.paperpilot.server.entity.AppUserEntity;
 import com.paperpilot.server.entity.TranslationRecordEntity;
 import com.paperpilot.server.entity.TeamEntity;
 import com.paperpilot.server.entity.TutorialArticleEntity;
+import com.paperpilot.server.repository.VocabularyRepository;
 
 import com.paperpilot.server.repository.InviteCodeRepository;
 import com.paperpilot.server.repository.PaperRepository;
@@ -58,9 +59,14 @@ public class BootstrapDataConfig {
         SharedResourceRepository sharedResourceRepository,
         CheckinRepository checkinRepository,
         TeamRepository teamRepository,
-        TutorialArticleRepository tutorialArticleRepository
+        TutorialArticleRepository tutorialArticleRepository,
+        VocabularyRepository vocabularyRepository
     ) {
         return (args) -> {
+            // Remove the old client/demo vocabulary rows once, without touching
+            // any real user's entries. New demo vocabulary is no longer created.
+            vocabularyRepository.deleteDemoEntries("vocab_demo_%");
+
             // Production data must never be recreated by a service restart. The
             // old demo accounts made a successful admin deletion appear to revive.
             if (!demoSeed) {

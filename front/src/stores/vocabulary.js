@@ -165,12 +165,12 @@ export const useVocabularyStore = defineStore("vocabulary", {
 
     async init() {
       this.loadLocal();
-      if (this.items.length === 0) {
-        await this.preloadInitialDemoWords();
-      } else {
-        // 自动修复旧缓存中卡在"正在解析牛津释义..."的单词
-        this.repairPendingDefinitions();
-      }
+      // 清理历史版本写入浏览器的演示词，避免新用户看到同一批示例。
+      // 真实词汇仍保留，并由后端按当前登录用户同步。
+      const before = this.items.length;
+      this.items = this.items.filter(item => !String(item?.id || "").startsWith("vocab_demo_"));
+      if (this.items.length !== before) this.persistLocal();
+      this.repairPendingDefinitions();
       this.syncFromBackend();
     },
 
@@ -197,36 +197,8 @@ export const useVocabularyStore = defineStore("vocabulary", {
     },
 
     async preloadInitialDemoWords() {
-      const sampleWords = ["ablation", "preponderance", "ubiquitous", "parsimonious", "salient", "dichotomy", "orthogonal", "stochastic"];
-      const demoList = [];
-      for (let idx = 0; idx < sampleWords.length; idx++) {
-        const w = sampleWords[idx];
-        const dict = await lookupOxfordDefinition(w);
-        demoList.push({
-          id: `vocab_demo_${idx + 1}`,
-          word: w,
-          phonetic: dict.phonetic,
-          partOfSpeech: dict.partOfSpeech,
-          oxfordLevel: dict.oxfordLevel,
-          meaningCn: dict.meaningCn,
-          meaningEn: dict.meaningEn,
-          contextSentence: dict.academicExamples[0]?.en || `The ${w} plays an essential role in this methodology.`,
-          contextTranslation: dict.academicExamples[0]?.cn || `对于理解该方法学而言，${dict.meaningCn}至关重要。`,
-          paperId: "demo-paper-1",
-          paperTitle: "Attention Is All You Need (Vaswani et al.)",
-          sectionName: "Methodology",
-          collocations: dict.collocations || [],
-          academicExamples: dict.academicExamples || [],
-          synonyms: dict.synonyms || [],
-          antonyms: dict.antonyms || [],
-          etymology: dict.etymology || "",
-          masteryLevel: idx % 3,
-          reviewCount: idx,
-          createdAt: new Date(Date.now() - idx * 86400000).toISOString(),
-          updatedAt: new Date().toISOString()
-        });
-      }
-      this.items = demoList;
+      // 保留旧 action 名称以兼容外部调用，但不再自动生成演示词。
+      this.items = [];
       this.persistLocal();
     },
 
