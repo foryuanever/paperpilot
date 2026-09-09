@@ -1,0 +1,45 @@
+{
+  "version": "2026.08.09-offline-full-pipeline",
+  "packages": [
+    {
+      "id": "runtime-full",
+      "platforms": ["macos-arm64"],
+      "size": 1279988237,
+      "weight": 1279988237,
+      "sha256": "37a90c5b6b58c81d8c02eacd25737c7a7f2772097e2a097779dcd420a4f5c5ff",
+      "urls": [
+        "https://modelscope.cn/datasets/foryuanever/papersolver-dependencies/resolve/master/papersolver-local-dependency-macos-arm64.zip"
+      ]
+    },
+    {
+      "id": "runtime-full",
+      "platforms": ["windows-x64"],
+      "size": 1303159569,
+      "weight": 1303159569,
+      "sha256": "3f6f21a625dc5e603f19073a2cd02d1d8d835ecff7beab485820c6bd97a69410",
+      "urls": [
+        "https://modelscope.cn/datasets/foryuanever/papersolver-dependencies/resolve/master/papersolver-local-dependency-windows-x64.zip"
+      ]
+    },
+    {
+      "id": "layout-formula-runtime",
+      "platforms": ["macos-arm64"],
+      "size": 115459116,
+      "weight": 115459116,
+      "sha256": "2fd645db604166666fd96fc0620cd24f41c963fb591242f8673a6589c374749b",
+      "urls": [
+        "https://modelscope.cn/datasets/foryuanever/papersolver-dependencies/resolve/master/papersolver-parser-runtime-macos-arm64.zip"
+      ]
+    },
+    {
+      "id": "layout-formula-runtime",
+      "platforms": ["windows-x64"],
+      "size": 254816285,
+      "weight": 254816285,
+      "sha256": "f52ee75f2ee15f61cdc1cdeb969ff53240e325a2befd2bdb35ad207d60038cfb",
+      "urls": [
+        "https://modelscope.cn/datasets/foryuanever/papersolver-dependencies/resolve/master/papersolver-parser-runtime-windows-x64.zip"
+      ]
+    }
+  ]
+}

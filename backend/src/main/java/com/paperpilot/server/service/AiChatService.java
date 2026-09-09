@@ -29,6 +29,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -99,23 +100,7 @@ public class AiChatService {
     }
 
     public ChatResult chatJson(String systemPrompt, String userPrompt, int maxOutputTokens) throws Exception {
-        String scene = inferModelConfigScene(systemPrompt, userPrompt);
-        ModelConfigEntity config = activeSceneConfig(scene);
-        if (config == null) {
-            config = modelConfigRepository.findAllByActiveTrueOrderByUpdatedAtDesc().stream().findFirst().orElse(null);
-        }
-        return send(
-            config == null ? "https://api.openai.com/v1" : config.getBaseUrl(),
-            config == null ? "" : config.getApiKey(),
-            config == null ? "gpt-4.1-mini" : config.getModelName(),
-            config == null ? "openai_chat" : config.getApiFormat(),
-            config == null ? "bearer" : config.getAuthType(),
-            config != null && config.isFullUrl(),
-            config == null ? "" : config.getCustomUserAgent(),
-            systemPrompt,
-            userPrompt,
-            maxOutputTokens
-        );
+        return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, List.of(), true, Set.of(), null);
     }
 
     public ChatResult chatJsonWithModelFallback(
@@ -125,6 +110,77 @@ public class AiChatService {
         List<String> fallbackModels
     ) throws Exception {
         return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, true, Set.of(), null);
+    }
+
+    /**
+     * Runs the configured business pool until a model returns a response that passes the
+     * caller's quality gate. Rejected HTTP 200 responses are recorded as failures and
+     * never consume the user's Agent Token quota.
+     */
+    public ChatResult chatJsonWithModelFallbackValidated(
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        List<String> fallbackModels,
+        Predicate<String> responseValidator
+    ) throws Exception {
+        return chatJsonWithModelFallback(
+            systemPrompt,
+            userPrompt,
+            maxOutputTokens,
+            fallbackModels,
+            true,
+            Set.of(),
+            null,
+            responseValidator == null ? content -> true : responseValidator
+        );
+    }
+
+    /**
+     * Sends a reader figure together with the question to an OpenAI-compatible
+     * vision route. The image is deliberately optional for every other flow.
+     */
+    public ChatResult chatJsonWithModelFallbackValidatedWithImage(
+        String systemPrompt,
+        String userPrompt,
+        String imageDataUrl,
+        int maxOutputTokens,
+        List<String> fallbackModels,
+        Predicate<String> responseValidator
+    ) throws Exception {
+        return chatJsonWithModelFallback(
+            systemPrompt,
+            userPrompt,
+            maxOutputTokens,
+            fallbackModels,
+            true,
+            Set.of(),
+            null,
+            responseValidator == null ? content -> true : responseValidator,
+            imageDataUrl
+        );
+    }
+
+    /** Routes a visual request to the dedicated image-analysis pool instead of the text Q&A pool. */
+    public ChatResult chatJsonWithImageAnalysisPool(
+        String systemPrompt,
+        String userPrompt,
+        String imageDataUrl,
+        int maxOutputTokens,
+        List<String> fallbackModels,
+        Predicate<String> responseValidator
+    ) throws Exception {
+        return chatJsonWithModelFallback(
+            systemPrompt,
+            userPrompt,
+            maxOutputTokens,
+            fallbackModels,
+            true,
+            Set.of(),
+            ModelConfigService.SCENE_IMAGE_ANALYSIS,
+            responseValidator == null ? content -> true : responseValidator,
+            imageDataUrl
+        );
     }
 
     public ChatResult chatJsonWithModelFallbackSkipping(
@@ -144,6 +200,86 @@ public class AiChatService {
         List<String> fallbackModels
     ) throws Exception {
         return chatJsonWithModelFallback(systemPrompt, userPrompt, maxOutputTokens, fallbackModels, false, Set.of(), null);
+    }
+
+    /**
+     * Uses the business pool without recording a per-attempt charge. The caller records
+     * the final successful aggregate operation after validating every model response.
+     */
+    public ChatResult chatJsonWithModelFallbackUnmeteredValidated(
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        List<String> fallbackModels,
+        Predicate<String> responseValidator
+    ) throws Exception {
+        return chatJsonWithModelFallback(
+            systemPrompt,
+            userPrompt,
+            maxOutputTokens,
+            fallbackModels,
+            false,
+            Set.of(),
+            null,
+            responseValidator == null ? content -> true : responseValidator
+        );
+    }
+
+    /**
+     * Same aggregate-operation accounting as the validated variant above, but pins the
+     * business scene. Critical flows must not rely on keyword inference to choose a pool.
+     */
+    public ChatResult chatJsonWithModelFallbackUnmeteredValidatedForScene(
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        List<String> fallbackModels,
+        String explicitScene,
+        Predicate<String> responseValidator
+    ) throws Exception {
+        return chatJsonWithModelFallback(
+            systemPrompt,
+            userPrompt,
+            maxOutputTokens,
+            fallbackModels,
+            false,
+            Set.of(),
+            explicitScene,
+            responseValidator == null ? content -> true : responseValidator
+        );
+    }
+
+    public ChatResult chatJsonWithModelFallbackForSceneAndModel(
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        String explicitScene,
+        String preferredModel,
+        boolean accountUsage,
+        Predicate<String> responseValidator
+    ) throws Exception {
+        return chatJsonWithModelFallback(
+            systemPrompt, userPrompt, maxOutputTokens, List.of(), accountUsage,
+            Set.of(), explicitScene, responseValidator == null ? content -> true : responseValidator,
+            null, preferredModel
+        );
+    }
+
+    public ChatResult chatJsonWithModelFallbackForSceneAndModelWithImage(
+        String systemPrompt,
+        String userPrompt,
+        String imageDataUrl,
+        int maxOutputTokens,
+        String explicitScene,
+        String preferredModel,
+        boolean accountUsage,
+        Predicate<String> responseValidator
+    ) throws Exception {
+        return chatJsonWithModelFallback(
+            systemPrompt, userPrompt, maxOutputTokens, List.of(), accountUsage,
+            Set.of(), explicitScene, responseValidator == null ? content -> true : responseValidator,
+            imageDataUrl, preferredModel
+        );
     }
 
     /** Overload that pins the model-pool scene explicitly, bypassing keyword inference. */
@@ -166,6 +302,67 @@ public class AiChatService {
         Set<String> skippedModels,
         String explicitScene
     ) throws Exception {
+        return chatJsonWithModelFallback(
+            systemPrompt,
+            userPrompt,
+            maxOutputTokens,
+            fallbackModels,
+            accountUsage,
+            skippedModels,
+            explicitScene,
+            content -> true
+        );
+    }
+
+    private ChatResult chatJsonWithModelFallback(
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        List<String> fallbackModels,
+        boolean accountUsage,
+        Set<String> skippedModels,
+        String explicitScene,
+        Predicate<String> responseValidator
+    ) throws Exception {
+        return chatJsonWithModelFallback(
+            systemPrompt, userPrompt, maxOutputTokens, fallbackModels, accountUsage,
+            skippedModels, explicitScene, responseValidator, null
+        );
+    }
+
+    private ChatResult chatJsonWithModelFallback(
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        List<String> fallbackModels,
+        boolean accountUsage,
+        Set<String> skippedModels,
+        String explicitScene,
+        Predicate<String> responseValidator,
+        String imageDataUrl
+    ) throws Exception {
+        return chatJsonWithModelFallback(
+            systemPrompt, userPrompt, maxOutputTokens, fallbackModels, accountUsage,
+            skippedModels, explicitScene, responseValidator, imageDataUrl, null
+        );
+    }
+
+    private ChatResult chatJsonWithModelFallback(
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        List<String> fallbackModels,
+        boolean accountUsage,
+        Set<String> skippedModels,
+        String explicitScene,
+        Predicate<String> responseValidator,
+        String imageDataUrl,
+        String preferredModel
+    ) throws Exception {
+        long startedAt = System.nanoTime();
+        if (accountUsage) {
+            aiUsageService.assertAgentAvailable(currentUserService.getOrCreateDefaultUserId());
+        }
         String scene = (explicitScene != null && !explicitScene.isBlank())
             ? explicitScene
             : inferModelConfigScene(systemPrompt, userPrompt);
@@ -175,37 +372,43 @@ public class AiChatService {
             .filter(row -> StringUtils.hasText(row.getApiKey()))
             .filter(row -> StringUtils.hasText(row.getModelName()))
             .filter(row -> StringUtils.hasText(row.getBaseUrl()))
+            .filter(row -> !StringUtils.hasText(preferredModel)
+                || normalizeOpenCodeFreeModel(row.getModelName()).equals(normalizeOpenCodeFreeModel(preferredModel)))
             .sorted(this::comparePoolRoute)
             .toList();
+        // A selected model is an explicit route choice; never silently replace it
+        // with the scene default when that exact model is not configured.
+        if (pool.isEmpty() && StringUtils.hasText(preferredModel)) {
+            throw new IllegalStateException("所选模型未在当前场景配置：" + preferredModel);
+        }
         if (pool.isEmpty() && config != null && config.isActive()) {
             pool = List.of(config);
         }
-        if (pool.isEmpty()) {
-            pool = modelConfigRepository.findAllByActiveTrueOrderByUpdatedAtDesc().stream()
-                .filter(row -> StringUtils.hasText(row.getApiKey()) && StringUtils.hasText(row.getModelName()) && StringUtils.hasText(row.getBaseUrl()))
-                .sorted(this::comparePoolRoute)
-                .toList();
-        }
+        // Free public routes often queue or become temporarily unavailable. Keep
+        // a small fallback set so one stale route cannot hold the reader UI for
+        // several minutes before the next route is tried.
+        int maxPoolRoutes = ModelConfigService.SCENE_FREE_POOL.equals(scene) ? 2 : MAX_POOL_FALLBACK_ROUTES;
         int routeCount = 0;
         for (ModelConfigEntity row : pool) {
             if (!StringUtils.hasText(row.getApiKey()) || !StringUtils.hasText(row.getModelName()) || !StringUtils.hasText(row.getBaseUrl())) continue;
-            if (routeCount >= MAX_POOL_FALLBACK_ROUTES) break;
+            if (routeCount >= maxPoolRoutes) break;
             routeCount++;
-            Iterable<String> expansion = shouldUseConfiguredPoolOnly(scene) ? List.of(row.getModelName()) : expandedModels(row.getModelName(), row.getBaseUrl(), row.getProviderName(), fallbackModels);
-            for (String model : expansion) {
-                routes.add(new ModelRoute(
-                    row.getBaseUrl(),
-                    row.getApiKey(),
-                    model,
-                    row.getApiFormat(),
-                    row.getAuthType(),
-                    row.isFullUrl(),
-                    row.getCustomUserAgent()
-                ));
-            }
+            routes.add(new ModelRoute(
+                row.getBaseUrl(),
+                row.getApiKey(),
+                row.getModelName(),
+                row.getApiFormat(),
+                row.getAuthType(),
+                row.isFullUrl(),
+                row.getCustomUserAgent()
+            ));
         }
         // --- BACKUP POOL ---
-        if (!"backup".equals(scene)) {
+        // Free-pool requests must never silently fall through to paid backup routes.
+        if (!StringUtils.hasText(preferredModel)
+            && !"paper_quiz".equals(scene)
+            && !ModelConfigService.SCENE_FREE_POOL.equals(scene)
+            && !"backup".equals(scene)) {
             List<ModelConfigEntity> backupPool = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc("backup").stream()
                 .filter(row -> StringUtils.hasText(row.getApiKey()) && StringUtils.hasText(row.getModelName()) && StringUtils.hasText(row.getBaseUrl()))
                 .sorted(this::comparePoolRoute)
@@ -224,9 +427,7 @@ public class AiChatService {
                 ));
             }
         }
-        if (routes.isEmpty()) {
-            routes.add(new ModelRoute("https://api.openai.com/v1", "", "gpt-4.1-mini", "openai_chat", "bearer", false, ""));
-        }
+        if (routes.isEmpty()) throw new IllegalStateException("未配置模型，请联系管理员");
         String lastError = "没有可用模型";
         LinkedHashSet<String> attempted = new LinkedHashSet<>();
         boolean hadSkippedRoutes = false;
@@ -241,20 +442,44 @@ public class AiChatService {
                 String attemptKey = route.baseUrl() + " " + route.model();
                 if (!attempted.add(attemptKey)) continue;
                 try {
-                    return send(route.baseUrl(), route.apiKey(), route.model(), route.apiFormat(), route.authType(), route.fullUrl(), route.customUserAgent(), systemPrompt, userPrompt, maxOutputTokens, accountUsage);
+                    ChatResult result = send(
+                        route.baseUrl(), route.apiKey(), route.model(), route.apiFormat(), route.authType(), route.fullUrl(), route.customUserAgent(),
+                        systemPrompt, userPrompt, maxOutputTokens, false, imageDataUrl
+                    );
+                    if (!responseValidator.test(result.content())) {
+                        lastError = route.model() + "：模型输出不符合质量要求";
+                        if (accountUsage) {
+                            recordFailure(route.model(), systemPrompt, userPrompt, new IllegalStateException("模型输出不符合质量要求"), elapsedMs(startedAt));
+                        }
+                        continue;
+                    }
+                    if (accountUsage) {
+                        UsageEstimate usage = result.totalTokens() > 0
+                            ? new UsageEstimate(result.promptTokens(), result.completionTokens(), result.totalTokens())
+                            : estimateUsage(systemPrompt, userPrompt, result.content());
+                        recordUsage(result.modelName(), usage, systemPrompt, userPrompt, elapsedMs(startedAt));
+                    }
+                    return result;
                 } catch (Exception error) {
                     lastError = route.model() + "：" + error.getMessage();
+                    if (accountUsage) {
+                        recordFailure(route.model(), systemPrompt, userPrompt, error, elapsedMs(startedAt));
+                    }
                 }
             }
             if (!attempted.isEmpty() || !hadSkippedRoutes) break;
             lastError = "未被质量门跳过的模型已耗尽，正在放开跳过列表重试完整模型池";
         }
-        throw new IllegalStateException("模型池全部尝试失败，最后错误：" + lastError);
+        if (StringUtils.hasText(imageDataUrl)) {
+            throw new IllegalStateException("AI 论文问答号池没有可用的视觉模型，请配置支持图像输入的模型后重试");
+        }
+        throw new IllegalStateException("模型已配置但全部调用失败，最近一次错误：" + lastError);
     }
 
     private boolean shouldUseConfiguredPoolOnly(String scene) {
-        return ModelConfigService.SCENE_PAPER_REVIEW.equals(scene)
+        return "paper_quiz".equals(scene) || ModelConfigService.SCENE_PAPER_REVIEW.equals(scene)
             || ModelConfigService.SCENE_PAPER_QA.equals(scene)
+            || ModelConfigService.SCENE_IMAGE_ANALYSIS.equals(scene)
             || ModelConfigService.SCENE_MEETING_FUSION.equals(scene)
             || ModelConfigService.SCENE_MEETING_DECK.equals(scene)
             || ModelConfigService.SCENE_TOPIC_RESEARCH.equals(scene);
@@ -674,7 +899,7 @@ public class AiChatService {
         String userPrompt,
         int maxOutputTokens
     ) throws Exception {
-        return send(baseUrl, apiKey, model, apiFormat, authType, fullUrl, customUserAgent, systemPrompt, userPrompt, maxOutputTokens, true);
+        return send(baseUrl, apiKey, model, apiFormat, authType, fullUrl, customUserAgent, systemPrompt, userPrompt, maxOutputTokens, true, null);
     }
 
     private ChatResult send(
@@ -690,8 +915,28 @@ public class AiChatService {
         int maxOutputTokens,
         boolean accountUsage
     ) throws Exception {
+        return send(baseUrl, apiKey, model, apiFormat, authType, fullUrl, customUserAgent, systemPrompt, userPrompt, maxOutputTokens, accountUsage, null);
+    }
+
+    private ChatResult send(
+        String baseUrl,
+        String apiKey,
+        String model,
+        String apiFormat,
+        String authType,
+        boolean fullUrl,
+        String customUserAgent,
+        String systemPrompt,
+        String userPrompt,
+        int maxOutputTokens,
+        boolean accountUsage,
+        String imageDataUrl
+    ) throws Exception {
         long startedAt = System.nanoTime();
         try {
+            if (accountUsage) {
+                aiUsageService.assertAgentAvailable(currentUserService.getOrCreateDefaultUserId());
+            }
             if (!StringUtils.hasText(baseUrl)) throw new IllegalArgumentException("Base URL 不能为空");
             if (!StringUtils.hasText(model)) throw new IllegalArgumentException("模型名称不能为空");
             model = normalizeOpenCodeFreeModel(model);
@@ -705,9 +950,10 @@ public class AiChatService {
             for (String endpoint : endpoints) {
                 HttpResponse<String> response = null;
                 for (int tokenBudget : tokenBudgetCandidates(maxOutputTokens)) {
-                    for (int attempt = 0; attempt < 3; attempt++) {
+                    int maxAttempts = isFreeRouteModel(model) ? 1 : 3;
+                    for (int attempt = 0; attempt < maxAttempts; attempt++) {
                         response = sendToEndpoint(
-                            endpoint, apiKey, model, normalizeFormat(apiFormat), authType, customUserAgent, systemPrompt, userPrompt, tokenBudget
+                            endpoint, apiKey, model, normalizeFormat(apiFormat), authType, customUserAgent, systemPrompt, userPrompt, tokenBudget, imageDataUrl
                         );
                         if (response.statusCode() >= 200 && response.statusCode() < 300) {
                             ChatResult parsed = parseChatResult(model, normalizeFormat(apiFormat), response.body());
@@ -721,7 +967,7 @@ public class AiChatService {
                         }
                         lastError = responseError(response);
                         if (isTokenBudgetError(response, tokenBudget)) break;
-                        if (!isRetryableStatus(response.statusCode()) || attempt == 2) break;
+                        if (!isRetryableStatus(response.statusCode()) || attempt == maxAttempts - 1) break;
                         Thread.sleep(700L * (attempt + 1));
                     }
                     if (response == null || !isTokenBudgetError(response, tokenBudget)) break;
@@ -738,9 +984,12 @@ public class AiChatService {
     private List<Integer> tokenBudgetCandidates(int requested) {
         LinkedHashSet<Integer> budgets = new LinkedHashSet<>();
         budgets.add(Math.max(64, requested));
-        if (requested > 3600) budgets.add(3200);
-        if (requested > 2200) budgets.add(1800);
-        if (requested > 1200) budgets.add(900);
+        if (requested > 5000) budgets.add(4800);
+        if (requested > 4200) budgets.add(4000);
+        if (requested > 3400) budgets.add(3200);
+        if (requested > 2400) budgets.add(2200);
+        if (requested > 1400) budgets.add(1400);
+        if (requested > 900) budgets.add(900);
         return new ArrayList<>(budgets);
     }
 
@@ -818,7 +1067,8 @@ public class AiChatService {
         String customUserAgent,
         String systemPrompt,
         String userPrompt,
-        int requestedMaxTokens
+        int requestedMaxTokens,
+        String imageDataUrl
     ) throws Exception {
         Map<String, Object> payload = new LinkedHashMap<>();
         boolean codexEndpoint = isCodexEndpoint(endpoint, apiFormat);
@@ -828,50 +1078,94 @@ public class AiChatService {
             payload.put("model", model);
             payload.put("max_tokens", maxTokens);
             payload.put("system", systemPrompt);
-            payload.put("messages", List.of(Map.of("role", "user", "content", userPrompt)));
+            payload.put("messages", List.of(Map.of("role", "user", "content", anthropicContent(userPrompt, imageDataUrl))));
         } else if ("openai_responses".equals(apiFormat)) {
             payload.put("model", model);
             payload.put("instructions", systemPrompt);
             payload.put("store", false);
-            if (codexEndpoint) {
+            if (codexEndpoint || StringUtils.hasText(imageDataUrl)) {
+                List<Map<String, Object>> content = new ArrayList<>();
+                content.add(Map.of("type", "input_text", "text", userPrompt));
+                if (StringUtils.hasText(imageDataUrl)) {
+                    content.add(Map.of("type", "input_image", "image_url", imageDataUrl));
+                }
                 payload.put("input", List.of(Map.of(
                     "role", "user",
-                    "content", List.of(Map.of("type", "input_text", "text", userPrompt))
+                    "content", content
                 )));
-                payload.put("tools", List.of());
-                payload.put("tool_choice", "auto");
-                payload.put("parallel_tool_calls", false);
-                payload.put("stream", true);
-                payload.put("include", List.of("reasoning.encrypted_content"));
+                if (codexEndpoint) {
+                    payload.put("tools", List.of());
+                    payload.put("tool_choice", "auto");
+                    payload.put("parallel_tool_calls", false);
+                    payload.put("stream", true);
+                    payload.put("include", List.of("reasoning.encrypted_content"));
+                } else {
+                    payload.put("max_output_tokens", maxTokens);
+                }
             } else {
                 payload.put("input", userPrompt);
                 payload.put("max_output_tokens", maxTokens);
             }
         } else {
             payload.put("model", model);
+            Object userContent = StringUtils.hasText(imageDataUrl)
+                ? openAiContent(userPrompt, imageDataUrl)
+                : userPrompt;
             payload.put("messages", List.of(
                 Map.of("role", "system", "content", systemPrompt),
-                Map.of("role", "user", "content", userPrompt)
+                Map.of("role", "user", "content", userContent)
             ));
             payload.put("temperature", connectionTest ? 0 : 0.25);
             payload.put("max_tokens", maxTokens);
         }
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(endpoint))
-            .timeout(Duration.ofSeconds(requestTimeoutSeconds(systemPrompt, userPrompt, connectionTest)))
+            .timeout(Duration.ofSeconds(requestTimeoutSeconds(systemPrompt, userPrompt, connectionTest, model)))
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)));
         applyHeaders(builder, apiKey, authType, apiFormat, customUserAgent, codexEndpoint);
         return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
 
-    private int requestTimeoutSeconds(String systemPrompt, String userPrompt, boolean connectionTest) {
+    private List<Map<String, Object>> openAiContent(String text, String imageDataUrl) {
+        return List.of(
+            Map.of("type", "text", "text", text),
+            Map.of("type", "image_url", "image_url", Map.of("url", imageDataUrl))
+        );
+    }
+
+    private List<Map<String, Object>> anthropicContent(String text, String imageDataUrl) {
+        if (!StringUtils.hasText(imageDataUrl)) return List.of(Map.of("type", "text", "text", text));
+        int comma = imageDataUrl.indexOf(',');
+        String header = comma > 0 ? imageDataUrl.substring(0, comma) : "";
+        String data = comma > 0 ? imageDataUrl.substring(comma + 1) : imageDataUrl;
+        String mediaType = header.contains("image/png") ? "image/png" : header.contains("image/webp") ? "image/webp" : "image/jpeg";
+        return List.of(
+            Map.of("type", "image", "source", Map.of("type", "base64", "media_type", mediaType, "data", data)),
+            Map.of("type", "text", "text", text)
+        );
+    }
+
+    private int requestTimeoutSeconds(String systemPrompt, String userPrompt, boolean connectionTest, String model) {
         if (connectionTest) return 7;
         String scene = inferModelConfigScene(systemPrompt, userPrompt);
-        if (ModelConfigService.SCENE_TOPIC_RESEARCH.equals(scene)) return 90;
-        if (ModelConfigService.SCENE_PAPER_QA.equals(scene)) return 90;
+        // A paper quiz is a large structured JSON response. Free routes are
+        // often slower, so the generic 35s free-route timeout caused valid
+        // calls to be recorded as network failures before the response ended.
+        if (ModelConfigService.SCENE_PAPER_QUIZ.equals(scene)) return 240;
+        if (isFreeRouteModel(model)) return 35;
+        if (ModelConfigService.SCENE_TOPIC_RESEARCH.equals(scene)) return 60;
+        if (ModelConfigService.SCENE_PAPER_QA.equals(scene)) return 60;
         if (ModelConfigService.SCENE_MEETING_FUSION.equals(scene)) return 90;
-        if (ModelConfigService.SCENE_FORUM_MODERATION.equals(scene)) return 20;
+        if (ModelConfigService.SCENE_READING_NOTES.equals(scene)) return 120;
+        if (ModelConfigService.SCENE_FORUM_MODERATION.equals(scene)) return 30;
         return 65;
+    }
+
+    private boolean isFreeRouteModel(String model) {
+        String normalized = normalizeOpenCodeFreeModel(model);
+        if (!StringUtils.hasText(normalized)) return false;
+        String value = normalized.trim().toLowerCase(Locale.ROOT);
+        return value.startsWith("oc/") || value.contains(":free") || value.endsWith("-free");
     }
 
     private void applyHeaders(
@@ -929,7 +1223,22 @@ public class AiChatService {
         JsonNode root = objectMapper.readTree(stripMixedStreamTail(body));
         String content;
         if ("anthropic".equals(apiFormat)) {
-            content = root.path("content").path(0).path("text").asText("");
+            // Claude thinking models return multiple content blocks: {"type":"thinking",...}, {"type":"text","text":"..."}
+            // We must iterate to find the first block with type="text" to avoid empty content.
+            content = "";
+            for (JsonNode block : root.path("content")) {
+                if ("text".equals(block.path("type").asText(""))) {
+                    String blockText = block.path("text").asText("");
+                    if (StringUtils.hasText(blockText)) {
+                        content = blockText;
+                        break;
+                    }
+                }
+            }
+            // Fallback: try content[0].text in case type field is absent
+            if (!StringUtils.hasText(content)) {
+                content = root.path("content").path(0).path("text").asText("");
+            }
         } else if ("openai_responses".equals(apiFormat)) {
             content = root.path("output_text").asText("");
             if (!StringUtils.hasText(content)) {
@@ -989,23 +1298,28 @@ public class AiChatService {
             usage.path("completionTokens"),
             usage.path("outputTokens")
         );
-        JsonNode completionDetails = usage.path("completion_tokens_details");
-        completionTokens += firstLong(
-            completionDetails.path("reasoning_tokens"),
-            completionDetails.path("accepted_prediction_tokens")
-        );
-        long totalTokens = firstLong(
+        long declaredTotalTokens = firstLong(
             usage.path("total_tokens"),
             usage.path("totalTokens")
         );
-        if (totalTokens <= 0 && (promptTokens > 0 || completionTokens > 0)) {
+        // completion_tokens_details is a breakdown of completion_tokens, not an
+        // extra charge. Some relays also return a stale or cache-adjusted
+        // total_tokens value. Keep the ledger internally auditable: whenever both
+        // columns are supplied, total must equal input + output.
+        long totalTokens;
+        if (promptTokens > 0 && completionTokens > 0) {
             totalTokens = promptTokens + completionTokens;
+        } else {
+            totalTokens = declaredTotalTokens;
         }
         if (totalTokens > 0 && completionTokens <= 0 && promptTokens > 0) {
             completionTokens = Math.max(0L, totalTokens - promptTokens);
         }
         if (totalTokens > 0 && promptTokens <= 0 && completionTokens > 0) {
             promptTokens = Math.max(0L, totalTokens - completionTokens);
+        }
+        if (totalTokens <= 0 && (promptTokens > 0 || completionTokens > 0)) {
+            totalTokens = promptTokens + completionTokens;
         }
         return new UsageEstimate(promptTokens, completionTokens, totalTokens);
     }
@@ -1136,7 +1450,6 @@ public class AiChatService {
 
     private void recordUsage(String modelName, UsageEstimate usage, String systemPrompt, String userPrompt, long latencyMs) {
         long totalTokens = usage.totalTokens();
-        if (totalTokens <= 0) return;
         try {
             AppUserEntity user = currentUserService.getOrCreateDefaultUser();
             aiUsageService.recordAndCharge(
@@ -1158,14 +1471,13 @@ public class AiChatService {
     private void recordFailure(String modelName, String systemPrompt, String userPrompt, Exception error, long latencyMs) {
         try {
             AppUserEntity user = currentUserService.getOrCreateDefaultUser();
-            long promptTokens = estimateUsage(systemPrompt, userPrompt, "").promptTokens();
             aiUsageService.recordFailure(
                 user.getId(),
                 StringUtils.hasText(modelName) ? normalizeOpenCodeFreeModel(modelName) : "unknown-model",
                 inferModelConfigScene(systemPrompt, userPrompt),
                 inferAction(systemPrompt, userPrompt),
                 inferPaperTitle(systemPrompt, userPrompt),
-                promptTokens,
+                0L,
                 readableError(error),
                 latencyMs
             );
@@ -1193,11 +1505,17 @@ public class AiChatService {
 
     private String inferModelConfigScene(String systemPrompt, String userPrompt) {
         String combined = ((systemPrompt == null ? "" : systemPrompt) + "\n" + (userPrompt == null ? "" : userPrompt)).toLowerCase();
+        if (combined.contains("出题检测") || combined.contains("paper_quiz") || combined.contains("选择题") && combined.contains("简答题")) {
+            return ModelConfigService.SCENE_PAPER_QUIZ;
+        }
         if (combined.contains("内容审核") || combined.contains("审核员") || combined.contains("risklevel") || combined.contains("approved(boolean)")) {
             return ModelConfigService.SCENE_FORUM_MODERATION;
         }
         if (combined.contains("deep-research") || combined.contains("选题调研") || combined.contains("选题广场") || combined.contains("可执行选题") || combined.contains("topic research")) {
             return ModelConfigService.SCENE_TOPIC_RESEARCH;
+        }
+        if (combined.contains("组会汇报笔记") || combined.contains("5 步走组会") || combined.contains("5步走组会") || combined.contains("reading_notes_generator")) {
+            return ModelConfigService.SCENE_READING_NOTES;
         }
         if (combined.contains("组会汇报教练") || combined.contains("融合成组会表单") || combined.contains("融合论文综述")) {
             return ModelConfigService.SCENE_MEETING_FUSION;
@@ -1224,8 +1542,9 @@ public class AiChatService {
             case "translate" -> "PDF双栏翻译";
             case "report" -> "组会论文综述生成";
             case "summary" -> "文献综述生成";
-            case "qa" -> combined.contains("用户当前选中内容") || combined.contains("选区") ? "论文选区解读与问答" : "AI研读对话";
-            default -> "AI研读对话";
+            case "qa" -> combined.contains("用户当前选中") || combined.contains("选中的这段") || combined.contains("选中内容")
+                ? "AI 解析" : "AI 对话";
+            default -> "AI 对话";
         };
     }
 

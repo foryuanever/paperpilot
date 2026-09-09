@@ -57,7 +57,8 @@ paperpilot:
   ppt-master:
     skill-dir: ${PPT_MASTER_SKILL_DIR:/Users/yuan/.codex/skills/ppt-master}
     python: ${PPT_MASTER_PYTHON:}
-    codex: ${PPT_MASTER_CODEX:/Applications/Codex.app/Contents/Resources/codex}
+    codex: ${PPT_MASTER_CODEX:}
+    codex-home: ${PPT_MASTER_CODEX_HOME:}
     agent-timeout-minutes: ${PPT_MASTER_AGENT_TIMEOUT_MINUTES:120}
   payment:
     wechat:
@@ -84,4 +85,3 @@ paperpilot:
       limit-ip-count: ${PAPERPILOT_SECURITY_FIREWALL_LIMIT_IP_COUNT:1000}
       limit-ip-ban: ${PAPERPILOT_SECURITY_FIREWALL_LIMIT_IP_BAN:1500}
       limit-user-count: ${PAPERPILOT_SECURITY_FIREWALL_LIMIT_USER_COUNT:500}
-

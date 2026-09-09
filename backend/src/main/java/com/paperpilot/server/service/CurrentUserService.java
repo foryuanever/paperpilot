@@ -17,9 +17,11 @@ public class CurrentUserService {
     private static final String DEFAULT_EMAIL = "local@paperpilot.app";
 
     private final AppUserRepository appUserRepository;
+    private final SessionTokenService sessionTokenService;
 
-    public CurrentUserService(AppUserRepository appUserRepository) {
+    public CurrentUserService(AppUserRepository appUserRepository, SessionTokenService sessionTokenService) {
         this.appUserRepository = appUserRepository;
+        this.sessionTokenService = sessionTokenService;
     }
 
     @Transactional
@@ -29,9 +31,13 @@ public class CurrentUserService {
 
     @Transactional
     public AppUserEntity getOrCreateDefaultUser() {
-        Long requestUserId = extractUserIdFromRequest();
-        if (requestUserId != null && appUserRepository.existsById(requestUserId)) {
-            return appUserRepository.findById(requestUserId).orElseThrow();
+        Long requestUserId = extractAuthenticatedUserId();
+        if (requestUserId != null) {
+            return appUserRepository.findById(requestUserId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "登录已失效，请重新登录"));
+        }
+        if (hasHttpRequest()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录后继续");
         }
         return appUserRepository.findByEmail(DEFAULT_EMAIL)
             .orElseGet(() -> {
@@ -53,20 +59,26 @@ public class CurrentUserService {
         return user;
     }
 
-    private Long extractUserIdFromRequest() {
+    public boolean isCurrentSessionImpersonated() {
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return false;
+        }
+        HttpServletRequest request = attributes.getRequest();
+        String token = request.getHeader("X-PaperPilot-Session");
+        return sessionTokenService.isImpersonated(token);
+    }
+
+    private Long extractAuthenticatedUserId() {
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
         if (attributes == null) {
             return null;
         }
         HttpServletRequest request = attributes.getRequest();
-        String header = request.getHeader("X-PaperPilot-User-Id");
-        if (header == null || header.isBlank()) {
-            return null;
-        }
-        try {
-            return Long.parseLong(header);
-        } catch (NumberFormatException exception) {
-            return null;
-        }
+        return sessionTokenService.verify(request.getHeader("X-PaperPilot-Session")).orElse(null);
+    }
+
+    private boolean hasHttpRequest() {
+        return RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes;
     }
 }

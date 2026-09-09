@@ -8,4 +8,5 @@ import java.util.Optional;
 public interface InviteCodeRepository extends JpaRepository<InviteCodeEntity, Long> {
 
     Optional<InviteCodeEntity> findByCodeAndActiveTrue(String code);
+    Optional<InviteCodeEntity> findFirstByReferrerIdAndActiveTrueOrderByCreatedAtDesc(Long referrerId);
 }

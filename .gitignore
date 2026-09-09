@@ -53,8 +53,14 @@ MEMORY.md
 .trash/
 backups/
 reports/
+scratch/
+desktop/scratch/
+release/quick/
+aiwqlo55aQsH.md
+.agents/
 release/remote/
 *.bak
+*.bak2
 *.bak-*
 *-bak-*
 diff.txt

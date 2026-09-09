@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PaperSolver Capture",
-  "version": "0.3.8",
+  "version": "0.3.11",
   "description": "在论文官网、数据库详情页和 PDF 页面识别文献信息，并一键导入 PaperSolver。",
   "icons": {
     "128": "icon-active-128.png"
@@ -10,6 +10,8 @@
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*",
+    "https://papersolver.cn/*",
+    "https://www.papersolver.cn/*",
     "https://www.sciencedirect.com/*",
     "https://*.sciencedirect.com/*",
     "https://pdf.sciencedirectassets.com/*",
@@ -39,7 +41,9 @@
     "https://www.nature.com/*",
     "https://*.nature.com/*",
     "https://dl.acm.org/*",
-    "https://doi.org/*"
+    "https://doi.org/*",
+    "https://*/*",
+    "http://*/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -84,7 +88,9 @@
         "https://www.nature.com/*",
         "https://*.nature.com/*",
         "https://dl.acm.org/*",
-        "https://doi.org/*"
+        "https://doi.org/*",
+        "https://*/*",
+        "http://*/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"],

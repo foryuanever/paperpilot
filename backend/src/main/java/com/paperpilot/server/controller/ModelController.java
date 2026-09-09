@@ -135,6 +135,12 @@ public class ModelController {
         return modelConfigService.fetchModelsForRoute(id);
     }
 
+    @PostMapping("/pool/{id}/test-connection")
+    public Map<String, Object> testRelayConnection(@PathVariable("id") Long id) {
+        currentUserService.requireAdmin();
+        return modelConfigService.testRelayConnection(id);
+    }
+
     @PostMapping("/pool/{id}/test-model")
     public Map<String, Object> testPoolModel(
         @PathVariable("id") Long id,
@@ -142,6 +148,17 @@ public class ModelController {
     ) {
         currentUserService.requireAdmin();
         return modelConfigService.testPoolModel(id, modelName);
+    }
+
+    @PostMapping("/pool/{id}/probe-output")
+    public Map<String, Object> probePoolModelOutput(
+        @PathVariable("id") Long id,
+        @RequestParam("modelName") String modelName,
+        @RequestBody(required = false) Map<String, Object> body
+    ) {
+        currentUserService.requireAdmin();
+        String prompt = body == null ? null : String.valueOf(body.getOrDefault("prompt", ""));
+        return modelConfigService.probePoolModelOutput(id, modelName, prompt);
     }
 
     @DeleteMapping("/pool/{id}")
@@ -170,6 +187,32 @@ public class ModelController {
     public Map<String, Object> sortPoolRoutes(@RequestBody List<Long> ids) {
         currentUserService.requireAdmin();
         return modelConfigService.sortPoolRoutes(ids);
+    }
+
+    @PostMapping("/pool/stress")
+    public Map<String, Object> stressPoolRoutes(@RequestBody(required = false) Map<String, Object> body, HttpServletRequest request) {
+        currentUserService.requireAdmin();
+        Map<String, Object> payload = body == null ? Map.of() : body;
+        Integer samples = number(payload.get("samples"));
+        Integer concurrency = number(payload.get("concurrency"));
+        Boolean applySort = bool(payload.get("applySort"));
+        Map<String, Object> result = modelConfigService.stressTestPools(samples, concurrency, applySort);
+        authService.logAction("管理员高并发测速并排序模型池（跳过PPT）", "warn", getClientIp(request));
+        return result;
+    }
+
+    private Integer number(Object value) {
+        if (value == null) return null;
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private Boolean bool(Object value) {
+        if (value == null) return null;
+        return Boolean.parseBoolean(String.valueOf(value));
     }
 
     private String getClientIp(HttpServletRequest request) {

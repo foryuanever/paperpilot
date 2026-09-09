@@ -1,21 +1,23 @@
 <template>
   <div class="spatial-page referral-page">
+    <!-- 头部统计卡片 -->
     <section class="referral-stats-grid">
       <article v-for="card in statsCards" :key="card.label" class="referral-stat-card">
         <span class="referral-icon" v-html="icons[card.icon]"></span>
-        <div>
+        <div class="stat-content">
           <strong>{{ card.value }}</strong>
           <span>{{ card.label }}</span>
         </div>
       </article>
     </section>
 
+    <!-- 邀请流程图解 -->
     <section class="referral-flow">
-      <h2>返佣规则</h2>
+      <h2>邀请奖励流程</h2>
       <div class="referral-rule-row">
         <article v-for="step in flowSteps" :key="step.title" class="referral-rule-item">
           <span class="referral-icon small" v-html="icons[step.icon]"></span>
-          <div>
+          <div class="step-text">
             <strong>{{ step.index }}. {{ step.title }}</strong>
             <span>{{ step.desc }}</span>
           </div>
@@ -23,135 +25,162 @@
       </div>
     </section>
 
-    <section class="commission-card">
-      <div>
-        <h2>佣金余额</h2>
-        <span>可用佣金</span>
-        <strong>¥{{ inviteStats.commission }}</strong>
-        <p>邀请好友获得的佣金，可以直接划转到消费余额</p>
-      </div>
-      <div class="commission-actions">
-        <button type="button" @click="transferCommission">
-          <span v-html="icons.wallet"></span>
-          划转到余额
-        </button>
-        <button type="button" @click="redeemPoints">
-          <span v-html="icons.exchange"></span>
-          兑换积分
-        </button>
-      </div>
-    </section>
-
+    <!-- 邀请链接与邀请码卡片 -->
     <section class="invite-panel">
-      <header>
-        <h2>邀请链接</h2>
-        <button type="button" class="text-action" @click="generateCode">+ 创建邀请码</button>
+      <header class="invite-header">
+        <h2>我的专属邀请</h2>
+        <button type="button" class="text-action" @click="generateCode">+ 新建邀请码</button>
       </header>
 
       <div class="invite-code-card">
-        <div class="invite-card-head">
-          <span v-html="icons.ticket"></span>
-          <strong>邀请码 1</strong>
+        <div class="invite-card-left">
+          <div class="invite-card-head">
+            <span v-html="icons.ticket"></span>
+            <strong>专属激活邀请码 (一次性使用)</strong>
+          </div>
+          <div class="invite-code-value">
+            <em v-if="referralCode">{{ referralCode }}</em>
+            <em v-else class="empty-code">暂无有效邀请码，请点击右侧创建</em>
+          </div>
+          <div class="invite-card-foot">
+            <span>被邀请人使用本激活码完成注册，邀请人获得 15 积分奖励</span>
+            <span>{{ referralCodeCreatedAt ? `创建于 ${referralCodeCreatedAt}` : "点击右侧按钮生成" }}</span>
+          </div>
         </div>
-        <button type="button" @click="deleteCode">删除邀请码</button>
-        <em>{{ referralCode }}</em>
-        <div class="invite-card-foot">
-          <span>扫码注册可获得额外福利</span>
-          <span>{{ createdAt ? `创建于 ${createdAt}` : "账号默认邀请码" }}</span>
+        <div class="invite-card-right">
+          <button v-if="referralCode" type="button" class="action-btn cancel-btn" @click="deleteCode">作废当前码</button>
+          <button v-else type="button" class="action-btn" @click="generateCode">创建邀请码</button>
         </div>
       </div>
 
       <div class="invite-link-row">
         <div class="invite-link-box">
           <span v-html="icons.link"></span>
-          <code>{{ registerLink }}</code>
+          <code>{{ registerLink || '请先创建邀请码' }}</code>
         </div>
-        <button type="button" class="copy-link-btn" @click="copyReferralCode">
+        <button type="button" class="copy-link-btn" :disabled="!referralCode" @click="copyReferralCode">
           <span v-html="icons.copy"></span>
-          {{ copied ? "已复制" : "复制链接" }}
+          {{ copied ? "已复制" : "复制邀请码" }}
         </button>
       </div>
-
     </section>
 
+    <!-- 规则说明卡片 -->
+    <section class="referral-rules-details">
+      <h2>邀请活动细则</h2>
+      <ul>
+        <li><strong>邀请奖励</strong>：被邀请人使用邀请码成功注册后，<strong>仅邀请人获得 15 积分</strong>。</li>
+        <li><strong>限首次QQ注册登录</strong>：激活奖励仅限被邀请人<strong>第一次</strong>点击 QQ 登录并完成账号绑定注册时有效，后续重复登录不记为成功邀请。</li>
+        <li><strong>一次性核销规则</strong>：为了防止滥用，<strong>每个邀请码仅限使用一次</strong>。被邀请人成功激活注册后，该邀请码将自动失效作废。</li>
+        <li><strong>随时生成新码</strong>：旧码作废或被使用后，您可以点击右上角“创建邀请码”随时生成新的激活码分发给下一个好友。</li>
+        <li><strong>反作弊说明</strong>：系统将通过设备指纹与网络IP地址智能判定关联账号。若发现虚假注册、同设备刷分等违规作弊行为，系统将收回赠予积分并封禁关联账户。</li>
+      </ul>
+    </section>
+
+    <!-- 邀请明细记录 -->
     <section class="referral-ledger">
-      <h2>返佣记录</h2>
+      <h2>成功邀请记录</h2>
       <div class="referral-table">
         <div class="referral-table-head">
           <span>注册时间</span>
-          <span>用户</span>
-          <span>消费金额</span>
-          <span>佣金</span>
+          <span>被邀请人（QQ昵称）</span>
+          <span>获得奖励</span>
+          <span>状态</span>
         </div>
         <div v-for="row in inviteRows" :key="row.time + row.user" class="referral-table-row">
           <span>{{ row.time }}</span>
           <strong>{{ row.user }}</strong>
-          <em>¥{{ row.amount }}</em>
-          <span>¥{{ row.reward }}</span>
+          <em>+{{ row.reward }} 积分</em>
+          <span class="status-badge">{{ row.status }}</span>
         </div>
-        <p v-if="!inviteRows.length" class="referral-empty-row">暂无真实返佣记录</p>
+        <div v-if="!inviteRows.length" class="referral-empty-row">
+          暂无成功邀请的注册记录
+        </div>
       </div>
     </section>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { useAuthStore } from "../stores/auth";
+import { paperpilotApi } from "../services/paperpilotApi";
 
 const authStore = useAuthStore();
 const copied = ref(false);
-const localCode = ref(localStorage.getItem("papersolver-referral-code") || "");
-const createdAt = ref(localStorage.getItem("papersolver-referral-created-at") || "");
-const referralCode = computed(() => localCode.value || authStore.profile.inviteCode || "PAPERSOLVER2026");
-const registerLink = computed(() => `${window.location.origin}/#/register?code=${encodeURIComponent(referralCode.value)}`);
-const inviteStats = computed(() => ({
-  registered: Number(localStorage.getItem("papersolver-referral-invited") || 0),
-  returned: Number(localStorage.getItem("papersolver-referral-paid") || 0),
-  totalCommission: Number(localStorage.getItem("papersolver-referral-commission") || 0),
-  commission: Number(localStorage.getItem("papersolver-referral-commission") || 0).toFixed(3),
-}));
-const statsCards = computed(() => [
-  { icon: "users", value: inviteStats.value.registered, label: "已注册用户数" },
-  { icon: "coin", value: inviteStats.value.returned, label: "返利人数" },
-  { icon: "wallet", value: `¥${inviteStats.value.commission}`, label: "累计获得佣金" },
-  { icon: "chart", value: "10%", label: "佣金比例" },
-]);
-const flowSteps = [
-  { index: 1, icon: "share", title: "分享", desc: "分享邀请链接" },
-  { index: 2, icon: "userPlus", title: "注册", desc: "好友完成注册" },
-  { index: 3, icon: "cart", title: "购买", desc: "好友购买套餐" },
-  { index: 4, icon: "cash", title: "返佣", desc: "获得10%返佣" },
-];
-const inviteRows = computed(() => {
-  const time = localStorage.getItem("papersolver-referral-paid-at");
-  const user = localStorage.getItem("papersolver-referral-user");
-  const amount = localStorage.getItem("papersolver-referral-amount");
-  const commission = localStorage.getItem("papersolver-referral-commission");
-  if (!time || !user || !amount || !commission) return [];
-  return [{
-    time,
-    user,
-    amount: Number(amount).toFixed(2),
-    reward: Number(commission).toFixed(3),
-  }];
+
+const referralCode = ref("");
+const referralCodeActive = ref(true);
+const referralCodeCreatedAt = ref("");
+
+const registerLink = computed(() => {
+  if (!referralCode.value) return "";
+  return String(referralCode.value).replace(/^INV[-_]?/i, "").toUpperCase();
 });
+
+const inviteStats = ref({
+  registered: 0,
+  returned: 0,
+  totalPointsReward: 0
+});
+
+const statsCards = computed(() => [
+  { icon: "users", value: inviteStats.value.registered, label: "已激活注册好友" },
+  { icon: "coin", value: inviteStats.value.returned, label: "奖励发放次数" },
+  { icon: "wallet", value: `${inviteStats.value.totalPointsReward} 积分`, label: "累计获得积分奖励" },
+  { icon: "chart", value: "15 积分", label: "单次邀请奖励" },
+]);
+
+const flowSteps = [
+  { index: 1, icon: "share", title: "分享好友", desc: "发送专属链接或激活码给好友" },
+  { index: 2, icon: "userPlus", title: "登录激活", desc: "好友完成首次 QQ 登录并填写邀请码" },
+  { index: 3, icon: "cash", title: "核销单次码", desc: "注册成功后邀请码自动核销作废" },
+  { index: 4, icon: "coin", title: "发放积分", desc: "邀请人账户获得 15 积分奖励" },
+];
+
+const inviteRows = ref([]);
+
 const icons = {
-  users: `<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
-  coin: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M14.8 8.8c-.7-.5-1.7-.8-2.8-.8-1.7 0-3 .8-3 2s1.3 1.8 3 2 3 .8 3 2-1.3 2-3 2c-1.1 0-2.1-.3-2.8-.8"/><path d="M12 6v12"/></svg>`,
-  wallet: `<svg viewBox="0 0 24 24"><path d="M20 7H5a3 3 0 0 0 0 6h15v6H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h13z"/><path d="M16 13h6v-3h-6a1.5 1.5 0 0 0 0 3z"/></svg>`,
-  chart: `<svg viewBox="0 0 24 24"><path d="M4 20V10h4v10"/><path d="M10 20V4h4v16"/><path d="M16 20v-7h4v7"/></svg>`,
-  share: `<svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4"/><path d="m15.4 6.5-6.8 4"/></svg>`,
-  userPlus: `<svg viewBox="0 0 24 24"><path d="M15 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>`,
-  cart: `<svg viewBox="0 0 24 24"><circle cx="9" cy="20" r="1"/><circle cx="17" cy="20" r="1"/><path d="M3 4h2l2.4 11.4a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L21 8H6"/></svg>`,
-  cash: `<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="12" rx="2"/><path d="M7 12h.01"/><path d="M17 14h.01"/><path d="M9 7V5h6v2"/></svg>`,
-  ticket: `<svg viewBox="0 0 24 24"><path d="M3 9a3 3 0 0 0 0 6v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a3 3 0 0 0 0-6V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z"/><path d="M13 5v14"/></svg>`,
-  link: `<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1"/></svg>`,
-  copy: `<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
-  exchange: `<svg viewBox="0 0 24 24"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>`,
+  users: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  coin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`,
+  wallet: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H5a3 3 0 0 0 0 6h15v6H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h13z"/><path d="M16 13h6v-3h-6a1.5 1.5 0 0 0 0 3z"/></svg>`,
+  chart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>`,
+  share: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>`,
+  userPlus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>`,
+  cash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="12" y1="10" x2="12" y2="14"></line><line x1="10" y1="12" x2="14" y2="12"></line></svg>`,
+  ticket: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a3 3 0 0 0 0 6v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a3 3 0 0 0 0-6V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z"/></svg>`,
+  link: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 1.1 7.1l1.1-1.1"/></svg>`,
+  copy: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+  exchange: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 20 7 16 11"></polyline><line x1="20" y1="7" x2="4" y2="7"></line><polyline points="8 21 4 17 8 13"></polyline><line x1="4" y1="17" x2="20" y2="17"></line></svg>`,
 };
 
+async function loadData() {
+  try {
+    const codeData = await paperpilotApi.getReferralCode();
+    referralCode.value = codeData.code || "";
+    referralCodeActive.value = codeData.active ?? false;
+    if (codeData.createdAt) {
+      referralCodeCreatedAt.value = new Date(codeData.createdAt).toLocaleString("zh-CN", { hour12: false }).replace(/\//g, "-");
+    } else {
+      referralCodeCreatedAt.value = "";
+    }
+
+    const statsData = await paperpilotApi.getReferralStats();
+    inviteStats.value = statsData;
+
+    const recordsData = await paperpilotApi.getReferralRecords();
+    inviteRows.value = recordsData;
+  } catch (error) {
+    console.error("加载邀请奖励数据失败", error);
+  }
+}
+
+onMounted(() => {
+  loadData();
+});
+
 async function copyReferralCode() {
+  if (!referralCode.value) return;
   try {
     await navigator.clipboard.writeText(registerLink.value);
     copied.value = true;
@@ -161,517 +190,549 @@ async function copyReferralCode() {
   }
 }
 
-function generateCode() {
-  const seed = (authStore.profile.name || "YUAN").replace(/\s+/g, "").slice(0, 6).toUpperCase();
-  const code = `${seed}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
-  localCode.value = code;
-  createdAt.value = new Date().toLocaleString("zh-CN", { hour12: false }).replace(/\//g, "-");
-  localStorage.setItem("papersolver-referral-code", code);
-  localStorage.setItem("papersolver-referral-created-at", createdAt.value);
-  authStore.addNotification({ title: "邀请码已生成", desc: code });
+async function generateCode() {
+  try {
+    const codeData = await paperpilotApi.createReferralCode();
+    referralCode.value = codeData.code;
+    referralCodeActive.value = codeData.active;
+    if (codeData.createdAt) {
+      referralCodeCreatedAt.value = new Date(codeData.createdAt).toLocaleString("zh-CN", { hour12: false }).replace(/\//g, "-");
+    }
+    authStore.addNotification({ title: "已创建新邀请码", desc: codeData.code });
+    loadData();
+  } catch (error) {
+    authStore.addNotification({ title: "生成失败", desc: error?.message || "请稍后重试" });
+  }
 }
 
-function deleteCode() {
-  localCode.value = "";
-  localStorage.removeItem("papersolver-referral-code");
-  authStore.addNotification({ title: "邀请码已删除", desc: "已恢复为账号默认邀请码。" });
-}
-
-function transferCommission() {
-  authStore.addNotification({ title: "已提交划转申请", desc: `可用佣金 ¥${inviteStats.value.commission}` });
-}
-
-function redeemPoints() {
-  authStore.addNotification({ title: "积分兑换待开放", desc: "当前佣金可先划转到余额。" });
+async function deleteCode() {
+  try {
+    await paperpilotApi.deleteReferralCode();
+    referralCode.value = "";
+    referralCodeActive.value = false;
+    referralCodeCreatedAt.value = "";
+    authStore.addNotification({ title: "已作废邀请码", desc: "作废后其他人将无法使用它进行注册。" });
+    loadData();
+  } catch (error) {
+    authStore.addNotification({ title: "作废失败", desc: error?.message || "请稍后重试" });
+  }
 }
 </script>
 
 <style scoped>
-
 /* ═══ ReferralView — Premium Dual-Theme ═══ */
-.referral-page, [class*="referral"] {
-  --c-bg:      #f4f5f8;
-  --c-surface: #ffffff;
-  --c-border:  rgba(15,23,42,.08);
-  --c-text:    #0f172a;
-  --c-muted:   #64748b;
-  --c-accent:  #6366f1;
-  --c-accent2: #a855f7;
-  --sh-sm: 0 2px 8px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.04);
-  --r: 16px; --r-sm: 10px; --r-pill: 999px;
-  min-height: 100vh;
-  background: var(--c-bg);
-  color: var(--c-text);
-  font-family: Inter, "PingFang SC", system-ui, sans-serif;
-  transition: background .3s, color .3s;
-}
-:root[data-theme="dark"] .referral-page,
-:root[data-theme="dark"] [class*="referral"] {
-  --c-bg:      #09090e;
-  --c-surface: rgba(18,24,40,.88);
-  --c-border:  rgba(255,255,255,.07);
-  --c-text:    #f1f5f9;
-  --c-muted:   #94a3b8;
-}
-
-/* All surface cards */
-.referral-page section, .referral-page article,
-.referral-page .card, .referral-page .panel {
-  background: var(--c-surface) !important;
-  border: 1px solid var(--c-border) !important;
-  border-radius: var(--r) !important;
-  box-shadow: var(--sh-sm) !important;
-  backdrop-filter: blur(16px);
-  color: var(--c-text) !important;
-}
-.referral-page h1, .referral-page h2, .referral-page h3 { color: var(--c-text) !important; }
-.referral-page p, .referral-page span { color: var(--c-muted); }
-.referral-page strong { color: var(--c-text) !important; }
-
-/* Invite code box */
-.referral-page input[readonly] {
-  background: var(--c-bg) !important;
-  border: 1px solid var(--c-border) !important;
-  color: var(--c-text) !important;
-  border-radius: var(--r-sm);
-  padding: 10px 14px;
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  outline: none;
-}
-
-/* CTA buttons */
-.referral-page button:not(.secondary), .referral-page .cta-btn {
-  border-radius: var(--r-pill) !important;
-  border: none !important;
-  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2)) !important;
-  color: #fff !important;
-  font-weight: 800 !important;
-  box-shadow: 0 4px 14px rgba(99,102,241,.3) !important;
-  transition: all .2s !important;
-}
-.referral-page button:hover { transform: translateY(-1px) !important; }
-.referral-page .reward-item, .referral-page .tier-card {
-  padding: 16px 20px;
-  border-radius: var(--r-sm) !important;
-  background: var(--c-bg) !important;
-  border: 1px solid var(--c-border) !important;
-}
-
 .referral-page {
-  display: grid;
-  gap: 26px;
-  width: min(1280px, calc(100vw - 64px));
-  margin: 0 auto;
-  padding: 24px 0 64px;
+  --c-bg: #f8fafc;
+  --c-surface: #ffffff;
+  --c-border: #e2e8f0;
+  --c-text-primary: #0f172a;
+  --c-text-secondary: #475569;
+  --c-text-muted: #94a3b8;
+  --c-accent: #2563eb;
+  --c-accent-light: #eff6ff;
+  --c-accent-hover: #1d4ed8;
+  --c-success: #10b981;
+  --c-success-light: #ecfdf5;
+  --c-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05), 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+  --c-card-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+
+  min-height: 100vh;
+  background-color: var(--c-bg);
+  padding: 32px;
+  font-family: Inter, "PingFang SC", system-ui, sans-serif;
+  transition: background-color .3s, color .3s;
+}
+
+:root[data-theme="dark"] .referral-page {
+  --c-bg: #09090b;
+  --c-surface: #18181b;
+  --c-border: #27272a;
+  --c-text-primary: #f4f4f5;
+  --c-text-secondary: #a1a1aa;
+  --c-text-muted: #52525b;
+  --c-accent: #3b82f6;
+  --c-accent-light: rgba(59, 130, 246, 0.08);
+  --c-accent-hover: #60a5fa;
+  --c-success: #10b981;
+  --c-success-light: rgba(16, 185, 129, 0.08);
+  --c-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02);
+  --c-card-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+}
+
+/* Sections as modern containers */
+.referral-flow, .invite-panel, .referral-rules-details, .referral-ledger {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 16px;
+  padding: 28px;
+  margin-bottom: 28px;
+  box-shadow: var(--c-shadow);
 }
 
 .referral-stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 22px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 28px;
 }
 
-.referral-stat-card,
-.referral-flow,
-.commission-card,
-.invite-panel,
-.referral-ledger {
-  border: 1px solid #e0e5ec;
-  border-radius: 8px;
-  background: #f8fafc;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, .045);
+@media (max-width: 1024px) {
+  .referral-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .referral-stats-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .referral-stat-card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  padding: 16px 20px;
   display: flex;
   align-items: center;
   gap: 16px;
-  min-height: 108px;
-  padding: 20px;
+  box-shadow: var(--c-shadow);
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.referral-stat-card div {
-  display: grid;
-  gap: 6px;
-}
-
-.referral-stat-card strong {
-  color: #20242c;
-  font-size: 21px;
-  line-height: 1;
-}
-
-.referral-stat-card span:not(.referral-icon) {
-  color: #4b5563;
-  font-size: 14px;
-  font-weight: 600;
+.referral-stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--c-card-shadow);
 }
 
 .referral-icon {
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 60px;
-  height: 60px;
-  border-radius: 10px;
-  color: #315bc9;
-  background: #e3e9f8;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.referral-icon svg, :deep(.referral-icon svg) {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.5 !important;
 }
 
 .referral-icon.small {
-  width: 48px;
-  height: 48px;
-  border-radius: 9px;
+  width: 32px;
+  height: 32px;
 }
 
-.referral-icon :deep(svg),
-.commission-actions span :deep(svg),
-.invite-card-head span :deep(svg),
-.invite-link-box span :deep(svg),
-.copy-link-btn span :deep(svg) {
-  width: 26px;
-  height: 26px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.referral-icon.small svg, :deep(.referral-icon.small svg) {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.5 !important;
 }
 
-.referral-icon.small :deep(svg) {
-  width: 22px;
-  height: 22px;
+.stat-content {
+  display: flex;
+  flex-direction: column;
 }
 
-.referral-flow,
-.invite-panel,
-.referral-ledger {
-  padding: 24px;
-}
-
-.referral-flow h2,
-.commission-card h2,
-.invite-panel h2,
-.referral-ledger h2 {
-  margin: 0;
-  color: #20242c;
-  font-size: 20px;
+.stat-content strong {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--c-text-primary);
   line-height: 1.2;
 }
 
-.referral-flow h2 {
-  margin-bottom: 26px;
+.stat-content span {
+  font-size: 0.75rem;
+  color: var(--c-text-secondary);
+  margin-top: 2px;
+}
+
+.referral-page h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--c-text-primary);
+  margin-top: 0;
+  margin-bottom: 24px;
 }
 
 .referral-rule-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 28px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .referral-rule-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .referral-rule-item {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 16px;
-}
-
-.referral-rule-item div {
-  display: grid;
-  gap: 7px;
-}
-
-.referral-rule-item strong {
-  color: #20242c;
-  font-size: 16px;
-}
-
-.referral-rule-item span:not(.referral-icon) {
-  color: #4b5563;
-  font-size: 14px;
-}
-
-.commission-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 28px;
-  min-height: 156px;
-  padding: 24px;
-  border-color: #b8ccff;
-  background: #f8fbff;
-}
-
-.commission-card > div:first-child {
-  display: grid;
   gap: 12px;
+  padding: 14px 18px;
+  background: var(--c-bg);
+  border-radius: 12px;
+  border: 1px solid var(--c-border);
 }
 
-.commission-card span {
-  color: #4b5563;
-  font-size: 14px;
-  font-weight: 650;
+.step-text {
+  display: flex;
+  flex-direction: column;
 }
 
-.commission-card strong {
-  color: #315bc9;
-  font-size: 32px;
-  line-height: 1;
+.step-text strong {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--c-text-primary);
 }
 
-.commission-card p {
+.step-text span {
+  font-size: 0.75rem;
+  color: var(--c-text-secondary);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.invite-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.invite-header h2 {
   margin: 0;
-  color: #4b5563;
-  font-size: 14px;
-}
-
-.commission-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.commission-actions button,
-.copy-link-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 46px;
-  border: 0;
-  border-radius: 8px;
-  padding: 0 22px;
-  color: #fff;
-  background: #315bc9;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 800;
-  box-shadow: 0 8px 18px rgba(49, 91, 201, .22);
-  cursor: pointer;
-}
-
-.commission-actions span,
-.copy-link-btn span {
-  display: inline-grid;
-  place-items: center;
-}
-
-.commission-actions span :deep(svg),
-.copy-link-btn span :deep(svg) {
-  width: 16px;
-  height: 16px;
-}
-
-.invite-panel header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 42px;
 }
 
 .text-action {
-  border: 0;
-  color: #4b5563;
-  background: transparent;
-  font: inherit;
-  font-size: 14px;
+  background: none;
+  border: none;
+  color: var(--c-accent);
+  font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
 }
 
+.text-action:hover {
+  color: var(--c-accent-hover);
+}
+
+/* Coupon Ticket Style Card */
 .invite-code-card {
   position: relative;
-  display: grid;
-  width: min(560px, 100%);
-  min-height: 150px;
-  margin: 0 auto 32px;
-  padding: 22px 32px 18px;
+  background: linear-gradient(135deg, var(--c-accent), #1d4ed8) !important;
+  color: #ffffff;
+  border-radius: 16px;
+  padding: 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   overflow: hidden;
-  border-radius: 8px;
-  color: #fff;
-  background:
-    radial-gradient(circle at 92% 86%, rgba(255, 255, 255, .08), transparent 28%),
-    #456ac8;
-  box-shadow: 0 10px 22px rgba(49, 91, 201, .22);
+  box-shadow: var(--c-card-shadow);
+  margin-bottom: 24px;
 }
 
-.invite-card-head,
-.invite-card-foot {
+.invite-code-card::before, .invite-code-card::after {
+  content: "";
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: var(--c-bg);
+  border-radius: 50%;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+}
+
+.invite-code-card::before {
+  left: -12px;
+}
+
+.invite-code-card::after {
+  right: -12px;
+}
+
+.invite-card-left {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  flex: 1;
 }
 
 .invite-card-head {
-  justify-content: flex-start;
-  color: #fff;
-  font-size: 18px;
-  font-weight: 850;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
-.invite-card-head span :deep(svg) {
-  width: 22px;
-  height: 22px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
+.invite-card-head svg {
+  width: 16px;
+  height: 16px;
 }
 
-.invite-code-card button {
-  position: absolute;
-  top: 16px;
-  right: 32px;
-  min-height: 28px;
-  border: 1px solid rgba(255, 255, 255, .48);
-  border-radius: 5px;
-  padding: 0 10px;
-  color: #fff;
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.invite-code-card em {
-  justify-self: center;
-  align-self: center;
-  padding: 14px 18px;
-  border-radius: 7px;
-  color: #fff;
-  background: rgba(255, 255, 255, .12);
+.invite-code-value em {
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
   font-style: normal;
-  font-size: 27px;
-  font-weight: 850;
-  letter-spacing: .04em;
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: #ffffff;
+  margin: 12px 0;
+  display: block;
+}
+
+.invite-code-value .empty-code {
+  font-size: 1.15rem;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: normal;
+  font-family: inherit;
+  font-weight: 500;
+  margin: 16px 0;
+  font-style: normal;
+  display: block;
 }
 
 .invite-card-foot {
-  align-self: end;
-  color: rgba(255, 255, 255, .9);
-  font-size: 12px;
-  font-weight: 650;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.invite-card-right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 32px;
+  border-left: 2px dashed rgba(255, 255, 255, 0.25);
+  height: 100px;
+  margin-left: 24px;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  background: #ffffff;
+  color: var(--c-accent);
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.action-btn:hover {
+  background: #f1f5f9;
+  transform: translateY(-1px);
+}
+
+.action-btn.cancel-btn {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.action-btn.cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .invite-link-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
   gap: 12px;
-  align-items: center;
+  margin-top: 20px;
 }
 
 .invite-link-box {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-height: 46px;
+  gap: 12px;
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
   padding: 0 16px;
-  border: 1px solid #e0e5ec;
-  border-radius: 7px;
-  background: #f3f5f7;
+  height: 48px;
+  overflow: hidden;
 }
 
-.invite-link-box span {
-  color: #6b7280;
-}
-
-.invite-link-box span :deep(svg) {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
+.invite-link-box svg {
+  width: 18px;
+  height: 18px;
+  color: var(--c-text-secondary);
+  flex-shrink: 0;
 }
 
 .invite-link-box code {
-  min-width: 0;
-  overflow: hidden;
-  color: #20242c;
-  font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  color: var(--c-text-primary);
   white-space: nowrap;
+  overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.copy-link-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--c-accent);
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 0 24px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.copy-link-btn:hover:not(:disabled) {
+  background: var(--c-accent-hover);
+}
+
+.copy-link-btn:disabled {
+  background: var(--c-border);
+  color: var(--c-text-muted);
+  cursor: not-allowed;
+}
+
+.copy-link-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Rules Section */
+.referral-rules-details ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+}
+
+.referral-rules-details li {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--c-text-secondary);
+  position: relative;
+  padding-left: 24px;
+}
+
+.referral-rules-details li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--c-success);
+  font-weight: 900;
+  font-size: 1rem;
+}
+
+.referral-rules-details li strong {
+  color: var(--c-text-primary);
+  font-weight: 600;
+}
+
+/* Ledger (Records Table) styling */
+.referral-ledger {
+  padding: 28px 0 !important;
+}
+
 .referral-ledger h2 {
-  margin-bottom: 20px;
+  padding: 0 28px;
 }
 
 .referral-table {
-  overflow: hidden;
-  border: 1px solid #edf0f4;
-  border-radius: 12px;
-  background: #f8fafc;
-}
-
-.referral-table-head,
-.referral-table-row {
-  display: grid;
-  grid-template-columns: 1.2fr 1.4fr .65fr .55fr;
-  gap: 18px;
-  align-items: center;
-  min-height: 56px;
-  padding: 0 22px;
+  width: 100%;
 }
 
 .referral-table-head {
-  border-bottom: 1px solid #e0e5ec;
-  color: #20242c;
-  font-size: 14px;
-  font-weight: 850;
+  display: grid;
+  grid-template-columns: 1.5fr 2fr 1fr 1fr;
+  background: var(--c-bg);
+  border-top: 1px solid var(--c-border);
+  border-bottom: 1px solid var(--c-border);
+  padding: 14px 28px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .referral-table-row {
-  color: #20242c;
-  font-size: 14px;
+  display: grid;
+  grid-template-columns: 1.5fr 2fr 1fr 1fr;
+  align-items: center;
+  padding: 16px 28px;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--c-border);
+  transition: background-color 0.2s;
 }
 
-.referral-table-row strong,
+.referral-table-row:hover {
+  background-color: var(--c-bg);
+}
+
+.referral-table-row span {
+  color: var(--c-text-secondary);
+}
+
+.referral-table-row strong {
+  font-weight: 500;
+  color: var(--c-text-primary);
+}
+
 .referral-table-row em {
   font-style: normal;
-  font-weight: 750;
+  color: var(--c-success);
+  font-weight: 600;
 }
 
-.referral-table-row em {
-  color: #315bc9;
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  background: var(--c-success-light);
+  color: var(--c-success);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  width: fit-content;
 }
 
 .referral-empty-row {
-  margin: 0;
-  padding: 28px 22px;
-  color: #6b7280;
-  font-size: 14px;
   text-align: center;
+  padding: 60px 0;
+  color: var(--c-text-secondary);
+  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
 
-@media (max-width: 900px) {
-  .referral-page {
-    width: min(100% - 28px, 1280px);
-  }
-
-  .referral-stats-grid,
-  .referral-rule-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .commission-card,
-  .invite-link-row {
-    grid-template-columns: 1fr;
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
-
-@media (max-width: 620px) {
-  .referral-stats-grid,
-  .referral-rule-row,
-  .referral-table-head,
-  .referral-table-row {
-    grid-template-columns: 1fr;
-  }
-
-  .referral-table-head {
-    display: none;
-  }
+.referral-empty-row::before {
+  content: "✉";
+  font-size: 2.5rem;
+  color: var(--c-text-muted);
+  opacity: 0.5;
 }
 </style>

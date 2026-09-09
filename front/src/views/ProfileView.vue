@@ -22,10 +22,6 @@
                 {{ userInitial }}
               </span>
             </div>
-            <label class="avatar-upload">
-              <input type="file" accept="image/*" @change="onAvatarUpload" />
-              更新头像
-            </label>
           </div>
 
           <div class="hero-copy">
@@ -47,20 +43,23 @@
             <article class="hero-stat">
               <span>科研等级</span>
               <strong>LV{{ levelInfo.level }}</strong>
-              <small>{{ levelInfo.current }} / 100 硕果</small>
+              <small>{{ levelInfo.current }} / 100 经验</small>
             </article>
             <article class="hero-stat">
-              <span>累计硕果</span>
+              <span>累计经验</span>
+              <strong>{{ checkinScore }}</strong>
+              <small>签到成长经验</small>
+            </article>
+            <article class="hero-stat">
+              <span>可用积分</span>
               <strong>{{ fruitScore }}</strong>
-              <small>签到、发帖与置顶奖励</small>
+              <small>AI 调用余额</small>
             </article>
           </div>
         </div>
       </header>
 
       <div v-if="profileSuccess" class="banner-alert success">{{ profileSuccess }}</div>
-      <div v-if="passwordError" class="banner-alert error">{{ passwordError }}</div>
-      <div v-if="passwordSuccess" class="banner-alert success">{{ passwordSuccess }}</div>
 
       <section class="profile-grid" data-reveal>
         <aside class="profile-side">
@@ -159,44 +158,11 @@
 
               <label>
                 <span>邀请码</span>
-                <input :value="authStore.profile.inviteCode" type="text" disabled />
+                <input :value="inviteCodeDisplay" type="text" disabled />
               </label>
 
               <div class="form-actions">
                 <button type="submit" class="apple-btn apple-btn-primary">保存资料</button>
-              </div>
-            </form>
-          </article>
-
-          <article class="panel settings-panel">
-            <div class="panel-head">
-              <div>
-                <span class="panel-eyebrow">Security</span>
-                <h2>密码与安全</h2>
-              </div>
-            </div>
-
-            <form class="form-stack" @submit.prevent="submitPasswordChange">
-              <div class="form-grid">
-                <label>
-                  <span>当前密码</span>
-                <input v-model="oldPassword" type="password" placeholder="输入当前密码" autocomplete="current-password" />
-                </label>
-                <label>
-                  <span>新密码</span>
-                  <input v-model="newPassword" type="password" placeholder="至少 6 位" autocomplete="new-password" />
-                </label>
-              </div>
-
-              <label>
-                <span>确认新密码</span>
-                <input v-model="confirmPassword" type="password" placeholder="再次输入新密码" autocomplete="new-password" />
-              </label>
-
-              <div class="form-actions">
-                <button type="submit" class="apple-btn apple-btn-primary" :disabled="isSubmittingPassword">
-                  {{ isSubmittingPassword ? "正在提交..." : "更新密码" }}
-                </button>
               </div>
             </form>
           </article>
@@ -240,9 +206,9 @@
           <article class="panel contribution-panel">
             <div class="panel-head contribution-head">
               <div>
-                <span class="panel-eyebrow">Check-in activity</span>
-                <h2>签到热力分布</h2>
-                <p>按真实签到日期展示，颜色越深表示当天获得的硕果越多。</p>
+                <span class="panel-eyebrow">Online activity</span>
+                <h2>在线天数</h2>
+                <p>记录您的日常科研在线轨迹，点亮代表当天有在线科研记录。</p>
               </div>
               <label class="year-select">
                 <span>年份</span>
@@ -253,71 +219,50 @@
             </div>
 
             <div class="contribution-summary">
-              <span><strong>{{ annualFruitTotal }}</strong>枚年度硕果</span>
-              <span><strong>{{ activeCheckinDays }}</strong>个签到日</span>
-              <span><strong>{{ longestCheckinStreak }}</strong>天最长连续</span>
-              <span><strong>{{ currentCheckinStreak }}</strong>天当前连续</span>
+              <span><strong>{{ activeOnlineDays }}</strong>天在线天数</span>
+              <span><strong>{{ longestOnlineStreak }}</strong>天最长连续</span>
+              <span><strong>{{ currentOnlineStreak }}</strong>天当前连续</span>
             </div>
 
-            <div class="heatmap-scroll" aria-label="每日签到硕果热力图">
-              <div class="heatmap-months">
-                <span v-for="month in heatmapMonths" :key="month">{{ month }}</span>
-              </div>
-              <div class="heatmap-body">
-                <div class="heatmap-weekdays" aria-hidden="true">
-                  <span>一</span><span>三</span><span>五</span>
+            <div class="heatmap-scroll" aria-label="每日在线热力图">
+              <div class="heatmap-body-wrap">
+                <div class="heatmap-months-track">
+                  <span
+                    v-for="monthName in heatmapMonths"
+                    :key="monthName"
+                    class="heatmap-month-label"
+                  >
+                    {{ monthName }}
+                  </span>
                 </div>
-                <div class="reading-heatmap">
-                  <button
-                    v-for="day in readingContribution"
-                    :key="day.date"
-                    class="heatmap-cell"
-                    :class="`level-${day.level}`"
-                    :title="`${day.date}：签到获得 ${day.count} 枚硕果`"
-                    :aria-label="`${day.date} 签到获得 ${day.count} 枚硕果`"
-                  ></button>
+                <div class="heatmap-body">
+                  <div class="heatmap-weekdays" aria-hidden="true">
+                    <span>一</span><span>三</span><span>五</span><span>日</span>
+                  </div>
+                  <div class="reading-heatmap">
+                    <button
+                      v-for="day in readingContribution"
+                      :key="day.date"
+                      class="heatmap-cell"
+                      :class="{ 'is-active': day.active, 'is-future': day.isFuture }"
+                      :disabled="day.isFuture"
+                      :title="day.isFuture ? `${day.date}（未到达）` : `${day.date}：${day.active ? '在线' : '未在线'}`"
+                      :aria-label="day.isFuture ? `${day.date} 未到达` : `${day.date} ${day.active ? '在线' : '未在线'}`"
+                    ></button>
+                  </div>
                 </div>
               </div>
             </div>
 
             <footer class="heatmap-footer">
-              <span>{{ contributionYear }} 年签到轨迹</span>
-              <div class="heatmap-legend"><span>少</span><i class="level-0"></i><i class="level-1"></i><i class="level-2"></i><i class="level-3"></i><i class="level-4"></i><span>多</span></div>
+              <span>{{ contributionYear }} 年在线足迹</span>
+              <div class="heatmap-legend">
+                <span class="legend-item"><i class="heatmap-cell"></i> 未在线</span>
+                <span class="legend-item"><i class="heatmap-cell is-active"></i> 在线</span>
+              </div>
             </footer>
           </article>
 
-          <article class="panel posts-panel">
-            <div class="panel-head">
-              <div>
-                <span class="panel-eyebrow">Timeline</span>
-                <h2>我的讨论记录</h2>
-              </div>
-              <router-link to="/forum" class="apple-link">进入论坛</router-link>
-            </div>
-
-            <div v-if="myPosts.length" class="post-list">
-              <article v-for="post in myPosts" :key="post.id" class="post-card">
-                <div class="post-meta">
-                  <span>{{ post.time }}</span>
-                  <div>
-                    <span>{{ post.likes }} 赞</span>
-                    <span>{{ post.replies.length }} 回复</span>
-                    <button @click="openEditPost(post)">修改</button>
-                    <button class="danger" @click="removePost(post)">删除</button>
-                  </div>
-                </div>
-                <h3>{{ post.title }}</h3>
-                <p>{{ truncateText(post.content, 180) }}</p>
-                <div class="post-tags">
-                  <span v-if="post.paperTitle" class="paper-pill">《{{ post.paperTitle }}》</span>
-                  <span v-for="tag in post.tags" :key="tag" class="tag-pill">#{{ tag }}</span>
-                </div>
-              </article>
-            </div>
-            <div v-else class="empty-state">
-              你还没有发布讨论。把一篇值得聊的论文带去社区，会很像这页设计本身一样清爽。
-            </div>
-          </article>
         </main>
       </section>
     </section>
@@ -380,19 +325,19 @@ const tempName = ref(authStore.profile.name);
 const tempQq = ref("");
 const tempWechat = ref("");
 const profileSuccess = ref("");
-const oldPassword = ref("");
-const newPassword = ref("");
-const confirmPassword = ref("");
-const passwordError = ref("");
-const passwordSuccess = ref("");
-const isSubmittingPassword = ref(false);
 const editingPost = ref(null);
 const savingPost = ref(false);
 const contactRequestsLoading = ref(false);
 const contactRequests = ref({ incoming: [], outgoing: [], pendingCount: 0 });
-const contributionYear = ref(new Date().getFullYear());
+const currentSystemYear = new Date().getFullYear();
+const contributionYear = ref(currentSystemYear);
 const checkinHistory = ref([]);
-const contributionYears = computed(() => [new Date().getFullYear(), new Date().getFullYear() - 1]);
+const contributionYears = computed(() => [
+  currentSystemYear,
+  currentSystemYear - 1,
+  currentSystemYear - 2,
+  currentSystemYear - 3
+]);
 const editForm = ref({ title: "", direction: "", content: "" });
 const directions = [
   "计算机", "人工智能", "软件工程", "自动化", "电气工程", "电子信息", "通信工程",
@@ -427,13 +372,34 @@ const pageBackgroundStyle = computed(() => {
 });
 
 const fruitScore = computed(() => {
-  // authStore.session.user.fruitScore is updated synchronously after drawCheckinFruit
   const fromAuth = Number(authStore.profile.fruitScore ?? 0);
-  // Also check teamStore for current member (may differ if team is loaded)
   const fromMember = teamStore.members.find(m => m.email === authStore.profile.email)?.fruitScore;
   return fromMember !== undefined ? Number(fromMember) : fromAuth;
 });
-const levelInfo = computed(() => getMemberLevelInfo(fruitScore.value));
+const checkinScore = computed(() => {
+  const fromAuth = Number(authStore.profile.checkinScore ?? 0);
+  const fromMember = teamStore.members.find(m => m.email === authStore.profile.email)?.checkinScore;
+  return fromMember !== undefined ? Number(fromMember) : fromAuth;
+});
+const levelInfo = computed(() => getMemberLevelInfo(checkinScore.value));
+
+const inviteCodeDisplay = computed(() => {
+  const code = String(authStore.profile.inviteCode || "").trim();
+  if (
+    !code ||
+    code === "NO-INVITE" ||
+    code === "QQ-LOGIN" ||
+    code === "WECHAT-LOGIN" ||
+    code === "ADMIN-CREATED" ||
+    code === "LOCAL-SEED" ||
+    code === "DEMO MODE" ||
+    code === "undefined" ||
+    code === "null"
+  ) {
+    return "暂无";
+  }
+  return code;
+});
 
 const myPosts = computed(() => {
   const currentName = authStore.profile.name || "";
@@ -445,45 +411,82 @@ const myPosts = computed(() => {
 const totalLikes = computed(() => myPosts.value.reduce((sum, post) => sum + (post.likes || 0), 0));
 const totalReplies = computed(() => myPosts.value.reduce((sum, post) => sum + (post.replies?.length || 0), 0));
 const heatmapMonths = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
-const checkinByDate = computed(() => {
-  const map = new Map();
+
+const activeDatesSet = computed(() => {
+  const set = new Set();
+  // 1. Checkin history
   checkinHistory.value.forEach((item) => {
-    if (item.date) map.set(item.date, Number(item.fruitAward || 0));
+    if (item.date) set.add(item.date);
   });
-  return map;
+  // 2. Active online dates saved locally for this user
+  const memberId = authStore.profile.email || currentUserMember.value?.email || "user";
+  let localOnlineDates = [];
+  try {
+    const rawDates = localStorage.getItem(`online_active_dates_${memberId}`);
+    if (rawDates) localOnlineDates = JSON.parse(rawDates);
+  } catch {
+    localOnlineDates = [];
+  }
+  if (Array.isArray(localOnlineDates)) {
+    localOnlineDates.forEach(d => { if (d) set.add(d); });
+  }
+  // 3. Always mark today as active online day
+  const todayKey = formatDateKey(new Date());
+  set.add(todayKey);
+  return set;
 });
+
 const readingContribution = computed(() => {
-  const start = new Date(contributionYear.value, 0, 1);
-  const end = new Date(contributionYear.value, 11, 31);
+  const selectedYear = contributionYear.value;
+  const start = new Date(selectedYear, 0, 1);
+  const end = new Date(selectedYear, 11, 31);
   const cells = [];
+  
+  // Pad preceding days before Jan 1 so that row index matches Monday (0) to Sunday (6)
+  let firstWeekday = start.getDay() - 1; // 0 = Mon, 6 = Sun
+  if (firstWeekday < 0) firstWeekday = 6;
+  for (let p = 0; p < firstWeekday; p++) {
+    cells.push({
+      date: `pad-start-${p}`,
+      active: false,
+      isFuture: true,
+      isPad: true
+    });
+  }
+
+  const todayStr = formatDateKey(new Date());
   for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
     const dateKey = formatDateKey(date);
-    const count = checkinByDate.value.get(dateKey) || 0;
-    const level = count === 0 ? 0 : count <= 2 ? 1 : count <= 5 ? 2 : count <= 8 ? 3 : 4;
+    const isFuture = dateKey > todayStr;
+    const active = isFuture ? false : activeDatesSet.value.has(dateKey);
     cells.push({
       date: dateKey,
-      count,
-      level,
+      active,
+      isFuture,
+      isPad: false
     });
   }
   return cells;
 });
-const annualFruitTotal = computed(() => readingContribution.value.reduce((sum, day) => sum + day.count, 0));
-const activeCheckinDays = computed(() => readingContribution.value.filter((day) => day.count > 0).length);
-const longestCheckinStreak = computed(() => {
+
+const activeOnlineDays = computed(() => readingContribution.value.filter((day) => !day.isPad && day.active).length);
+
+const longestOnlineStreak = computed(() => {
   let longest = 0;
   let streak = 0;
   readingContribution.value.forEach((day) => {
-    streak = day.count > 0 ? streak + 1 : 0;
+    if (day.isPad || day.isFuture) return;
+    streak = day.active ? streak + 1 : 0;
     longest = Math.max(longest, streak);
   });
   return longest;
 });
-const currentCheckinStreak = computed(() => {
+
+const currentOnlineStreak = computed(() => {
   let streak = 0;
-  const lastActiveIndex = readingContribution.value.findLastIndex((day) => day.count > 0);
-  for (let index = lastActiveIndex; index >= 0; index -= 1) {
-    if (readingContribution.value[index].count === 0) break;
+  const days = readingContribution.value.filter(d => !d.isPad && !d.isFuture);
+  for (let i = days.length - 1; i >= 0; i--) {
+    if (!days[i].active) break;
     streak += 1;
   }
   return streak;
@@ -493,8 +496,25 @@ onMounted(() => {
   tempName.value = authStore.profile.name;
   tempQq.value = authStore.profile.qq || "";
   tempWechat.value = authStore.profile.wechat || "";
+  // Record today's online activity
+  const memberId = authStore.profile.email || currentUserMember.value?.email || "user";
+  const onlineKey = `online_active_dates_${memberId}`;
+  const todayKey = formatDateKey(new Date());
+  let storedList = [];
+  try {
+    const rawOnline = localStorage.getItem(onlineKey);
+    if (rawOnline) storedList = JSON.parse(rawOnline);
+  } catch {
+    storedList = [];
+  }
+  const storedDates = new Set(Array.isArray(storedList) ? storedList : []);
+  storedDates.add(todayKey);
+  localStorage.setItem(onlineKey, JSON.stringify(Array.from(storedDates)));
+
   loadCheckinHistory();
   loadContactRequests();
+  authStore.refreshProfile().catch(() => {});
+  teamStore.loadFromServer().catch(() => {});
 });
 
 watch(contributionYear, loadCheckinHistory);
@@ -561,47 +581,6 @@ async function saveProfileData() {
     flash(profileSuccess, "个人资料已保存");
   } catch (error) {
     dialogStore.alert(error?.response?.data?.message || "个人资料保存失败");
-  }
-}
-
-async function submitPasswordChange() {
-  passwordError.value = "";
-  passwordSuccess.value = "";
-
-  if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
-    passwordError.value = "请填写所有密码字段";
-    return;
-  }
-  if (newPassword.value !== confirmPassword.value) {
-    passwordError.value = "两次输入的新密码不一致";
-    return;
-  }
-  if (newPassword.value.length < 6) {
-    passwordError.value = "新密码长度至少为 6 位";
-    return;
-  }
-
-  isSubmittingPassword.value = true;
-  try {
-    await paperpilotApi.changePassword({
-      oldPassword: oldPassword.value,
-      newPassword: newPassword.value,
-    });
-    passwordSuccess.value = "密码修改成功";
-    oldPassword.value = "";
-    newPassword.value = "";
-    confirmPassword.value = "";
-  } catch (error) {
-    if (error?.message === "Network Error" || error?.code === "ECONNABORTED" || !error?.response) {
-      passwordSuccess.value = "密码修改成功（本地模式已模拟保存）";
-      oldPassword.value = "";
-      newPassword.value = "";
-      confirmPassword.value = "";
-    } else {
-      passwordError.value = error.response?.data?.message || error.message || "修改密码失败";
-    }
-  } finally {
-    isSubmittingPassword.value = false;
   }
 }
 
@@ -1415,20 +1394,32 @@ button, input, select, textarea { font: inherit; cursor: pointer; }
 
 .heatmap-scroll {
   padding: 20px 24px !important;
-  overflow-x: auto !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
-.heatmap-months {
+.heatmap-body-wrap {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+}
+.heatmap-months-track {
   display: flex !important;
   justify-content: space-between !important;
-  font-size: 11px !important;
-  font-weight: 750 !important;
-  color: var(--c-subtle) !important;
   margin-bottom: 10px !important;
   padding-left: 28px !important;
+  padding-right: 4px !important;
+  font-size: 11.5px !important;
+  font-weight: 750 !important;
+  color: var(--c-subtle) !important;
+  line-height: 1 !important;
+}
+.heatmap-month-label {
+  white-space: nowrap !important;
 }
 .heatmap-body {
   display: flex !important;
   gap: 10px !important;
+  width: 100% !important;
 }
 .heatmap-weekdays {
   display: flex !important;
@@ -1436,60 +1427,101 @@ button, input, select, textarea { font: inherit; cursor: pointer; }
   justify-content: space-between !important;
   font-size: 10px !important;
   color: var(--c-subtle) !important;
-  padding: 4px 0 !important;
+  padding: 2px 0 !important;
+  width: 16px !important;
+  flex-shrink: 0 !important;
+  text-align: center !important;
 }
 .reading-heatmap {
+  flex: 1 !important;
   display: grid !important;
-  grid-template-rows: repeat(7, 12px) !important;
+  grid-template-rows: repeat(7, minmax(12px, 1fr)) !important;
   grid-auto-flow: column !important;
-  grid-auto-columns: 12px !important;
+  grid-auto-columns: minmax(0, 1fr) !important;
   gap: 4px !important;
+  width: 100% !important;
 }
 .heatmap-cell {
-  width: 12px !important;
-  height: 12px !important;
+  width: 100% !important;
+  aspect-ratio: 1 / 1 !important;
+  max-height: 16px !important;
   border-radius: 3px !important;
   border: none !important;
   padding: 0 !important;
   cursor: pointer !important;
-  transition: transform 0.15s ease !important;
+  background: rgba(148, 163, 184, 0.18) !important;
+  transition: transform 0.15s ease, background 0.15s ease !important;
 }
-.heatmap-cell:hover {
+
+.heatmap-cell.is-active {
+  background: #8b5cf6 !important;
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.55) !important;
+}
+
+.heatmap-cell.is-future {
+  opacity: 0.45 !important;
+  cursor: default !important;
+}
+
+.heatmap-cell[class*="pad"] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.heatmap-cell:hover:not(.is-future) {
   transform: scale(1.35) !important;
   z-index: 10 !important;
 }
 
-.heatmap-cell.level-0 { background: rgba(148, 163, 184, 0.18) !important; }
-.heatmap-cell.level-1 { background: rgba(99, 102, 241, 0.35) !important; }
-.heatmap-cell.level-2 { background: rgba(99, 102, 241, 0.65) !important; }
-.heatmap-cell.level-3 { background: rgba(99, 102, 241, 0.88) !important; }
-.heatmap-cell.level-4 { background: #6366f1 !important; box-shadow: 0 0 8px rgba(99, 102, 241, 0.6) !important; }
+:root[data-theme="dark"] .heatmap-cell {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+:root[data-theme="dark"] .heatmap-cell.is-active {
+  background: #a855f7 !important;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.65) !important;
+}
 
 .heatmap-footer {
   display: flex !important;
+  flex-direction: row !important;
   align-items: center !important;
-  justify-content: space-between !important;
-  padding: 14px 24px !important;
-  border-top: 1px solid var(--c-border) !important;
+  justify-content: flex-start !important;
+  gap: 24px !important;
+  padding: 14px 24px 20px !important;
   font-size: 12px !important;
   color: var(--c-muted) !important;
+  white-space: nowrap !important;
 }
+
 .heatmap-legend {
-  display: flex !important;
+  display: inline-flex !important;
+  flex-direction: row !important;
   align-items: center !important;
-  gap: 4px !important;
+  gap: 16px !important;
+  white-space: nowrap !important;
 }
-.heatmap-legend i {
-  width: 10px !important;
-  height: 10px !important;
-  border-radius: 2px !important;
+
+.legend-item {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 12px !important;
+  color: var(--c-muted) !important;
+  white-space: nowrap !important;
+}
+
+.legend-item i.heatmap-cell {
   display: inline-block !important;
+  width: 12px !important;
+  height: 12px !important;
+  aspect-ratio: 1 / 1 !important;
+  border-radius: 3px !important;
+  cursor: default !important;
+  pointer-events: none !important;
+  vertical-align: middle !important;
 }
-.heatmap-legend i.level-0 { background: rgba(148, 163, 184, 0.18) !important; }
-.heatmap-legend i.level-1 { background: rgba(99, 102, 241, 0.35) !important; }
-.heatmap-legend i.level-2 { background: rgba(99, 102, 241, 0.65) !important; }
-.heatmap-legend i.level-3 { background: rgba(99, 102, 241, 0.88) !important; }
-.heatmap-legend i.level-4 { background: #6366f1 !important; }
 
 /* My Posts Action Buttons Fix */
 .post-meta {

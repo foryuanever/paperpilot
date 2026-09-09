@@ -544,7 +544,7 @@
           <div class="detail-grid">
             <div class="detail-item">
               <span>注册时间</span>
-              <strong>{{ selectedMember.registerTime }}</strong>
+              <strong>{{ (selectedMember.registerTime || '').replace('T', ' ').split('.')[0].substring(0, 16) || '—' }}</strong>
             </div>
             <div class="detail-item">
               <span>科研等级</span>
@@ -606,11 +606,11 @@
             :disabled="fruitDrawLoading"
             @click="drawFruit"
           >
-            {{ fruitDrawLoading ? "转盘抽取中..." : "抽取今日硕果" }}
+            {{ fruitDrawLoading ? "转盘抽取中..." : "抽取今日积分" }}
           </button>
           <div v-else class="fruit-award-panel">
             <span>今日获得</span>
-            <strong>+{{ currentCheckinItem?.fruitAward || fruitDrawAward || 0 }} 硕果</strong>
+            <strong>+{{ currentCheckinItem?.fruitAward || fruitDrawAward || 0 }} 积分</strong>
           </div>
           <div class="checkin-streak-panel">
             <span>连续打卡</span>
@@ -1398,10 +1398,10 @@ function openCheckinDialog(saved = currentCheckinItem.value) {
   checkinStreak.value = Math.max(1, streak);
   fruitDrawAward.value = Number(saved?.fruitAward || currentCheckinItem.value?.fruitAward || 0);
   const claimed = Boolean(saved?.fruitClaimed ?? currentCheckinItem.value?.fruitClaimed);
-  checkinDialogTitle.value = claimed ? "今日硕果已入账" : "签到成功，抽取今日硕果";
+  checkinDialogTitle.value = claimed ? "今日积分已入账" : "签到成功，抽取今日积分";
   checkinMotivation.value = claimed
-    ? `今天已经获得 ${fruitDrawAward.value || 0} 枚硕果，继续保持。`
-    : "先完成签到，再亲手转动一次硕果转盘。连续签到越久，高额硕果概率越大。";
+    ? `今天已经获得 ${fruitDrawAward.value || 0} 积分，继续保持。`
+    : "先完成签到，再亲手转动一次积分转盘。连续签到越久，高额积分概率越大。";
   showCheckinModal.value = true;
 }
 
@@ -1422,7 +1422,7 @@ async function drawFruit() {
     }, 650);
   } catch (error) {
     fruitDrawSpinning.value = false;
-    showToast(error.response?.data?.message || "抽取硕果失败，请稍后重试");
+    showToast(error.response?.data?.message || "抽取积分失败，请稍后重试");
   } finally {
     window.setTimeout(() => {
       fruitDrawLoading.value = false;

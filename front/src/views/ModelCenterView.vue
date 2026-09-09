@@ -60,6 +60,24 @@
         </button>
       </div>
 
+      <!-- Stacked subscriptions list -->
+      <div v-if="membership.stacked && membership.stacked.length > 1" class="membership-stack-list animate-hover-up" style="margin-top: 16px; padding: 16px 24px; border-radius: var(--r); background: var(--c-surface); border: 1px solid var(--c-border); display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box; box-shadow: var(--sh-sm); position: relative; z-index: 2;">
+        <span style="font-size: 0.78rem; font-weight: 850; color: var(--c-muted); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          已购套餐队列
+        </span>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div v-for="(sub, idx) in membership.stacked" :key="idx" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; padding: 6px 0; border-bottom: 1px dashed var(--c-border); margin-bottom: 4px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-weight: 800; color: var(--c-text);">{{ sub.planName }}</span>
+              <span v-if="sub.status === 'active'" style="background: rgba(16, 185, 129, 0.12); color: #10b981; font-size: 10px; font-weight: 850; padding: 2px 6px; border-radius: var(--r-sm);">当前生效</span>
+              <span v-else style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; font-size: 10px; font-weight: 850; padding: 2px 6px; border-radius: var(--r-sm);">排队中 (暂挂)</span>
+            </div>
+            <span style="color: var(--c-muted); font-size: 0.8rem;">有效期至 {{ formatFullDate(sub.expiresAt) }}</span>
+          </div>
+        </div>
+      </div>
+
       <!-- 📏 Full-Width Linear Rows Dashboard -->
       <div class="entitlement-linear-panel">
         <div class="panel-header">
@@ -74,7 +92,8 @@
         </div>
 
         <div class="entitlement-linear-rows">
-          <div v-for="item in benefitItems" :key="item.key" class="linear-row">
+          <div v-for="item in benefitItems" :key="item.key" class="entitlement-row-group">
+          <button type="button" class="linear-row" :class="{ expanded: expandedBenefit === item.key }" :disabled="item.isFeature" @click="!item.isFeature && toggleBenefit(item.key)">
             <div class="row-left">
               <span class="homepage-icon-box" :class="benefitBoxClass(item.key)">
                 <svg v-if="item.key === 'import'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -93,13 +112,14 @@
                 <small v-if="item.unlimited">全量开放免扣减</small>
                 <small v-else-if="item.isFeature">{{ item.included ? '已开通特权' : '当期未包含' }}</small>
                 <small v-else-if="item.isTeam && !item.quota">个人套餐未开通</small>
-                <small v-else>当期额度 {{ item.quota }} {{ item.unit }}</small>
+                <small v-else-if="item.key === 'agent'">当前余额 {{ item.quota }} 积分</small>
+                <small v-else>{{ item.isDaily ? '每日额度' : '当期额度' }} {{ item.quota }} {{ item.unit }}</small>
               </div>
             </div>
 
             <div class="row-center-meter">
               <div v-if="!item.unlimited && !item.isFeature && item.quota > 0" class="linear-meter-track">
-                <b :style="{ width: `${quotaPercent(item)}%` }"></b>
+                <b :style="{ width: `${quotaPercent(item)}%`, background: getMeterColor(item) }"></b>
               </div>
               <span v-else-if="item.unlimited" class="linear-unlimited-label">✓ 不限次数</span>
               <span v-else-if="item.isFeature" class="linear-feature-badge" :class="{ active: item.included }">
@@ -110,7 +130,48 @@
 
             <div class="row-right">
               <span class="row-stat-text">{{ benefitUsageLabel(item) }}</span>
+              <span class="row-expand-icon" aria-hidden="true">{{ expandedBenefit === item.key ? '⌃' : '⌄' }}</span>
             </div>
+          </button>
+          <section v-if="expandedBenefit === item.key" class="benefit-detail-panel">
+            <header>
+              <strong>{{ item.label }}使用明细</strong>
+              <span>{{ membershipStartLabel }} 至 {{ membershipEndLabel }}</span>
+            </header>
+            <div class="benefit-detail-filters">
+              <label>开始日期<input v-model="detailStartDate" type="date" @change="loadBenefitDetails" /></label>
+              <label>结束日期<input v-model="detailEndDate" type="date" @change="loadBenefitDetails" /></label>
+            </div>
+            <div v-if="detailsLoading" class="benefit-detail-empty">正在加载使用记录...</div>
+            <div v-else-if="benefitDetails.length === 0" class="benefit-detail-empty">所选日期内暂无使用记录。</div>
+            <div v-else class="benefit-detail-table-wrap">
+              <table class="benefit-detail-table"><thead><tr><th>时间</th><th>场景</th><th>论文</th><th v-if="isCountBenefit(expandedBenefit)">扣减</th><th>结果</th></tr></thead>
+                <tbody>
+                  <tr v-for="row in benefitDetails" :key="row.id">
+                    <td>{{ formatDetailTime(row.time) }}</td>
+                    <td>
+                      <span v-if="isRestoreBenefit(row)" class="restore-scene-tag">{{ row.sceneLabel || '重置福利' }}</span>
+                      <span v-else>{{ row.sceneLabel || 'AI 调用' }}</span>
+                    </td>
+                    <td>{{ isPaperlessScene(row.scene) ? '-' : (row.paper || '-') }}</td>
+                    <td v-if="isCountBenefit(expandedBenefit)">
+                      <span v-if="isRestoreBenefit(row)" class="detail-full-blood">满血</span>
+                      <span v-else :class="row.delta > 0 ? 'detail-add' : row.effective ? 'detail-deduct' : 'detail-muted'">{{ row.delta > 0 ? '+' + row.delta : row.delta }}</span>
+                    </td>
+                    <td>
+                      <span v-if="isRestoreBenefit(row)" class="detail-full-blood">已恢复满血</span>
+                      <span v-else :class="row.effective ? 'detail-success' : 'detail-failed'">{{ row.status }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="benefit-detail-pagination">
+                <span>{{ benefitDetailTotal ? `第 ${benefitDetailPage}/${benefitDetailTotalPages} 页，共 ${benefitDetailTotal} 条` : '暂无记录' }}</span>
+                <button type="button" :disabled="benefitDetailPage <= 1 || detailsLoading" @click="changeBenefitDetailPage(benefitDetailPage - 1)">上一页</button>
+                <button type="button" :disabled="benefitDetailPage >= benefitDetailTotalPages || detailsLoading" @click="changeBenefitDetailPage(benefitDetailPage + 1)">下一页</button>
+              </div>
+            </div>
+          </section>
           </div>
         </div>
       </div>
@@ -140,7 +201,7 @@
           :key="plan.id"
           class="plan-card-v2"
           :class="[normalizePlanId(plan.id), { active: selectedPlan === plan.id, current: plan.id === usageStore.state.membership?.id, featured: plan.id === 'plus' }]"
-          @click="selectedPlan = plan.id"
+          @click="selectPlanForCheckout(plan.id)"
         >
           <!-- Top accent line for featured -->
           <div v-if="plan.id === 'plus'" class="card-accent-line"></div>
@@ -159,21 +220,18 @@
                 <h3>{{ plan.name }}</h3>
                 <span v-if="plan.subtitle" style="font-size: 11px; font-weight: 800; color: var(--c-accent); padding: 2px 6px; background: rgba(99,102,241,0.08); border-radius: 4px; border: 1px solid rgba(99,102,241,0.15);">{{ plan.subtitle }}</span>
               </div>
-              <p style="margin-top: 8px; min-height: 36px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{{ planCopy(plan.id) }}</p>
+              <p style="margin-top: 8px; min-height: 36px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{{ plan.topUpPack ? "一次性购买后立即叠加当前额度，不影响正在生效的会员套餐。" : planCopy(plan.id) }}</p>
             </div>
 
             <!-- Price -->
             <div class="plan-price-row" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 32px;">
-              <template v-if="!plan.monthlyPrice">
+              <template v-if="Number(planPrice(plan)) <= 0 && !isSeckillActive(plan)">
                 <span class="price-main" style="font-size: 26px;">免费</span>
                 <span class="price-sub">永久开放</span>
               </template>
               <template v-else>
                 <span class="price-main">¥<em>{{ planPrice(plan) }}</em></span>
-                <span class="price-sub">/ {{ cycleShortLabel(selectedCycle) }}</span>
-                <span v-if="isSeckillActive(plan)" class="price-original" style="text-decoration: line-through; font-size: 13px; color: var(--c-muted); font-weight: 500;">
-                  ¥{{ originalPlanPrice(plan) }}
-                </span>
+                <span class="price-sub">{{ plan.topUpPack ? "一次性" : `/ ${cycleShortLabel(selectedCycle)}` }}</span>
                 <!-- Inline Seckill Countdown Badge next to price -->
                 <span v-if="isSeckillActive(plan)" class="seckill-inline-countdown" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; background: linear-gradient(90deg, #ef4444, #f97316); color: #fff; font-size: 10px; font-weight: 800; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.25); border: 1px solid rgba(255,255,255,0.15); font-variant-numeric: tabular-nums; line-height: 1;">
                   <span>⚡️秒杀</span>
@@ -194,12 +252,14 @@
           <!-- Features -->
           <ul class="plan-feat-list">
             <li v-for="row in planRows(plan)" :key="row.label" :class="{ 'feat-off': !row.included }">
-              <span class="feat-status-icon" :class="row.included ? 'status-ok' : 'status-no'">
-                <svg v-if="row.included" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" class="feat-svg-icon" style="width: 10px; height: 10px;"><polyline points="20 6 9 17 4 12"/></svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" class="feat-svg-icon" style="width: 10px; height: 10px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <span v-if="row.included" class="feat-status-icon status-ok" style="background: rgba(16, 185, 129, 0.15) !important; color: #10b981 !important; border: 1px solid rgba(16, 185, 129, 0.25);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" class="feat-svg-icon" style="width: 10px; height: 10px;"><polyline points="20 6 9 17 4 12"/></svg>
+              </span>
+              <span v-else class="feat-status-icon status-no" style="background: rgba(239, 68, 68, 0.15) !important; color: #ef4444 !important; border: 1px solid rgba(239, 68, 68, 0.25); display: flex; align-items: center; justify-content: center;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" style="width: 9px; height: 9px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </span>
               <span class="feat-label">{{ row.label }}</span>
-              <span class="feat-val">{{ row.value }}</span>
+              <span class="feat-val" :style="{ color: row.included ? 'var(--c-text)' : 'rgba(239,68,68,0.75)', textDecoration: row.included ? 'none' : 'none' }">{{ row.value }}</span>
             </li>
           </ul>
 
@@ -212,86 +272,20 @@
       </div>
     </section>
 
-    <!-- ── Power Packs ──────────────────────────────────────── -->
-    <section class="plan-workbench">
-      <div class="plan-heading">
-        <div>
-          <span class="section-chip chip-amber">额度加油包</span>
-          <h2>按需补充，永不过期</h2>
-          <p>购买后即时生效，直接叠加至当前可用额度，无需等待周期重置，适合临时大额用量场景。</p>
-        </div>
-      </div>
-
-      <div class="packs-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
-        <article
-          v-for="pack in powerPacks"
-          :key="pack.id"
-          class="pack-card-v2"
-          :class="{ 'pack-v2-active': selectedPlan === pack.id }"
-          @click="selectedPlan = pack.id"
-          style="display: flex; flex-direction: column; height: 100%; min-height: 380px;"
-        >
-          <!-- Left side colored strip -->
-          <div class="pack-accent-bar" :class="pack.icon"></div>
-
-          <div class="pack-v2-top">
-            <div class="pack-v2-icon" :class="pack.icon">
-              <svg v-if="pack.icon === 'review'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-              <svg v-else-if="pack.icon === 'ppt'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-              <svg v-else-if="pack.icon === 'chat'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              <svg v-else-if="pack.icon === 'report'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            </div>
-            <div class="pack-v2-info">
-              <strong>{{ pack.name }}</strong>
-              <span>{{ pack.desc }}</span>
-            </div>
-          </div>
-
-          <!-- Seckill Banner for Pack -->
-          <div v-if="isSeckillActive(pack)" class="seckill-countdown-banner" style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px; margin-bottom: 12px; padding: 6px 10px; border-radius: 8px; background: linear-gradient(90deg, #ef4444, #f97316); color: #fff; font-size: 11px; font-weight: 800; box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); border: 1px solid rgba(255,255,255,0.1);">
-            <span>⚡️ 限时秒杀中</span>
-            <span style="font-variant-numeric: tabular-nums;">{{ formatSeckillCountdown(pack) }}</span>
-          </div>
-
-          <div class="card-hr" style="margin: 10px 0;"></div>
-
-          <!-- Pack Features -->
-          <ul class="plan-feat-list" style="margin-top: 4px; flex: 1;">
-            <li v-for="row in pack.benefits" :key="row.name" :class="{ 'feat-off': !row.included }">
-              <span class="feat-status-icon" :class="row.included ? 'status-ok' : 'status-no'">
-                <svg v-if="row.included" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" class="feat-svg-icon" style="width: 10px; height: 10px;"><polyline points="20 6 9 17 4 12"/></svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" class="feat-svg-icon" style="width: 10px; height: 10px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </span>
-              <span class="feat-label">{{ row.name }}</span>
-              <span class="feat-val">{{ row.value }}</span>
-            </li>
-          </ul>
-
-          <div class="pack-v2-bottom" style="margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.04);">
-            <div class="pack-v2-price">
-              ¥<em>{{ planPrice(pack) }}</em><span>/ 包</span>
-              <span v-if="isSeckillActive(pack)" class="price-original" style="text-decoration: line-through; margin-left: 8px; font-size: 13px; color: var(--c-muted); font-weight: 500;">
-                ¥{{ originalPlanPrice(pack) }}
-              </span>
-            </div>
-          </div>
-          <button class="pack-v2-btn" :class="{ active: selectedPlan === pack.id }">
-            {{ selectedPlan === pack.id ? '✓ 已选中' : '加入选择' }}
-          </button>
-        </article>
-      </div>
-    </section>
-
     <!-- ── Floating Checkout Bar ───────────────────────────────── -->
-    <section class="checkout-bar">
+    <section v-if="showCheckoutBar" class="checkout-bar">
       <div>
         <span>本次开通</span>
-        <strong>{{ selectedPlanInfo.name }}{{ selectedPlanInfo.id && selectedPlanInfo.id.startsWith('pack_') ? ' (即时加量)' : ' · ' + cycleLabel(selectedCycle) }}</strong>
+        <strong>{{ selectedPlanInfo.name }}{{ selectedPlanInfo.topUpPack ? ' (即时叠加)' : ' · ' + cycleLabel(selectedCycle) }}</strong>
         <p>{{ checkoutDescription }}</p>
       </div>
       <div class="checkout-actions">
-        <div class="pay-methods">
-          <button class="active" disabled style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+        <div class="pay-methods" v-if="selectedPlanInfo.id && selectedPlanInfo.id !== 'free'">
+          <button type="button" :class="{ active: payMethod === 'redeem' }" @click="payMethod = 'redeem'" style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <span style="font-size: 1.1rem; line-height: 1;">🎟️</span>
+            兑换通道
+          </button>
+          <button v-if="!selectedPlanRequiresRedeem" type="button" :class="{ active: payMethod === 'wechat' }" @click="payMethod = 'wechat'" style="display: flex; align-items: center; justify-content: center; gap: 6px;">
             <svg class="wechat-pay-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 18px; height: 18px;">
               <rect width="24" height="24" rx="5" fill="#07C160"/>
               <path d="M12 17.5c2.485 0 4.5-1.79 4.5-4s-2.015-4-4.5-4-4.5 1.79-4.5 4c0 .878.318 1.69.856 2.348l-.348 1.152 1.348-.674c.642.176 1.314.274 2.144.274z" fill="#FFF"/>
@@ -300,9 +294,15 @@
             微信支付
           </button>
         </div>
-        <button class="primary-button" :disabled="paying" @click="checkout">
+        <button v-if="payMethod === 'wechat' && !selectedPlanRequiresRedeem" class="primary-button" :disabled="paying" @click="checkout">
           {{ paying ? "正在创建订单..." : `¥${planPrice(selectedPlanInfo)} 去支付` }}
         </button>
+        <div v-else style="display: flex; gap: 8px; align-items: center;">
+          <input v-model.trim="redeemCode" placeholder="输入 5 位兑换码" maxlength="5" style="padding: 0 12px; height: 38px; border-radius: var(--r-pill); border: 1px solid var(--c-border); background: var(--c-bg); color: var(--c-text); text-align: center; text-transform: uppercase; font-family: monospace; font-size: 14px; letter-spacing: 2px; outline: none; width: 170px;" />
+          <button class="primary-button" :disabled="redeeming || !redeemCode" @click="submitRedeemCode" style="margin-top: 0; height: 38px; line-height: 38px; padding: 0 18px; display: flex; align-items: center; justify-content: center;">
+            {{ redeeming ? "兑换中..." : "立即兑换" }}
+          </button>
+        </div>
       </div>
       <p v-if="paymentMessage" class="payment-message" :class="{ success: paymentMessage.includes('成功') }">
         <span v-if="paymentMessage.includes('成功')" class="success-check-icon">✓</span>
@@ -341,6 +341,7 @@
           <button type="button" class="close-button" aria-label="关闭" @click="ticketDialog?.close()">×</button>
         </div>
         <label>工单类型<select v-model="ticket.type"><option value="support">支付与开通问题</option><option value="refund">退款申请</option></select></label>
+        <label v-if="ticket.type === 'refund'">退款支付宝账号<input v-model.trim="ticket.alipayAccount" placeholder="请输入用于接收退款的支付宝账号" required /></label>
         <label>问题标题<input v-model.trim="ticket.subject" placeholder="例如：支付后会员未生效" /></label>
         <label>具体说明<textarea v-model.trim="ticket.detail" rows="5" placeholder="请写明订单、发生时间、问题现象和希望处理方式。"></textarea></label>
         <p v-if="ticketError" class="ticket-error">{{ ticketError }}</p>
@@ -366,7 +367,7 @@
           </div>
           <div class="wechat-pay-meta">
             <strong>{{ currentPayOrder?.orderNo || "待创建订单" }}</strong>
-            <span>{{ selectedPlanInfo.name }} · {{ cycleLabel(selectedCycle) }}</span>
+            <span>{{ selectedPlanInfo.name }} · {{ selectedPlanInfo.topUpPack ? "加油包" : cycleLabel(selectedCycle) }}</span>
             <b v-if="currentPayOrder?.status !== 'paid'">¥{{ Number(currentPayOrder?.amount || planPrice(selectedPlanInfo) || 0).toFixed(2) }}</b>
             <b v-else style="color: #10b981;">支付成功！</b>
             <p>{{ paymentMessage || "请使用微信扫一扫完成支付，支付成功后会员权益会自动生效。" }}</p>
@@ -387,14 +388,28 @@ useScrollReveal(".model-center-page");
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import QRCode from "qrcode";
 import { useUsageStore } from "../stores/usage";
+import { useAuthStore } from "../stores/auth";
 import { paperpilotApi } from "../services/paperpilotApi";
 import { getCurrentApiBaseUrl } from "../services/apiClient";
 import goldCardReference from "../assets/membership/gold-card-cropped.jpg";
 import luckinLogo from "../assets/luckin-logo.png";
 
 const usageStore = useUsageStore();
+const authStore = useAuthStore();
 const loading = ref(false);
+const expandedBenefit = ref("");
+const benefitDetails = ref([]);
+const benefitDetailPage = ref(1);
+const benefitDetailPageSize = ref(10);
+const benefitDetailTotal = ref(0);
+const benefitDetailTotalPages = ref(1);
+const detailsLoading = ref(false);
+const detailStartDate = ref("");
+const detailEndDate = ref("");
 const paying = ref(false);
+const payMethod = ref("wechat");
+const redeemCode = ref("");
+const redeeming = ref(false);
 const ordersLoading = ref(false);
 const orders = ref([]);
 const filteredOrders = computed(() => {
@@ -402,24 +417,8 @@ const filteredOrders = computed(() => {
 });
 const provider = ref("wechat");
 const selectedCycle = ref("monthly");
-const selectedPlan = ref("pack_tier_lite");
-const powerPacks = computed(() => {
-  const packs = displayPlans.value.filter((item) => item.id.startsWith("pack_"));
-  return packs.map((item) => {
-    let icon = "review";
-    if (item.id.includes("standard")) icon = "chat";
-    else if (item.id.includes("plus")) icon = "ppt";
-    else if (item.id.includes("pro")) icon = "report";
-
-    return {
-      ...item,
-      icon,
-      desc: item.subtitle || "补充科研额度",
-      price: item.effectiveMonthlyPrice || item.monthlyPrice || 0,
-      benefits: packRows(item)
-    };
-  });
-});
+const selectedPlan = ref("plus");
+const showCheckoutBar = ref(false);
 const paymentMessage = ref("");
 const ticketDialog = ref(null);
 const qrDialog = ref(null);
@@ -446,28 +445,19 @@ const cycles = [
   { id: "monthly", label: "月付" },
 ];
 
-const defaultPlans = [
-  { id: "free", name: "个人 Free", subtitle: "永久免费版", monthlyPrice: 0, reviewQuotaDaily: 3, pptQuotaMonthly: 0, chatQuotaDaily: 5, translateQuotaDaily: 5, immersiveQuotaDaily: 3, forumSpecial: false, forumTopDaily: 0, peakPriority: false, teamShared: false },
-  { id: "lite", name: "个人 Lite", subtitle: "一杯瑞幸咖啡价", monthlyPrice: 9.9, reviewQuotaDaily: 15, pptQuotaMonthly: 2, chatQuotaDaily: 30, translateQuotaDaily: 10, immersiveQuotaDaily: 10, forumSpecial: false, forumTopDaily: 0, peakPriority: false, teamShared: false },
-  { id: "plus", name: "个人 Plus", subtitle: "热销推荐", monthlyPrice: 19.9, reviewQuotaDaily: 30, pptQuotaMonthly: 4, chatQuotaDaily: 60, translateQuotaDaily: 20, immersiveQuotaDaily: 20, forumSpecial: true, forumTopDaily: 0, peakPriority: false, teamShared: false },
-  { id: "pro", name: "个人 Pro", subtitle: "极速进阶", monthlyPrice: 29.9, reviewQuotaDaily: 60, pptQuotaMonthly: 6, chatQuotaDaily: 120, translateQuotaDaily: 50, immersiveQuotaDaily: 50, forumSpecial: true, forumTopDaily: 1, peakPriority: true, teamShared: false },
-  { id: "team_plus", name: "课题组团队 Plus", subtitle: "导师购买分配 (9折)", monthlyPrice: 17.91, perUserPrice: 19.9, reviewQuotaDaily: 30, pptQuotaMonthly: 4, chatQuotaDaily: 60, translateQuotaDaily: 20, immersiveQuotaDaily: 20, forumSpecial: true, forumTopDaily: 0, peakPriority: true, teamShared: true, teamSeats: 10 },
-  { id: "team_pro", name: "课题组团队 Pro", subtitle: "实验室旗舰 (9折)", monthlyPrice: 26.91, perUserPrice: 29.9, reviewQuotaDaily: 60, pptQuotaMonthly: 6, chatQuotaDaily: 120, translateQuotaDaily: 50, immersiveQuotaDaily: 50, forumSpecial: true, forumTopDaily: 1, peakPriority: true, teamShared: true, teamSeats: 20 },
-  { id: "pack_tier_lite", name: "学术启航加油包", subtitle: "适合日常轻量文献阅读", monthlyPrice: 19.9, reviewQuota: 5, pptQuota: 0, chatQuota: 50, translateQuota: 3, immersiveQuota: 3, researchQuota: 0, reportQuota: 0, teamShared: false },
-  { id: "pack_tier_standard", name: "学术精进加油包", subtitle: "适合高频文献精研", monthlyPrice: 39.9, reviewQuota: 15, pptQuota: 0, chatQuota: 120, translateQuota: 8, immersiveQuota: 8, researchQuota: 10, reportQuota: 0, teamShared: false },
-  { id: "pack_tier_plus", name: "学术大师加油包", subtitle: "中度学术汇报制作", monthlyPrice: 69.9, reviewQuota: 35, pptQuota: 2, chatQuota: 250, translateQuota: 18, immersiveQuota: 18, researchQuota: 25, reportQuota: 0, teamShared: false },
-  { id: "pack_tier_pro", name: "学术至尊加油包", subtitle: "终极文献分析汇报", monthlyPrice: 99.9, reviewQuota: 80, pptQuota: 5, chatQuota: 600, translateQuota: 40, immersiveQuota: 40, researchQuota: 60, reportQuota: 5, teamShared: false },
-];
+const defaultPlans = [];
 
 const fetchedPlans = ref([]);
-const planOrder = ["free", "lite", "plus", "pro", "team_plus", "team_pro", "pack_tier_lite", "pack_tier_standard", "pack_tier_plus", "pack_tier_pro"];
+const publicPlansLoaded = ref(false);
+const planOrder = ["free", "lite", "plus", "pro", "team_plus", "team_pro"];
 const displayPlans = computed(() => {
-  const byId = new Map(defaultPlans.map((plan) => [plan.id, plan]));
-  (fetchedPlans.value || []).forEach((plan) => {
-    const id = plan.id && plan.id.startsWith("pack_") ? plan.id : normalizePlanId(plan.id);
-    byId.set(id, { ...(byId.get(id) || {}), ...plan, id });
-  });
-  return Array.from(byId.values())
+  // The public API is authoritative; before it answers, render no plan values.
+  const source = publicPlansLoaded.value ? (fetchedPlans.value || []) : defaultPlans;
+  return source
+    .map((plan) => {
+      const id = plan.id && plan.id.startsWith("pack_") ? plan.id : normalizePlanId(plan.id);
+      return { ...plan, id };
+    })
     .filter((plan) => plan && plan.activeFlag !== false)
     .sort((a, b) => {
       const ia = planOrder.includes(a.id) ? planOrder.indexOf(a.id) : Number(a.sortOrder ?? 99);
@@ -483,30 +473,17 @@ const planGroups = computed(() => [
     plans: personalPlans.value,
   },
 ]);
-const personalPlans = computed(() => displayPlans.value.filter((item) => !item.teamShared && !item.id.startsWith("pack_")));
+const personalPlans = computed(() => displayPlans.value.filter((item) => !item.teamShared));
 const membership = computed(() => usageStore.state.membership || { id: "free", name: "未开通会员", benefits: {} });
+const membershipStartLabel = computed(() => formatFullDate(membership.value.startedAt || membership.value.startAt) || "开通日");
+const membershipEndLabel = computed(() => formatFullDate(membership.value.expiresAt) || "到期日");
 const selectedPlanInfo = computed(() => {
   const id = selectedPlan.value || "";
-  if (id.startsWith("pack_")) {
-    const pack = powerPacks.value.find(p => p.id === id);
-    if (pack) {
-      return {
-        id: pack.id,
-        name: pack.name,
-        monthlyPrice: pack.price,
-        originalMonthlyPrice: pack.originalMonthlyPrice || pack.price,
-        description: pack.desc,
-        seckillEnabled: pack.seckillEnabled,
-        seckillPrice: pack.seckillPrice,
-        seckillStartsAt: pack.seckillStartsAt,
-        seckillEndsAt: pack.seckillEndsAt,
-        seckillLabel: pack.seckillLabel,
-        seckillActive: pack.seckillActive,
-        teamShared: false
-      };
-    }
-  }
-  return displayPlans.value.find((item) => item.id === id) || displayPlans.value[0] || { name: "研读会员", monthlyPrice: 19.9, reviewQuota: 10, pptQuota: 2, chatQuota: 80 };
+  return displayPlans.value.find((item) => item.id === id) || displayPlans.value[0] || { name: "暂未上架套餐", monthlyPrice: 0, reviewQuota: 0, pptQuota: 0, chatQuota: 0 };
+});
+const selectedPlanRequiresRedeem = computed(() => {
+  const plan = selectedPlanInfo.value;
+  return Boolean(plan?.seckillActive && Number(planPrice(plan)) <= 0);
 });
 const remainingDays = computed(() => {
   if (!membership.value.active || !membership.value.expiresAt) return 0;
@@ -542,42 +519,66 @@ function benefitBoxClass(key) {
     forumBadge: "box-purple",
     forumTop: "box-amber",
     peakPriority: "box-emerald",
-    teamSeats: "box-blue",
   }[key] || "box-purple";
 }
 
 const benefitItems = computed(() => {
   const benefits = membership.value.benefits || {};
   const currentPlanId = normalizePlanId(membership.value.id || "free");
-  const planInfo = displayPlans.value.find((p) => p.id === currentPlanId) || defaultPlans[0];
+  const planInfo = displayPlans.value.find((p) => p.id === currentPlanId) || displayPlans.value[0] || {};
 
-  return [
+  const items = [
     { key: "import", label: "论文插件导入", unlimited: true },
-    { key: "translation", label: "对照翻译", unlimited: false, quota: planInfo.translateQuotaDaily || 5, used: benefits.translation?.used || 0, unit: "篇/天" },
-    { key: "immersive", label: "沉浸翻译", unlimited: false, quota: planInfo.immersiveQuotaDaily || 3, used: benefits.immersive?.used || 0, unit: "篇/天" },
-    { key: "review", label: "AI 论文综述", unlimited: false, quota: planInfo.reviewQuotaDaily || 3, used: benefits.review?.used || 0, unit: "次/天" },
-    { key: "chat", label: "研读对话", unlimited: false, quota: planInfo.chatQuotaDaily || 5, used: benefits.chat?.used || 0, unit: "次/天" },
-    { key: "ppt", label: "组会 PPT", unlimited: false, quota: planInfo.pptQuotaMonthly || 0, used: benefits.ppt?.used || 0, unit: "次/月" },
-    { key: "research", label: "调研广场", unlimited: false, quota: planInfo.researchQuotaDaily || 0, used: benefits.research?.used || 0, unit: "次/天" },
-    { key: "report", label: "组会一键汇报", unlimited: false, quota: planInfo.reportQuotaMonthly || 0, used: benefits.report?.used || 0, unit: "次/月" },
+    { key: "translation", label: "对照翻译", unlimited: false, quota: benefits.translation?.quota !== undefined ? benefits.translation.quota : (planInfo?.translateQuotaDaily || 0), used: benefits.translation?.used || 0, unit: "篇/天" },
+    { key: "immersive", label: "沉浸全篇翻译", unlimited: false, quota: benefits.immersive?.quota !== undefined ? benefits.immersive.quota : (planInfo?.immersiveQuotaDaily || 0), used: benefits.immersive?.used || 0, unit: "篇/天" },
+    { key: "ppt", label: "PPT 生成", unlimited: false, quota: benefits.ppt?.quota !== undefined ? benefits.ppt.quota : (planInfo.pptQuotaMonthly || 0), used: benefits.ppt?.used || 0, unit: "次/月" },
+    { key: "agent", label: "积分", unlimited: false, quota: authStore.profile.fruitScore || 0, used: 0, unit: "积分" },
     { key: "forumBadge", label: "论坛会员标识", isFeature: true, included: planInfo.forumSpecial },
-    { key: "forumTop", label: "发帖置顶", isFeature: true, included: Number(planInfo.forumTopDaily || 0) > 0, value: planInfo.forumTopDaily ? `${planInfo.forumTopDaily} 次/天` : "未包含" },
+    { key: "forumTop", label: "发帖置顶", isFeature: true, included: Number(planInfo.forumTopDaily || 0) > 0, value: planInfo.forumTopDaily ? "包含" : "未包含" },
     { key: "peakPriority", label: "高峰期优先通道", isFeature: true, included: planInfo.peakPriority, value: planInfo.peakPriority ? "优先通道" : "标准通道" },
-    { key: "teamSeats", label: "团队席位", unlimited: false, quota: planInfo.teamSeats || (benefits.teamSeats?.quota || 0), used: benefits.teamSeats?.used || 0, unit: "席", isTeam: true },
   ];
+
+  return items.map(item => {
+    const isDaily = item.unit && item.unit.endsWith("/天");
+    if (isDaily) {
+      const dailyQuota = Number(item.quota || 0);
+      const dailyUsed = Number(item.used || 0);
+      const dailyRemaining = Math.max(0, dailyQuota - dailyUsed);
+
+      return {
+        ...item,
+        isDaily: true,
+        dailyRemaining,
+        quota: dailyQuota,
+        used: dailyUsed,
+        unit: item.unit
+      };
+    } else {
+      const quota = Number(item.quota || 0);
+      const used = Number(item.used || 0);
+      const remaining = Math.max(0, quota - used);
+      return {
+        ...item,
+        isDaily: false,
+        remaining,
+        quota,
+        used,
+        unit: item.unit || "次"
+      };
+    }
+  });
 });
 
 const checkoutDescription = computed(() => {
   const plan = selectedPlanInfo.value;
-  if (plan.id && plan.id.startsWith("pack_")) {
-    return `${plan.description} (单次购买即时生效，无月度自动重置)`;
+  if (plan.topUpPack) {
+    return "购买后立即叠加下列额度，不改变当前套餐、有效期和已用次数。";
   }
   const count = plan.teamShared ? teamMemberCount.value : 0;
   return [
-    `对照 ${plan.translateQuotaDaily || 10} 篇/天`,
-    `沉浸 ${plan.immersiveQuotaDaily || 10} 篇/天`,
-    `综述 ${plan.reviewQuotaDaily || 15} 次/天`,
-    `PPT ${plan.pptQuotaMonthly || 2} 次/月`,
+    `对照 ${plan.translateQuotaDaily || 0} 篇/天`,
+    `沉浸 ${plan.immersiveQuotaDaily || 0} 篇/天`,
+    `PPT ${plan.pptQuotaMonthly || 0} 次/月`,
     plan.teamShared ? `团队 ${count} 人席位` : "",
   ].filter(Boolean).join(" · ");
 });
@@ -586,30 +587,111 @@ onMounted(() => {
   saleTimer = window.setInterval(() => {
     nowTick.value = Date.now();
   }, 40);
+  window.addEventListener("paperpilot:membership-plans-changed", refreshPublicMembershipPlans);
   load();
   loadOrders();
 });
 
 onBeforeUnmount(() => {
+  if (saleTimer) {
+    clearInterval(saleTimer);
+    saleTimer = null;
+  }
+  if (paymentPollTimer) {
+    clearInterval(paymentPollTimer);
+    paymentPollTimer = null;
+  }
+  window.removeEventListener("paperpilot:membership-plans-changed", refreshPublicMembershipPlans);
+});
+
+function toggleBenefit(key) {
+  expandedBenefit.value = expandedBenefit.value === key ? "" : key;
+  benefitDetailPage.value = 1;
+  if (expandedBenefit.value) loadBenefitDetails();
+}
+
+async function loadBenefitDetails() {
+  if (!expandedBenefit.value) return;
+  detailsLoading.value = true;
+  try {
+    const data = await usageStore.fetchDetails({
+      benefit: expandedBenefit.value,
+      startDate: detailStartDate.value || undefined,
+      endDate: detailEndDate.value || undefined,
+      page: benefitDetailPage.value,
+      pageSize: benefitDetailPageSize.value,
+    });
+    benefitDetails.value = Array.isArray(data) ? data : (data.rows || []);
+    benefitDetailTotal.value = Array.isArray(data) ? data.length : Number(data.total || 0);
+    benefitDetailTotalPages.value = Array.isArray(data) ? 1 : Math.max(1, Number(data.totalPages || 1));
+  } catch (error) {
+    benefitDetails.value = [];
+    benefitDetailTotal.value = 0;
+    benefitDetailTotalPages.value = 1;
+    console.warn("load usage details failed", error);
+  } finally {
+    detailsLoading.value = false;
+  }
+}
+
+function changeBenefitDetailPage(target) {
+  benefitDetailPage.value = Math.min(Math.max(1, target), benefitDetailTotalPages.value);
+  loadBenefitDetails();
+}
+
+function formatDetailTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("zh-CN", { hour12: false });
+}
+
+function isCountBenefit(key) {
+  return ["translation", "immersive", "ppt", "agent"].includes(key);
+}
+
+function isRestoreBenefit(row) {
+  if (!row) return false;
+  return row.deltaLabel === "满血"
+    || row.scene === "restore-benefit"
+    || row.scene === "gift-restore"
+    || row.action === "restore-benefit"
+    || row.action === "restore-full"
+    || String(row.sceneLabel || "").includes("重置福利")
+    || String(row.sceneLabel || "").includes("恢复满血");
+}
+
+function isPaperlessScene(scene) {
+  const s = String(scene || "").toLowerCase();
+  return s === "checkin" || s === "recharge" || s === "admin-gift" || s === "restore-benefit" || s.startsWith("gift");
+}
+
+onBeforeUnmount(() => {
   if (saleTimer) window.clearInterval(saleTimer);
+  window.removeEventListener("paperpilot:membership-plans-changed", refreshPublicMembershipPlans);
   stopPaymentPolling();
 });
+
+async function refreshPublicMembershipPlans() {
+  try {
+    const response = await paperpilotApi.getPublicMembershipPlans();
+    fetchedPlans.value = Array.isArray(response) ? response : [];
+    publicPlansLoaded.value = true;
+    selectedPlan.value = normalizePlanId(selectedPlan.value);
+    if (!displayPlans.value.some((item) => item.id === selectedPlan.value)) {
+      selectedPlan.value = displayPlans.value[0]?.id || "free";
+    }
+  } catch (error) {
+    // Keep the local bootstrap cards only when the public catalog is genuinely unreachable.
+    publicPlansLoaded.value = false;
+    console.warn("fetch public membership plans failed", error);
+  }
+}
 
 async function load() {
   loading.value = true;
   try {
     await usageStore.fetchSummary();
-    try {
-      fetchedPlans.value = await paperpilotApi.getPublicMembershipPlans();
-    } catch (e) {
-      console.warn("fetch public membership plans failed", e);
-    }
-    if (!selectedPlan.value.startsWith("pack_")) {
-      selectedPlan.value = normalizePlanId(selectedPlan.value);
-      if (!displayPlans.value.some((item) => item.id === selectedPlan.value)) {
-        selectedPlan.value = displayPlans.value[1]?.id || displayPlans.value[0]?.id || "plus";
-      }
-    }
+    await refreshPublicMembershipPlans();
   } finally {
     loading.value = false;
   }
@@ -625,19 +707,12 @@ async function loadOrders() {
 }
 
 function planPrice(plan) {
-  if (plan.id && plan.id.startsWith("pack_")) {
-    return Number(plan.monthlyPrice || 0).toFixed(2);
-  }
   const monthly = isSeckillActive(plan) ? Number(plan.seckillPrice ?? plan.effectiveMonthlyPrice ?? plan.monthlyPrice ?? 0) : Number(plan.effectiveMonthlyPrice ?? plan.monthlyPrice ?? 0);
   return totalPlanPrice(monthly, plan);
 }
 
-function originalPlanPrice(plan) {
-  const monthly = Math.max(Number(plan.originalMonthlyPrice || 0), Number(plan.monthlyPrice || 0), Number(plan.effectiveMonthlyPrice || 0));
-  return totalPlanPrice(monthly, plan);
-}
-
 function totalPlanPrice(monthly, plan) {
+  if (plan?.topUpPack) return Number(monthly || 0).toFixed(2);
   const factor = selectedCycle.value === "quarterly" ? 2.7 : selectedCycle.value === "yearly" ? 9 : 1;
   const isTeam = plan.teamShared;
   const count = isTeam ? Math.max(1, teamMemberCount.value) : 1;
@@ -647,6 +722,7 @@ function totalPlanPrice(monthly, plan) {
 function isSeckillActive(plan) {
   nowTick.value;
   if (!plan || !plan.seckillEnabled) return false;
+  if (plan.seckillActive === true) return true;
   const start = parseDateValue(plan.seckillStartsAt);
   const end = parseDateValue(plan.seckillEndsAt);
   const now = Date.now();
@@ -662,36 +738,56 @@ function seckillRemainingMs(plan) {
 function formatSeckillCountdown(plan) {
   const ms = seckillRemainingMs(plan);
   if (!ms) return "进行中";
-  const hours = Math.floor(ms / 3600000);
+  const days = Math.floor(ms / 86400000);
+  const hours = Math.floor((ms % 86400000) / 3600000);
   const minutes = Math.floor((ms % 3600000) / 60000);
   const seconds = Math.floor((ms % 60000) / 1000);
-  const cc = Math.floor((ms % 1000) / 10);
+  const milliseconds = ms % 1000;
+  const dd = String(days).padStart(2, "0");
   const hh = String(hours).padStart(2, "0");
   const mm = String(minutes).padStart(2, "0");
   const ss = String(seconds).padStart(2, "0");
-  const ccStr = String(cc).padStart(2, "0");
-  return `${hh}:${mm}:${ss}.${ccStr}`;
+  const msStr = String(milliseconds).padStart(3, "0");
+  return `${dd}天 ${hh}时 ${mm}分 ${ss}秒 ${msStr}毫秒`;
 }
 
 function quotaPercent(item) {
   const quota = Number(item.quota || 0);
   const used = Number(item.used || 0);
-  return quota ? Math.max(0, Math.min(100, (used / quota) * 100)) : 0;
+  if (!quota) return 0;
+  const remaining = Math.max(0, quota - used);
+  return Math.max(0, Math.min(100, (remaining / quota) * 100));
+}
+
+function getMeterColor(item) {
+  const pct = quotaPercent(item);
+  if (pct < 10) {
+    return "linear-gradient(90deg, #ef4444, #f87171)";
+  } else if (pct < 30) {
+    return "linear-gradient(90deg, #f59e0b, #fbbf24)";
+  } else {
+    return "linear-gradient(90deg, #10b981, #34d399)";
+  }
 }
 
 function benefitUsageLabel(item) {
   if (item.unlimited) return "不限次";
   if (item.isFeature) return item.included ? (item.value || "包含") : "未包含";
-  if (item.isTeam && !item.quota) return "未开放";
-  const unit = item.unit || "次";
-  const quota = Number(item.quota || 0);
-  const used = Number(item.used || 0);
-  return `${used} / ${quota} ${unit}`;
+  if (item.key === "agent") {
+    return `余 ${item.remaining} 积分`;
+  }
+  const unitChar = item.key === "translation" || item.key === "immersive" ? "篇" : "次";
+
+  if (item.isDaily) {
+    return `日剩 ${item.dailyRemaining} ${unitChar}`;
+  } else {
+    return `月剩 ${item.remaining} ${unitChar}`;
+  }
 }
 
 function quotaTone(item) {
   if (item.unlimited) return "quota-unlimited";
-  const percent = quotaPercent({ ...item, remaining: benefitRemaining(item) });
+  const percent = quotaPercent(item);
   if (percent >= 60) return "quota-good";
   if (percent >= 25) return "quota-mid";
   return "quota-low";
@@ -730,116 +826,46 @@ function planCopy(id) {
 }
 
 function planRows(plan) {
-  const id = normalizePlanId(plan.id);
+  if (plan.topUpPack) {
+    const amount = (value, unit) => Number(value || 0) > 0 ? `+${Number(value).toLocaleString("zh-CN")} ${unit}` : "未包含";
+    return [
+      { label: "对照翻译", description: "直接叠加当前可用篇数", value: amount(plan.translateQuota, "篇"), included: Number(plan.translateQuota || 0) > 0 },
+      { label: "沉浸全篇翻译", description: "直接叠加当前可用篇数", value: amount(plan.immersiveQuota, "篇"), included: Number(plan.immersiveQuota || 0) > 0 },
+      { label: "PPT 生成", description: "直接叠加当前可用次数", value: amount(plan.pptQuota, "次"), included: Number(plan.pptQuota || 0) > 0 },
+      { label: "AI 积分（共用）", description: "直接叠加当前可用点数", value: amount(plan.agentTokenQuota, "积分"), included: Number(plan.agentTokenQuota || 0) > 0 },
+    ];
+  }
   const isTeam = Boolean(plan.teamShared);
   const prefix = isTeam ? "每人" : "";
-
-  const translateVal = plan.translateQuotaDaily ? `${prefix}每天 ${plan.translateQuotaDaily} 篇` : "未包含";
-  const immersiveVal = plan.immersiveQuotaDaily ? `${prefix}每天 ${plan.immersiveQuotaDaily} 篇` : "未包含";
-  const reviewVal = plan.reviewQuotaDaily ? `${prefix}每天 ${plan.reviewQuotaDaily} 次` : "未包含";
-  const chatVal = plan.chatQuotaDaily ? `${prefix}每天 ${plan.chatQuotaDaily} 次` : "未包含";
-  const pptVal = plan.pptQuotaMonthly ? `${prefix}每月 ${plan.pptQuotaMonthly} 次` : "未包含";
-  const researchVal = plan.researchQuotaDaily ? `${prefix}每天 ${plan.researchQuotaDaily} 次` : "未包含";
-  const reportVal = plan.reportQuotaMonthly ? `${prefix}每月 ${plan.reportQuotaMonthly} 次` : "未包含";
-
-  const forumVal = plan.forumSpecial ? (id === "pro" || id === "team_pro" ? "包含 (每日1次置顶)" : "包含") : "未包含";
-  const peakVal = plan.peakPriority ? "优先通道" : "标准通道";
-
-  if (id === "free") {
-    return [
-      { label: "论文插件导入", description: "文献一键入库与管理", value: "不限次", included: true },
-      { label: "对照翻译", description: "双栏对照翻译阅读", value: translateVal, included: Number(plan.translateQuotaDaily || 0) > 0 },
-      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: immersiveVal, included: Number(plan.immersiveQuotaDaily || 0) > 0 },
-      { label: "AI 论文综述", description: "结构化文献综述生成", value: reviewVal, included: Number(plan.reviewQuotaDaily || 0) > 0 },
-      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: chatVal, included: Number(plan.chatQuotaDaily || 0) > 0 },
-      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: pptVal, included: Number(plan.pptQuotaMonthly || 0) > 0 },
-      { label: "调研广场", description: "社会与学术热点文献分析调研", value: researchVal, included: Number(plan.researchQuotaDaily || 0) > 0 },
-      { label: "组会一键汇报", description: "自动整合组会大纲与一键汇报", value: reportVal, included: Number(plan.reportQuotaMonthly || 0) > 0 },
-      { label: "论坛会员特效与标识", description: "彩色姓名与专属标识", value: forumVal, included: Boolean(plan.forumSpecial) },
-      { label: "高峰期优先响应", description: "高并发时段优先通道", value: "标准通道", included: false },
-    ];
-  }
-  if (id === "lite") {
-    return [
-      { label: "论文插件导入", description: "文献一键入库与管理", value: "不限次", included: true },
-      { label: "对照翻译", description: "双栏对照翻译阅读", value: translateVal, included: Number(plan.translateQuotaDaily || 0) > 0 },
-      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: immersiveVal, included: Number(plan.immersiveQuotaDaily || 0) > 0 },
-      { label: "AI 论文综述", description: "结构化文献综述生成", value: reviewVal, included: Number(plan.reviewQuotaDaily || 0) > 0 },
-      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: chatVal, included: Number(plan.chatQuotaDaily || 0) > 0 },
-      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: pptVal, included: Number(plan.pptQuotaMonthly || 0) > 0 },
-      { label: "调研广场", description: "社会与学术热点文献分析调研", value: researchVal, included: Number(plan.researchQuotaDaily || 0) > 0 },
-      { label: "组会一键汇报", description: "自动整合组会大纲与一键汇报", value: reportVal, included: Number(plan.reportQuotaMonthly || 0) > 0 },
-      { label: "论坛会员特效与标识", description: "彩色姓名与专属标识", value: forumVal, included: Boolean(plan.forumSpecial) },
-      { label: "高峰期优先响应", description: "高并发时段优先通道", value: peakVal, included: Boolean(plan.peakPriority) },
-    ];
-  }
-  if (id === "plus") {
-    return [
-      { label: "论文插件导入", description: "文献一键入库与管理", value: "不限次", included: true },
-      { label: "对照翻译", description: "双栏对照翻译阅读", value: translateVal, included: Number(plan.translateQuotaDaily || 0) > 0 },
-      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: immersiveVal, included: Number(plan.immersiveQuotaDaily || 0) > 0 },
-      { label: "AI 论文综述", description: "结构化文献综述生成", value: reviewVal, included: Number(plan.reviewQuotaDaily || 0) > 0 },
-      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: chatVal, included: Number(plan.chatQuotaDaily || 0) > 0 },
-      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: pptVal, included: Number(plan.pptQuotaMonthly || 0) > 0 },
-      { label: "调研广场", description: "社会与学术热点文献分析调研", value: researchVal, included: Number(plan.researchQuotaDaily || 0) > 0 },
-      { label: "组会一键汇报", description: "自动整合组会大纲与一键汇报", value: reportVal, included: Number(plan.reportQuotaMonthly || 0) > 0 },
-      { label: "论坛会员特效与标识", description: "彩色姓名与专属标识", value: forumVal, included: Boolean(plan.forumSpecial) },
-      { label: "高峰期优先响应", description: "高并发时段优先通道", value: peakVal, included: Boolean(plan.peakPriority) },
-    ];
-  }
-  if (id === "pro") {
-    return [
-      { label: "论文插件导入", description: "文献一键入库与管理", value: "不限次", included: true },
-      { label: "对照翻译", description: "双栏对照翻译阅读", value: translateVal, included: Number(plan.translateQuotaDaily || 0) > 0 },
-      { label: "沉浸翻译", description: "全页版式保留沉浸翻译", value: immersiveVal, included: Number(plan.immersiveQuotaDaily || 0) > 0 },
-      { label: "AI 论文综述", description: "结构化文献综述生成", value: reviewVal, included: Number(plan.reviewQuotaDaily || 0) > 0 },
-      { label: "论文解析与研读对话", description: "针对论文深度问答与推演", value: chatVal, included: Number(plan.chatQuotaDaily || 0) > 0 },
-      { label: "组会 PPT 汇报制作", description: "PPT Agent 自动生成组会汇报", value: pptVal, included: Number(plan.pptQuotaMonthly || 0) > 0 },
-      { label: "调研广场", description: "社会与学术热点文献分析调研", value: researchVal, included: Number(plan.researchQuotaDaily || 0) > 0 },
-      { label: "组会一键汇报", description: "自动整合组会大纲与一键汇报", value: reportVal, included: Number(plan.reportQuotaMonthly || 0) > 0 },
-      { label: "论坛会员特效与标识", description: "会员特效 + 每日1次发帖置顶", value: forumVal, included: Boolean(plan.forumSpecial) },
-      { label: "高峰期优先响应", description: "高并发时段优先通道", value: peakVal, included: Boolean(plan.peakPriority) },
-    ];
-  }
-  // Team plan
+  const renderedTranslateVal = plan.translateQuotaDaily ? `${prefix}每天 ${plan.translateQuotaDaily} 篇` : "未包含";
+  const renderedImmersiveVal = plan.immersiveQuotaDaily ? `${prefix}每天 ${plan.immersiveQuotaDaily} 篇` : "未包含";
+  const renderedPptVal = plan.pptQuotaMonthly ? `${prefix}每月 ${plan.pptQuotaMonthly} 次` : "未包含";
+  const renderedAgentVal = plan.agentEnabled !== false ? `${prefix}${Number(plan.agentTokenQuota || 0).toLocaleString("zh-CN")} 积分/月` : "未包含";
+  const included = (label, description, enabled) => ({ label, description, value: enabled ? "-" : "未包含", included: Boolean(enabled) });
   return [
-    { label: "论文插件导入", description: "全员文献入库与 PDF 管理", value: "不限次", included: true },
-    { label: "对照翻译", description: "全员双栏对照翻译阅读", value: translateVal, included: Number(plan.translateQuotaDaily || 0) > 0 },
-    { label: "沉浸翻译", description: "全员全页版式沉浸翻译", value: immersiveVal, included: Number(plan.immersiveQuotaDaily || 0) > 0 },
-    { label: "AI 论文综述", description: "全员结构化综述生成", value: reviewVal, included: Number(plan.reviewQuotaDaily || 0) > 0 },
-    { label: "论文解析与研读对话", description: "全员学术问答与推演", value: chatVal, included: Number(plan.chatQuotaDaily || 0) > 0 },
-    { label: "组会 PPT 汇报制作", description: "全员 PPT Agent 自动汇报", value: pptVal, included: Number(plan.pptQuotaMonthly || 0) > 0 },
-    { label: "调研广场", description: "全员社会与学术热点文献分析调研", value: researchVal, included: Number(plan.researchQuotaDaily || 0) > 0 },
-    { label: "组会一键汇报", description: "全员自动大纲与一键汇报", value: reportVal, included: Number(plan.reportQuotaMonthly || 0) > 0 },
-    { label: "论坛会员特效与标识", description: "全员尊享会员标识", value: forumVal, included: Boolean(plan.forumSpecial) },
-    { label: "导师购买统一分配", description: "按人数结算享优惠", value: `¥${plan.monthlyPrice} / 人 / 月`, included: true },
-    { label: "高峰期优先响应", description: "全员享受极速优先通道", value: peakVal, included: Boolean(plan.peakPriority) },
-  ];
-}
-
-function packRows(pack) {
-  const translateVal = pack.translateQuota ? `+${pack.translateQuota} 篇` : "未包含";
-  const immersiveVal = pack.immersiveQuota ? `+${pack.immersiveQuota} 篇` : "未包含";
-  const reviewVal = pack.reviewQuota ? `+${pack.reviewQuota} 次` : "未包含";
-  const chatVal = pack.chatQuota ? `+${pack.chatQuota} 次` : "未包含";
-  const pptVal = pack.pptQuota ? `+${pack.pptQuota} 次` : "未包含";
-  const researchVal = pack.researchQuota ? `+${pack.researchQuota} 次` : "未包含";
-  const reportVal = pack.reportQuota ? `+${pack.reportQuota} 次` : "未包含";
-
-  return [
-    { name: "对照翻译", value: translateVal, included: Number(pack.translateQuota || 0) > 0 },
-    { name: "沉浸翻译", value: immersiveVal, included: Number(pack.immersiveQuota || 0) > 0 },
-    { name: "AI论文综述", value: reviewVal, included: Number(pack.reviewQuota || 0) > 0 },
-    { name: "研读对话", value: chatVal, included: Number(pack.chatQuota || 0) > 0 },
-    { name: "调研广场", value: researchVal, included: Number(pack.researchQuota || 0) > 0 },
-    { name: "组会PPT", value: pptVal, included: Number(pack.pptQuota || 0) > 0 },
-    { name: "组会一键汇报", value: reportVal, included: Number(pack.reportQuota || 0) > 0 },
+    included("论文插件导入", "文献一键入库与管理", plan.pluginImportEnabled !== false),
+    { label: "对照翻译", description: "双栏对照翻译阅读", value: renderedTranslateVal, included: Number(plan.translateQuotaDaily || 0) > 0 },
+    { label: "沉浸全篇翻译", description: "全页版式保留沉浸翻译", value: renderedImmersiveVal, included: Number(plan.immersiveQuotaDaily || 0) > 0 },
+    { label: "PPT 生成", description: "PPT 自动生成组会汇报", value: renderedPptVal, included: Number(plan.pptQuotaMonthly || 0) > 0 },
+    { label: "AI 积分（共用）", description: "论文解析、对话与综述的通用点数", value: renderedAgentVal, included: plan.agentEnabled !== false },
+    included("AI 论文综述", "结构化文献综述生成", plan.reviewEnabled !== false),
+    included("研读解析与对话", "针对论文深度问答与推演", plan.chatEnabled !== false),
+    included("论坛会员特效与标识", "彩色姓名与专属标识", plan.forumSpecial),
+    included("高峰期优先响应", "高并发时段优先通道", plan.peakPriority),
   ];
 }
 
 async function selectAndCheckout(planId) {
   selectedPlan.value = normalizePlanId(planId);
+  showCheckoutBar.value = true;
   await checkout();
+}
+
+function selectPlanForCheckout(planId) {
+  selectedPlan.value = normalizePlanId(planId);
+  showCheckoutBar.value = true;
+  paymentMessage.value = "";
+  if (selectedPlanRequiresRedeem.value) payMethod.value = "redeem";
 }
 
 function normalizePlanId(id) {
@@ -875,7 +901,9 @@ function scrollToPlans() {
 }
 
 function orderPlanName(order) {
-  return displayPlans.value.find((item) => item.id === normalizePlanId(order.planId))?.name || (order.planId === "custom-recharge" ? "历史余额订单" : "会员套餐");
+  const plan = displayPlans.value.find((item) => item.id === normalizePlanId(order.planId));
+  if (plan) return `${plan.name}${plan.topUpPack ? "（加油包）" : ""}`;
+  return order.planId === "custom-recharge" ? "历史余额订单" : "会员套餐";
 }
 
 function statusLabel(status) {
@@ -883,6 +911,11 @@ function statusLabel(status) {
 }
 
 async function checkout() {
+  if (selectedPlanRequiresRedeem.value) {
+    payMethod.value = "redeem";
+    paymentMessage.value = "限时 0 元套餐必须使用兑换码兑换，不能创建支付订单。";
+    return;
+  }
   paying.value = true;
   paymentMessage.value = "";
   
@@ -920,6 +953,36 @@ async function checkout() {
   }
 }
 
+async function submitRedeemCode() {
+  if (!redeemCode.value) {
+    paymentMessage.value = "请输入兑换码。";
+    return;
+  }
+  const codeStr = String(redeemCode.value).trim();
+  if (codeStr.length !== 5) {
+    paymentMessage.value = "请输入 5 位有效的兑换码。";
+    return;
+  }
+  redeeming.value = true;
+  paymentMessage.value = "";
+  try {
+    const res = await paperpilotApi.redeemPromoCode(codeStr, selectedPlan.value);
+    if (res.success) {
+      paymentMessage.value = "🎉 兑换成功，会员权益已生效！";
+      redeemCode.value = "";
+      await usageStore.fetchSummary(); // 刷新本地额度权益
+      await loadOrders(); // 刷新本地订单列表
+    } else {
+      paymentMessage.value = res.message || "兑换失败，请检查兑换码是否正确。";
+    }
+  } catch (error) {
+    console.error("Redeem failed:", error);
+    paymentMessage.value = error?.response?.data?.message || "兑换失败，请检查兑换码是否正确。";
+  } finally {
+    redeeming.value = false;
+  }
+}
+
 function startPaymentPolling(orderNo) {
   stopPaymentPolling();
   paymentPollTimer = window.setInterval(async () => {
@@ -929,7 +992,7 @@ function startPaymentPolling(orderNo) {
     if (latest?.status === "paid") {
       paymentMessage.value = "微信支付成功，会员权益已生效。";
       stopPaymentPolling();
-      await usageStore.load();
+      await usageStore.fetchSummary();
       setTimeout(() => qrDialog.value?.close(), 900);
     }
   }, 3000);
@@ -948,19 +1011,27 @@ function closeWechatPayDialog() {
 }
 
 function openTicket(order) {
-  ticket.value = { orderNo: order.orderNo, type: "support", subject: "", detail: "" };
+  ticket.value = { orderNo: order.orderNo, type: "support", subject: "", detail: "", alipayAccount: "" };
   ticketError.value = "";
   ticketDialog.value?.showModal();
 }
 
 async function submitTicket() {
+  if (ticket.value.type === "refund" && !ticket.value.alipayAccount) {
+    ticketError.value = "请输入您的退款收款支付宝账号。";
+    return;
+  }
   if (ticket.value.detail.length < 6) {
     ticketError.value = "请把遇到的情况写具体一些。";
     return;
   }
   ticketSubmitting.value = true;
   try {
-    await paperpilotApi.createPaymentTicket(ticket.value);
+    const payload = { ...ticket.value };
+    if (payload.type === "refund") {
+      payload.detail = `【退款收款支付宝账号：${payload.alipayAccount}】\n\n` + payload.detail;
+    }
+    await paperpilotApi.createPaymentTicket(payload);
     ticketDialog.value?.close();
     paymentMessage.value = "售后工单已提交，管理员处理后会同步更新。";
   } catch (error) {
@@ -973,29 +1044,34 @@ async function submitTicket() {
 
 <style scoped>
 /* ════════════════════════════════════════════════════════════
-   USAGE & RESET CENTER — Clean Horizontal & Linear Design
+   QUOTA MANAGEMENT & MEMBERSHIP CENTER — Apple Glassmorphism Aesthetic
    ════════════════════════════════════════════════════════════ */
 
 .membership-page {
-  --c-bg:       #f8fafc;
-  --c-surface:  #ffffff;
-  --c-border:   #e2e8f0;
-  --c-text:     #0f172a;
-  --c-muted:    #475569;
-  --c-subtle:   #94a3b8;
-  --c-accent:   #6366f1;
-  --c-accent2:  #a855f7;
-  --r: 20px; --r-sm: 12px; --r-pill: 999px;
-  --sh-sm: 0 2px 10px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.03);
-  --sh-md: 0 10px 32px rgba(15,23,42,.08);
-  --sh-lg: 0 20px 60px rgba(15,23,42,.14);
+  --c-bg: #f8fafc;
+  --c-surface: #ffffff;
+  --c-surface-glass: rgba(255, 255, 255, 0.85);
+  --c-border: #e2e8f0;
+  --c-border-subtle: rgba(148, 163, 184, 0.2);
+  --c-text: #0f172a;
+  --c-muted: #475569;
+  --c-subtle: #94a3b8;
+  --c-accent: #6366f1;
+  --c-accent2: #a855f7;
+  --c-accent-glow: rgba(99, 102, 241, 0.2);
+  --r: 20px;
+  --r-sm: 12px;
+  --r-pill: 999px;
+  --sh-sm: 0 4px 14px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.02);
+  --sh-md: 0 12px 32px rgba(15, 23, 42, 0.06), 0 2px 6px rgba(15, 23, 42, 0.03);
+  --sh-lg: 0 24px 64px rgba(15, 23, 42, 0.12), 0 4px 16px rgba(15, 23, 42, 0.06);
 
   position: relative;
   min-height: 100vh;
   background: var(--c-bg);
   color: var(--c-text);
-  padding: 36px clamp(16px, 4vw, 56px) 130px;
-  font-family: Inter, "PingFang SC", system-ui, sans-serif;
+  padding: 32px clamp(20px, 4vw, 56px) 140px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   transition: background 0.3s ease, color 0.3s ease;
   width: 100%;
   box-sizing: border-box;
@@ -1003,72 +1079,59 @@ async function submitTicket() {
 }
 
 :root[data-theme="dark"] .membership-page {
-  --c-bg:       #09090e;
-  --c-surface:  #111827;
-  --c-border:   rgba(255, 255, 255, 0.08);
-  --c-text:     #f1f5f9;
-  --c-muted:    #94a3b8;
-  --c-subtle:   #64748b;
-  --sh-sm: 0 2px 10px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
-  --sh-md: 0 10px 32px rgba(0,0,0,.45);
-  --sh-lg: 0 20px 60px rgba(0,0,0,.65);
+  --c-bg: #09090e;
+  --c-surface: #111827;
+  --c-surface-glass: rgba(17, 24, 39, 0.85);
+  --c-border: rgba(255, 255, 255, 0.08);
+  --c-border-subtle: rgba(255, 255, 255, 0.05);
+  --c-text: #f8fafc;
+  --c-muted: #94a3b8;
+  --c-subtle: #64748b;
+  --c-accent-glow: rgba(99, 102, 241, 0.35);
+  --sh-sm: 0 4px 14px rgba(0, 0, 0, 0.3);
+  --sh-md: 0 12px 36px rgba(0, 0, 0, 0.45);
+  --sh-lg: 0 24px 64px rgba(0, 0, 0, 0.65);
 }
 
-.ticket-dialog {
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  border-radius: 16px;
-  color: var(--c-text);
-  width: 90%;
-  max-width: 480px;
-  padding: 24px;
-}
-.wechat-pay-success-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 200px;
-  height: 200px;
-  background: rgba(16, 185, 129, 0.1);
-  border-radius: 12px;
-  color: #10b981;
-}
-.success-checkmark-svg {
-  width: 80px;
-  height: 80px;
-}
-.payment-message.success {
-  color: #10b981 !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-weight: bold;
-}
-.success-check-icon {
-  font-size: 1.2rem;
-}
-
-/* Ambient Orbs */
+/* ── Ambient Background Atmosphere ─────────────────────────── */
 .ambient-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
+  filter: blur(100px);
   pointer-events: none;
-  opacity: 0.22;
+  opacity: 0.28;
+  z-index: 1;
 }
-.orb-1 { top: -100px; left: 10%; width: 400px; height: 400px; background: radial-gradient(circle, #818cf8, #c084fc); }
-.orb-2 { top: 200px; right: 5%; width: 500px; height: 500px; background: radial-gradient(circle, #38bdf8, #818cf8); }
+.orb-1 {
+  top: -60px;
+  left: 12%;
+  width: 440px;
+  height: 440px;
+  background: radial-gradient(circle, #818cf8, #c084fc);
+}
+.orb-2 {
+  top: 240px;
+  right: 6%;
+  width: 520px;
+  height: 520px;
+  background: radial-gradient(circle, #38bdf8, #818cf8);
+}
+:root[data-theme="dark"] .ambient-orb {
+  opacity: 0.18;
+}
 
-/* ── Topbar ─────────────────────────────────────────────── */
+/* ── Topbar ────────────────────────────────────────────────── */
 .membership-topbar {
   position: relative;
   z-index: 2;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 28px;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+@media (max-width: 840px) {
+  .membership-topbar { flex-direction: column; align-items: flex-start; }
 }
 
 .topbar-badge-row {
@@ -1079,47 +1142,55 @@ async function submitTicket() {
 }
 
 .page-chip {
-  padding: 4px 14px;
+  padding: 5px 14px;
   border-radius: var(--r-pill);
   background: rgba(99, 102, 241, 0.1);
   color: var(--c-accent);
   font-size: 12px;
-  font-weight: 800;
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  font-weight: 850;
+  letter-spacing: 0.4px;
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.08);
 }
 :root[data-theme="dark"] .page-chip {
   background: rgba(99, 102, 241, 0.18);
-  color: #818cf8;
+  color: #a5b4fc;
+  border-color: rgba(99, 102, 241, 0.38);
 }
 
 .reset-tag {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
+  padding: 5px 13px;
   border-radius: var(--r-pill);
   background: rgba(16, 185, 129, 0.1);
   color: #10b981;
   font-size: 12px;
   font-weight: 800;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+:root[data-theme="dark"] .reset-tag {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.38);
+  color: #6ee7b7;
 }
 
 .membership-topbar h1 {
   margin: 0 0 8px;
-  font-size: clamp(22px, 2.5vw, 30px);
+  font-size: clamp(23px, 2.6vw, 32px);
   font-weight: 900;
   color: var(--c-text);
   line-height: 1.25;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.6px;
 }
 
 .membership-topbar p {
   margin: 0;
-  font-size: 14px;
+  font-size: 14.5px;
   color: var(--c-muted);
-  max-width: 760px;
-  line-height: 1.6;
+  max-width: 780px;
+  line-height: 1.65;
 }
 
 .ghost-button {
@@ -1127,34 +1198,36 @@ async function submitTicket() {
   padding: 0 20px;
   border-radius: var(--r-pill);
   border: 1px solid var(--c-border);
-  background: var(--c-surface);
+  background: var(--c-surface-glass);
   color: var(--c-muted);
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 800;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: var(--sh-sm);
+  backdrop-filter: blur(12px);
   white-space: nowrap;
 }
-.ghost-button:hover {
+.ghost-button:hover:not(:disabled) {
   border-color: var(--c-accent);
   color: var(--c-accent);
   transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.15);
 }
 .spinning { display: inline-block; animation: spin 1s linear infinite; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
-/* ── Current Strip (Horizontal Banner + Linear Rows) ────── */
+/* ── Current Strip (Horizontal VIP Banner + Linear Rows) ────── */
 .current-strip-linear {
   position: relative;
   z-index: 2;
   display: flex;
   flex-direction: column;
   gap: 24px;
-  margin-bottom: 44px;
+  margin-bottom: 48px;
 }
 
 /* 💳 Horizontal Membership Status Banner (Subtle Glass Bar) */
@@ -1162,15 +1235,25 @@ async function submitTicket() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 18px 28px;
-  border-radius: var(--r);
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  box-shadow: var(--sh-sm);
+  gap: 28px;
+  padding: 24px 34px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.9));
+  border: 1.5px solid rgba(99, 102, 241, 0.2);
+  box-shadow: 0 12px 36px -8px rgba(99, 102, 241, 0.12), 0 4px 12px rgba(0, 0, 0, 0.03);
+  backdrop-filter: blur(16px);
+  position: relative;
+  overflow: hidden;
 }
-@media (max-width: 900px) {
-  .horizontal-membership-bar { flex-direction: column; align-items: flex-start; }
+:root[data-theme="dark"] .horizontal-membership-bar {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.88), rgba(15, 23, 42, 0.95));
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.5);
+}
+@media (max-width: 960px) {
+  .horizontal-membership-bar { flex-direction: column; align-items: flex-start; gap: 20px; padding: 22px; }
+  .vip-metrics { width: 100%; justify-content: space-between; }
+  .upgrade-vip-btn { width: 100%; text-align: center; }
 }
 
 .vip-status-main {
@@ -1182,122 +1265,137 @@ async function submitTicket() {
 .vip-badge-glow {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
+  gap: 8px;
+  padding: 8px 18px;
   border-radius: var(--r-pill);
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.18), rgba(245, 158, 11, 0.12));
-  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(217, 119, 6, 0.14));
+  border: 1.5px solid rgba(245, 158, 11, 0.38);
   color: #d97706;
-  font-size: 13.5px;
-  font-weight: 850;
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.16);
+  letter-spacing: 0.3px;
 }
 :root[data-theme="dark"] .vip-badge-glow {
   color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.45);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.22), rgba(245, 158, 11, 0.15));
 }
 
 .vip-details {
   display: flex;
   flex-direction: column;
+  gap: 3px;
 }
 .vip-name {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
   color: var(--c-text);
+  letter-spacing: -0.3px;
 }
 .vip-expire {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--c-muted);
+  font-weight: 600;
 }
 
 .vip-metrics {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 28px;
 }
 .metric-item {
   display: flex;
   flex-direction: column;
+  gap: 3px;
 }
 .metric-item small {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--c-subtle);
+  font-weight: 750;
+  letter-spacing: 0.3px;
 }
 .metric-item strong {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
   color: var(--c-text);
+  font-variant-numeric: tabular-nums;
 }
 .metric-item strong .unit {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 750;
   color: var(--c-muted);
 }
 .status-active { color: #10b981 !important; }
 
 .metric-divider {
   width: 1px;
-  height: 28px;
+  height: 32px;
   background: var(--c-border);
 }
 
 .upgrade-vip-btn {
-  height: 38px;
-  padding: 0 20px;
+  height: 42px;
+  padding: 0 24px;
   border-radius: var(--r-pill);
   border: none;
   background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
   color: #ffffff;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 850;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
-  transition: all 0.2s ease;
+  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.35);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
 }
 .upgrade-vip-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
 }
 
-/* 📏 Full-Width Linear Rows Panel (No Box Tiles!) */
+/* 📏 Full-Width Linear Rows Panel */
 .entitlement-linear-panel {
   background: var(--c-surface);
   border: 1px solid var(--c-border);
-  border-radius: var(--r);
-  padding: 24px 30px;
+  border-radius: 22px;
+  padding: 28px 34px;
   box-shadow: var(--sh-sm);
+  backdrop-filter: blur(16px);
+}
+@media (max-width: 768px) {
+  .entitlement-linear-panel { padding: 20px 16px; }
 }
 
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
+  margin-bottom: 22px;
+  padding-bottom: 18px;
   border-bottom: 1px solid var(--c-border);
 }
 .panel-tag {
   display: block;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--c-accent);
-  margin-bottom: 2px;
+  margin-bottom: 3px;
 }
 .panel-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 900;
   color: var(--c-text);
+  letter-spacing: -0.3px;
 }
 
 .reset-cycle-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
+  padding: 5px 14px;
   border-radius: var(--r-pill);
   background: rgba(16, 185, 129, 0.1);
   color: #10b981;
@@ -1310,26 +1408,46 @@ async function submitTicket() {
 .entitlement-linear-rows {
   display: flex;
   flex-direction: column;
+  gap: 6px;
+}
+
+.entitlement-row-group {
+  border-bottom: 1px solid var(--c-border-subtle);
+  transition: all 0.2s ease;
+}
+.entitlement-row-group:last-child {
+  border-bottom: none;
 }
 
 .linear-row {
+  width: 100%;
   display: grid;
-  grid-template-columns: 240px 1fr 140px;
+  grid-template-columns: 260px 1fr 160px;
   align-items: center;
   gap: 24px;
-  padding: 16px 12px;
-  border-bottom: 1px solid var(--c-border);
-  transition: background 0.18s ease;
+  padding: 16px 14px;
+  border-radius: 14px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.linear-row:last-child {
-  border-bottom: none;
+.linear-row:disabled {
+  cursor: default;
 }
-.linear-row:hover {
-  background: rgba(99, 102, 241, 0.035);
-  border-radius: var(--r-sm);
+.linear-row:hover:not(:disabled),
+.linear-row.expanded {
+  background: rgba(99, 102, 241, 0.05);
+  transform: translateX(4px);
 }
-@media (max-width: 768px) {
-  .linear-row { grid-template-columns: 1fr; gap: 10px; }
+:root[data-theme="dark"] .linear-row:hover:not(:disabled),
+:root[data-theme="dark"] .linear-row.expanded {
+  background: rgba(99, 102, 241, 0.12);
+}
+@media (max-width: 800px) {
+  .linear-row { grid-template-columns: 1fr; gap: 12px; }
+  .row-right { text-align: left !important; }
 }
 
 .row-left {
@@ -1340,13 +1458,15 @@ async function submitTicket() {
 
 .row-title-block strong {
   display: block;
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 850;
   color: var(--c-text);
+  letter-spacing: -0.2px;
 }
 .row-title-block small {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--c-muted);
+  font-weight: 600;
 }
 
 .row-center-meter {
@@ -1354,29 +1474,31 @@ async function submitTicket() {
 }
 
 .linear-meter-track {
-  height: 8px;
+  height: 10px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.16);
+  background: rgba(148, 163, 184, 0.18);
   overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 .linear-meter-track b {
   display: block;
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #6366f1, #a855f7);
-  transition: width 0.4s ease;
+  transition: width 0.45s ease;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.45);
 }
 
 .linear-unlimited-label {
-  font-size: 12px;
+  font-size: 12.5px;
   color: #10b981;
-  font-weight: 800;
+  font-weight: 850;
 }
 
 .linear-feature-badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 850;
@@ -1391,145 +1513,283 @@ async function submitTicket() {
 .linear-disabled-label {
   font-size: 12px;
   color: var(--c-subtle);
-  font-weight: 700;
-}
-
-.homepage-icon-box.box-cyan {
-  background: rgba(6, 182, 212, 0.08);
-  border: 1.5px solid rgba(6, 182, 212, 0.3);
-  color: #0891b2;
-}
-:root[data-theme="dark"] .homepage-icon-box.box-cyan {
-  background: rgba(6, 182, 212, 0.12);
-  border-color: rgba(6, 182, 212, 0.4);
-  color: #22d3ee;
+  font-weight: 750;
 }
 
 .row-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
   text-align: right;
 }
 .row-stat-text {
   font-size: 15px;
-  font-weight: 950;
+  font-weight: 900;
   color: var(--c-accent);
   font-variant-numeric: tabular-nums;
 }
+.row-expand-icon {
+  font-size: 16px;
+  color: var(--c-muted);
+}
 
-/* 🎨 Homepage Micro-Glow Icon Box */
+/* 🎨 Micro-Glow Icon Box */
 .homepage-icon-box {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   border-radius: 12px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
-
 .homepage-icon-box.box-blue {
-  background: rgba(37, 99, 235, 0.08);
+  background: rgba(37, 99, 235, 0.09);
   border: 1.5px solid rgba(37, 99, 235, 0.3);
   color: #2563eb;
 }
 :root[data-theme="dark"] .homepage-icon-box.box-blue {
-  background: rgba(59, 130, 246, 0.12);
-  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.14);
+  border-color: rgba(59, 130, 246, 0.45);
   color: #60a5fa;
 }
-
+.homepage-icon-box.box-cyan {
+  background: rgba(6, 182, 212, 0.09);
+  border: 1.5px solid rgba(6, 182, 212, 0.3);
+  color: #0891b2;
+}
+:root[data-theme="dark"] .homepage-icon-box.box-cyan {
+  background: rgba(6, 182, 212, 0.14);
+  border-color: rgba(6, 182, 212, 0.45);
+  color: #22d3ee;
+}
 .homepage-icon-box.box-purple {
-  background: rgba(147, 51, 234, 0.08);
+  background: rgba(147, 51, 234, 0.09);
   border: 1.5px solid rgba(147, 51, 234, 0.3);
   color: #9333ea;
 }
 :root[data-theme="dark"] .homepage-icon-box.box-purple {
-  background: rgba(168, 85, 247, 0.12);
-  border-color: rgba(168, 85, 247, 0.4);
+  background: rgba(168, 85, 247, 0.14);
+  border-color: rgba(168, 85, 247, 0.45);
   color: #c084fc;
 }
-
 .homepage-icon-box.box-emerald {
-  background: rgba(16, 185, 129, 0.08);
+  background: rgba(16, 185, 129, 0.09);
   border: 1.5px solid rgba(16, 185, 129, 0.3);
   color: #10b981;
 }
 :root[data-theme="dark"] .homepage-icon-box.box-emerald {
-  background: rgba(16, 185, 129, 0.12);
-  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.45);
   color: #34d399;
 }
-
 .homepage-icon-box.box-amber {
-  background: rgba(245, 158, 11, 0.08);
+  background: rgba(245, 158, 11, 0.09);
   border: 1.5px solid rgba(245, 158, 11, 0.3);
   color: #d97706;
 }
 :root[data-theme="dark"] .homepage-icon-box.box-amber {
-  background: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.45);
   color: #fbbf24;
 }
-
 .linear-row:hover .homepage-icon-box {
-  transform: translateY(-2px) scale(1.05);
+  transform: translateY(-2px) scale(1.06);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
 }
 
+/* ── Usage Detail Panel ────────────────────────────────────── */
+.benefit-detail-panel {
+  margin: 4px 14px 20px;
+  padding: 20px 24px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: var(--c-bg);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+.benefit-detail-panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  color: var(--c-muted);
+  font-size: 13px;
+}
+.benefit-detail-panel header strong {
+  color: var(--c-text);
+  font-size: 15px;
+  font-weight: 850;
+}
+.benefit-detail-filters {
+  display: flex;
+  gap: 16px;
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+.benefit-detail-filters label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--c-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.benefit-detail-filters input {
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: 13px;
+  outline: none;
+}
+.benefit-detail-filters input:focus {
+  border-color: var(--c-accent);
+}
+
+.benefit-detail-table-wrap {
+  overflow-x: auto;
+}
+.benefit-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.benefit-detail-table th,
+.benefit-detail-table td {
+  padding: 10px 12px;
+  border-top: 1px solid var(--c-border);
+  text-align: left;
+  vertical-align: middle;
+}
+.benefit-detail-table th {
+  color: var(--c-muted);
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.015);
+}
+:root[data-theme="dark"] .benefit-detail-table th {
+  background: rgba(255, 255, 255, 0.02);
+}
+.benefit-detail-table td {
+  color: var(--c-text);
+}
+.benefit-detail-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 14px;
+  color: var(--c-muted);
+  font-size: 13px;
+}
+.benefit-detail-pagination button {
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface);
+  color: var(--c-text);
+  padding: 6px 14px;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.benefit-detail-pagination button:hover:not(:disabled) {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+.benefit-detail-pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.detail-success { color: #059669 !important; font-weight: 800; }
+.detail-failed { color: #dc2626 !important; font-weight: 800; }
+.detail-deduct { color: #4f46e5 !important; font-weight: 850; }
+.detail-add { color: #10b981 !important; font-weight: 850; }
+.detail-muted { color: var(--c-muted) !important; }
+.detail-full-blood {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #10b981 !important;
+  font-weight: 900 !important;
+  background: rgba(16, 185, 129, 0.12);
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  font-size: 11.5px;
+}
+.restore-scene-tag {
+  display: inline-flex;
+  align-items: center;
+  color: #6366f1 !important;
+  font-weight: 850;
+  background: rgba(99, 102, 241, 0.1);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+}
+.benefit-detail-empty {
+  padding: 24px 0;
+  color: var(--c-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
 /* ══════════════════════════════════════════════════
-   PLAN WORKBENCH — V2 Premium Design
+   PLAN WORKBENCH — V2 Premium Bento Grid
    ══════════════════════════════════════════════════ */
 .plan-workbench {
   position: relative;
   z-index: 2;
-  margin-bottom: 56px;
+  margin-bottom: 64px;
 }
 
 .section-chip {
   display: inline-block;
-  padding: 4px 14px;
+  padding: 5px 14px;
   border-radius: 999px;
   background: rgba(99, 102, 241, 0.1);
   color: var(--c-accent);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
+  font-size: 11.5px;
+  font-weight: 850;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.22);
   margin-bottom: 10px;
 }
-.section-chip.chip-amber {
-  background: rgba(245, 158, 11, 0.1);
-  color: #d97706;
-  border-color: rgba(245, 158, 11, 0.2);
-}
-:root[data-theme="dark"] .section-chip.chip-amber { color: #fbbf24; }
 
 .plan-heading {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 20px;
-  margin-bottom: 32px;
+  margin-bottom: 34px;
 }
+@media (max-width: 800px) {
+  .plan-heading { flex-direction: column; align-items: flex-start; }
+}
+
 .plan-heading h2 {
   margin: 0 0 6px;
-  font-size: clamp(20px, 2vw, 26px);
+  font-size: clamp(21px, 2.2vw, 28px);
   font-weight: 900;
   color: var(--c-text);
-  letter-spacing: -0.3px;
+  letter-spacing: -0.4px;
 }
 .plan-heading > div > p {
   margin: 0;
-  font-size: 14px;
+  font-size: 14.5px;
   color: var(--c-muted);
-  max-width: 600px;
+  max-width: 620px;
   line-height: 1.6;
 }
 
 /* Cycle Toggle */
 .cycle-toggle-pill {
   display: inline-flex;
-  gap: 3px;
+  gap: 4px;
   padding: 4px;
   border-radius: 999px;
   background: var(--c-surface);
@@ -1538,28 +1798,28 @@ async function submitTicket() {
   flex-shrink: 0;
 }
 .cycle-toggle-pill button {
-  height: 34px;
-  padding: 0 18px;
+  height: 36px;
+  padding: 0 20px;
   border-radius: 999px;
   border: none;
   background: transparent;
   color: var(--c-muted);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 800;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 .cycle-toggle-pill button.active {
   background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
   color: #fff;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
 }
 
 /* Plan Cards Grid V2 */
 .plan-cards-v2 {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 20px;
   align-items: stretch;
 }
 @media (max-width: 1200px) {
@@ -1569,13 +1829,13 @@ async function submitTicket() {
   .plan-cards-v2 { grid-template-columns: 1fr; }
 }
 
-/* Plan Card V2 — Premium Glassmorphism & Dark Minimal */
+/* Plan Card V2 Base */
 .plan-card-v2 {
   position: relative;
-  border-radius: 20px;
-  background: radial-gradient(circle at 10% 10%, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.005)), var(--c-surface);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 24px;
+  border-radius: 22px;
+  background: var(--c-surface);
+  border: 1.5px solid var(--c-border);
+  padding: 26px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1583,130 +1843,86 @@ async function submitTicket() {
   backdrop-filter: blur(16px);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
-}
-:root[data-theme="light"] .plan-card-v2 {
-  background: radial-gradient(circle at 10% 10%, rgba(15, 23, 42, 0.02), rgba(15, 23, 42, 0.002)), var(--c-surface);
-  border-color: rgba(15, 23, 42, 0.08);
-}
-.plan-card-v2::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent 50%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-:root[data-theme="light"] .plan-card-v2::after {
-  background: linear-gradient(135deg, rgba(15,23,42,0.1), transparent 50%);
+  box-shadow: var(--sh-sm);
 }
 
 .plan-card-v2:hover {
   border-color: rgba(99, 102, 241, 0.45);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.18), 0 0 20px rgba(99,102,241,0.1);
-  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12), 0 0 20px rgba(99, 102, 241, 0.1);
+  transform: translateY(-5px);
 }
+
 .plan-card-v2.active {
   border-color: var(--c-accent) !important;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25), 0 12px 32px rgba(99, 102, 241, 0.15) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3), 0 16px 40px rgba(99, 102, 241, 0.18) !important;
 }
+
 .plan-card-v2.featured {
-  border-color: rgba(99, 102, 241, 0.4);
-  background: radial-gradient(circle at 10% 10%, rgba(99, 102, 241, 0.06), rgba(255, 255, 255, 0.005)), var(--c-surface);
+  border-color: rgba(99, 102, 241, 0.45);
+  background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.08), transparent 70%), var(--c-surface);
 }
 
 /* Top accent line for featured (Plus) */
 .card-accent-line {
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 3px;
+  height: 4px;
   background: linear-gradient(90deg, #6366f1, #a855f7);
-  border-radius: 20px 20px 0 0;
+  border-radius: 22px 22px 0 0;
 }
 
-/* Top row: tier icon + badge */
+/* Badges */
 .card-top-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
+  min-height: 22px;
 }
-.plan-tier-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
-  box-shadow: var(--sh-sm);
-}
-:root[data-theme="light"] .plan-tier-icon {
-  background: rgba(15,23,42,0.04);
-  border-color: rgba(15,23,42,0.08);
-  color: var(--c-text);
-}
-.plan-card-v2.featured .plan-tier-icon,
-.plan-card-v2.active .plan-tier-icon {
-  background: linear-gradient(135deg, #6366f1, #a855f7);
-  border-color: transparent;
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(99,102,241,0.25);
-}
-.tier-svg {
-  width: 20px;
-  height: 20px;
-}
-
-/* Tier badges */
 .tier-badge {
   padding: 4px 12px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 850;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.3px;
 }
 .badge-current {
   background: rgba(16, 185, 129, 0.12);
   color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  border: 1px solid rgba(16, 185, 129, 0.3);
 }
 .badge-hot {
-  background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(168,85,247,0.18));
-  color: #a5b4fc;
-  border: 1px solid rgba(99,102,241,0.25);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(168, 85, 247, 0.18));
+  color: #6366f1;
+  border: 1px solid rgba(99, 102, 241, 0.3);
 }
-:root[data-theme="light"] .badge-hot {
-  color: #4f46e5;
+:root[data-theme="dark"] .badge-hot {
+  color: #a5b4fc;
 }
 
-/* Name block */
+/* Name Block */
 .plan-name-block h3 {
-  margin: 0 0 4px;
-  font-size: 19px;
+  margin: 0;
+  font-size: 20px;
   font-weight: 900;
   color: var(--c-text);
   letter-spacing: -0.3px;
 }
 .plan-name-block p {
-  margin: 0;
-  font-size: 12.5px;
+  margin: 6px 0 0;
+  font-size: 13px;
   color: var(--c-muted);
   line-height: 1.5;
 }
 
-/* Price */
+/* Price Row */
 .plan-price-row {
   display: flex;
   align-items: baseline;
   gap: 6px;
 }
 .price-main {
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 750;
   color: var(--c-muted);
   line-height: 1;
 }
@@ -1716,47 +1932,46 @@ async function submitTicket() {
   font-weight: 950;
   color: var(--c-text);
   letter-spacing: -1.5px;
-  font-family: tabular-nums, Inter, system-ui;
+  font-variant-numeric: tabular-nums;
 }
 .plan-card-v2.featured .price-main em,
 .plan-card-v2.active .price-main em {
-  background: linear-gradient(135deg, #818cf8, #c084fc);
+  background: linear-gradient(135deg, #6366f1, #a855f7);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 .price-sub {
   font-size: 13.5px;
   color: var(--c-muted);
-  font-weight: 600;
+  font-weight: 650;
 }
 
-/* Luckin hint */
+/* Luckin Coffee Tag */
 .luckin-hint {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px 6px 10px;
+  padding: 5px 12px 5px 8px;
   border-radius: 999px;
   background: rgba(14, 165, 233, 0.08);
   border: 1px solid rgba(14, 165, 233, 0.25);
-  font-size: 11.5px;
+  font-size: 12px;
   color: #0284c7;
-  font-weight: 800;
+  font-weight: 850;
   width: fit-content;
 }
-:global(html[data-theme="dark"]) .luckin-hint {
-  background: rgba(56, 189, 248, 0.12);
-  border-color: rgba(56, 189, 248, 0.35);
+:root[data-theme="dark"] .luckin-hint {
+  background: rgba(56, 189, 248, 0.14);
+  border-color: rgba(56, 189, 248, 0.38);
   color: #38bdf8;
 }
 .luckin-icon-sm {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   object-fit: cover;
 }
 
-/* Horizontal rule */
 .card-hr {
   height: 1px;
   background: linear-gradient(90deg, var(--c-border), transparent);
@@ -1769,43 +1984,32 @@ async function submitTicket() {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 2px;
   flex: 1;
 }
 .plan-feat-list li {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--c-border-subtle);
   font-size: 13px;
 }
-:root[data-theme="light"] .plan-feat-list li {
-  border-color: rgba(15, 23, 42, 0.04);
+.plan-feat-list li:last-child {
+  border-bottom: none;
 }
-.plan-feat-list li:last-child { border-bottom: none; }
-.plan-feat-list li.feat-off { opacity: 0.42; }
+.plan-feat-list li.feat-off {
+  opacity: 0.45;
+}
 
-/* status icons ✓ / ✗ */
 .feat-status-icon {
   width: 18px;
   height: 18px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 11.5px;
-  font-weight: 900;
   flex-shrink: 0;
 }
-.feat-status-icon.status-ok {
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.12);
-}
-.feat-status-icon.status-no {
-  color: #f43f5e;
-  background: rgba(244, 63, 94, 0.12);
-}
-
 .feat-label {
   flex: 1;
   color: var(--c-text);
@@ -1821,1089 +2025,36 @@ async function submitTicket() {
   color: var(--c-accent);
 }
 
-/* CTA button */
+/* Plan CTA Button */
 .plan-cta-btn {
   width: 100%;
-  height: 42px;
+  height: 44px;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
   color: var(--c-text);
-  font-size: 13.5px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 850;
   cursor: pointer;
   transition: all 0.22s ease;
   margin-top: 4px;
-}
-:root[data-theme="light"] .plan-cta-btn {
-  border-color: rgba(15,23,42,0.12);
-  background: rgba(15,23,42,0.02);
 }
 .plan-cta-btn:hover {
   border-color: var(--c-accent);
   color: #fff;
   background: var(--c-accent);
-  box-shadow: 0 4px 14px rgba(99,102,241,0.25);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.28);
 }
 .plan-cta-btn.cta-active {
   background: linear-gradient(135deg, #6366f1, #818cf8);
   border-color: transparent;
   color: #fff;
-  box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
 }
 .plan-cta-btn.cta-current {
-  background: rgba(16,185,129,0.08);
-  border-color: rgba(16,185,129,0.3);
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.35);
   color: #10b981;
-}
-
-/* ── Power Packs V2 — Premium Glass Layout ─────────── */
-.packs-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-@media (max-width: 960px) {
-  .packs-grid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 580px) {
-  .packs-grid { grid-template-columns: 1fr; }
-}
-
-.pack-card-v2 {
-  position: relative;
-  border-radius: 16px;
-  background: radial-gradient(circle at 10% 10%, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.005)), var(--c-surface);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 20px 20px 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  overflow: hidden;
-}
-:root[data-theme="light"] .pack-card-v2 {
-  background: radial-gradient(circle at 10% 10%, rgba(15, 23, 42, 0.015), rgba(15, 23, 42, 0.002)), var(--c-surface);
-  border-color: rgba(15, 23, 42, 0.08);
-}
-.pack-card-v2:hover {
-  border-color: rgba(99,102,241,0.4);
-  box-shadow: 0 10px 28px rgba(0,0,0,0.12), 0 0 15px rgba(99,102,241,0.06);
-  transform: translateY(-3px);
-}
-.pack-card-v2.pack-v2-active {
-  border-color: var(--c-accent) !important;
-  box-shadow: 0 0 0 2px rgba(99,102,241,0.25), 0 10px 28px rgba(99,102,241,0.12) !important;
-}
-
-/* Left colored accent bar */
-.pack-accent-bar {
-  position: absolute;
-  top: 0; left: 0; bottom: 0;
-  width: 4px;
-  transition: width 0.25s ease;
-}
-.pack-card-v2:hover .pack-accent-bar {
-  width: 6px;
-}
-/* Theme colors for accent bar and icon */
-.pack-accent-bar.review      { background: #8b5cf6; }
-.pack-accent-bar.ppt         { background: #10b981; }
-.pack-accent-bar.chat        { background: #f59e0b; }
-.pack-accent-bar.translation { background: #3b82f6; }
-.pack-accent-bar.research    { background: #ec4899; }
-.pack-accent-bar.report      { background: #f43f5e; }
-
-/* Pack top: icon + info */
-.pack-v2-top {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-.pack-v2-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  border: 1px solid transparent;
-}
-.pack-v2-icon svg { width: 18px; height: 18px; }
-
-/* Specific icon background colors with transparent opacity */
-.pack-v2-icon.review      { color: #c084fc; background: rgba(139, 92, 246, 0.12); border-color: rgba(139, 92, 246, 0.15); }
-.pack-v2-icon.ppt         { color: #34d399; background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.15); }
-.pack-v2-icon.chat        { color: #fbbf24; background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.15); }
-.pack-v2-icon.translation { color: #60a5fa; background: rgba(59, 130, 246, 0.12); border-color: rgba(59, 130, 246, 0.15); }
-.pack-v2-icon.research    { color: #f472b6; background: rgba(236, 72, 153, 0.12); border-color: rgba(236, 72, 153, 0.15); }
-.pack-v2-icon.report      { color: #fb7185; background: rgba(244, 63, 94, 0.12); border-color: rgba(244, 63, 94, 0.15); }
-
-:root[data-theme="light"] .pack-v2-icon.review      { color: #8b5cf6; }
-:root[data-theme="light"] .pack-v2-icon.ppt         { color: #10b981; }
-:root[data-theme="light"] .pack-v2-icon.chat        { color: #d97706; }
-:root[data-theme="light"] .pack-v2-icon.translation { color: #2563eb; }
-:root[data-theme="light"] .pack-v2-icon.research    { color: #db2777; }
-:root[data-theme="light"] .pack-v2-icon.report      { color: #e11d48; }
-
-.pack-v2-info {
-  flex: 1;
-}
-.pack-v2-info strong {
-  display: block;
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--c-text);
-  margin-bottom: 2px;
-}
-.pack-v2-info span {
-  display: block;
-  font-size: 12px;
-  color: var(--c-muted);
-  line-height: 1.45;
-}
-
-/* Pack bottom: qty + price */
-.pack-v2-bottom {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255,255,255,0.04);
-}
-:root[data-theme="light"] .pack-v2-bottom {
-  border-color: rgba(15,23,42,0.04);
-}
-.pack-v2-qty {
-  font-size: 21px;
-  font-weight: 950;
-  color: var(--c-accent);
-  letter-spacing: -0.5px;
-}
-.pack-v2-price {
-  font-size: 23px;
-  font-weight: 950;
-  color: var(--c-text);
-  letter-spacing: -0.5px;
-  font-family: tabular-nums, Inter, system-ui;
-}
-.pack-v2-price span {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--c-muted);
-  margin-left: 2px;
-}
-
-/* Pack CTA button */
-.pack-v2-btn {
-  width: 100%;
-  height: 38px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.01);
-  color: var(--c-muted);
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-:root[data-theme="light"] .pack-v2-btn {
-  border-color: rgba(15,23,42,0.1);
-  background: rgba(15,23,42,0.01);
-}
-.pack-v2-btn:hover {
-  border-color: var(--c-accent);
-  color: var(--c-accent);
-  background: rgba(99,102,241,0.06);
-}
-.pack-v2-btn.active {
-  background: var(--c-accent);
-  border-color: var(--c-accent);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(99,102,241,0.3);
-}
-
-
-/* Color Themes per tier */
-.plan-card-v2.free   { --tier-h: 215; --tier-s: 25%; --tier-l: 50%; }
-.plan-card-v2.lite   { --tier-h: 158; --tier-s: 64%; --tier-l: 36%; }
-.plan-card-v2.plus   { --tier-h: 225; --tier-s: 80%; --tier-l: 52%; }
-.plan-card-v2.pro    { --tier-h: 270; --tier-s: 75%; --tier-l: 52%; }
-
-.plan-card-v2 {
-  --tc: hsl(var(--tier-h), var(--tier-s), var(--tier-l));
-  --tc-soft: hsla(var(--tier-h), var(--tier-s), var(--tier-l), 0.08);
-  --tc-border: hsla(var(--tier-h), var(--tier-s), var(--tier-l), 0.25);
-  --tc-glow: hsla(var(--tier-h), var(--tier-s), var(--tier-l), 0.18);
-
-  position: relative;
-  border-radius: 20px;
-  background: var(--c-surface);
-  border: 1.5px solid var(--tc-border);
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  overflow: hidden;
-}
-.plan-card-v2::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(160deg, var(--tc-soft) 0%, transparent 60%);
-  pointer-events: none;
-  border-radius: inherit;
-  transition: opacity 0.3s ease;
-  opacity: 0.7;
-}
-.plan-card-v2:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 16px 40px var(--tc-glow), 0 4px 12px rgba(0,0,0,0.06);
-  border-color: var(--tc);
-}
-.plan-card-v2.active {
-  border-color: var(--tc);
-  box-shadow: 0 0 0 2px var(--tc), 0 16px 40px var(--tc-glow);
-}
-.plan-card-v2.active::before { opacity: 1; }
-.plan-card-v2.featured {
-  border-color: hsl(var(--tier-h), var(--tier-s), calc(var(--tier-l) + 5%));
-}
-
-/* Featured glow strip on top */
-.featured-glow {
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--tc), hsl(calc(var(--tier-h) + 30), var(--tier-s), calc(var(--tier-l) + 10%)));
-  border-radius: 20px 20px 0 0;
-}
-
-/* Badges */
-.v2-current-badge {
-  position: absolute;
-  top: 14px; right: 14px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
-  font-size: 10.5px;
-  font-weight: 800;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-.v2-hot-badge {
-  position: absolute;
-  top: 14px; right: 14px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  font-size: 10.5px;
-  font-weight: 800;
-  border: 1px solid rgba(239, 68, 68, 0.25);
-}
-
-/* Card Header */
-.v2-card-header {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-}
-.v2-plan-icon-wrap {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  background: var(--tc);
-  box-shadow: 0 4px 12px var(--tc-glow);
-}
-.v2-plan-icon {
-  font-size: 18px;
-  font-weight: 900;
-  color: #fff;
-  line-height: 1;
-}
-.v2-plan-meta h3 {
-  margin: 0 0 3px;
-  font-size: 17px;
-  font-weight: 900;
-  color: var(--c-text);
-}
-.v2-plan-meta p {
-  margin: 0;
-  font-size: 12px;
-  color: var(--c-muted);
-  line-height: 1.45;
-}
-
-/* Price block */
-.v2-price-block {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.v2-price-free {
-  font-size: 32px;
-  font-weight: 950;
-  color: var(--c-text);
-  line-height: 1;
-}
-.v2-price-num {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--c-muted);
-  line-height: 1;
-}
-.v2-price-num strong {
-  font-size: 36px;
-  font-weight: 950;
-  color: var(--tc);
-  letter-spacing: -1px;
-}
-.v2-price-cycle {
-  font-size: 13px;
-  color: var(--c-muted);
-  font-weight: 600;
-}
-
-/* Divider */
-.v2-divider {
-  height: 1px;
-  background: linear-gradient(90deg, var(--tc-border), transparent);
-}
-
-/* Feature List */
-.v2-features {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  flex: 1;
-}
-.v2-features li {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  font-size: 13px;
-}
-.v2-features li.excluded {
-  opacity: 0.45;
-}
-.v2-feat-icon {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 900;
-  color: #fff;
-  background: var(--tc);
-  margin-top: 1px;
-}
-.v2-features li.excluded .v2-feat-icon {
-  background: rgba(148, 163, 184, 0.3);
-  color: var(--c-subtle);
-}
-.v2-feat-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.v2-feat-text strong {
-  font-weight: 700;
-  color: var(--c-text);
-  line-height: 1.3;
-}
-.v2-feat-text span {
-  font-size: 11.5px;
-  color: var(--tc);
-  font-weight: 700;
-}
-.v2-features li.excluded .v2-feat-text span {
-  color: var(--c-subtle);
-}
-
-/* CTA Button */
-.v2-cta {
-  width: 100%;
-  height: 42px;
-  border-radius: 12px;
-  border: 1.5px solid var(--tc-border);
-  background: var(--tc-soft);
-  color: var(--tc);
-  font-size: 13.5px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  margin-top: auto;
-}
-.v2-cta:hover {
-  background: var(--tc);
-  color: #fff;
-  border-color: var(--tc);
-  box-shadow: 0 6px 18px var(--tc-glow);
-  transform: translateY(-1px);
-}
-.v2-cta-selected {
-  background: var(--tc) !important;
-  color: #fff !important;
-  border-color: var(--tc) !important;
-  box-shadow: 0 6px 18px var(--tc-glow) !important;
-}
-
-/* ══════════════════════════════════════════════════
-   POWER PACKS — V2 Premium Grid
-   ══════════════════════════════════════════════════ */
-.packs-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
-}
-@media (max-width: 960px) {
-  .packs-grid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 580px) {
-  .packs-grid { grid-template-columns: 1fr; }
-}
-
-/* Color themes for each pack type */
-.pack-card.review      { --pk-h: 258; --pk-s: 90%; --pk-l: 58%; }
-.pack-card.ppt         { --pk-h: 160; --pk-s: 70%; --pk-l: 38%; }
-.pack-card.chat        { --pk-h: 37;  --pk-s: 90%; --pk-l: 50%; }
-.pack-card.translation { --pk-h: 215; --pk-s: 75%; --pk-l: 52%; }
-.pack-card.research    { --pk-h: 330; --pk-s: 82%; --pk-l: 55%; }
-.pack-card.report      { --pk-h: 5;   --pk-s: 88%; --pk-l: 55%; }
-
-.pack-card {
-  --pk: hsl(var(--pk-h), var(--pk-s), var(--pk-l));
-  --pk-soft: hsla(var(--pk-h), var(--pk-s), var(--pk-l), 0.08);
-  --pk-border: hsla(var(--pk-h), var(--pk-s), var(--pk-l), 0.22);
-  --pk-glow: hsla(var(--pk-h), var(--pk-s), var(--pk-l), 0.2);
-
-  position: relative;
-  border-radius: 20px;
-  background: var(--c-surface);
-  border: 1.5px solid var(--pk-border);
-  padding: 22px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  overflow: hidden;
-}
-.pack-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(145deg, var(--pk-soft) 0%, transparent 55%);
-  pointer-events: none;
-  border-radius: inherit;
-  opacity: 0.6;
-  transition: opacity 0.3s ease;
-}
-.pack-card:hover {
-  transform: translateY(-4px);
-  border-color: var(--pk);
-  box-shadow: 0 16px 36px var(--pk-glow), 0 4px 12px rgba(0,0,0,0.05);
-}
-.pack-card:hover::before { opacity: 1; }
-.pack-active {
-  border-color: var(--pk) !important;
-  box-shadow: 0 0 0 2px var(--pk), 0 16px 36px var(--pk-glow) !important;
-}
-.pack-active::before { opacity: 1 !important; }
-
-/* Decorative blob */
-.pack-blob {
-  position: absolute;
-  bottom: -30px; right: -30px;
-  width: 100px; height: 100px;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--pk-soft), transparent 70%);
-  pointer-events: none;
-  transition: transform 0.4s ease;
-}
-.pack-card:hover .pack-blob {
-  transform: scale(1.4);
-}
-
-/* Pack top row */
-.pack-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.pack-icon-wrap {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  background: var(--pk);
-  color: #fff;
-  box-shadow: 0 4px 12px var(--pk-glow);
-  flex-shrink: 0;
-}
-.pack-icon-wrap svg {
-  width: 20px;
-  height: 20px;
-}
-.pack-label-tag {
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--pk-soft);
-  color: var(--pk);
-  font-size: 10.5px;
-  font-weight: 800;
-  border: 1px solid var(--pk-border);
-}
-
-/* Pack body */
-.pack-body h3 {
-  margin: 0 0 4px;
-  font-size: 15px;
-  font-weight: 850;
-  color: var(--c-text);
-}
-.pack-body p {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--c-muted);
-  line-height: 1.45;
-}
-
-/* Pack bottom */
-.pack-bottom {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-top: 4px;
-}
-.pack-quantity {
-  font-size: 20px;
-  font-weight: 900;
-  color: var(--pk);
-  letter-spacing: -0.3px;
-}
-.pack-pricing {
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
-}
-.pack-pricing strong {
-  font-size: 26px;
-  font-weight: 950;
-  color: var(--c-text);
-  letter-spacing: -0.5px;
-}
-.pack-pricing span {
-  font-size: 12px;
-  color: var(--c-muted);
-  font-weight: 600;
-}
-
-/* Pack CTA */
-.pack-cta {
-  width: 100%;
-  height: 38px;
-  border-radius: 10px;
-  border: 1.5px solid var(--pk-border);
-  background: transparent;
-  color: var(--pk);
-  font-size: 13px;
-  font-weight: 750;
-  cursor: pointer;
-  transition: all 0.25s ease;
-}
-.pack-cta:hover {
-  background: var(--pk);
-  color: #fff;
-  border-color: var(--pk);
-  box-shadow: 0 4px 14px var(--pk-glow);
-}
-.pack-cta-active {
-  background: var(--pk) !important;
-  color: #fff !important;
-  border-color: var(--pk) !important;
-  box-shadow: 0 4px 14px var(--pk-glow) !important;
-}
-
-/* Premium Card Color-Coded Themes */
-.plan-card.free {
-  --tier: #64748b;
-  --tier-soft: rgba(100, 116, 139, 0.05);
-  --tier-line: rgba(100, 116, 139, 0.2);
-}
-.plan-card.lite {
-  --tier: #0b946f;
-  --tier-soft: rgba(11, 148, 111, 0.05);
-  --tier-line: rgba(11, 148, 111, 0.22);
-}
-.plan-card.plus {
-  --tier: #2664ea;
-  --tier-soft: rgba(38, 100, 234, 0.05);
-  --tier-line: rgba(38, 100, 234, 0.22);
-}
-.plan-card.pro {
-  --tier: #7a2fe3;
-  --tier-soft: rgba(122, 47, 227, 0.05);
-  --tier-line: rgba(122, 47, 227, 0.22);
-}
-.plan-card.team_plus {
-  --tier: #d97706;
-  --tier-soft: rgba(217, 119, 6, 0.05);
-  --tier-line: rgba(217, 119, 6, 0.22);
-}
-.plan-card.team_pro {
-  --tier: #b45309;
-  --tier-soft: rgba(180, 83, 9, 0.05);
-  --tier-line: rgba(180, 83, 9, 0.22);
-}
-
-.plan-card {
-  position: relative;
-  border-radius: 16px;
-  background: linear-gradient(180deg, var(--tier-soft), var(--c-surface) 60%) !important;
-  border: 1px solid var(--tier-line) !important;
-  box-shadow: var(--sh-sm);
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.plan-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
-}
-.plan-card.active {
-  border-color: var(--tier) !important;
-  box-shadow: 0 0 0 2px var(--tier), 0 12px 28px rgba(0, 0, 0, 0.12) !important;
-}
-
-.plan-card header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 14px;
-}
-.plan-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-.plan-title-row h3 {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 900;
-  color: var(--c-text);
-}
-.plan-title-row em {
-  font-style: normal;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--c-surface);
-  border: 1px solid var(--tier-line);
-  color: var(--tier);
-  font-size: 10.5px;
-  font-weight: 850;
-}
-.plan-card .plan-subtitle {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--c-muted);
-  line-height: 1.55;
-}
-.plan-icon {
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border-radius: 10px;
-  color: #fff;
-  background: var(--tier);
-  font-weight: 900;
-  font-size: 16px;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
-}
-
-.price-line {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px 9px;
-  margin: 12px 0 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--c-border);
-}
-
-/* Premium Benefit Ladder CSS */
-.benefit-ladder {
-  overflow: hidden;
-  border: 1px solid var(--c-border);
-  border-radius: 12px;
-  background: var(--c-surface);
-  margin-bottom: 16px;
-}
-
-.ladder-head,
-.ladder-row {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  min-height: 38px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--c-border);
-}
-
-.ladder-head {
-  grid-template-columns: minmax(0, 1fr) auto;
-  color: var(--c-text);
-  background: rgba(0, 0, 0, 0.02);
-  font-weight: 850;
-  font-size: 12.5px;
-}
-:root[data-theme="dark"] .ladder-head {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.ladder-head b {
-  color: var(--tier);
-  font-size: 11px;
-}
-
-.ladder-row {
-  font-size: 12px;
-}
-.ladder-row.not-included {
-  opacity: 0.55;
-}
-
-.ladder-info {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.35;
-}
-.ladder-info strong {
-  color: var(--c-text);
-  font-weight: 700;
-}
-.ladder-info small {
-  color: var(--c-muted);
-  font-size: 10px;
-  margin-top: 1px;
-}
-
-.ladder-row b {
-  color: var(--c-text);
-  font-weight: 800;
-  font-size: 12px;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.row-icon {
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  color: #fff;
-  background: #10b981;
-  font-size: 10px;
-  font-weight: 900;
-}
-.ladder-row.not-included .row-icon {
-  background: #ef4444;
-}
-
-.settlement-note {
-  margin: 0;
-  padding: 8px 10px;
-  color: var(--c-muted);
-  text-align: center;
-  font-size: 10.5px;
-  background: rgba(0, 0, 0, 0.01);
-}
-
-.plan-actions {
-  margin-top: 14px;
-}
-.solid-buy {
-  width: 100%;
-  height: 40px;
-  border: none;
-  border-radius: 10px;
-  color: #fff;
-  background: var(--tier);
-  font-size: 13.5px;
-  font-weight: 850;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-.solid-buy:hover {
-  transform: translateY(-1.5px);
-  filter: brightness(1.08);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
-}
-.solid-buy.active {
-  filter: brightness(0.95);
-}
-
-.plan-sale-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 0 0 10px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(245, 158, 11, 0.14));
-  border: 1px solid rgba(248, 113, 113, 0.24);
-  color: #b91c1c;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-:root[data-theme="dark"] .plan-sale-strip {
-  color: #fecaca;
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(245, 158, 11, 0.16));
-  border-color: rgba(251, 191, 36, 0.28);
-}
-
-.plan-sale-strip strong {
-  flex-shrink: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  color: #ef4444;
-  font-size: 10.5px;
-  letter-spacing: 0;
-}
-
-:root[data-theme="dark"] .plan-sale-strip strong {
-  color: #fbbf24;
-}
-
-.price-line.sale {
-  align-items: baseline;
-}
-
-.price-line .origin-price {
-  color: var(--c-muted);
-  text-decoration: line-through;
-  text-decoration-thickness: 2px;
-  font-size: 13px;
-  min-width: 0;
-}
-
-.price-line.sale strong {
-  color: #ef4444;
-}
-
-:root[data-theme="dark"] .price-line.sale strong {
-  color: #fb7185;
-}
-
-.price-line strong {
-  font-size: clamp(28px, 2.5vw, 32px);
-  font-weight: 950;
-  color: var(--c-text);
-  font-family: tabular-nums;
-  line-height: 1;
-}
-.price-line span {
-  font-size: 12px;
-  color: var(--c-muted);
-  font-weight: 700;
-}
-
-.team-seats-selector {
-  margin: 0 0 18px;
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-radius: 12px;
-  background: rgba(99, 102, 241, 0.08);
-  border: 1px solid rgba(129, 140, 248, 0.3);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-.seats-label {
-  font-size: 13px;
-  font-weight: 850;
-  color: var(--c-text);
-  white-space: nowrap;
-}
-.seats-counter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.counter-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid rgba(129, 140, 248, 0.35);
-  background: rgba(99, 102, 241, 0.14);
-  color: var(--c-text);
-  font-size: 16px;
-  font-weight: 900;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  user-select: none;
-  transition: all 0.2s ease;
-}
-.counter-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-.counter-btn:not(:disabled):hover {
-  background: rgba(99, 102, 241, 0.28);
-  border-color: rgba(129, 140, 248, 0.6);
-  transform: scale(1.05);
-}
-
-.counter-value-box {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.45);
-  border: 1px solid rgba(129, 140, 248, 0.35);
-}
-:root[data-theme="light"] .counter-value-box {
-  background: #ffffff;
-}
-
-.counter-input {
-  width: 36px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  color: var(--c-text);
-  text-align: center;
-  font-size: 15px;
-  font-weight: 900;
-  outline: none;
-  padding: 0;
-  margin: 0;
-  font-family: inherit;
-}
-.counter-unit {
-  font-size: 13px;
-  font-weight: 850;
-  color: #818cf8;
-}
-
-/* Feature list */
-.center-plan-features {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 22px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.center-plan-features li {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-.feature-check {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: rgba(16, 185, 129, 0.16);
-  color: #10b981;
-  font-size: 12px;
-  font-weight: 900;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-.feature-check.excluded {
-  background: rgba(239, 68, 68, 0.16);
-  color: #ef4444;
-}
-
-.luckin-tag {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: fit-content;
-  max-width: 100%;
-  flex: 0 0 100%;
-  margin-top: 6px;
-  padding: 3px 11px 3px 5px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 850;
-  color: #a5b4fc;
-  background: rgba(49, 46, 129, 0.45);
-  border: 1px solid rgba(129, 140, 248, 0.35);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-  white-space: normal;
-}
-.luckin-icon {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.center-plan-features li div strong {
-  display: block;
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--c-text);
-}
-.center-plan-features li div small {
-  display: block;
-  font-size: 11.5px;
-  color: var(--c-muted);
-}
-
-.settlement-note {
-  font-size: 11px;
-  color: var(--c-subtle);
-  margin-bottom: 16px;
-  line-height: 1.5;
-}
-
-.plan-buy-button {
-  width: 100%;
-  height: 42px;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--c-border);
-  background: var(--c-bg);
-  color: var(--c-text);
-  font-size: 13.5px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.plan-card:hover .plan-buy-button,
-.plan-card.active .plan-buy-button {
-  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
-  color: #ffffff;
-  border-color: transparent;
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.38);
 }
 
 /* ── Checkout Bar ────────────────────────────────────────── */
@@ -2913,38 +2064,39 @@ async function submitTicket() {
   left: 50%;
   transform: translateX(-50%);
   z-index: 100;
-  width: min(1020px, calc(100vw - 32px));
-  padding: 16px 26px;
-  border-radius: var(--r);
+  width: min(1040px, calc(100vw - 32px));
+  padding: 18px 28px;
+  border-radius: 20px;
   background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  box-shadow: var(--sh-lg);
+  border: 1.5px solid rgba(99, 102, 241, 0.25);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
   backdrop-filter: blur(24px);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 24px;
 }
-@media (max-width: 700px) {
+@media (max-width: 768px) {
   .checkout-bar { flex-direction: column; align-items: stretch; }
 }
 
 .checkout-bar > div:first-child span {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 850;
   color: var(--c-subtle);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
 }
 .checkout-bar > div:first-child strong {
   display: block;
-  font-size: 16px;
+  font-size: 16.5px;
   font-weight: 900;
   color: var(--c-text);
+  margin: 2px 0;
 }
 .checkout-bar > div:first-child p {
-  margin: 2px 0 0;
-  font-size: 12px;
+  margin: 0;
+  font-size: 12.5px;
   color: var(--c-muted);
 }
 
@@ -2953,68 +2105,76 @@ async function submitTicket() {
   align-items: center;
   gap: 14px;
 }
+@media (max-width: 600px) {
+  .checkout-actions { flex-direction: column; width: 100%; }
+}
 
 .pay-methods {
   display: flex;
   gap: 6px;
 }
 .pay-methods button {
-  height: 38px;
+  height: 40px;
   padding: 0 16px;
   border-radius: var(--r-pill);
   border: 1px solid var(--c-border);
   background: var(--c-bg);
   color: var(--c-muted);
-  font-size: 13px;
-  font-weight: 750;
+  font-size: 13.5px;
+  font-weight: 800;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.18s;
-}
-.pay-methods button:disabled {
-  cursor: default;
-  opacity: 1;
+  transition: all 0.2s ease;
 }
 .pay-methods button.active {
   border-color: var(--c-accent);
   color: var(--c-accent);
-  background: rgba(99, 102, 241, 0.08);
-}
-.pay-methods button i {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(99, 102, 241, 0.15);
-  font-style: normal;
-  font-size: 10px;
-  font-weight: 900;
-  display: grid;
-  place-items: center;
+  background: rgba(99, 102, 241, 0.1);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
 }
 
 .primary-button {
   height: 44px;
-  padding: 0 26px;
+  padding: 0 28px;
   border-radius: var(--r-pill);
   border: none;
   background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
   color: #ffffff;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 850;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
-  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.38);
+  transition: all 0.25s ease;
   white-space: nowrap;
 }
 .primary-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.48);
 }
 .primary-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.payment-message {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #ef4444;
+  font-weight: 750;
+  text-align: center;
+}
+.payment-message.success {
+  color: #10b981 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 850;
+}
+.success-check-icon {
+  font-size: 1.2rem;
 }
 
 /* ── Orders Section ──────────────────────────────────────── */
@@ -3023,8 +2183,8 @@ async function submitTicket() {
   z-index: 2;
   background: var(--c-surface);
   border: 1px solid var(--c-border);
-  border-radius: var(--r);
-  padding: 26px 30px;
+  border-radius: 22px;
+  padding: 28px 34px;
   box-shadow: var(--sh-sm);
 }
 
@@ -3032,33 +2192,34 @@ async function submitTicket() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
 .section-title span {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 850;
   color: var(--c-subtle);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
 }
 .section-title h2 {
   margin: 2px 0 0;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 900;
   color: var(--c-text);
+  letter-spacing: -0.3px;
 }
 
 .orders-table {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 .order-head {
   display: grid;
   grid-template-columns: 1.5fr 1.2fr 1fr 1fr 1fr;
   padding: 8px 16px;
-  font-size: 12px;
-  font-weight: 750;
+  font-size: 12.5px;
+  font-weight: 800;
   color: var(--c-subtle);
   border-bottom: 1px solid var(--c-border);
 }
@@ -3066,22 +2227,22 @@ async function submitTicket() {
   display: grid;
   grid-template-columns: 1.5fr 1.2fr 1fr 1fr 1fr;
   align-items: center;
-  padding: 12px 16px;
-  border-radius: var(--r-sm);
+  padding: 14px 18px;
+  border-radius: 12px;
   background: var(--c-bg);
   border: 1px solid var(--c-border);
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--c-text);
 }
-.order-item strong { font-weight: 800; }
-.order-item small { color: var(--c-muted); display: block; font-size: 11px; }
+.order-item strong { font-weight: 850; }
+.order-item small { color: var(--c-muted); display: block; font-size: 11.5px; }
 
 .status {
   display: inline-block;
-  padding: 2px 10px;
+  padding: 3px 12px;
   border-radius: var(--r-pill);
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 11.5px;
+  font-weight: 850;
   width: fit-content;
 }
 .status.paid, .status.success { background: rgba(16, 185, 129, 0.12); color: #10b981; }
@@ -3089,39 +2250,80 @@ async function submitTicket() {
 .status.failed, .status.cancelled { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
 
 .ticket-button {
-  height: 30px;
-  padding: 0 12px;
+  height: 32px;
+  padding: 0 14px;
   border-radius: var(--r-pill);
   border: 1px solid var(--c-border);
-  background: transparent;
+  background: var(--c-surface);
   color: var(--c-muted);
-  font-size: 12px;
-  font-weight: 750;
+  font-size: 12.5px;
+  font-weight: 800;
   cursor: pointer;
-  transition: all 0.18s;
+  transition: all 0.2s ease;
   width: fit-content;
 }
 .ticket-button:hover { border-color: var(--c-accent); color: var(--c-accent); }
 
 .orders-empty {
-  padding: 36px;
+  padding: 40px;
   text-align: center;
   color: var(--c-subtle);
-  font-size: 13px;
+  font-size: 13.5px;
   background: var(--c-bg);
   border-radius: var(--r-sm);
   border: 1px dashed var(--c-border);
 }
 
-/* ── Ticket Dialog ───────────────────────────────────────── */
+/* ── Ticket & Payment Dialogs ────────────────────────────── */
 .ticket-dialog {
   border: 1px solid var(--c-border);
-  border-radius: var(--r);
+  border-radius: 22px;
   background: var(--c-surface);
   color: var(--c-text);
   box-shadow: var(--sh-lg);
   padding: 28px 32px;
-  width: min(480px, calc(100vw - 32px));
+  width: min(500px, calc(100vw - 32px));
+}
+.ticket-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+}
+.dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+.dialog-heading span { font-size: 11px; font-weight: 850; color: var(--c-accent); text-transform: uppercase; }
+.dialog-heading h2 { margin: 2px 0 0; font-size: 19px; font-weight: 900; }
+.close-button { border: none; background: transparent; color: var(--c-muted); font-size: 22px; cursor: pointer; }
+
+.ticket-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--c-muted);
+}
+.ticket-dialog input, .ticket-dialog select, .ticket-dialog textarea {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-size: 13.5px;
+  outline: none;
+}
+.ticket-dialog input:focus, .ticket-dialog select:focus, .ticket-dialog textarea:focus {
+  border-color: var(--c-accent);
+}
+.ticket-error {
+  color: #ef4444;
+  font-size: 12.5px;
+  font-weight: 750;
+  margin: 8px 0;
 }
 
 .wechat-pay-dialog {
@@ -3133,19 +2335,17 @@ async function submitTicket() {
   padding: 28px;
   width: min(560px, calc(100vw - 32px));
 }
-
 .wechat-pay-dialog::backdrop {
-  background: rgba(2, 6, 23, 0.62);
-  backdrop-filter: blur(8px);
+  background: rgba(2, 6, 23, 0.65);
+  backdrop-filter: blur(10px);
 }
 
 .wechat-pay-body {
   display: grid;
   grid-template-columns: 220px 1fr;
-  gap: 22px;
+  gap: 24px;
   align-items: center;
 }
-
 .wechat-qr-shell {
   width: 220px;
   height: 220px;
@@ -3157,17 +2357,29 @@ async function submitTicket() {
   place-items: center;
   padding: 14px;
 }
-
 .wechat-qr-shell img {
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
-
 .wechat-qr-loading {
   color: #64748b;
   font-size: 13px;
   font-weight: 800;
+}
+.wechat-pay-success-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 180px;
+  height: 180px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 16px;
+  color: #10b981;
+}
+.success-checkmark-svg {
+  width: 72px;
+  height: 72px;
 }
 
 .wechat-pay-meta {
@@ -3175,24 +2387,20 @@ async function submitTicket() {
   flex-direction: column;
   gap: 8px;
 }
-
 .wechat-pay-meta strong {
   font-size: 12px;
   color: var(--c-muted);
   word-break: break-all;
 }
-
 .wechat-pay-meta span {
   font-size: 15px;
   font-weight: 850;
 }
-
 .wechat-pay-meta b {
   font-size: 34px;
   line-height: 1;
   color: #22c55e;
 }
-
 .wechat-pay-meta p {
   margin: 4px 0 0;
   color: var(--c-muted);
@@ -3206,49 +2414,8 @@ async function submitTicket() {
   gap: 12px;
   margin-top: 24px;
 }
-
 @media (max-width: 640px) {
-  .wechat-pay-body {
-    grid-template-columns: 1fr;
-  }
-  .wechat-qr-shell {
-    margin: 0 auto;
-  }
-}
-
-.ticket-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(6px);
-}
-.dialog-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-.dialog-heading span { font-size: 11px; font-weight: 800; color: var(--c-accent); text-transform: uppercase; }
-.dialog-heading h2 { margin: 2px 0 0; font-size: 18px; font-weight: 900; }
-.close-button { border: none; background: transparent; color: var(--c-muted); font-size: 20px; cursor: pointer; }
-
-.ticket-dialog label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
-  font-size: 12.5px;
-  font-weight: 750;
-  color: var(--c-muted);
-}
-.ticket-dialog input, .ticket-dialog select, .ticket-dialog textarea {
-  padding: 10px 14px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--c-border);
-  background: var(--c-bg);
-  color: var(--c-text);
-  font-size: 13.5px;
-  outline: none;
-}
-.ticket-dialog input:focus, .ticket-dialog select:focus, .ticket-dialog textarea:focus {
-  border-color: var(--c-accent);
+  .wechat-pay-body { grid-template-columns: 1fr; }
+  .wechat-qr-shell { margin: 0 auto; }
 }
 </style>

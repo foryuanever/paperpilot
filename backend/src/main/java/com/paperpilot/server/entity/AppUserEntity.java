@@ -7,8 +7,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "app_user")
@@ -28,6 +30,7 @@ public class AppUserEntity {
     private String inviteCode;
 
     @Column(name = "password_hash", length = 255)
+    @JsonIgnore
     private String passwordHash;
 
     @Column(name = "created_at", nullable = false)
@@ -99,6 +102,7 @@ public class AppUserEntity {
     }
 
     @Column(name = "plain_password", length = 255)
+    @JsonIgnore
     private String plainPassword;
 
     public String getPlainPassword() {
@@ -152,7 +156,7 @@ public class AppUserEntity {
     private LocalDateTime membershipExpiresAt;
 
     @Column(name = "review_quota")
-    private Integer reviewQuota = 0;
+    private Integer reviewQuota = 90;
 
     @Column(name = "review_used")
     private Integer reviewUsed = 0;
@@ -164,25 +168,64 @@ public class AppUserEntity {
     private Integer pptUsed = 0;
 
     @Column(name = "chat_quota")
-    private Integer chatQuota = 0;
+    private Integer chatQuota = 150;
 
     @Column(name = "chat_used")
     private Integer chatUsed = 0;
 
     @Column(name = "research_quota")
-    private Integer researchQuota = 0;
+    private Integer researchQuota = 90;
 
     @Column(name = "research_used")
     private Integer researchUsed = 0;
 
     @Column(name = "report_quota")
-    private Integer reportQuota = 0;
+    private Integer reportQuota = 1;
 
     @Column(name = "report_used")
     private Integer reportUsed = 0;
 
+    @Column(name = "translate_quota")
+    private Integer translateQuota = 5;
+
+    @Column(name = "translate_used")
+    private Integer translateUsed = 0;
+
+    @Column(name = "immersive_quota")
+    private Integer immersiveQuota = 3;
+
+    @Column(name = "immersive_used")
+    private Integer immersiveUsed = 0;
+
+    @Column(name = "translate_one_off_quota")
+    private Integer translateOneOffQuota = 0;
+
+    @Column(name = "immersive_one_off_quota")
+    private Integer immersiveOneOffQuota = 0;
+
+    @Column(name = "translate_daily_quota_base")
+    private Integer translateDailyQuotaBase;
+
+    @Column(name = "immersive_daily_quota_base")
+    private Integer immersiveDailyQuotaBase;
+
+    @Column(name = "translate_daily_bonus")
+    private Integer translateDailyBonus = 0;
+
+    @Column(name = "translate_daily_bonus_date")
+    private LocalDate translateDailyBonusDate;
+
+    @Column(name = "immersive_daily_bonus")
+    private Integer immersiveDailyBonus = 0;
+
+    @Column(name = "immersive_daily_bonus_date")
+    private LocalDate immersiveDailyBonusDate;
+
     @Column(name = "fruit_score")
     private Integer fruitScore = 0;
+
+    @Column(name = "checkin_score")
+    private Integer checkinScore = 0;
 
     public String getMembershipPlan() { return membershipPlan; }
     public void setMembershipPlan(String membershipPlan) { this.membershipPlan = membershipPlan; }
@@ -210,8 +253,34 @@ public class AppUserEntity {
     public void setReportQuota(Integer reportQuota) { this.reportQuota = reportQuota; }
     public Integer getReportUsed() { return reportUsed; }
     public void setReportUsed(Integer reportUsed) { this.reportUsed = reportUsed; }
+    public Integer getTranslateQuota() { return translateQuota; }
+    public void setTranslateQuota(Integer translateQuota) { this.translateQuota = translateQuota; }
+    public Integer getTranslateUsed() { return translateUsed; }
+    public void setTranslateUsed(Integer translateUsed) { this.translateUsed = translateUsed; }
+    public Integer getImmersiveQuota() { return immersiveQuota; }
+    public void setImmersiveQuota(Integer immersiveQuota) { this.immersiveQuota = immersiveQuota; }
+    public Integer getImmersiveUsed() { return immersiveUsed; }
+    public void setImmersiveUsed(Integer immersiveUsed) { this.immersiveUsed = immersiveUsed; }
+    public Integer getTranslateOneOffQuota() { return translateOneOffQuota; }
+    public void setTranslateOneOffQuota(Integer translateOneOffQuota) { this.translateOneOffQuota = translateOneOffQuota; }
+    public Integer getImmersiveOneOffQuota() { return immersiveOneOffQuota; }
+    public void setImmersiveOneOffQuota(Integer immersiveOneOffQuota) { this.immersiveOneOffQuota = immersiveOneOffQuota; }
+    public Integer getTranslateDailyQuotaBase() { return translateDailyQuotaBase; }
+    public void setTranslateDailyQuotaBase(Integer translateDailyQuotaBase) { this.translateDailyQuotaBase = translateDailyQuotaBase; }
+    public Integer getImmersiveDailyQuotaBase() { return immersiveDailyQuotaBase; }
+    public void setImmersiveDailyQuotaBase(Integer immersiveDailyQuotaBase) { this.immersiveDailyQuotaBase = immersiveDailyQuotaBase; }
+    public Integer getTranslateDailyBonus() { return translateDailyBonus; }
+    public void setTranslateDailyBonus(Integer translateDailyBonus) { this.translateDailyBonus = translateDailyBonus; }
+    public LocalDate getTranslateDailyBonusDate() { return translateDailyBonusDate; }
+    public void setTranslateDailyBonusDate(LocalDate translateDailyBonusDate) { this.translateDailyBonusDate = translateDailyBonusDate; }
+    public Integer getImmersiveDailyBonus() { return immersiveDailyBonus; }
+    public void setImmersiveDailyBonus(Integer immersiveDailyBonus) { this.immersiveDailyBonus = immersiveDailyBonus; }
+    public LocalDate getImmersiveDailyBonusDate() { return immersiveDailyBonusDate; }
+    public void setImmersiveDailyBonusDate(LocalDate immersiveDailyBonusDate) { this.immersiveDailyBonusDate = immersiveDailyBonusDate; }
     public Integer getFruitScore() { return fruitScore; }
     public void setFruitScore(Integer fruitScore) { this.fruitScore = fruitScore; }
+    public Integer getCheckinScore() { return checkinScore; }
+    public void setCheckinScore(Integer checkinScore) { this.checkinScore = checkinScore; }
 
     @Column(name = "last_ip", length = 128)
     private String lastIp;
@@ -293,12 +362,23 @@ public class AppUserEntity {
     @Column(name = "qq_openid", length = 128, unique = true)
     private String qqOpenid;
 
+    @Column(name = "machine_id", length = 128)
+    private String machineId;
+
     public String getQqOpenid() {
         return qqOpenid;
     }
 
     public void setQqOpenid(String qqOpenid) {
         this.qqOpenid = qqOpenid;
+    }
+
+    public String getMachineId() {
+        return machineId;
+    }
+
+    public void setMachineId(String machineId) {
+        this.machineId = machineId;
     }
 
     @Column(name = "qq", length = 32)
@@ -328,12 +408,40 @@ public class AppUserEntity {
 
     public Integer getNumericId() {
         if (numericId == null && id != null) {
-            numericId = 100000 + Math.abs(id.hashCode() % 900000);
+            int h = id.hashCode();
+            h ^= (h >>> 16);
+            h *= 0x85ebca6b;
+            h ^= (h >>> 13);
+            h *= 0xc2b2ae35;
+            h ^= (h >>> 16);
+            numericId = 100000 + Math.abs(h) % 900000;
         }
         return numericId;
     }
 
     public void setNumericId(Integer numericId) {
         this.numericId = numericId;
+    }
+
+    @Column(name = "membership_stack", length = 2000)
+    private String membershipStack;
+
+    @Column(name = "last_membership_evaluation_time")
+    private LocalDateTime lastMembershipEvaluationTime;
+
+    public String getMembershipStack() {
+        return membershipStack;
+    }
+
+    public void setMembershipStack(String membershipStack) {
+        this.membershipStack = membershipStack;
+    }
+
+    public LocalDateTime getLastMembershipEvaluationTime() {
+        return lastMembershipEvaluationTime;
+    }
+
+    public void setLastMembershipEvaluationTime(LocalDateTime lastMembershipEvaluationTime) {
+        this.lastMembershipEvaluationTime = lastMembershipEvaluationTime;
     }
 }

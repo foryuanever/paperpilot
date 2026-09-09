@@ -12,7 +12,7 @@ import ForumPostView from "../views/ForumPostView.vue";
 import TeamView from "../views/TeamView.vue";
 import ProfileView from "../views/ProfileView.vue";
 import ReferralView from "../views/ReferralView.vue";
-import TopicSquareView from "../views/TopicSquareView.vue";
+import VocabularyView from "../views/VocabularyView.vue";
 import { useAuthStore } from "../stores/auth";
 
 const routes = [
@@ -67,6 +67,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: "/vocabulary",
+    name: "vocabulary",
+    component: VocabularyView,
+    meta: { requiresAuth: true },
+  },
+  {
     path: "/reader",
     name: "reader",
     component: ReaderView,
@@ -96,9 +102,7 @@ const routes = [
   },
   {
     path: "/topics",
-    name: "topics",
-    component: TopicSquareView,
-    meta: { requiresAuth: true },
+    redirect: "/library",
   },
   {
     path: "/forum/post/:id",

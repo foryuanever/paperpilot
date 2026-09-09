@@ -64,8 +64,8 @@ export const pageNavItems = [
   { to: "/search", label: "文献检索", icon: "search" },
   { to: "/library", label: "文献库", icon: "library" },
   { to: "/reading", label: "文献阅读", icon: "reading" },
-  { to: "/topics", label: "选题大厅", icon: "search" },
+  { to: "/vocabulary", label: "词汇积累", icon: "vocabulary" },
   { to: "/meeting-report", label: "组会汇报", icon: "slides" },
-  { to: "/forum", label: "学术贴吧", icon: "forum" },
+  { to: "/referral", label: "邀请奖励", icon: "gift" },
   { to: "/models", label: "额度管理", icon: "models" },
 ];

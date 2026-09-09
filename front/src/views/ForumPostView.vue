@@ -76,7 +76,7 @@
                 点赞 {{ post.likes }}
               </button>
               <button class="report-action" @click="openReportModal">举报</button>
-              <span>{{ post.replies.length }} 条评论</span>
+              <span>{{ post.replies?.length || 0 }} 条评论</span>
             </footer>
           </article>
 
@@ -86,7 +86,7 @@
                 <span>DISCUSSION</span>
                 <h2>评论与讨论</h2>
               </div>
-              <strong>{{ post.replies.length }}</strong>
+              <strong>{{ post.replies?.length || 0 }}</strong>
             </header>
 
             <div class="comment-editor">
@@ -159,10 +159,8 @@
               </div>
             </div>
 
-            <div v-if="post.replies.length" class="comment-list">
+            <div v-if="post.replies?.length" class="comment-list">
               <article v-for="reply in post.replies" :key="reply.id" class="comment-item">
-                <img v-if="avatarUrlFor(reply)" :src="avatarUrlFor(reply)" class="comment-avatar-img" :data-user-id="reply.authorUserId" :alt="reply.author" title="查看个人卡片" />
-                <span v-else class="comment-avatar" :data-user-id="reply.authorUserId" title="查看个人卡片">{{ reply.avatar }}</span>
                 <div>
                   <header>
                     <strong class="member-name" :class="membershipClass(reply.authorMembershipPlan)">{{ reply.author }}</strong>
@@ -314,6 +312,7 @@ function clearReplyContent() {
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
 const defaultValidateLink = markdown.validateLink;
 markdown.validateLink = (url) => /^data:(image|application|text)\//i.test(url) || defaultValidateLink(url);
+const adminTextColors = ["#dc2626", "#ea580c", "#ca8a04", "#16a34a", "#2563eb", "#7c3aed", "#c026d3", "#0f172a"];
 
 const post = computed(() => forumStore.state.posts.find(item => item.id === route.params.id));
 
@@ -342,7 +341,19 @@ function renderMarkdown(value) {
     .replace(/<!--\s*(?:图片|附件)\s*[:：]\s*.*?-->/gi, "")
     .replace(/(?:图片|附件)\s*[:：]\s*[^\n\r]+/gi, "")
     .trim();
-  return markdown.render(cleaned || "_暂无内容_");
+  const tokens = [];
+  cleaned = cleaned
+    .replace(/\[color=(#[0-9a-f]{6})\]/gi, (_, color) => {
+      const safeColor = color.toLowerCase();
+      if (!adminTextColors.includes(safeColor)) return _;
+      const token = `PAPERSOLVERCOLOROPEN${tokens.length}TOKEN`;
+      tokens.push({ token, html: `<span style="color:${safeColor}">` });
+      return token;
+    })
+    .replace(/\[\/color\]/gi, "PAPERSOLVERCOLORCLOSETOKEN");
+  let rendered = markdown.render(cleaned || "_暂无内容_");
+  for (const token of tokens) rendered = rendered.replaceAll(token.token, token.html);
+  return rendered.replaceAll("PAPERSOLVERCOLORCLOSETOKEN", "</span>");
 }
 
 function handleMarkdownImageClick(event) {

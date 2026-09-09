@@ -2,6 +2,8 @@ package com.paperpilot.server.dto;
 
 public class PaperUpdateRequest {
 
+ private String title;
+ private String source;
  private String progress;
  private String note;
  private String readAt;
@@ -9,6 +11,22 @@ public class PaperUpdateRequest {
  private String authors;
  private String publishYear;
   private java.util.List<String> journalTags;
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
+    }
 
  public String getProgress() {
         return progress;

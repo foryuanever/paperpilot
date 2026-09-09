@@ -23,7 +23,7 @@
       <article class="metric-card spatial-glass-panel">
         <span class="metric-label">实时在线</span>
         <strong class="metric-value">{{ currentOnline }}<small>人</small></strong>
-        <p>近 2 分钟有业务接口心跳的账号数。</p>
+        <p>近 90 秒有客户端心跳的账号数。</p>
       </article>
       <article class="metric-card spatial-glass-panel">
         <span class="metric-label">近 1 分钟请求</span>
@@ -1006,5 +1006,64 @@ onUnmounted(() => {
   .audit-log-item {
     grid-template-columns: 1fr;
   }
+}
+
+:global([data-theme="light"]) .admin-monitoring-panel {
+  color: #0f172a;
+}
+:global([data-theme="light"]) .admin-monitoring-panel .monitoring-header,
+:global([data-theme="light"]) .admin-monitoring-panel .chart-container,
+:global([data-theme="light"]) .admin-monitoring-panel .security-card,
+:global([data-theme="light"]) .admin-monitoring-panel .ops-card {
+  background: #ffffff;
+  border-color: #dbe4f0;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, .06);
+}
+:global([data-theme="light"]) .admin-monitoring-panel .monitoring-header {
+  background: linear-gradient(135deg, #ffffff 0%, #f4f8ff 100%);
+}
+:global([data-theme="light"]) .admin-monitoring-panel .monitoring-header h4,
+:global([data-theme="light"]) .admin-monitoring-panel .chart-header h5,
+:global([data-theme="light"]) .admin-monitoring-panel .security-card h5 {
+  color: #0f172a;
+}
+:global([data-theme="light"]) .admin-monitoring-panel .monitoring-header p,
+:global([data-theme="light"]) .admin-monitoring-panel .chart-header span,
+:global([data-theme="light"]) .admin-monitoring-panel .metric-card p,
+:global([data-theme="light"]) .admin-monitoring-panel .sec-card-header span {
+  color: #64748b;
+}
+:global([data-theme="light"]) .admin-monitoring-panel .metric-label,
+:global([data-theme="light"]) .admin-monitoring-panel .live-pulse,
+:global([data-theme="light"]) .admin-monitoring-panel .traffic-legend {
+  color: #475569;
+}
+:global([data-theme="light"]) .admin-monitoring-panel .metric-value {
+  color: #0f172a;
+}
+:global([data-theme="light"]) .admin-monitoring-panel .metric-value small,
+:global([data-theme="light"]) .admin-monitoring-panel .axis-label,
+:global([data-theme="light"]) .admin-monitoring-panel .chart-empty {
+  color: #64748b;
+}
+:global([data-theme="light"]) .admin-monitoring-panel .quick-date-btn {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+:global([data-theme="light"]) .admin-monitoring-panel .chart-plot-bg {
+  fill: #f8fafc;
+}
+:global([data-theme="light"]) .admin-monitoring-panel .grid-line {
+  stroke: #dbe4f0;
+}
+:global([data-theme="light"]) .admin-monitoring-panel .date-filter,
+:global([data-theme="light"]) .admin-monitoring-panel .audit-log-item {
+  color: #334155;
+  background: #f8fafc;
+  border-color: #dbe4f0;
+}
+:global([data-theme="light"]) .admin-monitoring-panel .audit-log-item p {
+  color: #64748b;
 }
 </style>

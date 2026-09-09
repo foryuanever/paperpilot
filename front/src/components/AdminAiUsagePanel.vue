@@ -5,7 +5,7 @@
         <div>
           <span class="pool-kicker">Usage Ledger</span>
           <h4>AI 调用明细</h4>
-          <p>记录本站用户在每个模块中调用的模型、输入 Token、输出 Token、费用估算与失败原因。</p>
+          <p>记录本站用户在每个模块中的输入 Token、输出 Token、实际调用模型、费用估算与失败原因。</p>
         </div>
         <div class="ledger-header-actions">
           <button class="spatial-btn spatial-btn-ghost compact-btn danger-btn" :disabled="loading || clearing" @click="clearAiUsageCalls">
@@ -28,10 +28,6 @@
             <option value="">全部模块</option>
             <option v-for="scene in sceneOptions" :key="scene.value" :value="scene.value">{{ scene.label }}</option>
           </select>
-        </label>
-        <label>
-          <span>模型</span>
-          <input v-model.trim="filters.model" type="search" placeholder="例如 gpt / qwen / deepseek" @keyup.enter="resetPageAndLoad" />
         </label>
         <label>
           <span>状态</span>
@@ -77,12 +73,26 @@
 
       <div class="ledger-table-wrap">
         <table class="ledger-table">
+          <colgroup>
+            <col class="ledger-col-time" />
+            <col class="ledger-col-user" />
+            <col class="ledger-col-module" />
+            <col class="ledger-col-model" />
+            <col class="ledger-col-paper" />
+            <col class="ledger-col-token" />
+            <col class="ledger-col-token" />
+            <col class="ledger-col-token" />
+            <col class="ledger-col-fee" />
+            <col class="ledger-col-status" />
+            <col class="ledger-col-action" />
+          </colgroup>
           <thead>
             <tr>
               <th>时间</th>
               <th>用户</th>
               <th class="ledger-module-col">模块</th>
-              <th>模型</th>
+              <th>调用模型</th>
+              <th>论文</th>
               <th>输入</th>
               <th>输出</th>
               <th>总量</th>
@@ -94,7 +104,7 @@
           <tbody>
             <tr v-for="row in rows" :key="row.id" :class="{ failed: row.status === 'failed' }">
               <td class="ledger-time">{{ row.time }}</td>
-              <td>
+              <td class="ledger-user">
                 <strong>{{ row.username || "未知用户" }}</strong>
                 <small>{{ row.userEmail || `ID ${row.userId || "—"}` }}</small>
               </td>
@@ -102,24 +112,20 @@
                 <strong>{{ formatSceneLabel(row) }}</strong>
                 <small>{{ formatActionLabel(row) }}</small>
               </td>
-              <td class="ledger-model">
-                <strong>{{ row.model }}</strong>
-                <small>{{ row.paper }}</small>
-              </td>
-              <td>{{ formatNumber(row.promptTokens) }}</td>
-              <td>{{ formatNumber(row.completionTokens) }}</td>
-              <td>{{ formatNumber(row.totalTokens) }}</td>
-              <td>¥{{ formatMoney(row.chargeAmount) }}</td>
-              <td>
+              <td class="ledger-model"><code>{{ row.modelName || "未记录模型" }}</code></td>
+              <td class="ledger-model">{{ row.paper }}</td>
+              <td class="ledger-token">{{ formatNumber(row.promptTokens) }}</td>
+              <td class="ledger-token">{{ formatNumber(row.completionTokens) }}</td>
+              <td class="ledger-token">{{ formatNumber(row.totalTokens) }}</td>
+              <td class="ledger-fee">¥{{ formatMoney(row.chargeAmount) }}</td>
+              <td class="ledger-status-col">
                 <span class="ledger-status" :class="row.status">{{ row.status === "failed" ? "失败" : "成功" }}</span>
                 <small v-if="row.latencyMs">{{ row.latencyMs }} ms</small>
-                <small v-if="row.status === 'failed' && row.fallbackResolved" class="ledger-fallback">
-                  已切换 {{ row.fallbackModel }} 成功
-                </small>
+                <small v-if="row.status === 'failed' && row.fallbackResolved" class="ledger-fallback">已自动切换备用池成功</small>
                 <small v-if="row.status === 'failed'" class="ledger-error">{{ row.errorMessage || "调用失败" }}</small>
                 <small v-if="row.accountingNote" class="ledger-accounting-note">{{ row.accountingNote }}</small>
               </td>
-              <td style="text-align: center; white-space: nowrap;">
+              <td class="ledger-actions">
                 <button
                   class="action-btn text-danger-btn compact-btn"
                   style="white-space: nowrap; display: inline-block;"
@@ -131,7 +137,7 @@
               </td>
             </tr>
             <tr v-if="!rows.length">
-              <td colspan="10" class="ledger-empty">{{ loading ? "正在读取调用记录..." : "暂无调用记录，真实模型调用后会自动出现在这里。" }}</td>
+              <td colspan="11" class="ledger-empty">{{ loading ? "正在读取调用记录..." : "暂无调用记录，真实模型调用后会自动出现在这里。" }}</td>
             </tr>
           </tbody>
         </table>
@@ -157,7 +163,7 @@ import { useDialogStore } from "../stores/dialog";
 const dialogStore = useDialogStore();
 
 const page = ref(1);
-const pageSize = ref(20);
+const pageSize = ref(10);
 const rows = ref([]);
 const total = ref(0);
 const totalPages = ref(1);
@@ -168,7 +174,6 @@ const summary = ref({ inputTokens: 0, outputTokens: 0, totalTokens: 0, failed: 0
 const filters = ref({
   keyword: "",
   scene: "",
-  model: "",
   status: "",
   startDate: "",
   endDate: ""
@@ -179,7 +184,6 @@ const sceneOptions = [
   { value: "paper_qa", label: "AI论文问答" },
   { value: "meeting_fusion", label: "组会一键融合" },
   { value: "meeting_deck", label: "PPT生成" },
-  { value: "forum_moderation", label: "AI发帖审核" },
   { value: "topic_research", label: "选题研究" },
   { value: "translate", label: "全文翻译" },
   { value: "summary", label: "论文综述旧记录" },
@@ -198,7 +202,6 @@ async function loadAiUsageCalls() {
       pageSize: pageSize.value,
       keyword: filters.value.keyword || undefined,
       scene: filters.value.scene || undefined,
-      model: filters.value.model || undefined,
       status: filters.value.status || undefined,
       startDate: filters.value.startDate || undefined,
       endDate: filters.value.endDate || undefined
@@ -255,16 +258,25 @@ async function clearAiUsageCalls() {
 
 function formatSceneLabel(row) {
   const scene = String(row.scene || "").toLowerCase();
+  const action = String(row.action || row.rawAction || "");
   if (scene === "meeting_fusion" || scene === "review") {
     return "组会一键融合";
   }
-  if (scene === "paper_review" || scene === "report") {
-    return "论文综述";
+  if (scene === "reading_notes" || scene === "reading-notes") {
+    return "AI 笔记";
+  }
+  if (scene === "paper_review" || scene === "paper_review_section" || scene === "report") {
+    return "文献综述";
+  }
+  if (scene === "paper_qa") {
+    if (action.includes("图片分析")) return "图片分析";
+    if (action.includes("解析") || action.includes("解读")) return "AI 解析";
+    return "AI 对话";
   }
   if (scene === "meeting_deck") {
     return "PPT生成";
   }
-  return row.sceneLabel || "AI研读对话";
+  return row.sceneLabel || "AI 对话";
 }
 
 function formatActionLabel(row) {
@@ -488,8 +500,9 @@ onMounted(() => {
 }
 
 .ledger-table {
-  width: 100%;
-  min-width: 1100px;
+  width: 1640px;
+  min-width: 1640px;
+  table-layout: fixed;
   border-collapse: collapse;
   color: var(--spatial-graphite);
   font-size: 0.8rem;
@@ -505,10 +518,23 @@ onMounted(() => {
   border-bottom: 1px solid var(--spatial-line);
 }
 
+.ledger-col-time { width: 152px; }
+.ledger-col-user { width: 190px; }
+.ledger-col-module { width: 128px; }
+.ledger-col-model { width: 188px; }
+.ledger-col-paper { width: 228px; }
+.ledger-col-token { width: 78px; }
+.ledger-col-fee { width: 94px; }
+.ledger-col-status { width: 144px; }
+.ledger-col-action { width: 78px; }
+
 .ledger-table td {
   padding: 14px;
   border-bottom: 1px solid var(--spatial-line);
   vertical-align: middle;
+  overflow: hidden;
+  word-break: keep-all;
+  overflow-wrap: normal;
 }
 
 .ledger-table tr:last-child td {
@@ -548,17 +574,46 @@ onMounted(() => {
 
 .ledger-module-col strong,
 .ledger-module-col small {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
 }
 
 .ledger-model {
-  max-width: 300px;
+  overflow: hidden;
 }
 
-.ledger-model strong,
-.ledger-model small {
+.ledger-user strong,
+.ledger-user small,
+.ledger-model,
+.ledger-model code,
+.ledger-status-col small {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+}
+
+.ledger-token,
+.ledger-fee {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-status-col {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.ledger-status-col small {
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-actions {
+  text-align: center;
   white-space: nowrap;
 }
 

@@ -22,6 +22,9 @@ public class SiteMessageEntity {
     @Column(name = "image_url", columnDefinition = "LONGTEXT")
     private String imageUrl;
 
+    @Column(name = "text_color", length = 16)
+    private String textColor = "#000000";
+
     @Column(name = "active_flag", nullable = false)
     private boolean activeFlag;
 
@@ -53,6 +56,8 @@ public class SiteMessageEntity {
     public void setMessageType(String messageType) { this.messageType = messageType; }
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public String getTextColor() { return textColor; }
+    public void setTextColor(String textColor) { this.textColor = textColor; }
     public boolean isActiveFlag() { return activeFlag; }
     public void setActiveFlag(boolean activeFlag) { this.activeFlag = activeFlag; }
     public LocalDateTime getCreatedAt() { return createdAt; }

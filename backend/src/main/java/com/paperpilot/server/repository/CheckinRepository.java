@@ -13,4 +13,5 @@ public interface CheckinRepository extends JpaRepository<CheckinEntity, Long> {
     Optional<CheckinEntity> findByMemberIdAndDate(String memberId, String date);
     List<CheckinEntity> findAllByMemberIdOrderByDateDesc(String memberId);
     List<CheckinEntity> findAllByMemberIdAndDateBetweenOrderByDateAsc(String memberId, String startDate, String endDate);
+    void deleteAllByMemberId(String memberId);
 }

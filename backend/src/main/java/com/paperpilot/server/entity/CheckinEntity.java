@@ -83,6 +83,12 @@ public class CheckinEntity {
         this.createdAt = createdAt;
     }
 
+    @Column(name = "award_type", length = 32)
+    private String awardType = "points"; // points, full_translate, bilingual_translate
+
+    @Column(name = "award_name", length = 64)
+    private String awardName;
+
     public Integer getFruitAward() {
         return fruitAward;
     }
@@ -97,5 +103,21 @@ public class CheckinEntity {
 
     public void setFruitClaimed(Boolean fruitClaimed) {
         this.fruitClaimed = fruitClaimed;
+    }
+
+    public String getAwardType() {
+        return awardType;
+    }
+
+    public void setAwardType(String awardType) {
+        this.awardType = awardType;
+    }
+
+    public String getAwardName() {
+        return awardName;
+    }
+
+    public void setAwardName(String awardName) {
+        this.awardName = awardName;
     }
 }

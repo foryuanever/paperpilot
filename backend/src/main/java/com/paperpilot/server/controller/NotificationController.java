@@ -20,8 +20,10 @@ public class NotificationController {
     }
 
     @GetMapping
-    public List<UserNotificationEntity> unread() {
-        return repository.findByUserIdAndReadFlagFalseOrderByCreatedAtDesc(
+    public List<UserNotificationEntity> history() {
+        // Keep read items in the feed so users can audit approvals, gifts and
+        // other account events instead of losing them after the first click.
+        return repository.findTop100ByUserIdOrderByCreatedAtDesc(
             currentUserService.getOrCreateDefaultUserId()
         );
     }

@@ -3,16 +3,27 @@ package com.paperpilot.server.service;
 import com.paperpilot.server.dto.LoginRequest;
 import com.paperpilot.server.dto.RegisterRequest;
 import com.paperpilot.server.entity.AppUserEntity;
+import com.paperpilot.server.entity.InviteCodeEntity;
 import com.paperpilot.server.entity.VerificationCodeEntity;
 import com.paperpilot.server.entity.SystemLogEntity;
+import com.paperpilot.server.entity.ReferralRecordEntity;
+import com.paperpilot.server.entity.QqDeviceBindingEntity;
+import com.paperpilot.server.entity.DeletedAccountEntity;
 import com.paperpilot.server.repository.AppUserRepository;
 import com.paperpilot.server.repository.InviteCodeRepository;
 import com.paperpilot.server.repository.SystemLogRepository;
 import com.paperpilot.server.repository.PaperRepository;
 import com.paperpilot.server.repository.TranslationRecordRepository;
 import com.paperpilot.server.repository.VerificationCodeRepository;
+import com.paperpilot.server.repository.ReferralRecordRepository;
+import com.paperpilot.server.repository.AiUsageRecordRepository;
+import com.paperpilot.server.repository.QqDeviceBindingRepository;
+import com.paperpilot.server.repository.DeletedAccountRepository;
+import com.paperpilot.server.repository.CheckinRepository;
+import com.paperpilot.server.repository.RechargeRecordRepository;
 import com.paperpilot.server.vo.AuthSessionVO;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.SimpleMailMessage;
@@ -30,7 +41,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @Service
 public class AuthService {
@@ -41,10 +54,33 @@ public class AuthService {
     private final PaperRepository paperRepository;
     private final TranslationRecordRepository translationRecordRepository;
     private final VerificationCodeRepository verificationCodeRepository;
+    private final SessionTokenService sessionTokenService;
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
     private final String mailUsername;
+    private final ReferralRecordRepository referralRecordRepository;
+    private final NotificationService notificationService;
+    private final MembershipService membershipService;
+    private final AiUsageRecordRepository aiUsageRecordRepository;
+    private final QqDeviceBindingRepository qqDeviceBindingRepository;
+    private final DeletedAccountRepository deletedAccountRepository;
+    private final CheckinRepository checkinRepository;
+    private final RechargeRecordRepository rechargeRecordRepository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @Value("${PAPERPILOT_QQ_APP_ID:}")
+    private String qqAppId;
+    @Value("${PAPERPILOT_QQ_APP_SECRET:}")
+    private String qqAppSecret;
+    @Value("${PAPERPILOT_WECHAT_APP_ID:}")
+    private String wechatAppId;
+    @Value("${PAPERPILOT_WECHAT_APP_SECRET:}")
+    private String wechatAppSecret;
+    @Value("${PAPERPILOT_PRIVILEGED_MACHINE_IDS:}")
+    private String privilegedMachineIds;
     private static final SecureRandom CODE_RANDOM = new SecureRandom();
     private static final java.time.Duration VERIFICATION_TTL = java.time.Duration.ofMinutes(10);
+    private static final java.time.Duration QQ_OAUTH_TIMEOUT = java.time.Duration.ofSeconds(20);
+    private static final int QQ_OAUTH_MAX_ATTEMPTS = 3;
 
     public AuthService(
         AppUserRepository appUserRepository,
@@ -53,8 +89,17 @@ public class AuthService {
         PaperRepository paperRepository,
         TranslationRecordRepository translationRecordRepository,
         VerificationCodeRepository verificationCodeRepository,
+        SessionTokenService sessionTokenService,
         ObjectProvider<JavaMailSender> mailSenderProvider,
-        @Value("${spring.mail.username:}") String mailUsername
+        @Value("${spring.mail.username:}") String mailUsername,
+        ReferralRecordRepository referralRecordRepository,
+        NotificationService notificationService,
+        MembershipService membershipService,
+        AiUsageRecordRepository aiUsageRecordRepository,
+        QqDeviceBindingRepository qqDeviceBindingRepository,
+        DeletedAccountRepository deletedAccountRepository,
+        CheckinRepository checkinRepository,
+        RechargeRecordRepository rechargeRecordRepository
     ) {
         this.appUserRepository = appUserRepository;
         this.inviteCodeRepository = inviteCodeRepository;
@@ -62,8 +107,17 @@ public class AuthService {
         this.paperRepository = paperRepository;
         this.translationRecordRepository = translationRecordRepository;
         this.verificationCodeRepository = verificationCodeRepository;
+        this.sessionTokenService = sessionTokenService;
         this.mailSenderProvider = mailSenderProvider;
         this.mailUsername = mailUsername;
+        this.referralRecordRepository = referralRecordRepository;
+        this.notificationService = notificationService;
+        this.membershipService = membershipService;
+        this.aiUsageRecordRepository = aiUsageRecordRepository;
+        this.qqDeviceBindingRepository = qqDeviceBindingRepository;
+        this.deletedAccountRepository = deletedAccountRepository;
+        this.checkinRepository = checkinRepository;
+        this.rechargeRecordRepository = rechargeRecordRepository;
     }
 
     public void logAction(String message, String level, String ipAddress) {
@@ -84,10 +138,14 @@ public class AuthService {
     public AuthSessionVO register(RegisterRequest request, String ipAddress) {
         String email = normalizeEmail(request.getEmail());
         ensureQqEmail(email);
+        if (deletedAccountRepository.existsByEmail(email)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "该账号已被管理员移除，请联系管理员恢复");
+        }
         verifyRegisterCode(email, request.getVerificationCode());
 
-        String inviteCode = text(request.getInviteCode());
-        if (!inviteCode.isBlank() && inviteCodeRepository.findByCodeAndActiveTrue(inviteCode).isEmpty()) {
+        String inviteCode = normalizeInviteCode(request.getInviteCode());
+        InviteCodeEntity inviteCodeEntity = findActiveInviteCode(inviteCode);
+        if (!inviteCode.isBlank() && inviteCodeEntity == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "邀请码无效");
         }
         if (appUserRepository.findByEmail(email).isPresent()) {
@@ -110,24 +168,45 @@ public class AuthService {
         AppUserEntity user = new AppUserEntity();
         user.setUsername(request.getName());
         user.setEmail(email);
-        user.setInviteCode(inviteCode.isBlank() ? "NO-INVITE" : inviteCode);
+        user.setInviteCode(inviteCodeEntity == null ? "NO-INVITE" : inviteCodeEntity.getCode());
         user.setRole(chosenRole);
         user.setPasswordHash(hash(request.getPassword()));
-        user.setPlainPassword(request.getPassword());
         user.setLastIp(ipAddress);
-        
-        // Initialize default Free quotas
-        user.setReviewQuota(90);
-        user.setPptQuota(0);
-        user.setChatQuota(150);
-        user.setResearchQuota(90);
-        user.setReportQuota(1);
+        membershipService.initializeFreeEntitlements(user);
         
         AppUserEntity saved = appUserRepository.save(user);
         consumeVerificationCode(email, "REGISTER");
+        if (inviteCodeEntity != null) {
+            if (inviteCodeEntity.getReferrerId() != null
+                && !referralRecordRepository.existsByInviteeId(saved.getId())) {
+                appUserRepository.findById(inviteCodeEntity.getReferrerId()).ifPresent(referrer -> {
+                    ReferralRecordEntity record = new ReferralRecordEntity();
+                    record.setReferrerId(referrer.getId());
+                    record.setInviteeId(saved.getId());
+                    record.setInviteeName(saved.getUsername());
+                    record.setInviteeEmail(saved.getEmail());
+                    record.setPointsReward(15);
+                    referralRecordRepository.save(record);
+                    referrer.setFruitScore((referrer.getFruitScore() == null ? 0 : referrer.getFruitScore()) + 15);
+                    appUserRepository.save(referrer);
+                    notificationService.createSystemNotice(
+                        referrer.getId(), null, "referral_reward", saved.getId(),
+                        "邀请奖励已到账", "好友 " + saved.getUsername() + " 注册成功，你获得 +15 积分。"
+                    );
+                });
+            }
+            inviteCodeEntity.setActive(false);
+            inviteCodeRepository.save(inviteCodeEntity);
+            notificationService.createSystemNotice(
+                saved.getId(), null, "referral_activated", null,
+                "邀请码核销成功", "邀请码已核销，邀请人将获得 +15 积分奖励。"
+            );
+        }
 
         logAction("成功注册新用户: " + saved.getUsername() + " (" + saved.getEmail() + "), 身份: " + saved.getRole(), "info", ipAddress);
-        return toSession(saved);
+        AuthSessionVO session = toSession(saved);
+        session.setNewUser(true);
+        return session;
     }
 
     public AuthSessionVO login(LoginRequest request) {
@@ -160,7 +239,6 @@ public class AuthService {
         }
 
         user.setPasswordHash(hash(newPassword));
-        user.setPlainPassword(newPassword);
         appUserRepository.save(user);
 
         logAction("用户修改密码成功: " + user.getUsername() + " (" + user.getEmail() + ")", "info", user.getLastIp());
@@ -191,8 +269,8 @@ public class AuthService {
         user.setEmail(email);
         user.setRole(role);
         user.setPasswordHash(hash(password));
-        user.setPlainPassword(password);
         user.setInviteCode("ADMIN-CREATED");
+        membershipService.initializeFreeEntitlements(user);
         AppUserEntity saved = appUserRepository.save(user);
 
         logAction("管理员添加用户: " + username + " (" + email + "), 身份: " + role, "info", ip);
@@ -203,12 +281,10 @@ public class AuthService {
     public void adminChangePassword(Long userId, String newPassword, String ip) {
         AppUserEntity user = appUserRepository.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
-        String oldPw = user.getPlainPassword();
         user.setPasswordHash(hash(newPassword));
-        user.setPlainPassword(newPassword);
         appUserRepository.save(user);
 
-        logAction("管理员修改用户 " + user.getUsername() + " 的密码 (" + oldPw + " ➡️ " + newPassword + ")", "warn", ip);
+        logAction("管理员修改用户 " + user.getUsername() + " 的密码", "warn", ip);
     }
 
     @Transactional
@@ -250,13 +326,119 @@ public class AuthService {
         AppUserEntity user = appUserRepository.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
         
-        // Delete dependent records first to satisfy foreign key constraints
-        paperRepository.deleteAllByUserId(userId);
-        translationRecordRepository.deleteAllByUserId(userId);
-        
+        // Keep one tombstone per QQ/email. Repeated admin cleanup must be
+        // idempotent and must not fail on the unique tombstone indexes.
+        DeletedAccountEntity tombstone = user.getQqOpenid() == null ? null
+            : deletedAccountRepository.findFirstByQqOpenid(user.getQqOpenid()).orElse(null);
+        if (tombstone == null && user.getEmail() != null) {
+            tombstone = deletedAccountRepository.findFirstByEmail(user.getEmail()).orElse(null);
+        }
+        if (tombstone == null) tombstone = new DeletedAccountEntity();
+        tombstone.setQqOpenid(user.getQqOpenid());
+        tombstone.setEmail(user.getEmail());
+        tombstone.setDeletedAt(LocalDateTime.now());
+        deletedAccountRepository.save(tombstone);
+
+        // Remove all known user-owned rows, including rows added by newer
+        // modules. The direct SQL pass is intentionally defensive: it also
+        // cleans tables whose repository was not wired into this service.
+        deleteUserRows(userId, user.getEmail());
         appUserRepository.delete(user);
+        appUserRepository.flush();
 
         logAction("管理员移除了系统用户 " + user.getUsername() + " (" + user.getEmail() + ")", "warn", ip);
+    }
+
+    private void deleteUserRows(Long userId, String email) {
+        // Children of forum posts must go before the posts themselves.
+        executeDelete("DELETE FROM forum_post_report WHERE post_id IN (SELECT id FROM forum_post WHERE user_id = ?)", userId);
+        executeDelete("DELETE FROM forum_post_report WHERE reporter_id = ?", userId);
+        executeDelete("DELETE FROM forum_post_view WHERE post_id IN (SELECT id FROM forum_post WHERE user_id = ?)", userId);
+        executeDelete("DELETE FROM forum_reply WHERE post_id IN (SELECT id FROM forum_post WHERE user_id = ?)", userId);
+        executeDelete("DELETE FROM forum_post WHERE user_id = ?", userId);
+
+        String[] userTables = {
+            "paper_record", "translation_record", "ai_usage_record", "referral_record",
+            "payment_order", "payment_ticket", "user_notification", "search_session",
+            "backend_job", "campus_verification", "meeting_report", "model_config",
+            "paper_translation_cache", "user_promotion", "promo_code_redemption",
+            "forum_post_view", "forum_post_report", "forum_reply", "topic_research",
+            "request_monitor_record"
+        };
+        for (String table : userTables) {
+            executeDelete("DELETE FROM " + table + " WHERE user_id = ?", userId);
+        }
+        executeDelete("DELETE FROM direct_message WHERE sender_id = ? OR recipient_id = ?", userId, userId);
+        executeDelete("DELETE FROM friend_request WHERE requester_id = ? OR recipient_id = ?", userId, userId);
+        executeDelete("DELETE FROM referral_record WHERE referrer_id = ? OR invitee_id = ?", userId, userId);
+        executeDelete("DELETE FROM invite_code WHERE referrer_id = ?", userId);
+        // Promo codes keep the redeemer as a nullable reference. Clear it
+        // before deleting the account so old installations with a foreign key
+        // cannot roll the whole transaction back.
+        executeUpdate("UPDATE promo_code SET used_by_user_id = NULL WHERE used_by_user_id = ?", userId);
+        deleteGenericUserRows(userId);
+        if (email != null && !email.isBlank()) {
+            executeDelete("DELETE FROM checkin WHERE member_id = ?", email);
+            executeDelete("DELETE FROM recharge_record WHERE email = ?", email);
+            executeDelete("DELETE FROM verification_code WHERE email = ?", email);
+        }
+    }
+
+    private void executeDelete(String sql, Object... args) {
+        try {
+            jdbcTemplate.update(sql, args);
+        } catch (org.springframework.dao.DataAccessException ignored) {
+            // Optional tables differ between old installations. A missing
+            // table/column must not prevent deletion of the account itself.
+        }
+    }
+
+    private void executeUpdate(String sql, Object... args) {
+        try {
+            jdbcTemplate.update(sql, args);
+        } catch (org.springframework.dao.DataAccessException ignored) {
+            // Keep compatibility with databases created before this column.
+        }
+    }
+
+    private void deleteGenericUserRows(Long userId) {
+        try {
+            List<Map<String, Object>> foreignKeys = jdbcTemplate.query(
+                "SELECT k.TABLE_NAME, k.COLUMN_NAME, c.IS_NULLABLE "
+                    + "FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE k "
+                    + "JOIN INFORMATION_SCHEMA.COLUMNS c "
+                    + "ON c.TABLE_SCHEMA = k.TABLE_SCHEMA AND c.TABLE_NAME = k.TABLE_NAME "
+                    + "AND c.COLUMN_NAME = k.COLUMN_NAME "
+                    + "WHERE k.TABLE_SCHEMA = DATABASE() AND k.REFERENCED_TABLE_NAME = 'app_user' "
+                    + "AND k.REFERENCED_COLUMN_NAME = 'id'",
+                (rs, rowNum) -> {
+                    Map<String, Object> row = new java.util.HashMap<>();
+                    row.put("TABLE_NAME", rs.getString("TABLE_NAME"));
+                    row.put("COLUMN_NAME", rs.getString("COLUMN_NAME"));
+                    row.put("IS_NULLABLE", rs.getString("IS_NULLABLE"));
+                    return row;
+                }
+            );
+            // A few installations have foreign keys between user-owned
+            // modules. Repeating the pass lets child rows disappear before a
+            // parent row is retried, while executeDelete keeps old schemas
+            // compatible.
+            for (int pass = 0; pass < 3; pass++) {
+                for (Map<String, Object> foreignKey : foreignKeys) {
+                    String table = String.valueOf(foreignKey.get("TABLE_NAME"));
+                    String column = String.valueOf(foreignKey.get("COLUMN_NAME"));
+                    if (!table.matches("[A-Za-z0-9_]+") || !column.matches("[A-Za-z0-9_]+")) continue;
+                    if ("YES".equalsIgnoreCase(String.valueOf(foreignKey.get("IS_NULLABLE")))) {
+                        executeUpdate("UPDATE " + table + " SET " + column + " = NULL WHERE " + column + " = ?", userId);
+                    } else {
+                        executeDelete("DELETE FROM " + table + " WHERE " + column + " = ?", userId);
+                    }
+                }
+            }
+        } catch (org.springframework.dao.DataAccessException ignored) {
+            // INFORMATION_SCHEMA is unavailable on some legacy databases;
+            // the explicit cleanup above remains the fallback.
+        }
     }
 
     public void sendRegisterVerificationCode(String email) {
@@ -303,7 +485,6 @@ public class AuthService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
 
         user.setPasswordHash(hash(newPassword));
-        user.setPlainPassword(newPassword);
         appUserRepository.save(user);
         consumeVerificationCode(normalizedEmail, "FORGOT-PASSWORD");
 
@@ -386,7 +567,7 @@ public class AuthService {
         if (user.getCreatedAt() != null) {
             regTime = user.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         }
-        return new AuthSessionVO(
+        AuthSessionVO session = new AuthSessionVO(
             user.getId(),
             user.getUsername(),
             user.getEmail(),
@@ -403,10 +584,25 @@ public class AuthService {
             regTime,
             user.getNumericId()
         );
+        session.setCheckinScore(user.getCheckinScore() != null ? user.getCheckinScore() : 0);
+        session.setAccessToken(sessionTokenService.issue(user.getId()));
+        return session;
     }
 
     private String text(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private String normalizeInviteCode(Object value) {
+        String code = text(value).toUpperCase(java.util.Locale.ROOT);
+        return code.replaceFirst("^INV[-_]", "");
+    }
+
+    private InviteCodeEntity findActiveInviteCode(String displayCode) {
+        String normalized = normalizeInviteCode(displayCode);
+        if (normalized.isBlank()) return null;
+        return inviteCodeRepository.findByCodeAndActiveTrue(normalized)
+            .orElseGet(() -> inviteCodeRepository.findByCodeAndActiveTrue("INV-" + normalized).orElse(null));
     }
 
     private String limitDataUrl(String value, int maxLength, String message) {
@@ -430,76 +626,155 @@ public class AuthService {
         }
     }
 
+    private HttpResponse<String> requestQQGraph(HttpClient client, URI uri, String phase, boolean retryable) throws Exception {
+        Exception lastFailure = null;
+        for (int attempt = 1; attempt <= QQ_OAUTH_MAX_ATTEMPTS; attempt++) {
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(uri)
+                    .timeout(QQ_OAUTH_TIMEOUT)
+                    .header("Accept", "application/json, text/plain, */*")
+                    .header("User-Agent", "PaperSolver-Server/1.0")
+                    .GET()
+                    .build();
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                int status = response.statusCode();
+                if (status >= 200 && status < 300) {
+                    return response;
+                }
+
+                lastFailure = new IllegalStateException("QQ " + phase + " HTTP " + status + ": " + safeQQBody(response.body()));
+                if (status < 500 && status != 408 && status != 429) {
+                    break;
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw exception;
+            } catch (Exception exception) {
+                lastFailure = exception;
+            }
+
+            if (!retryable || attempt >= QQ_OAUTH_MAX_ATTEMPTS) {
+                break;
+            }
+            if (attempt < QQ_OAUTH_MAX_ATTEMPTS) {
+                try {
+                    Thread.sleep(350L * attempt);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw exception;
+                }
+            }
+        }
+        throw lastFailure == null
+            ? new IllegalStateException("QQ " + phase + " 请求失败")
+            : lastFailure;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readQQJson(com.fasterxml.jackson.databind.ObjectMapper mapper, HttpResponse<String> response, String phase) throws Exception {
+        String body = response.body() == null ? "" : response.body().trim();
+        if (!body.startsWith("{")) {
+            throw new IllegalStateException("QQ " + phase + " 返回了非 JSON 内容: " + safeQQBody(body));
+        }
+        Map<String, Object> result = mapper.readValue(body, Map.class);
+        Object error = result.get("error");
+        if (error != null) {
+            Object description = result.get("error_description");
+            throw new IllegalStateException("QQ " + phase + " 返回错误 " + error +
+                (description == null ? "" : ": " + safeQQBody(String.valueOf(description))));
+        }
+        return result;
+    }
+
+    private String encodeQQQueryValue(String value) {
+        return java.net.URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
+    }
+
+    private String safeQQError(Exception exception) {
+        String message = exception.getMessage();
+        return exception.getClass().getSimpleName() + (message == null || message.isBlank() ? "" : ": " + safeQQBody(message));
+    }
+
+    private String safeQQBody(String value) {
+        if (value == null || value.isBlank()) return "empty response";
+        String sanitized = value
+            .replaceAll("(?i)(access_token=)[^&\\s]+", "$1***")
+            .replaceAll("(?i)(client_secret=)[^&\\s]+", "$1***")
+            .replaceAll("(?i)(code=)[^&\\s]+", "$1***");
+        return sanitized.length() > 280 ? sanitized.substring(0, 280) + "..." : sanitized;
+    }
+
     @Transactional
-    public AuthSessionVO loginOrRegisterViaQQ(String code, String ipAddress) {
-        String appId = "1905318043";
-        String appKey = "xthQ0OejhfT5UhhV";
+    public AuthSessionVO loginOrRegisterViaQQ(String code, String state, String ipAddress) {
+        String appId = qqAppId;
+        String appKey = qqAppSecret;
+        if (appId == null || appId.isBlank() || appKey == null || appKey.isBlank()) {
+            throw new IllegalStateException("QQ 登录未配置 OAuth 凭据");
+        }
         String redirectUri = "https://papersolver.cn/api/auth/qq/callback";
 
         String openid = null;
         String nickname = null;
         String avatarUrl = null;
 
+        String qqPhase = "初始化";
         try {
-            // 1. Exchange code for access token
+            // QQ Graph occasionally drops or delays requests. Keep retries confined to
+            // the server-to-server OAuth exchange so a desktop callback is never reused.
             HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(java.time.Duration.ofSeconds(5))
+                .connectTimeout(QQ_OAUTH_TIMEOUT)
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .version(HttpClient.Version.HTTP_1_1)
                 .build();
-
-            String tokenUrl = "https://graph.qq.com/oauth2.0/token?grant_type=authorization_code" +
-                "&client_id=" + appId +
-                "&client_secret=" + appKey +
-                "&code=" + code +
-                "&redirect_uri=" + java.net.URLEncoder.encode(redirectUri, StandardCharsets.UTF_8) +
-                "&fmt=json";
-
-            HttpRequest tokenRequest = HttpRequest.newBuilder()
-                .uri(URI.create(tokenUrl))
-                .timeout(java.time.Duration.ofSeconds(5))
-                .GET()
-                .build();
-
-            HttpResponse<String> tokenResponse = client.send(tokenRequest, HttpResponse.BodyHandlers.ofString());
-            String tokenBody = tokenResponse.body();
-            
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            Map<String, Object> tokenMap = mapper.readValue(tokenBody, Map.class);
+
+            qqPhase = "换取 access_token";
+            String tokenUrl = "https://graph.qq.com/oauth2.0/token?grant_type=authorization_code" +
+                "&client_id=" + encodeQQQueryValue(appId) +
+                "&client_secret=" + encodeQQQueryValue(appKey) +
+                "&code=" + encodeQQQueryValue(code) +
+                "&redirect_uri=" + encodeQQQueryValue(redirectUri) +
+                "&fmt=json";
+            Map<String, Object> tokenMap = readQQJson(
+                mapper,
+                requestQQGraph(client, URI.create(tokenUrl), qqPhase, false),
+                qqPhase
+            );
             String accessToken = (String) tokenMap.get("access_token");
 
             if (accessToken == null || accessToken.isBlank()) {
-                throw new IllegalStateException("Failed to exchange code for token: " + tokenBody);
+                throw new IllegalStateException("QQ 未返回 access_token");
             }
 
             // 2. Fetch OpenID
-            String meUrl = "https://graph.qq.com/oauth2.0/me?access_token=" + accessToken + "&fmt=json";
-            HttpRequest meRequest = HttpRequest.newBuilder()
-                .uri(URI.create(meUrl))
-                .timeout(java.time.Duration.ofSeconds(5))
-                .GET()
-                .build();
-
-            HttpResponse<String> meResponse = client.send(meRequest, HttpResponse.BodyHandlers.ofString());
-            String meBody = meResponse.body();
-            Map<String, Object> meMap = mapper.readValue(meBody, Map.class);
+            qqPhase = "获取 OpenID";
+            String meUrl = "https://graph.qq.com/oauth2.0/me?access_token=" + encodeQQQueryValue(accessToken) + "&fmt=json";
+            Map<String, Object> meMap = readQQJson(
+                mapper,
+                requestQQGraph(client, URI.create(meUrl), qqPhase, true),
+                qqPhase
+            );
             openid = (String) meMap.get("openid");
 
             if (openid == null || openid.isBlank()) {
-                throw new IllegalStateException("Failed to retrieve openid: " + meBody);
+                throw new IllegalStateException("QQ 未返回 OpenID");
             }
 
             // 3. Fetch user info
-            String infoUrl = "https://graph.qq.com/user/get_user_info?access_token=" + accessToken +
-                "&oauth_consumer_key=" + appId +
-                "&openid=" + openid;
-            HttpRequest infoRequest = HttpRequest.newBuilder()
-                .uri(URI.create(infoUrl))
-                .timeout(java.time.Duration.ofSeconds(5))
-                .GET()
-                .build();
-
-            HttpResponse<String> infoResponse = client.send(infoRequest, HttpResponse.BodyHandlers.ofString());
-            String infoBody = infoResponse.body();
-            Map<String, Object> infoMap = mapper.readValue(infoBody, Map.class);
+            qqPhase = "获取 QQ 用户资料";
+            String infoUrl = "https://graph.qq.com/user/get_user_info?access_token=" + encodeQQQueryValue(accessToken) +
+                "&oauth_consumer_key=" + encodeQQQueryValue(appId) +
+                "&openid=" + encodeQQQueryValue(openid);
+            Map<String, Object> infoMap = readQQJson(
+                mapper,
+                requestQQGraph(client, URI.create(infoUrl), qqPhase, true),
+                qqPhase
+            );
+            Object ret = infoMap.get("ret");
+            if (ret instanceof Number && ((Number) ret).intValue() != 0) {
+                throw new IllegalStateException("QQ 用户资料接口返回 ret=" + ret);
+            }
             nickname = (String) infoMap.get("nickname");
             avatarUrl = (String) infoMap.get("figureurl_qq_2"); // 100x100 custom avatar
             if (avatarUrl == null || avatarUrl.isBlank()) {
@@ -516,10 +791,11 @@ public class AuthService {
             }
 
         } catch (Exception e) {
-            openid = "mock_openid_" + code;
-            nickname = "QQ用户_" + code.substring(Math.max(0, code.length() - 4));
-            avatarUrl = "";
-            logAction("QQ OAuth API failed (" + e.getMessage() + "). Falling back to Mock QQ user for openid: " + openid, "warn", ipAddress);
+            logAction("QQ OAuth failed at " + qqPhase + ": " + safeQQError(e), "warn", ipAddress);
+            throw new ResponseStatusException(
+                HttpStatus.BAD_GATEWAY,
+                "QQ 授权服务暂时不可用，请稍后重试"
+            );
         }
 
         // Register or login
@@ -529,20 +805,96 @@ public class AuthService {
         if (finalOpenid == null || finalOpenid.trim().isEmpty() || "null".equalsIgnoreCase(finalOpenid.trim())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "QQ登录失败：无效的OpenID");
         }
+
+        // Extract machineId and inviteCode from state
+        String machineId = null;
+        String inviteCodeFromState = null;
+        if (state != null && state.startsWith("papersolver_")) {
+            String stateContent = state.substring("papersolver_".length());
+            if (stateContent.contains("_invite_")) {
+                int inviteIdx = stateContent.indexOf("_invite_");
+                machineId = stateContent.substring(0, inviteIdx);
+                inviteCodeFromState = stateContent.substring(inviteIdx + "_invite_".length());
+            } else {
+                machineId = stateContent;
+            }
+        }
+        if (machineId != null && machineId.isBlank()) {
+            machineId = null;
+        }
+        final String finalMachineId = machineId;
+        final String finalInviteCode = normalizeInviteCode(inviteCodeFromState);
+
+        if (deletedAccountRepository.existsByQqOpenid(finalOpenid)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "该 QQ 账号已被管理员移除，请联系管理员恢复");
+        }
+
+        ensureQqDeviceBinding(finalMachineId, finalOpenid);
+
+        boolean[] created = { false };
         AppUserEntity user = appUserRepository.findByQqOpenid(finalOpenid)
             .orElseGet(() -> {
                 String email = "qq_user_" + finalOpenid + "@qq.com";
                 return appUserRepository.findByEmail(email).orElseGet(() -> {
+                    // Verify if invite code is present and active
+                    InviteCodeEntity inviteCodeEntity = null;
+                    if (finalInviteCode != null && !finalInviteCode.trim().isEmpty()) {
+                        inviteCodeEntity = findActiveInviteCode(finalInviteCode);
+                        if (inviteCodeEntity == null) {
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "邀请码无效或已被使用，请检查");
+                        }
+                    }
+
                     AppUserEntity newUser = new AppUserEntity();
                     newUser.setUsername(finalNickname);
                     newUser.setEmail(email);
                     newUser.setQqOpenid(finalOpenid);
-                    newUser.setInviteCode("");
+                    newUser.setMachineId(finalMachineId);
                     newUser.setRole("普通用户");
+
+                    if (inviteCodeEntity != null) {
+                        newUser.setInviteCode(inviteCodeEntity.getCode());
+                    } else {
+                        newUser.setInviteCode("NO-INVITE");
+                    }
+
+                    membershipService.initializeFreeEntitlements(newUser);
+
                     String randomPassword = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12);
                     newUser.setPasswordHash(hash(randomPassword));
-                    newUser.setPlainPassword(randomPassword);
-                    return appUserRepository.save(newUser);
+                    newUser.setPlainPassword(null);
+
+                    AppUserEntity savedUser = appUserRepository.save(newUser);
+                    created[0] = true;
+                    if (inviteCodeEntity != null) {
+                        notificationService.createSystemNotice(
+                            savedUser.getId(), null, "referral_activated", null,
+                            "邀请码核销成功", "邀请码已核销，邀请人将获得 +15 积分奖励。"
+                        );
+                        // An invite is consumed by the first successful registration,
+                        // even when the code has no referrer attached.
+                        inviteCodeEntity.setActive(false);
+                        inviteCodeRepository.save(inviteCodeEntity);
+                    }
+                    if (inviteCodeEntity != null && inviteCodeEntity.getReferrerId() != null
+                        && !referralRecordRepository.existsByInviteeId(savedUser.getId())) {
+                        appUserRepository.findById(inviteCodeEntity.getReferrerId()).ifPresent(referrer -> {
+                            ReferralRecordEntity record = new ReferralRecordEntity();
+                            record.setReferrerId(referrer.getId());
+                            record.setInviteeId(savedUser.getId());
+                            record.setInviteeName(savedUser.getUsername());
+                            record.setInviteeEmail(savedUser.getEmail());
+                            record.setPointsReward(15);
+                            referralRecordRepository.save(record);
+                            referrer.setFruitScore((referrer.getFruitScore() == null ? 0 : referrer.getFruitScore()) + 15);
+                            appUserRepository.save(referrer);
+                            notificationService.createSystemNotice(
+                                referrer.getId(), null, "referral_reward", savedUser.getId(),
+                                "邀请奖励已到账", "好友 " + savedUser.getUsername() + " 注册成功，你获得 +15 积分。"
+                            );
+                        });
+                    }
+                    return savedUser;
                 });
             });
 
@@ -557,13 +909,57 @@ public class AuthService {
         AppUserEntity saved = appUserRepository.save(user);
 
         logAction("用户通过 QQ 登录成功: " + saved.getUsername() + " (" + saved.getEmail() + ")", "info", ipAddress);
-        return toSession(saved);
+        AuthSessionVO session = toSession(saved);
+        session.setNewUser(created[0]);
+        return session;
+    }
+
+    private boolean isPrivilegedMachine(String machineId) {
+        if (machineId == null || machineId.isBlank() || privilegedMachineIds == null || privilegedMachineIds.isBlank()) {
+            return false;
+        }
+        for (String configured : privilegedMachineIds.split("[,\\s]+")) {
+            if (machineId.equals(configured.trim())) return true;
+        }
+        return false;
+    }
+
+    private synchronized void ensureQqDeviceBinding(String machineId, String qqOpenid) {
+        if (machineId == null || machineId.isBlank() || qqOpenid == null || qqOpenid.isBlank() || isPrivilegedMachine(machineId)) {
+            return;
+        }
+        var binding = qqDeviceBindingRepository.findByMachineId(machineId);
+        if (binding.isPresent()) {
+            if (!qqOpenid.equals(binding.get().getQqOpenid())) {
+                throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "该设备已绑定其他 QQ 账号。每台设备只能登录一个 QQ 账号，如需切换请联系管理员加入白名单。"
+                );
+            }
+            return;
+        }
+        // Backfill the old machine_id field during the rollout so existing users
+        // cannot bypass the new binding table on their already-used device.
+        var legacy = appUserRepository.findFirstByMachineId(machineId);
+        if (legacy.isPresent() && legacy.get().getQqOpenid() != null && !qqOpenid.equals(legacy.get().getQqOpenid())) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "该设备已绑定其他 QQ 账号。每台设备只能登录一个 QQ 账号，如需切换请联系管理员加入白名单。"
+            );
+        }
+        QqDeviceBindingEntity entity = new QqDeviceBindingEntity();
+        entity.setMachineId(machineId);
+        entity.setQqOpenid(qqOpenid);
+        qqDeviceBindingRepository.save(entity);
     }
 
     @Transactional
     public AuthSessionVO loginOrRegisterViaWechat(String code, String ipAddress) {
-        String appId = "wxd84d54269bfdf677";
-        String appSecret = "a94ee435df06bfc8ad1f57e0f2b377b1";
+        String appId = wechatAppId;
+        String appSecret = wechatAppSecret;
+        if (appId == null || appId.isBlank() || appSecret == null || appSecret.isBlank()) {
+            throw new IllegalStateException("微信登录未配置 OAuth 凭据");
+        }
 
         String openid = null;
         String nickname = null;
@@ -638,9 +1034,9 @@ public class AuthService {
                     newUser.setQqOpenid(finalOpenid); // Store WeChat openid here
                     newUser.setInviteCode("WECHAT-LOGIN");
                     newUser.setRole("普通用户");
+                    membershipService.initializeFreeEntitlements(newUser);
                     String randomPassword = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12);
                     newUser.setPasswordHash(hash(randomPassword));
-                    newUser.setPlainPassword(randomPassword);
                     return appUserRepository.save(newUser);
                 });
             });

@@ -10,8 +10,12 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-            .allowedOrigins("*")
+            .allowedOriginPatterns(
+                "https://papersolver.cn",
+                "https://www.papersolver.cn",
+                "chrome-extension://*"
+            )
             .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-            .allowedHeaders("*");
+            .allowedHeaders("Content-Type", "Authorization", "X-PaperPilot-Session", "X-Requested-With", "Accept");
     }
 }

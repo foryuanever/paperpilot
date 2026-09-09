@@ -9,12 +9,12 @@
             <img src="/brand/papersolver-mark-v2.png" alt="PaperSolver" style="width: 36px; height: 36px; object-fit: contain;" />
           </div>
           <span class="brand-name">PaperSolver</span>
-          <span class="brand-tag">beta</span>
+            <span class="brand-tag">2.0</span>
         </router-link>
         <nav v-if="!isDesktopApp" class="nav-links">
-          <a href="#features">功能</a>
-          <a href="#workflow">使用流程</a>
-          <a href="#why">为什么选我们</a>
+          <a href="#features" @click.prevent="elScrollTo('#features')">功能</a>
+          <a href="#workflow" @click.prevent="elScrollTo('#workflow')">使用流程</a>
+          <a href="#why" @click.prevent="elScrollTo('#why')">为什么选我们</a>
           <a href="javascript:;" @click="guideModalOpen = true">安装教程</a>
         </nav>
 
@@ -52,40 +52,37 @@
         <div v-if="!isDesktopApp" class="hero-actions download-actions" style="display: flex; flex-direction: column; gap: 16px; align-items: center; margin-top: 24px; margin-bottom: 24px; width: 100%; max-width: 640px; margin-inline: auto;">
           <!-- Mac Section -->
           <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-            <span style="font-size: 0.8rem; color: #a1a1aa; font-weight: 600; text-align: center; text-transform: uppercase; letter-spacing: 0.05em;">下载 macOS 客户端 (分芯片类型)</span>
-            <div style="display: flex; gap: 12px; width: 100%;">
-              <a href="/downloads/PaperSolver-arm64.dmg" class="cta-primary download-btn mac-btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 12px; font-size: 0.9rem; font-weight: 600; background: linear-gradient(135deg, #2563eb, #7c3aed); border-radius: 8px; color: #fff; box-shadow: var(--sh-md);">
-                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style="display: block; flex-shrink: 0;">
+            <span style="font-size: 0.82rem; color: #cbd5e1; font-weight: 600; text-align: left; text-transform: uppercase; letter-spacing: 0.05em; padding-left: 2px;">macOS 客户端</span>
+            <div style="display: flex; gap: 10px; width: 100%;">
+              <a href="/downloads/PaperSolver-arm64.dmg" class="cta-primary download-btn mac-btn" style="flex: 1.4; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 13px 18px; font-size: 0.95rem; font-weight: 600; background: linear-gradient(135deg, #2563eb, #7c3aed); border-radius: 9px; color: #fff; box-shadow: 0 4px 14px rgba(37,99,235,0.35); transition: all 0.2s;">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" style="display: block; flex-shrink: 0;">
                   <path d="M12.03 5.41c.83-1.05 1.4-2.52 1.25-3.97-1.22.05-2.73.83-3.6 1.88-.77.9-1.44 2.41-1.25 3.82 1.36.1 2.76-.68 3.6-1.73zm4.5 5.86c-.05-2.24 1.79-3.32 1.87-3.37-1.03-1.54-2.63-1.75-3.2-1.81-1.37-.15-2.69.83-3.39.83-.71 0-1.79-.81-2.94-.79-1.51.02-2.92.89-3.69 2.27-1.57 2.78-.4 6.89 1.13 9.15.75 1.1 1.63 2.32 2.78 2.28 1.11-.05 1.54-.73 2.87-.73 1.33 0 1.73.73 2.89.7 1.2-.02 1.98-1.1 2.72-2.2 1.01-1.48 1.42-2.91 1.44-2.98-.03-.02-2.45-.96-2.48-3.76z"/>
                 </svg>
-                Apple Silicon (M系列芯片)
+                下载 macOS 版 (M系列芯片)
               </a>
-              <a href="/downloads/PaperSolver-x64.dmg" class="cta-primary download-btn mac-btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 12px; font-size: 0.9rem; font-weight: 600; background: linear-gradient(135deg, #4f46e5, #818cf8); border-radius: 8px; color: #fff; box-shadow: var(--sh-md);">
-                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style="display: block; flex-shrink: 0;">
-                  <path d="M12.03 5.41c.83-1.05 1.4-2.52 1.25-3.97-1.22.05-2.73.83-3.6 1.88-.77.9-1.44 2.41-1.25 3.82 1.36.1 2.76-.68 3.6-1.73zm4.5 5.86c-.05-2.24 1.79-3.32 1.87-3.37-1.03-1.54-2.63-1.75-3.2-1.81-1.37-.15-2.69.83-3.39.83-.71 0-1.79-.81-2.94-.79-1.51.02-2.92.89-3.69 2.27-1.57 2.78-.4 6.89 1.13 9.15.75 1.1 1.63 2.32 2.78 2.28 1.11-.05 1.54-.73 2.87-.73 1.33 0 1.73.73 2.89.7 1.2-.02 1.98-1.1 2.72-2.2 1.01-1.48 1.42-2.91 1.44-2.98-.03-.02-2.45-.96-2.48-3.76z"/>
-                </svg>
-                Intel 芯片
-              </a>
+              <button type="button" @click="openGuideModal('mac')" style="flex: 0.85; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 13px 14px; font-size: 0.9rem; font-weight: 600; color: #93c5fd; background: rgba(37,99,235,0.15); border: 1.5px solid rgba(96,165,250,0.45); border-radius: 9px; cursor: pointer; transition: all 0.2s;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10M6 10h10"/></svg>
+                Mac 安装教程
+              </button>
             </div>
           </div>
 
           <!-- Windows Section -->
           <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-            <span style="font-size: 0.8rem; color: #a1a1aa; font-weight: 600; text-align: center; text-transform: uppercase; letter-spacing: 0.05em;">下载 Windows 客户端 (分系统位数)</span>
-            <div style="display: flex; gap: 12px; width: 100%;">
-              <a href="/downloads/PaperSolver-x64.exe" class="cta-primary download-btn win-btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 12px; font-size: 0.9rem; font-weight: 600; background: linear-gradient(135deg, #10b981, #059669); border-radius: 8px; color: #fff; box-shadow: var(--sh-md);">
-                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+            <span style="font-size: 0.82rem; color: #cbd5e1; font-weight: 600; text-align: left; text-transform: uppercase; letter-spacing: 0.05em; padding-left: 2px;">Windows 客户端</span>
+            <div style="display: flex; gap: 10px; width: 100%;">
+              <a href="/downloads/PaperSolver.exe" class="cta-primary download-btn win-btn" style="flex: 1.4; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 13px 18px; font-size: 0.95rem; font-weight: 600; background: linear-gradient(135deg, #10b981, #059669); border-radius: 9px; color: #fff; box-shadow: 0 4px 14px rgba(16,185,129,0.35); transition: all 0.2s;">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" style="display: block; flex-shrink: 0;">
                   <path d="M0 3.449L9.75 2.1v9.45H0V3.449zM0 12.45h9.75v9.45L0 20.551v-8.1zM10.8 1.95L24 0v11.55H10.8V1.95zM10.8 12.45H24v11.55l-13.2-1.95v-9.6z"/>
                 </svg>
-                Windows 64位 (推荐)
+                下载 Windows 客户端
               </a>
-              <a href="/downloads/PaperSolver-ia32.exe" class="cta-primary download-btn win-btn" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 12px; font-size: 0.9rem; font-weight: 600; background: linear-gradient(135deg, #0d9488, #0f766e); border-radius: 8px; color: #fff; box-shadow: var(--sh-md);">
-                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                  <path d="M0 3.449L9.75 2.1v9.45H0V3.449zM0 12.45h9.75v9.45L0 20.551v-8.1zM10.8 1.95L24 0v11.55H10.8V1.95zM10.8 12.45H24v11.55l-13.2-1.95v-9.6z"/>
-                </svg>
-                Windows 32位 (兼容)
-              </a>
+              <button type="button" @click="openGuideModal('win')" style="flex: 0.85; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 13px 14px; font-size: 0.9rem; font-weight: 600; color: #6ee7b7; background: rgba(16,185,129,0.15); border: 1.5px solid rgba(52,211,153,0.45); border-radius: 9px; cursor: pointer; transition: all 0.2s;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10M6 10h10"/></svg>
+                Win 安装教程
+              </button>
             </div>
+            <span style="font-size: 0.8rem; color: #f87171; font-weight: 600; text-align: left; padding-left: 2px;">⚠️ 仅支持 Windows 10/11 系统，不支持 Windows 7、8 及 8.1 早期系统</span>
           </div>
         </div>
 
@@ -94,10 +91,6 @@
           <button class="cta-primary" @click="openModal('login')">
             开始体验
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-          </button>
-          <button class="cta-outline" @click="showContactModal = true">
-            联系我们
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
           </button>
         </div>
 
@@ -201,36 +194,6 @@
               </div>
             </div>
           </div>
-        </div>
-
-        <!-- Floating Controls Bar -->
-        <div class="full-carousel-controls">
-          <button class="fc-arrow-btn prev" @click="wfGo(wfActive - 1)" aria-label="上一页">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5"/><path d="m12 5-7 7 7 7"/></svg>
-          </button>
-
-          <div class="fc-dots-wrap">
-            <span
-              v-for="(_, i) in workflowSteps"
-              :key="i"
-              class="fc-dot-item"
-              :class="{ active: wfActive === i }"
-              @click="wfGo(i)"
-            ></span>
-          </div>
-
-          <div class="fc-progress-indicator" title="自动播放中">
-            <svg viewBox="0 0 36 36">
-              <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="2.5"/>
-              <circle cx="18" cy="18" r="14" fill="none" stroke="#3b82f6" stroke-width="2.5"
-                stroke-dasharray="88" :stroke-dashoffset="88 - 88 * wfProgress / 100"
-                stroke-linecap="round" transform="rotate(-90 18 18)"/>
-            </svg>
-          </div>
-
-          <button class="fc-arrow-btn next" @click="wfGo(wfActive + 1)" aria-label="下一页">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-          </button>
         </div>
       </div>
     </section>
@@ -373,9 +336,9 @@
       <div class="footer-inner">
         <span class="footer-logo">PaperSolver</span>
         <div class="footer-links">
-          <a href="#features">功能</a>
-          <a href="#workflow">流程</a>
-          <a href="#why">为什么选我们</a>
+          <a href="#features" @click.prevent="elScrollTo('#features')">功能</a>
+          <a href="#workflow" @click.prevent="elScrollTo('#workflow')">流程</a>
+          <a href="#why" @click.prevent="elScrollTo('#why')">为什么选我们</a>
           <a href="javascript:;" @click="openLegalModal('terms')">用户协议</a>
           <a href="javascript:;" @click="openLegalModal('privacy')">隐私政策</a>
           <a href="javascript:;" @click="openLegalModal('disclaimer')">免责声明</a>
@@ -384,36 +347,6 @@
       </div>
     </footer>
     </div>
-
-    <!-- ═══ AUTH MODAL ═══ -->
-    <!-- ═══ CONTACT US MODAL ═══ -->
-    <Transition name="mfade">
-      <div v-if="showContactModal" class="modal-mask" @click="showContactModal = false">
-        <div class="modal-box contact-modal-box" @click.stop style="max-width: 620px; width: 95%; padding: 32px; border-radius: 20px; background: rgba(20, 20, 30, 0.95); border: 1px solid rgba(165, 180, 252, 0.2); backdrop-filter: blur(25px); color: #fff; text-align: center; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6); position: relative;">
-          <button class="modal-x" @click="showContactModal = false" style="background: transparent; border: none; color: #a1a1aa; cursor: pointer; position: absolute; right: 20px; top: 20px; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#a1a1aa'">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
-          <h3 style="font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, #ffffff 40%, #c7d2fe 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px;">联系我们</h3>
-          <p style="color: #94a3b8; font-size: 0.88rem; margin-bottom: 28px;">关注官方账号，获取最新动态与专属学术支持</p>
-          
-          <div style="display: flex; gap: 24px; justify-content: center; flex-wrap: wrap;">
-            <!-- QQ QR Card -->
-            <div style="flex: 1; min-width: 240px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
-              <img src="/contact/qq-contact.jpg" alt="QQ" @click="openImagePreview('/contact/qq-contact.jpg')" style="width: 160px; height: 260px; object-fit: contain; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); cursor: zoom-in;" />
-              <div style="font-weight: 700; color: #f0f0f4; font-size: 0.95rem; margin-top: 4px;">QQ 官方交流群</div>
-              <div style="color: #64748b; font-size: 0.8rem;">群号: 1095440623</div>
-            </div>
-            
-            <!-- Douyin QR Card -->
-            <div style="flex: 1; min-width: 240px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
-              <img src="/contact/douyin-contact.jpg" alt="Douyin" @click="openImagePreview('/contact/douyin-contact.jpg')" style="width: 160px; height: 260px; object-fit: contain; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); cursor: zoom-in;" />
-              <div style="font-weight: 700; color: #f0f0f4; font-size: 0.95rem; margin-top: 4px;">抖音官方账号</div>
-              <div style="color: #64748b; font-size: 0.8rem;">抖音号: 76517306980</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Transition>
 
     <!-- ═══ LEGAL DOCUMENTS MODAL ═══ -->
     <Transition name="mfade">
@@ -473,25 +406,34 @@
             <div style="display: flex; flex-direction: column; gap: 14px; width: 100%; margin-top: 10px;">
               <!-- Mac -->
               <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
+                <span style="font-size: 0.8rem; color: #cbd5e1; font-weight: 600; text-align: left; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 2px;">下载 macOS 客户端</span>
                 <div style="display: flex; gap: 8px; width: 100%;">
-                  <a href="/downloads/PaperSolver-arm64.dmg" class="cta-primary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 10px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; color: #fff; background: linear-gradient(135deg, #2563eb, #7c3aed);">
-                    macOS (M系列芯片)
+                  <a href="/downloads/PaperSolver-arm64.dmg" class="cta-primary" style="flex: 1.3; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 11px 12px; border-radius: 8px; font-size: 0.88rem; font-weight: bold; color: #fff; background: linear-gradient(135deg, #2563eb, #7c3aed);">
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" style="display: block; flex-shrink: 0;">
+                      <path d="M12.03 5.41c.83-1.05 1.4-2.52 1.25-3.97-1.22.05-2.73.83-3.6 1.88-.77.9-1.44 2.41-1.25 3.82 1.36.1 2.76-.68 3.6-1.73zm4.5 5.86c-.05-2.24 1.79-3.32 1.87-3.37-1.03-1.54-2.63-1.75-3.2-1.81-1.37-.15-2.69.83-3.39.83-.71 0-1.79-.81-2.94-.79-1.51.02-2.92.89-3.69 2.27-1.57 2.78-.4 6.89 1.13 9.15.75 1.1 1.63 2.32 2.78 2.28 1.11-.05 1.54-.73 2.87-.73 1.33 0 1.73.73 2.89.7 1.2-.02 1.98-1.1 2.72-2.2 1.01-1.48 1.42-2.91 1.44-2.98-.03-.02-2.45-.96-2.48-3.76z"/>
+                    </svg>
+                    M系列芯片
                   </a>
-                  <a href="/downloads/PaperSolver-x64.dmg" class="cta-primary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 10px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; color: #fff; background: linear-gradient(135deg, #4f46e5, #818cf8);">
-                    macOS (Intel芯片)
-                  </a>
+                  <button type="button" @click="openGuideModal('mac')" style="flex: 0.8; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 11px 8px; font-size: 0.82rem; font-weight: 600; color: #93c5fd; background: rgba(37,99,235,0.15); border: 1.5px solid rgba(96,165,250,0.45); border-radius: 8px; cursor: pointer;">
+                    Mac 教程
+                  </button>
                 </div>
               </div>
               <!-- Win -->
               <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
+                <span style="font-size: 0.8rem; color: #cbd5e1; font-weight: 600; text-align: left; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 2px;">下载 Windows 客户端</span>
                 <div style="display: flex; gap: 8px; width: 100%;">
-                  <a href="/downloads/PaperSolver-x64.exe" class="cta-primary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 10px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; color: #fff; background: linear-gradient(135deg, #10b981, #059669);">
-                    Windows 64位
+                  <a href="/downloads/PaperSolver.exe" class="cta-primary" style="flex: 1.3; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 11px 12px; border-radius: 8px; font-size: 0.88rem; font-weight: bold; color: #fff; background: linear-gradient(135deg, #10b981, #059669);">
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" style="display: block; flex-shrink: 0;">
+                      <path d="M0 3.449L9.75 2.1v9.45H0V3.449zM0 12.45h9.75v9.45L0 20.551v-8.1zM10.8 1.95L24 0v11.55H10.8V1.95zM10.8 12.45H24v11.55l-13.2-1.95v-9.6z"/>
+                    </svg>
+                    下载 Win 客户端
                   </a>
-                  <a href="/downloads/PaperSolver-ia32.exe" class="cta-primary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; padding: 10px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; color: #fff; background: linear-gradient(135deg, #0d9488, #0f766e);">
-                    Windows 32位
-                  </a>
+                  <button type="button" @click="openGuideModal('win')" style="flex: 0.8; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 11px 8px; font-size: 0.82rem; font-weight: 600; color: #6ee7b7; background: rgba(16,185,129,0.15); border: 1.5px solid rgba(52,211,153,0.45); border-radius: 8px; cursor: pointer;">
+                    Win 教程
+                  </button>
                 </div>
+                <span style="font-size: 0.78rem; color: #f87171; font-weight: 600; text-align: left; margin-top: 2px; display: block;">⚠️ 仅支持 Windows 10/11 系统，不支持 Windows 7、8 及 8.1 早期系统</span>
               </div>
             </div>
           </div>
@@ -524,10 +466,24 @@
               <div v-if="loginMethod === 'qq'">
                 <p class="oauth-hint">为保障学术交流与数据安全，当前支持通过 QQ 一键安全登录与注册，免密且更安全。</p>
                 <div v-if="errorText" class="auth-err" style="margin-bottom: 20px;">{{ errorText }}</div>
-                
-                <button type="button" class="btn-oauth-premium qq" @click="loginWithQQ">
-                  QQ 登录
+
+                <button type="button" class="btn-oauth-premium qq" :disabled="isDesktopApp && !desktopSetupReady" @click="loginWithQQ">
+                  {{ isDesktopApp && !desktopSetupReady ? '完成首次配置后登录' : 'QQ 登录' }}
                 </button>
+                <p v-if="isDesktopApp && !desktopSetupReady" class="oauth-lock-hint">请先完成本机依赖、PDF 保存目录和云端检测，完成后即可登录。</p>
+
+                <!-- 邀请激活码 (可选) -->
+                <div class="qq-invite-input-container" style="margin-top: 20px;">
+                  <input
+                    type="text"
+                    v-model="qqInviteCode"
+                    placeholder="输入邀请激活码（可选，邀请人可得 15 积分）"
+                    style="width: 100%; padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px dashed rgba(255,255,255,0.15); color: #fff; box-sizing: border-box; outline: none; font-size: 0.85rem; text-align: center; transition: all 0.3s;"
+                    @focus="$event.target.style.borderColor = 'rgba(255,255,255,0.4)'"
+                    @blur="$event.target.style.borderColor = 'rgba(255,255,255,0.15)'"
+                  />
+                  <p style="font-size: 0.72rem; color: rgba(255,255,255,0.4); text-align: center; margin-top: 6px; line-height: 1.3;">仅限**首次** QQ 登录激活新账号时有效，核销后该邀请码作废。</p>
+                </div>
               </div>
 
               <!-- Password Login Method -->
@@ -577,135 +533,206 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
           <div class="auth-pane desktop-settings-pane">
-            <div class="auth-label">DESKTOP SETUP</div>
-            <h3 class="auth-title">首次使用配置</h3>
-            <p class="desktop-settings-desc">登录前请完成本机保存目录、依赖服务和云端连接检测。配置只保存在这台电脑。</p>
+            <div class="desktop-setup-header">
+              <div class="auth-label">DESKTOP SETUP</div>
+              <h3 class="auth-title">首次使用配置</h3>
+              <p class="desktop-settings-desc">配置本地文献存储与离线学术研读环境，配置仅保存在这台电脑。</p>
+            </div>
+
             <div class="auth-form">
+              <!-- Top Overview Status Grid -->
               <div class="desktop-setup-status-grid">
                 <div :class="['desktop-setup-status-card', desktopConnectionOk ? 'ok' : 'bad']">
-                  <span class="status-dot"></span>
-                  <strong>云端服务</strong>
-                  <small>{{ desktopConnectionOk ? '已验证' : '待检测' }}</small>
+                  <div class="status-icon-wrap">
+                    <svg v-if="desktopConnectionOk" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span v-else class="status-dot"></span>
+                  </div>
+                  <div class="status-text-wrap">
+                    <strong>云端服务</strong>
+                    <small>{{ desktopConnectionOk ? '已连接' : '待检测' }}</small>
+                  </div>
                 </div>
+
                 <div :class="['desktop-setup-status-card', desktopPdfDirDraft ? 'ok' : 'bad']">
-                  <span class="status-dot"></span>
-                  <strong>PDF 目录</strong>
-                  <small>{{ desktopPdfDirDraft ? '已选择' : '待选择' }}</small>
+                  <div class="status-icon-wrap">
+                    <svg v-if="desktopPdfDirDraft" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span v-else class="status-dot"></span>
+                  </div>
+                  <div class="status-text-wrap">
+                    <strong>PDF 存储目录</strong>
+                    <small>{{ desktopPdfDirDraft ? '已绑定' : '待选择' }}</small>
+                  </div>
                 </div>
-                <div :class="['desktop-setup-status-card', localDependencyState.running ? 'ok' : 'bad']">
-                  <span class="status-dot"></span>
-                  <strong>本机依赖</strong>
-                  <small>{{ localDependencyState.running ? '运行中' : localDependencyState.installed ? '待启动' : '待安装' }}</small>
+
+                <div :class="['desktop-setup-status-card', localDependencyState.running ? 'ok' : localDependencyState.installed ? 'warn' : 'bad']">
+                  <div class="status-icon-wrap">
+                    <svg v-if="localDependencyState.running" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span v-else class="status-dot"></span>
+                  </div>
+                  <div class="status-text-wrap">
+                    <strong>离线研读引擎</strong>
+                    <small>{{ localDependencyStatusText }}</small>
+                  </div>
                 </div>
               </div>
 
+              <!-- AI Capability Checklist Section (Clean Flat List) -->
               <div class="desktop-settings-section desktop-dependency-section">
                 <div class="desktop-settings-section-head">
-                  <span>PaperSolver 本机依赖</span>
-                  <small>{{ localDependencyState.running ? '可用' : localDependencyState.installed ? '已安装' : '未安装' }}</small>
-                </div>
-                <p>{{ localDependencyState.message || '用于沉浸翻译和 PDF 结构化解析。请先检测，未安装时可直接安装内置依赖。' }}</p>
-
-                <!-- Lite Mode vs Full Mode selection radio options -->
-                <div v-if="!localDependencyState.running" class="lite-mode-selector">
-                  <label class="lite-mode-label">
-                    <input type="radio" :value="true" v-model="liteModeSelected" />
-                    <span>极速精简版（推荐，极速启动，仅下必要模型，日常阅读翻译首选）</span>
-                  </label>
-                  <label class="lite-mode-label">
-                    <input type="radio" :value="false" v-model="liteModeSelected" />
-                    <span>专业完整版（需要1.2GB，支持复杂公式与表格重构，下载时间较长）</span>
-                  </label>
+                  <span class="section-title-clean">核心能力就绪状态</span>
+                  <span :class="['dep-pill-badge', localDependencyState.running ? 'ok' : 'pending']">
+                    {{ localDependencyState.running ? '已全部就绪' : localDependencyStepLabel }}
+                  </span>
                 </div>
 
-                <div v-if="localDependencyProgress.active" class="desktop-progress">
+                <!-- Global Download Progress Banner -->
+                <div v-if="localDependencyProgress.active" class="desktop-progress-card">
+                  <div class="progress-header-row">
+                    <span class="progress-msg">{{ localDependencyProgress.message || '正在准备环境...' }}</span>
+                    <span class="progress-pct">{{ Math.round(localDependencyProgress.progress) }}%</span>
+                  </div>
                   <div class="desktop-progress-bar">
                     <span :style="{ width: `${localDependencyProgress.progress}%` }"></span>
                   </div>
-                  <small>{{ localDependencyProgress.message }}</small>
+                  <div v-if="localDependencyProgress.detail" class="desktop-progress-detail">
+                    {{ localDependencyProgress.detail }}
+                  </div>
                 </div>
+
+                <!-- Clean Flat Checklist Rows (NOT nested cards) -->
+                <div class="dependency-checklist-list">
+                  <div
+                    v-for="item in dependencyChecklist"
+                    :key="item.id"
+                    :class="['checklist-row', item.ready ? 'is-ready' : item.loading ? 'is-loading' : 'is-pending']"
+                  >
+                    <div class="check-icon-wrap">
+                      <svg v-if="item.ready" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span v-else-if="item.loading" class="mini-spinner"></span>
+                      <span v-else class="pending-circle"></span>
+                    </div>
+
+                    <span class="item-title">{{ item.name }}</span>
+
+                    <span :class="['item-state-tag', item.ready ? 'state-ok' : item.loading ? 'state-loading' : 'state-pending']">
+                      {{ item.statusText }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Dependency Actions -->
                 <div class="desktop-dependency-actions">
-                  <button type="button" :disabled="localDependencyBusy" @click="refreshLocalDependencyStatus">
+                  <button v-if="dependencyDownloadActive" type="button" class="pause-action" :disabled="localDependencyPausing" @click="pauseLocalDependencyDownload">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    {{ localDependencyPausing ? '正在暂停...' : '暂停' }}
+                  </button>
+
+                  <button
+                    type="button"
+                    class="primary-action"
+                    :class="{ 'is-all-ready': localDependencyState.running }"
+                    :disabled="localDependencyBusy || !localDependencyDetected || localDependencyState.running"
+                    @click="continueLocalDependencySetup"
+                  >
                     <span v-if="localDependencyBusy" class="mini-spinner"></span>
+                    <svg v-else-if="localDependencyState.running" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><polyline points="20 6 9 17 4 12"/></svg>
+                    {{ localDependencyState.running ? '功能已全部就绪' : localDependencyPrimaryActionText }}
+                  </button>
+
+                  <button type="button" class="secondary-detect-btn" :disabled="localDependencyBusy" @click="refreshLocalDependencyStatus">
+                    <span v-if="localDependencyBusy" class="mini-spinner"></span>
+                    <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                     {{ localDependencyBusy ? '检测中' : '重新检测' }}
                   </button>
-                  <button type="button" :disabled="localDependencyBusy" @click="installLocalDependency(false)">
-                    {{ localDependencyState.installed ? '修复依赖' : '安装依赖' }}
-                  </button>
-                  <button type="button" :disabled="localDependencyBusy || !localDependencyState.installed" @click="startLocalDependency">
-                    启动依赖
-                  </button>
                 </div>
               </div>
 
-              <div class="desktop-settings-section desktop-api-section" style="display: none;">
-                <div class="desktop-settings-section-head">
-                  <span>云端服务地址</span>
-                  <small>连接您的私有部署或公网服务</small>
-                </div>
-                <p>客户端需要与后端服务通信以获取数据与调用 AI 功能。默认主通道为：https://papersolver.cn</p>
-                <div class="desktop-pdf-dir-row">
-                  <input v-model="desktopApiDraft" type="text" placeholder="例如 https://papersolver.cn" style="color: #fff; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); padding: 8px 12px; border-radius: 6px; flex: 1; font-family: monospace; font-size: 0.85rem;" />
-                </div>
-              </div>
-
+              <!-- PDF Save Directory Section -->
               <div class="desktop-settings-section desktop-pdf-section">
                 <div class="desktop-settings-section-head">
-                  <span>PDF 保存目录</span>
-                  <small>首次使用先配置</small>
+                  <div class="section-title-group">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <span>PDF 文献保存目录</span>
+                  </div>
+                  <small>{{ desktopPdfDirDraft ? '已绑定' : '首次使用需设置' }}</small>
                 </div>
-                <p>导入、Zotero 同步和手动上传 of PDF 会保存到用户电脑这个目录；后端只记录文献信息和本机缓存标记。</p>
+                <p>导入、Zotero 双向同步及解析的 PDF 文献将安全保存在此文件夹中。</p>
                 <div class="desktop-pdf-dir-row">
-                  <input v-model="desktopPdfDirDraft" type="text" readonly placeholder="请选择 PDF 保存目录" />
-                  <button type="button" :disabled="desktopSettingsSaving" @click="chooseDesktopPdfDir">选择目录</button>
+                  <input v-model="desktopPdfDirDraft" type="text" readonly placeholder="请选择您的 PDF 保存目录" />
+                  <button type="button" :disabled="desktopSettingsSaving" @click="chooseDesktopPdfDir">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    选择目录
+                  </button>
                 </div>
               </div>
 
-              <div class="desktop-settings-section desktop-cache-section">
-                <div class="desktop-settings-section-head">
-                  <span>本机 PDF 缓存</span>
-                  <small>{{ desktopCacheInfo.label || '未统计' }}</small>
+              <!-- Bottom Secondary Info: Cache & Updates -->
+              <div class="desktop-bottom-grid">
+                <div class="desktop-settings-section desktop-cache-section compact-grid-card">
+                  <div class="desktop-settings-section-head">
+                    <div class="section-title-group">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                      <span>本地存储管理</span>
+                    </div>
+                    <small>{{ desktopCacheInfo.label || '统计中' }}</small>
+                  </div>
+                  <p>当前已保存 {{ desktopCacheInfo.pdfs || 0 }} 份文献，元数据与解析缓存已与主文件分离。</p>
+                  <div class="desktop-cache-actions">
+                    <button type="button" :disabled="desktopCacheLoading" @click="openDesktopCacheDir">打开文件夹</button>
+                    <button type="button" class="danger" :disabled="desktopCacheLoading" @click="clearDesktopPdfCache">清理技术缓存</button>
+                  </div>
                 </div>
-                <p>
-                  已缓存 {{ desktopCacheInfo.pdfs || 0 }} 份 PDF，共 {{ desktopCacheInfo.files || 0 }} 个文件。
-                  阅读器会优先读取本机缓存，清理后不会删除云端文献记录。
-                </p>
-                <div v-if="desktopCacheMessage" :class="['desktop-translation-status', desktopCacheMessage.ok ? 'ok' : 'bad']">
-                  {{ desktopCacheMessage.text }}
-                </div>
-                <div class="desktop-cache-actions">
-                  <button type="button" :disabled="desktopCacheLoading" @click="refreshDesktopCacheInfo">
-                    {{ desktopCacheLoading ? '统计中' : '刷新占用' }}
-                  </button>
-                  <button type="button" :disabled="desktopCacheLoading" @click="openDesktopCacheDir">打开目录</button>
-                  <button type="button" class="danger" :disabled="desktopCacheLoading" @click="clearDesktopPdfCache">清理缓存</button>
+
+                <div class="desktop-settings-section desktop-update-section compact-grid-card">
+                  <div class="desktop-settings-section-head">
+                    <div class="section-title-group">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                      <span>客户端版本</span>
+                    </div>
+                    <small>{{ desktopRuntime.version ? `v${desktopRuntime.version}` : '读取中' }}</small>
+                  </div>
+                  <p>{{ desktopUpdateMessage || '已配置自动更新通道，有新版本时将自动推送。' }}</p>
+                  <div v-if="desktopUpdateStatus.updateAvailable" class="desktop-update-notice" role="status">
+                    发现最新版本 v{{ desktopUpdateStatus.latestVersion }}，请更新。
+                  </div>
+                  <div class="desktop-update-row">
+                    <button type="button" :disabled="desktopUpdateChecking" @click="checkDesktopUpdate">
+                      {{ desktopUpdateChecking ? '检测中…' : '检测更新' }}
+                    </button>
+                    <button
+                      v-if="desktopUpdateStatus.updateAvailable && !desktopUpdateStatus.downloaded"
+                      type="button"
+                      class="desktop-update-download"
+                      :disabled="desktopUpdateStatus.status === 'downloading'"
+                      @click="downloadDesktopUpdate"
+                    >
+                      {{ desktopUpdateStatus.status === 'downloading' ? `下载中 ${Math.round(desktopUpdateStatus.percent || 0)}%` : (desktopUpdateStatus.manualInstall ? '下载新版安装包' : '下载并覆盖更新') }}
+                    </button>
+                    <button
+                      v-if="desktopUpdateStatus.downloaded && !desktopUpdateStatus.manualInstall"
+                      type="button"
+                      class="desktop-update-download"
+                      @click="installDesktopUpdate"
+                    >
+                      重启安装
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div class="desktop-settings-section desktop-update-section compact">
-                <div class="desktop-settings-section-head">
-                  <span>客户端版本</span>
-                  <small>{{ desktopRuntime.version ? `v${desktopRuntime.version}` : '读取中' }}</small>
-                </div>
-                <div class="desktop-update-row">
-                  <span :class="['desktop-update-badge', desktopUpdateStatus.updateAvailable ? 'available' : 'stable']">
-                    {{ desktopUpdateStatus.updateAvailable ? '发现更新' : 'Beta 通道' }}
-                  </span>
-                  <button type="button" :disabled="desktopUpdateChecking" @click="checkDesktopUpdate">
-                    {{ desktopUpdateChecking ? '检测中…' : '检测更新' }}
-                  </button>
-                </div>
-                <p>{{ desktopUpdateMessage }}</p>
-              </div>
+              <!-- Message feedback -->
               <div v-if="desktopSettingsMessage" class="auth-ok">{{ desktopSettingsMessage }}</div>
               <div v-if="desktopSettingsError" class="auth-err">{{ desktopSettingsError }}</div>
+
+              <!-- Bottom Action Bar -->
               <div class="desktop-settings-actions">
                 <button class="desktop-test-btn" type="button" :disabled="desktopSettingsSaving || desktopTesting" @click="testDesktopConnection">
                   <span v-if="desktopTesting" class="mini-spinner"></span>
-                  {{ desktopTesting ? '检测中' : '检测云端' }}
+                  <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  {{ desktopTesting ? '正在检测云端...' : '检测云端连接' }}
                 </button>
                 <button class="auth-submit" :disabled="desktopSettingsSaving || desktopTesting" @click="saveDesktopSettings">
-                  {{ desktopSettingsSaving ? '保存中…' : '保存并继续登录' }}
+                  {{ desktopSettingsSaving ? '保存中…' : '完成配置，开始使用' }}
                 </button>
               </div>
             </div>
@@ -763,24 +790,45 @@
     </Transition>
 
     <!-- Detailed Guide Modal -->
+    <!-- ═══ GUIDE MODAL ═══ -->
     <Transition name="mfade">
-      <div v-if="guideModalOpen" class="modal-mask" @click="guideModalOpen = false" style="z-index: 10001; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px);">
-        <div class="modal-box" @click.stop style="max-width: 680px; width: 90%; background: #0f172a; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 32px; position: relative; box-shadow: var(--sh-xl);">
+      <div v-if="guideModalOpen" class="modal-mask" @click="guideModalOpen = false" style="z-index: 10001; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(10px);">
+        <div class="modal-box" @click.stop style="max-width: 680px; width: 90%; background: #0f172a; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 16px; padding: 28px 32px; position: relative; box-shadow: var(--sh-xl);">
           <button class="modal-x" @click="guideModalOpen = false" style="position: absolute; right: 20px; top: 20px; font-size: 24px; color: #94a3b8; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
           
-          <h2 style="margin-top: 0; margin-bottom: 24px; color: #fff; font-size: 20px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; font-weight: 600;">
+          <h2 style="margin-top: 0; margin-bottom: 20px; color: #fff; font-size: 20px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 14px; font-weight: 600;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #6366f1; flex-shrink: 0;">
               <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/>
               <path d="M6 6h10M6 10h10"/>
             </svg>
-            PaperSolver 客户端安装与运行配置指引
+            PaperSolver 客户端安装与运行指引
           </h2>
+
+          <!-- Tab Switcher -->
+          <div style="display: flex; gap: 8px; margin-bottom: 18px; background: rgba(30, 41, 59, 0.7); padding: 4px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+            <button
+              @click="guideModalTab = 'mac'"
+              style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 16px; border-radius: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s;"
+              :style="guideModalTab === 'mac' ? { background: '#2563eb', color: '#fff', boxShadow: '0 2px 8px rgba(37,99,235,0.4)' } : { background: 'transparent', color: '#94a3b8' }"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12.03 5.41c.83-1.05 1.4-2.52 1.25-3.97-1.22.05-2.73.83-3.6 1.88-.77.9-1.44 2.41-1.25 3.82 1.36.1 2.76-.68 3.6-1.73zm4.5 5.86c-.05-2.24 1.79-3.32 1.87-3.37-1.03-1.54-2.63-1.75-3.2-1.81-1.37-.15-2.69.83-3.39.83-.71 0-1.79-.81-2.94-.79-1.51.02-2.92.89-3.69 2.27-1.57 2.78-.4 6.89 1.13 9.15.75 1.1 1.63 2.32 2.78 2.28 1.11-.05 1.54-.73 2.87-.73 1.33 0 1.73.73 2.89.7 1.2-.02 1.98-1.1 2.72-2.2 1.01-1.48 1.42-2.91 1.44-2.98-.03-.02-2.45-.96-2.48-3.76z"/></svg>
+              macOS 安装教程
+            </button>
+            <button
+              @click="guideModalTab = 'win'"
+              style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 16px; border-radius: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s;"
+              :style="guideModalTab === 'win' ? { background: '#10b981', color: '#fff', boxShadow: '0 2px 8px rgba(16,185,129,0.4)' } : { background: 'transparent', color: '#94a3b8' }"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M0 3.449L9.75 2.1v9.45H0V3.449zM0 12.45h9.75v9.45L0 20.551v-8.1zM10.8 1.95L24 0v11.55H10.8V1.95zM10.8 12.45H24v11.55l-13.2-1.95v-9.6z"/></svg>
+              Windows 安装教程
+            </button>
+          </div>
           
           <div class="guide-scroll-container" style="max-height: 420px; overflow-y: auto; padding-right: 8px;">
             <!-- macOS Guide -->
-            <div style="margin-bottom: 28px;">
+            <div v-show="guideModalTab === 'mac'" style="margin-bottom: 12px;">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
                 <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" style="color: #60a5fa; flex-shrink: 0;">
                   <path d="M12.03 5.41c.83-1.05 1.4-2.52 1.25-3.97-1.22.05-2.73.83-3.6 1.88-.77.9-1.44 2.41-1.25 3.82 1.36.1 2.76-.68 3.6-1.73zm4.5 5.86c-.05-2.24 1.79-3.32 1.87-3.37-1.03-1.54-2.63-1.75-3.2-1.81-1.37-.15-2.69.83-3.39.83-.71 0-1.79-.81-2.94-.79-1.51.02-2.92.89-3.69 2.27-1.57 2.78-.4 6.89 1.13 9.15.75 1.1 1.63 2.32 2.78 2.28 1.11-.05 1.54-.73 2.87-.73 1.33 0 1.73.73 2.89.7 1.2-.02 1.98-1.1 2.72-2.2 1.01-1.48 1.42-2.91 1.44-2.98-.03-.02-2.45-.96-2.48-3.76z"/>
@@ -788,7 +836,7 @@
                 <h3 style="margin: 0; color: #f8fafc; font-size: 15.5px; font-weight: 600;">macOS 客户端安装步骤</h3>
               </div>
               <ol style="margin: 0; padding-left: 20px; color: #cbd5e1; font-size: 14px; line-height: 1.8;">
-                <li>下载 <strong>PaperSolver.dmg</strong> 镜像文件。</li>
+                <li>下载 <strong>PaperSolver-arm64.dmg</strong> 镜像文件。</li>
                 <li>双击打开 DMG 镜像文件，将 <strong>PaperSolver.app</strong> 拖拽至右侧的 <strong>Applications (应用程序)</strong> 文件夹中。</li>
                 <li>若双击运行时系统拦截并提示 <span style="color: #f43f5e; font-weight: bold;">“已损坏，无法打开。你应该将它移到废纸篓”</span>：
                   <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(244, 63, 94, 0.2); padding: 12px; border-radius: 8px; margin-top: 10px; margin-bottom: 10px; font-size: 13.5px; color: #cbd5e1;">
@@ -802,10 +850,19 @@
                 </li>
                 <li>执行命令后重新双击应用，即可完美启动配置并进入系统。</li>
               </ol>
+              <div style="margin-top: 14px; padding: 13px 14px; border-radius: 8px; background: rgba(30, 41, 59, 0.56); border: 1px solid rgba(96, 165, 250, 0.22); color: #cbd5e1; font-size: 13px; line-height: 1.75;">
+                <strong style="color: #93c5fd;">完整卸载与清理本机数据</strong>
+                <ol style="margin: 6px 0 0; padding-left: 19px;">
+                  <li>退出 PaperSolver 后，将 <strong>PaperSolver.app</strong> 从“应用程序”移入废纸篓。</li>
+                  <li>在 Finder 按 <strong>Command + Shift + G</strong>，输入 <code style="color: #86efac;">~/Library/Application Support/papersolver-desktop</code>。</li>
+                  <li>删除整个 <code style="color: #86efac;">papersolver-desktop</code> 文件夹，而不是只删除其中的依赖文件夹。</li>
+                </ol>
+                <div style="margin-top: 7px; color: #fcd34d;">这会一并删除本机缓存、配置、依赖、应用数据以及保存在该目录中的 PDF、笔记和 PPT。若你曾选择应用目录之外的 PDF 文件夹，还需到该文件夹单独删除。</div>
+              </div>
             </div>
             
             <!-- Windows Guide -->
-            <div>
+            <div v-show="guideModalTab === 'win'" style="margin-bottom: 12px;">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
                 <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" style="color: #34d399; flex-shrink: 0;">
                   <path d="M0 3.449L9.75 2.1v9.45H0V3.449zM0 12.45h9.75v9.45L0 20.551v-8.1zM10.8 1.95L24 0v11.55H10.8V1.95zM10.8 12.45H24v11.55l-13.2-1.95v-9.6z"/>
@@ -813,18 +870,34 @@
                 <h3 style="margin: 0; color: #f8fafc; font-size: 15.5px; font-weight: 600;">Windows 客户端安装步骤</h3>
               </div>
               <ol style="margin: 0; padding-left: 20px; color: #cbd5e1; font-size: 14px; line-height: 1.8;">
-                <li>下载 <strong>PaperSolver Setup.exe</strong> 一键安装包。</li>
-                <li>双击启动安装，程序会自动释放并生成桌面和开始菜单的快捷方式。</li>
-                <li>若系统弹出 Windows SmartScreen 安全警告 <span style="color: #fbbf24; font-weight: bold;">“已阻止无法识别的应用”</span>：
+                <li>下载 <strong>PaperSolver.exe</strong> 一键安装包。</li>
+                <li>若浏览器提示文件可能不安全，在下载栏点击文件右侧的 <strong>“…”</strong>，选择 <strong>“保留”</strong>。
+                  <img class="windows-guide-image" src="/tutorials/windows-browser-keep-download.png" alt="浏览器下载拦截时选择保留" />
+                </li>
+                <li>双击启动安装，程序会自动生成桌面和开始菜单的快捷方式。</li>
+                <li>若系统弹出 Windows SmartScreen 安全提示：
                   <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(251, 191, 36, 0.2); padding: 12px; border-radius: 8px; margin-top: 10px; margin-bottom: 10px; font-size: 13px; color: #cbd5e1;">
-                    点击提示框中的 <strong>“更多信息”</strong> 链接，此时右下角会露出 <strong>“仍要运行”</strong> 按钮，点击即可继续安装。
+                    在底部按钮旁的下拉菜单选择 <strong>“仍然保留”</strong>，然后重新打开安装包继续安装。
                   </div>
+                  <img class="windows-guide-image" src="/tutorials/windows-smartscreen-keep.jpg" alt="Windows SmartScreen 中选择仍然保留" />
                 </li>
               </ol>
+              <div style="margin-top: 14px; padding: 13px 14px; border-radius: 8px; background: rgba(30, 41, 59, 0.56); border: 1px solid rgba(52, 211, 153, 0.22); color: #cbd5e1; font-size: 13px; line-height: 1.75;">
+                <strong style="color: #6ee7b7;">完整卸载与清理本机数据</strong>
+                <ol style="margin: 6px 0 0; padding-left: 19px;">
+                  <li>先完全退出 PaperSolver，再在 Windows“设置 → 应用 → 已安装的应用”中卸载 PaperSolver。</li>
+                  <li>按 <strong>Win + R</strong>，输入 <code style="color: #86efac;">%LOCALAPPDATA%\Programs</code>，确认并删除残留的 <code style="color: #86efac;">PaperSolver</code> 安装文件夹（卸载器通常会自动删除，找不到即可跳过）。</li>
+                  <li>打开资源管理器，在 D/E/F 等非系统盘查找 <strong>PaperSolverData</strong>，删除其中的 <code style="color: #86efac;">dependencies</code>、<code style="color: #86efac;">dependency-downloads</code> 和 <code style="color: #86efac;">modelscope-cache</code> 文件夹。</li>
+                  <li>按 <strong>Win + R</strong> 输入 <code style="color: #86efac;">%APPDATA%</code>，删除旧版本残留的 <code style="color: #86efac;">papersolver-desktop</code> 和 <code style="color: #86efac;">dependency-downloads</code> 文件夹。</li>
+                  <li>按 <strong>Win + R</strong> 输入 <code style="color: #86efac;">%TEMP%</code>，删除名称以 <code style="color: #86efac;">papersolver</code> 或 <code style="color: #86efac;">papersolver-desktop</code> 开头的临时下载目录；正在使用的文件跳过即可。</li>
+                  <li>若找不到上述目录，可在“此电脑”搜索 <code style="color: #86efac;">PaperSolverData</code>、<code style="color: #86efac;">papersolver-desktop</code> 和 <code style="color: #86efac;">dependency-downloads</code> 后逐项确认删除。</li>
+                </ol>
+                <div style="margin-top: 7px; color: #fcd34d;">以上步骤会删除客户端、配置、依赖、模型和下载缓存。请勿直接删除包含个人文献的 PDF、笔记或 PPT 目录；如果这些文件保存在 PaperSolverData 中，请先打开目录确认内容，只删除依赖相关文件夹。</div>
+              </div>
             </div>
           </div>
           
-          <div style="margin-top: 24px; text-align: right; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
+          <div style="margin-top: 20px; text-align: right; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
             <button class="btn-solid" @click="guideModalOpen = false" style="background: #fff; border: none; padding: 10px 24px; border-radius: 8px; color: #09090b; font-weight: 600; cursor: pointer; transition: background 0.2s;">我知道了</button>
           </div>
         </div>
@@ -933,7 +1006,6 @@ const showAuthModal      = ref(false)
 const showDownloadPromptModal = ref(false)
 const showLegalModal      = ref(false)
 const legalModalTab      = ref('terms')
-const showContactModal    = ref(false)
 
 function openLegalModal(tab) {
   legalModalTab.value = tab
@@ -980,7 +1052,7 @@ const legalContent = {
       {
         title: "AI 与第三方服务",
         lines: [
-          "AI 研读、综述、PPT、审核或翻译功能可能调用平台配置的模型服务、翻译服务或本机依赖服务。",
+          "AI 研读、综述、PPT、审核等功能可能调用平台配置的服务或本机依赖。",
           "平台会记录必要的调用时间、模块、模型标识、消耗额度、状态和错误摘要，用于计费、排障和风控，不用于公开展示个人隐私。"
         ]
       },
@@ -1015,6 +1087,7 @@ const legalContent = {
 }
 
 const loginMethod        = ref('qq')
+const qqInviteCode       = ref('')
 const isLocal            = ref(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
 const authMode           = ref('login')
 const email              = ref('')
@@ -1037,6 +1110,12 @@ const forgotSuccessText  = ref('')
 const showPassword       = ref(false)
 const isDesktopApp       = Boolean(window.paperSolverDesktop?.isDesktop)
 const guideModalOpen     = ref(false)
+const guideModalTab      = ref('mac')
+
+function openGuideModal(tab = 'mac') {
+  guideModalTab.value = tab
+  guideModalOpen.value = true
+}
 const mouseX             = ref(-999)
 const mouseY             = ref(-999)
 function handleMouseMove(e) {
@@ -1057,35 +1136,115 @@ const desktopCacheMessage = ref(null)
 const desktopUpdateChecking = ref(false)
 const desktopRuntime = reactive({
   version: '',
-  channel: 'beta',
+  channel: 'latest',
 })
 const desktopUpdateStatus = reactive({
+  status: 'idle',
   updateAvailable: false,
   latestVersion: '',
+  downloadUrl: '',
+  manualInstall: false,
+  downloaded: false,
+  percent: 0,
   message: '',
 })
+const lastDesktopUpdateCheckAt = ref(0)
 const desktopConnectionOk = ref(false)
 const desktopSetupCompleted = ref(false)
 const localDependencyBusy = ref(false)
-const liteModeSelected = ref(true)
-watch(liteModeSelected, (newVal) => {
-  if (window.paperSolverDesktop?.setBackendConfig) {
-    window.paperSolverDesktop.setBackendConfig({ localDependencyLiteMode: newVal }).catch(() => {})
-  }
-})
+const localDependencyDetected = ref(false)
+const localDependencyPausing = ref(false)
 const localDependencyState = reactive({
-  ok: false,
-  installed: false,
-  running: false,
-  structuredParserAvailable: false,
+	  ok: false,
+	  installed: false,
+	  running: false,
+	  pdfServiceReady: false,
+	  structuredParserAvailable: false,
+	  formulaModelsAvailable: false,
+  downloadPaused: false,
   message: '',
   latencyMs: 0,
+})
+const localDependencyStatusText = computed(() => {
+  if (localDependencyBusy.value) return '配置中'
+  if (localDependencyState.downloadPaused) return '已暂停'
+  if (localDependencyState.running) return '已就绪'
+  if (localDependencyState.installed) return '待启动'
+  return '待配置'
+})
+const localDependencyStepLabel = computed(() => {
+  if (localDependencyState.running) return '已全部就绪'
+  if (localDependencyState.downloadPaused) return '下一步：继续配置'
+  if (localDependencyState.installed) return '下一步：启动'
+  return '下一步：配置'
+})
+const localDependencyPrimaryActionText = computed(() => {
+  if (localDependencyBusy.value) return '正在处理...'
+  if (localDependencyState.running) return '功能已就绪'
+  if (localDependencyState.installed) return '启动服务'
+  if (localDependencyState.downloadPaused) return '继续配置'
+  return '一键配置'
+})
+const localDependencyHelpText = computed(() => {
+  if (localDependencyState.running) {
+    return '本地学术研读与离线加速能力已就绪。'
+  }
+  if (localDependencyState.installed) {
+    return '组件已就绪，点击启动即可开启高性能研读。'
+  }
+  if (localDependencyState.downloadPaused) {
+    return '配置已暂停，点击继续后将自动恢复。'
+  }
+  return '首次使用需要完成初始化配置，点击下方按钮自动准备。'
 })
 const localDependencyProgress = reactive({
   active: false,
   progress: 0,
   message: '',
+  detail: '',
   stage: '',
+})
+const dependencyDownloadActive = computed(() => (
+  localDependencyBusy.value
+  && localDependencyProgress.active
+  && localDependencyProgress.stage === 'download'
+))
+const dependencyChecklist = computed(() => {
+  const isRunning = Boolean(localDependencyState.running)
+  const isInstalled = Boolean(localDependencyState.installed || isRunning)
+  const progress = Number(localDependencyProgress.progress) || 0
+  const isBusy = Boolean(localDependencyBusy.value && localDependencyProgress.active)
+
+  return [
+    {
+      id: 'reader',
+      name: '双栏沉浸精读与多语对照',
+      ready: isRunning || localDependencyState.pdfServiceReady,
+      loading: isBusy && !isRunning && progress < 30,
+      statusText: (isRunning || localDependencyState.pdfServiceReady) ? '已就绪' : isBusy ? '配置中' : '待配置',
+    },
+    {
+      id: 'layout',
+      name: '智能排版与文献结构化提炼',
+      ready: isRunning || localDependencyState.structuredParserAvailable,
+      loading: isBusy && !isRunning && progress >= 30 && progress < 65,
+      statusText: (isRunning || localDependencyState.structuredParserAvailable) ? '已就绪' : isBusy ? '配置中' : '待配置',
+    },
+    {
+      id: 'formula',
+      name: '复杂公式与学术图表提取',
+      ready: isRunning || localDependencyState.formulaModelsAvailable,
+      loading: isBusy && !isRunning && progress >= 65 && progress < 90,
+      statusText: (isRunning || localDependencyState.formulaModelsAvailable) ? '已就绪' : isBusy ? '配置中' : '待配置',
+    },
+    {
+      id: 'engine',
+      name: '本地数据加密与离线加速',
+      ready: isRunning || isInstalled,
+      loading: isBusy && !isInstalled && progress >= 90,
+      statusText: (isRunning || isInstalled) ? '已就绪' : isBusy ? '配置中' : '待配置',
+    },
+  ]
 })
 const desktopCacheInfo = reactive({
   label: '',
@@ -1112,6 +1271,8 @@ const desktopTranslationStatus = reactive({
 const DESKTOP_GUIDE_KEY = 'papersolver_desktop_first_setup_seen'
 let rcTimer = null
 let unsubscribeDependencyProgress = null
+let unsubscribeUpdateState = null
+let unsubscribeQqOAuthCallback = null
 
 const desktopSetupReady = computed(() => {
   if (!isDesktopApp) return true
@@ -1173,9 +1334,6 @@ async function loadDesktopBackendConfig() {
     applyDesktopTranslationConfig(config?.translationEndpoints)
     desktopPdfDirDraft.value = config?.pdfStorageDir || ''
     desktopSetupCompleted.value = Boolean(config?.setupCompleted)
-    if (config?.localDependencyLiteMode !== undefined) {
-      liteModeSelected.value = Boolean(config.localDependencyLiteMode)
-    }
     desktopApiBase.value = nextUrl
     desktopApiDraft.value = nextUrl
     setApiBaseUrl(nextUrl, { persist: true })
@@ -1198,7 +1356,7 @@ async function loadDesktopRuntimeInfo() {
   try {
     const info = await window.paperSolverDesktop.getRuntimeInfo()
     desktopRuntime.version = info?.version || ''
-    desktopRuntime.channel = info?.channel || 'beta'
+    desktopRuntime.channel = info?.channel || 'latest'
     desktopUpdateStatus.message = info?.updatePolicy?.message || ''
   } catch {
     desktopRuntime.version = ''
@@ -1207,26 +1365,93 @@ async function loadDesktopRuntimeInfo() {
 const desktopUpdateMessage = computed(() => {
   if (desktopUpdateStatus.message) return desktopUpdateStatus.message
   return desktopRuntime.version
-    ? `当前客户端版本 v${desktopRuntime.version}，正式分发后支持检测更新、下载并重启安装。`
+    ? `当前客户端版本 v${desktopRuntime.version}，有新版时会提示你下载更新。`
     : '正在读取客户端版本信息。'
 })
-async function checkDesktopUpdate() {
+function applyDesktopUpdateState(result = {}) {
+  desktopUpdateStatus.status = result?.status || desktopUpdateStatus.status || 'idle'
+  desktopUpdateStatus.updateAvailable = Boolean(result?.updateAvailable)
+  desktopUpdateStatus.latestVersion = result?.latestVersion || desktopUpdateStatus.latestVersion || ''
+  desktopUpdateStatus.downloadUrl = result?.downloadUrl || desktopUpdateStatus.downloadUrl || ''
+  desktopUpdateStatus.manualInstall = Boolean(result?.manualInstall)
+  desktopUpdateStatus.downloaded = Boolean(result?.downloaded)
+  desktopUpdateStatus.percent = Number(result?.percent) || 0
+  desktopUpdateStatus.message = result?.message || desktopUpdateStatus.message || ''
+}
+async function checkDesktopUpdate(options = {}) {
+  const { silent = false, force = false } = options
   if (!window.paperSolverDesktop?.checkUpdate) {
-    desktopUpdateStatus.message = '当前桌面壳不支持检测更新，请安装新版客户端。'
+    if (!silent) desktopUpdateStatus.message = '当前桌面壳不支持检测更新，请安装新版客户端。'
     return
   }
+  const now = Date.now()
+  if (!force && now - lastDesktopUpdateCheckAt.value < 5 * 60 * 1000) return
+  lastDesktopUpdateCheckAt.value = now
   desktopUpdateChecking.value = true
-  desktopUpdateStatus.message = ''
+  if (!silent) desktopUpdateStatus.message = ''
   try {
     const result = await window.paperSolverDesktop.checkUpdate()
-    desktopUpdateStatus.updateAvailable = Boolean(result?.updateAvailable)
-    desktopUpdateStatus.latestVersion = result?.latestVersion || ''
-    desktopUpdateStatus.message = result?.message || '检测完成。'
+    applyDesktopUpdateState(result)
+    desktopUpdateStatus.message = result?.updateAvailable
+      ? (desktopUpdateStatus.manualInstall
+          ? `发现最新版本 v${result.latestVersion || ''}，请下载新版安装包覆盖安装。`
+          : `发现最新版本 v${result.latestVersion || ''}，可直接下载并覆盖更新。`)
+      : (result?.message || '当前已是最新版本。')
   } catch (err) {
     desktopUpdateStatus.updateAvailable = false
-    desktopUpdateStatus.message = err?.message || '更新检测失败，请稍后重试。'
+    desktopUpdateStatus.downloadUrl = ''
+    if (!silent) desktopUpdateStatus.message = err?.message || '更新检测失败，请稍后重试。'
   } finally {
     desktopUpdateChecking.value = false
+  }
+}
+async function downloadDesktopUpdate() {
+  if (!window.paperSolverDesktop?.downloadUpdate) {
+    desktopUpdateStatus.message = '当前客户端不支持应用内覆盖更新，请从 PaperSolver 官网下载最新安装包。'
+    return
+  }
+  if (desktopUpdateStatus.manualInstall && desktopUpdateStatus.downloadUrl && window.paperSolverDesktop?.openUpdateDownload) {
+    await window.paperSolverDesktop.openUpdateDownload(desktopUpdateStatus.downloadUrl).catch(() => {})
+    desktopUpdateStatus.message = '已打开新版安装包下载地址，请下载后覆盖安装。'
+    return
+  }
+  try {
+    desktopUpdateStatus.status = 'downloading'
+    desktopUpdateStatus.message = '正在下载更新，下载完成后可重启覆盖安装。'
+    const result = await window.paperSolverDesktop.downloadUpdate()
+    applyDesktopUpdateState(result)
+    if (desktopUpdateStatus.manualInstall && desktopUpdateStatus.downloadUrl && window.paperSolverDesktop?.openUpdateDownload) {
+      await window.paperSolverDesktop.openUpdateDownload(desktopUpdateStatus.downloadUrl).catch(() => {})
+    }
+  } catch (err) {
+    desktopUpdateStatus.status = 'error'
+    if (desktopUpdateStatus.downloadUrl && window.paperSolverDesktop?.openUpdateDownload) {
+      await window.paperSolverDesktop.openUpdateDownload(desktopUpdateStatus.downloadUrl).catch(() => {})
+      desktopUpdateStatus.message = '应用内下载失败，已为你打开新版安装包下载地址。'
+    } else {
+      desktopUpdateStatus.message = err?.message || '下载更新失败，请稍后重试。'
+    }
+  }
+}
+async function installDesktopUpdate() {
+  if (desktopUpdateStatus.manualInstall) {
+    if (desktopUpdateStatus.downloadUrl && window.paperSolverDesktop?.openUpdateDownload) {
+      await window.paperSolverDesktop.openUpdateDownload(desktopUpdateStatus.downloadUrl).catch(() => {})
+      desktopUpdateStatus.message = '已打开新版安装包下载地址，请下载后覆盖安装。'
+    } else {
+      desktopUpdateStatus.message = '当前客户端需要下载安装包覆盖安装，请从 PaperSolver 官网下载最新版本。'
+    }
+    return
+  }
+  if (!window.paperSolverDesktop?.installUpdate) {
+    desktopUpdateStatus.message = '当前客户端不支持自动安装，请从 PaperSolver 官网下载最新安装包。'
+    return
+  }
+  try {
+    desktopUpdateStatus.message = '正在重启并安装更新...'
+    await window.paperSolverDesktop.installUpdate()
+  } catch (err) {
+    desktopUpdateStatus.message = err?.message || '安装更新失败，请重新检测更新。'
   }
 }
 function openDesktopSettings() {
@@ -1237,6 +1462,7 @@ function openDesktopSettings() {
   desktopSettingsOpen.value = true
   refreshDesktopCacheInfo()
   refreshLocalDependencyStatus({ silent: true })
+  void checkDesktopUpdate({ silent: true })
 }
 async function chooseDesktopPdfDir() {
   if (!window.paperSolverDesktop?.selectPdfStorageDir) {
@@ -1340,15 +1566,15 @@ async function refreshDesktopCacheInfo() {
   }
 }
 function applyLocalDependencyStatus(status = {}) {
-  localDependencyState.ok = Boolean(status.ok)
-  localDependencyState.installed = Boolean(status.installed)
-  localDependencyState.running = Boolean(status.running)
-  localDependencyState.structuredParserAvailable = Boolean(status.structuredParserAvailable)
+	  localDependencyState.ok = Boolean(status.ok)
+	  localDependencyState.installed = Boolean(status.installed)
+	  localDependencyState.running = Boolean(status.running)
+	  localDependencyState.pdfServiceReady = Boolean(status.pdfServiceReady)
+	  localDependencyState.structuredParserAvailable = Boolean(status.structuredParserAvailable)
+	  localDependencyState.formulaModelsAvailable = Boolean(status.formulaModelsAvailable)
+  localDependencyState.downloadPaused = Boolean(status.downloadPaused || status.paused)
   localDependencyState.message = status.message || ''
   localDependencyState.latencyMs = Number(status.latencyMs) || 0
-  if (status.liteMode !== undefined) {
-    liteModeSelected.value = Boolean(status.liteMode)
-  }
 }
 async function refreshLocalDependencyStatus(options = {}) {
   if (!window.paperSolverDesktop?.getLocalDependencyStatus) return
@@ -1356,18 +1582,31 @@ async function refreshLocalDependencyStatus(options = {}) {
   if (!options.silent) {
     desktopSettingsError.value = ''
     desktopSettingsMessage.value = ''
+    localDependencyProgress.active = true
+    localDependencyProgress.progress = 12
+    localDependencyProgress.message = '正在检测本机依赖...'
+    localDependencyProgress.detail = ''
+    localDependencyProgress.stage = 'status-check'
   }
   try {
     const status = await window.paperSolverDesktop.getLocalDependencyStatus()
+    localDependencyDetected.value = true
     applyLocalDependencyStatus(status)
     if (!options.silent) {
-      desktopSettingsMessage.value = status.running ? '本机依赖运行正常。' : status.message || '检测完成。'
+      desktopSettingsMessage.value = status.running ? '本机依赖运行正常。' : displayDependencyMessage(status.message) || '检测完成。'
+      localDependencyProgress.progress = status.running ? 100 : 45
+      localDependencyProgress.message = status.running ? '检测完成，本机依赖可使用。' : '检测完成，等待下一步操作。'
     }
   } catch (err) {
-    applyLocalDependencyStatus({ ok: false, installed: false, running: false, message: err?.message || '依赖检测失败。' })
-    if (!options.silent) desktopSettingsError.value = err?.message || '依赖检测失败。'
+    applyLocalDependencyStatus({ ok: false, installed: false, running: false, message: '本机依赖检测失败。' })
+    if (!options.silent) desktopSettingsError.value = '本机依赖检测失败，请稍后重试。'
   } finally {
     localDependencyBusy.value = false
+    if (!options.silent) {
+      setTimeout(() => {
+        localDependencyProgress.active = false
+      }, 900)
+    }
   }
 }
 async function installLocalDependency(force = false) {
@@ -1377,19 +1616,75 @@ async function installLocalDependency(force = false) {
   desktopSettingsMessage.value = ''
   localDependencyProgress.active = true
   localDependencyProgress.progress = 4
-  localDependencyProgress.message = force ? '正在重新安装本机依赖...' : '正在安装本机依赖...'
+  localDependencyProgress.message = force ? '正在重新准备本机依赖...' : '正在准备本机依赖...'
   try {
-    const status = await window.paperSolverDesktop.downloadLocalDependency({ force, liteMode: liteModeSelected.value })
+    const status = await window.paperSolverDesktop.downloadLocalDependency({ force })
     applyLocalDependencyStatus(status)
+    if (status?.paused) {
+      localDependencyProgress.active = true
+      localDependencyProgress.stage = 'paused'
+      localDependencyProgress.message = '本机依赖下载已暂停'
+      localDependencyProgress.detail = '已保留下载进度，再次点击继续下载即可恢复'
+      desktopSettingsMessage.value = '本机依赖下载已暂停。'
+      return
+    }
     desktopSettingsMessage.value = '本机依赖已安装并启动。'
   } catch (err) {
-    desktopSettingsError.value = err?.message || '安装依赖失败。'
+    desktopSettingsError.value = err?.message || '本机依赖安装失败。'
   } finally {
     localDependencyBusy.value = false
     setTimeout(() => {
       localDependencyProgress.active = false
     }, 900)
   }
+}
+async function pauseLocalDependencyDownload() {
+  if (!window.paperSolverDesktop?.pauseLocalDependencyDownload || localDependencyPausing.value) return
+  localDependencyPausing.value = true
+  try {
+    const result = await window.paperSolverDesktop.pauseLocalDependencyDownload()
+    if (result?.paused) {
+      localDependencyState.downloadPaused = true
+      localDependencyProgress.active = true
+      localDependencyProgress.stage = 'paused'
+      localDependencyProgress.message = '本机依赖下载已暂停'
+      localDependencyProgress.detail = '已保留下载进度，再次点击继续下载即可恢复'
+      desktopSettingsMessage.value = '下载已暂停，当前进度已保存。'
+    } else {
+      desktopSettingsMessage.value = result?.message || '当前没有正在进行的下载。'
+    }
+  } catch (err) {
+    desktopSettingsError.value = err?.message || '暂停下载失败。'
+  } finally {
+    localDependencyPausing.value = false
+  }
+}
+async function clearLocalDependency() {
+  if (!window.paperSolverDesktop?.clearLocalDependency || localDependencyBusy.value) return
+  const confirmed = window.confirm('确定清除已经安装的本机依赖吗？这会删除已安装内容和未完成的下载缓存。')
+  if (!confirmed) return
+  localDependencyBusy.value = true
+  desktopSettingsError.value = ''
+  desktopSettingsMessage.value = ''
+  try {
+    const status = await window.paperSolverDesktop.clearLocalDependency()
+    applyLocalDependencyStatus(status)
+    localDependencyProgress.active = false
+    localDependencyProgress.progress = 0
+    localDependencyProgress.stage = ''
+    desktopSettingsMessage.value = '已清除本机依赖。'
+  } catch (err) {
+    desktopSettingsError.value = '清除本机依赖失败，请稍后重试。'
+  } finally {
+    localDependencyBusy.value = false
+  }
+}
+async function continueLocalDependencySetup() {
+  if (localDependencyState.running) {
+    desktopSettingsMessage.value = '本机依赖已经可以使用。'
+    return
+  }
+  await installLocalDependency(false)
 }
 async function startLocalDependency() {
   if (!window.paperSolverDesktop?.startLocalDependency) return
@@ -1399,12 +1694,14 @@ async function startLocalDependency() {
   localDependencyProgress.active = true
   localDependencyProgress.progress = 35
   localDependencyProgress.message = '正在启动本机依赖...'
+  localDependencyProgress.detail = '通常需要几十秒，首次启动会更久。'
+  localDependencyProgress.stage = 'start'
   try {
     await window.paperSolverDesktop.startLocalDependency()
     await refreshLocalDependencyStatus({ silent: true })
     desktopSettingsMessage.value = '本机依赖已启动。'
   } catch (err) {
-    desktopSettingsError.value = err?.message || '启动依赖失败。'
+    desktopSettingsError.value = err?.message || '本机依赖启动失败。'
   } finally {
     localDependencyBusy.value = false
     localDependencyProgress.progress = localDependencyState.running ? 100 : localDependencyProgress.progress
@@ -1412,6 +1709,37 @@ async function startLocalDependency() {
       localDependencyProgress.active = false
     }, 900)
   }
+}
+function progressDetailText(payload = {}) {
+  const eta = Number(payload.etaSeconds) || 0
+  if (!eta || !Number.isFinite(eta)) return ''
+  return `预计剩余 ${formatDuration(eta)}`
+}
+function displayDependencyMessage(value) {
+  const message = String(value || '正在初始化 PaperSolver 科研加速引擎...')
+  if (/MinerU|pdf2zh|PDF2|模型|版面解析器|解析器|公式|翻译|全文解析|本机阅读|服务入口|运行环境|组件|PDF 服务|依赖|包|下载/i.test(message)) {
+    return '正在准备 PaperSolver 专有科研引擎组件...'
+  }
+  return message.replace(/本机依赖|本机能力/gi, '科研引擎')
+}
+function formatBytes(bytes) {
+  const value = Number(bytes) || 0
+  if (value >= 1024 * 1024 * 1024) return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`
+  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`
+  if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`
+  return `${Math.max(0, Math.round(value))} B`
+}
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0))
+  const minutes = Math.floor(total / 60)
+  const rest = total % 60
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60)
+    const remainMinutes = minutes % 60
+    return `${hours}小时${remainMinutes}分钟`
+  }
+  if (minutes > 0) return `${minutes}分${rest}秒`
+  return `${rest}秒`
 }
 async function openDesktopCacheDir() {
   if (!window.paperSolverDesktop?.openCacheDir) return
@@ -1432,7 +1760,13 @@ async function clearDesktopPdfCache() {
   desktopCacheMessage.value = null
   try {
     const result = await window.paperSolverDesktop.clearPdfCache()
-    applyDesktopCacheInfo({ bytes: 0, files: 0, pdfs: 0, label: '0 B', path: result?.path || desktopCacheInfo.path })
+    applyDesktopCacheInfo({
+      bytes: Number(result?.bytes) || 0,
+      files: Number(result?.files) || 0,
+      pdfs: Number(result?.pdfs) || 0,
+      label: result?.currentLabel || '0 B',
+      path: result?.path || desktopCacheInfo.path,
+    })
     desktopCacheMessage.value = { ok: true, text: `已清理 ${result?.label || '缓存'}。` }
   } catch (err) {
     desktopCacheMessage.value = { ok: false, text: err?.message || '清理缓存失败' }
@@ -1459,7 +1793,7 @@ async function saveDesktopSettings() {
       throw new Error('请先选择 PDF 保存目录。')
     }
     if (!localDependencyState.running) {
-      throw new Error('本机依赖未运行，请先安装或启动依赖。')
+      throw new Error('本机依赖未就绪，请先准备本机依赖。')
     }
     if (window.paperSolverDesktop?.setBackendConfig) {
       await window.paperSolverDesktop.setBackendConfig({
@@ -1514,34 +1848,95 @@ function normalizedDesktopTranslationDraft() {
   }
 }
 async function loginWithQQ() {
+  if (isDesktopApp) {
+    if (!desktopUpdateStatus.latestVersion && !desktopUpdateChecking.value) {
+      await checkDesktopUpdate({ silent: true, force: true });
+    }
+    if (desktopUpdateStatus.updateAvailable) {
+      errorText.value = `检测到新版本 v${desktopUpdateStatus.latestVersion || ""}，请先完成客户端更新后再登录。`;
+      desktopUpdateStatus.message = errorText.value;
+      return;
+    }
+  }
+  if (isDesktopApp && !desktopSetupReady.value) {
+    errorText.value = '请先完成首次使用配置，再登录。'
+    desktopSettingsOpen.value = true
+    return
+  }
   const appId = '1905318043';
   const redirectUri = encodeURIComponent('https://papersolver.cn/api/auth/qq/callback');
-  const qqAuthUrl = `https://graph.qq.com/oauth2.0/authorize?response_type=code&client_id=${appId}&redirect_uri=${redirectUri}&state=papersolver`;
+  // Desktop OAuth carries a stable local machine id for diagnostics and
+  // invite attribution only; the backend must allow this machine to switch QQ accounts.
+  let state = "papersolver";
+  if (isDesktopApp && window.paperSolverDesktop?.getMachineId) {
+    try {
+      const machineId = String(await window.paperSolverDesktop.getMachineId() || "").trim();
+      if (!machineId) {
+        throw new Error("无法读取本机设备标识");
+      }
+      state = `papersolver_${machineId}`;
+    } catch (error) {
+      errorText.value = error?.message || "无法读取本机设备标识，请重启客户端后重试。";
+      return;
+    }
+  }
+  if (qqInviteCode.value.trim()) {
+    state += `_invite_${qqInviteCode.value.trim()}`;
+  }
+  const useSystemBrowserOAuth = isDesktopApp && Boolean(window.paperSolverDesktop?.oauthQQInSystemBrowser)
+  if (useSystemBrowserOAuth) {
+    try {
+      if (window.paperSolverDesktop?.prepareQQOAuthLocalCallback) {
+        const prepared = await window.paperSolverDesktop.prepareQQOAuthLocalCallback(state)
+        state = String(prepared?.state || '')
+        if (!state.startsWith('desktop_local_')) {
+          throw new Error('无法准备 QQ 登录回调，请重试。')
+        }
+      } else {
+        state = `desktop_external_${state}`
+      }
+      const qqAuthUrl = `https://graph.qq.com/oauth2.0/authorize?response_type=code&client_id=${appId}&redirect_uri=${redirectUri}&state=${encodeURIComponent(state)}`;
+      await window.paperSolverDesktop.oauthQQInSystemBrowser(qqAuthUrl)
+      window.alert('已在默认浏览器打开 QQ 登录。完成授权后将自动回到 PaperSolver，无需在网页操作。')
+    } catch (e) {
+      errorText.value = e.message || '无法打开系统浏览器，请重试。'
+      window.alert(errorText.value)
+    }
+    return
+  }
+  const qqAuthUrl = `https://graph.qq.com/oauth2.0/authorize?response_type=code&client_id=${appId}&redirect_uri=${redirectUri}&state=${encodeURIComponent(state)}`;
   if (isDesktopApp && window.paperSolverDesktop?.oauthQQ) {
     console.log("[LoginView] oauthQQ desktop flow started with url:", qqAuthUrl);
     try {
       const result = await window.paperSolverDesktop.oauthQQ(qqAuthUrl);
-      console.log("[LoginView] oauthQQ resolved. Result:", result);
       if (result?.qqSession) {
-        const json = decodeBase64Utf8(result.qqSession);
-        console.log("[LoginView] Decoded JSON:", json);
-        const user = JSON.parse(json);
-        console.log("[LoginView] Applying session for user:", user);
-        authStore.applySession(user);
-        console.log("[LoginView] Session applied. Routing to library...");
-        router.push(authStore.session.role === '管理员' ? '/admin' : '/library');
+        completeDesktopQqLogin(result.qqSession)
       } else {
-        console.warn("[LoginView] oauthQQ resolved but qqSession was missing:", result);
+        console.warn("[LoginView] oauthQQ resolved but qqSession was missing");
       }
     } catch (e) {
       console.error("[LoginView] oauthQQ catch block error:", e);
       errorText.value = e.message || 'QQ 登录失败，请重试。';
+      window.alert(errorText.value);
       openModal('login');
     }
     return;
   }
   // Web browser flow
   window.location.href = qqAuthUrl;
+}
+
+function completeDesktopQqLogin(qqSession) {
+  const json = decodeBase64Utf8(qqSession)
+  const user = JSON.parse(json)
+  authStore.applySession(user)
+  if (user.newUser) {
+    window.alert(`欢迎加入 PaperSolver，QQ 名：${user.name || "QQ 用户"}`)
+  }
+  if (qqInviteCode.value.trim()) {
+    window.alert("邀请码核销成功！邀请人的 15 积分奖励将在注册完成后到账，被邀请人不获得额外积分。")
+  }
+  router.push(authStore.session.role === '管理员' ? '/admin' : '/library')
 }
 async function submitLogin() {
   if (isDesktopApp && !desktopSetupReady.value) {
@@ -1563,7 +1958,13 @@ async function submitRegister() {
   if (!isQqEmail(email.value)) { errorText.value = '请填写有效的邮箱地址'; return }
   if (!verificationCode.value || verificationCode.value.length !== 6) { errorText.value = '请输入 6 位验证码'; return }
   loading.value = true; errorText.value = ''
-  try { await authStore.register({ inviteCode: inviteCode.value, name: name.value, email: email.value, password: password.value, role: role.value, mentorInviteCode: mentorInviteCode.value, verificationCode: verificationCode.value }); router.push(authStore.session.role === '管理员' ? '/admin' : '/library') }
+  try {
+    await authStore.register({ inviteCode: inviteCode.value, name: name.value, email: email.value, password: password.value, role: role.value, mentorInviteCode: mentorInviteCode.value, verificationCode: verificationCode.value });
+    if (inviteCode.value.trim()) {
+      window.alert("邀请码核销成功！邀请人的 15 积分奖励将在注册完成后到账，被邀请人不获得额外积分。");
+    }
+    router.push(authStore.session.role === '管理员' ? '/admin' : '/library')
+  }
   catch (err) { errorText.value = authErrorMessage(err) }
   finally { loading.value = false }
 }
@@ -1577,11 +1978,11 @@ function authErrorMessage(err) {
 
 /* ── Static data ── */
 const features = [
-  { title:'文献库',   desc:'本地 PDF 文献管理与 Zotero 题录极速双向同步。自动补全元数据，文献全文均安全留存于个人本地电脑，严防隐私泄露。',  vb:'0 0 24 24', path:'<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="13" y2="11"/>',  color:'#3b82f6', chips:['本地物理留存','Zotero 极速同步','元数据智能补全'] },
-  { title:'多维翻译', desc:'双栏对照与沉浸式翻译。支持句子级精准划线与选区批注。内置自研大模型，选中任何不懂的专业词汇或复杂段落，可一键提问深度解析。', vb:'0 0 24 24', path:'<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',                                                             color:'#8b5cf6', chips:['双栏对照与沉浸翻译','自研模型智能提问','选区划线精准批注'] },
-  { title:'论文综述', desc:'一键智能提炼研究背景、发现亮点与汇报价值。自动高亮核心数字指标与关键英文术语，为组会分享提供标准输出。',     vb:'0 0 24 24', path:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/>', color:'#10b981', chips:['核心要点智能提炼','关键数字自动高亮','组会综述大纲生成'] },
-  { title:'调研广场', desc:'一键开启深度学术调研。智能生成定制研究选题卡，系统性梳理代表性文献，并精准捕捉现有工作的关键研究空白。',       vb:'0 0 24 24', path:'<circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>',                                                                                                                                    color:'#06b6d4', chips:['深度选题卡生成','代表论文梳理','研究空白敏锐捕捉'] },
-  { title:'组会汇报', desc:'支持将最多三篇文献深度串联融汇。采用原生 PPTmaster 引擎制作，高保真还原精美排版，一键生成完整的宣讲讲稿与导师问答建议。',             vb:'0 0 24 24', path:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m7 10 3 3 5-5"/>',                                                                                                   color:'#f59e0b', chips:['原生 PPTmaster 制作','多文献深度串联','宣讲讲稿自动生成'] },
+  { title:'文献库',   desc:'本地 PDF 文献管理与 Zotero 题录极速双向同步。自动补全元数据与期刊分区，文献全文安全留存于个人本地电脑，严防隐私泄露。',  vb:'0 0 24 24', path:'<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="13" y2="11"/>',  color:'#3b82f6', chips:['本地物理留存','Zotero 极速同步','元数据智能补全'] },
+  { title:'文献阅读', desc:'双栏对照与沉浸式阅读翻译。支持句子级精准划线与选区批注。内置自研大模型，选中任何专业词汇或复杂公式，可一键深度解析。', vb:'0 0 24 24', path:'<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',                                                             color:'#8b5cf6', chips:['双栏对照与沉浸翻译','自研模型智能提问','选区划线精准批注'] },
+  { title:'AI 研读',  desc:'专为学术论文定制优化的自研大模型。支持对论文全文、特定段落、数学公式或实验图表进行深度追问与同行评议局限性剖析。',     vb:'0 0 24 24', path:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/>', color:'#10b981', chips:['自研学术大模型','公式图表深度追问','研读脉络清晰可溯'] },
+  { title:'AI 笔记',   desc:'六大多维科研模板深度覆盖：快速阅读、精读拆解、方法提炼、综述梳理、复现实验与组会汇报，一键提炼沉淀属于您的学术知识资产。', vb:'0 0 24 24', path:'<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="m9 14 2 2 4-4"/>',                                               color:'#06b6d4', chips:['六大科研模板','深度精读拆解','学术资产沉淀'] },
+  { title:'组会汇报', desc:'支持单篇或最多三篇文献深度串联融汇。基于原生 PPTmaster 引擎制作，高保真还原精美学术排版，一键导出完整 PPT 与导师问答讲稿。',             vb:'0 0 24 24', path:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m7 10 3 3 5-5"/>',                                                                                                   color:'#f59e0b', chips:['原生 PPTmaster 制作','多文献深度串联','宣讲讲稿自动生成'] },
   { title:'学术论坛', desc:'高校邮箱实名认证的学术互助社区。支持同校专属帖子精确筛选，内置 AI 发帖规范性审查，学术交流更合规更纯粹。',           vb:'0 0 24 24', path:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="13" y2="14"/>',                               color:'#ec4899', chips:['邮箱实名认证','AI 发帖规范审查','同校学术圈筛选'] },
 ]
 
@@ -1589,62 +1990,62 @@ const workflowSteps = [
   {
     id: 'lib',
     title: '全部文献归纳与题录沉淀',
-    desc: '支持快速导入本地 PDF 论文，或一键从 Zotero 题录导入。系统会自动识别并智能补全作者、期刊、中科院分区与影响因子标签。',
+    desc: '支持快速导入本地 PDF 论文，或一键从 Zotero 题录极速同步。系统会自动识别并智能补全作者、期刊、中科院分区与影响因子标签。',
     highlights: [
       '<b>无缝同步 Zotero 题录</b>：快速拉取分类与元数据，免去手动键入',
       '<b>核心分区指标一览</b>：直观查看文献的 IF、JCR 分区与中科院等级',
-      '<b>文献生命周期管理</b>：阅读进度、个人批注与笔记一目了然'
+      '<b>文献生命周期管理</b>：阅读进度、个人批注与标签一目了然'
     ],
     tags: ['PDF 导入', 'Zotero 同步', '文献属性自动补全'],
-    img: '/workflow/library.png'
+    img: '/workflow/01-library.png'
   },
   {
     id: 'read',
-    title: '学术助手 PaperSolver 深度对话',
-    desc: '内置专门优化的自研 PaperSolver 学术大模型。支持对论文全文、特定选区段落或图表进行智能多轮追问，瞬间理解复杂学术概念。',
+    title: '学术多维翻译与沉浸式阅读',
+    desc: '提供双栏对照、逐段精读与沉浸原生阅读三大模式。支持精准划线批注、自由手绘画笔与公式/选区即时翻译。',
     highlights: [
-      '<b>自研学术大模型</b>：专门针对学术论文及图表解析进行定制优化',
-      '<b>划词/选区智能追问</b>：选中复杂数学公式或实验方法，即可一键追问',
-      '<b>提问与生成时间标记</b>：消息时间精确记录，阅读进度更清晰'
+      '<b>三大阅读对照模式</b>：PDF 原生排版、逐段分拆与沉浸划词译随意切换',
+      '<b>选区/公式即时解析</b>：复杂长难句与专业术语一键调用学术大模型',
+      '<b>划线高亮与手绘批注</b>：随时标注灵感，批注数据全本地安全留存'
     ],
-    tags: ['AI 研读助手', '多轮追问', 'PaperSolver 模型'],
-    img: '/workflow/reader.png'
+    tags: ['双栏对照', '沉浸式翻译', '精准批注画笔'],
+    img: '/workflow/02-reader.png'
   },
   {
-    id: 'review',
-    title: '文献结构化提炼与综述生成',
-    desc: '自动从文献中深度萃取主要发现、对比证据、机制阐释、贡献价值与核心创新，生成高保真结构化解析大纲。',
+    id: 'ai-study',
+    title: '学术助手 PaperSolver 深度研读',
+    desc: '内置专门优化的自研 PaperSolver 学术大模型。支持对论文全文、特定选区段落或图表进行智能多轮追问，深度剖析学术精髓。',
     highlights: [
-      '<b>研究发现智能提取</b>：提炼核心立论与机制演变路径',
-      '<b>对比证据全面捕获</b>：系统归纳实验数据与关键增幅比例',
-      '<b>一键流转至组会</b>：综述内容直接对接汇报主线，免去复制粘贴'
+      '<b>自研学术大模型</b>：专门针对学术论文结构、实验与图表解析定制优化',
+      '<b>选区/图表精准追问</b>：选中复杂数学推导或实验图，即可一键追问',
+      '<b>提问与生成时间标记</b>：消息时间精确记录，阅读脉络与进度清晰可溯'
     ],
-    tags: ['文献结构化综述', '数据要点高亮', '一键转流组会'],
-    img: '/workflow/review.png'
+    tags: ['AI 研读助手', '多轮追问', 'PaperSolver 模型'],
+    img: '/workflow/03-ai-study.png'
+  },
+  {
+    id: 'notes',
+    title: '六大多维模板沉淀 AI 阅读笔记',
+    desc: '提供快速阅读、精读拆解、方法提炼、综述梳理、复现实验与组会汇报六大专业模板，智能提炼文献核心并沉淀为个人知识库。',
+    highlights: [
+      '<b>六大科研专属模板</b>：适配从快速通读到深度复现实验的各种场景',
+      '<b>一键智能提炼生成</b>：自动提取研究问题、核心贡献、方法路径与实验结论',
+      '<b>文献知识结构化沉淀</b>：支持编辑、保存与随时流转，打造个人学术笔记库'
+    ],
+    tags: ['六大多维模板', 'AI 阅读笔记', '学术资产沉淀'],
+    img: '/workflow/04-ai-notes.png'
   },
   {
     id: 'meet',
-    title: '组会汇报与原生 PPTX 极速导出',
-    desc: '将日常阅读的文献笔记与精读记录，一键转化为组会汇报主线。基于原生 PPTmaster 引擎自动排版，快速导出完整幻灯片。',
+    title: '组会汇报与原生 PPTX 极速制作',
+    desc: '支持单篇或最多三篇文献深度串联融汇。基于原生 PPTmaster 引擎自动排版，一键导出精美幻灯片与宣讲讲稿。',
     highlights: [
-      '<b>笔记记录一键流转</b>：从多篇精读论文笔记秒级转为组会主线大纲',
-      '<b>原生 PPT 引擎制作</b>：高保真还原精美排版，一键导出 PPTX 文件',
+      '<b>多文献深度串联</b>：将多篇精读论文逻辑秒级转为组会汇报主线',
+      '<b>原生 PPT 引擎制作</b>：高保真还原精美学术排版，一键导出 PPTX 文件',
       '<b>自动生成宣讲讲稿</b>：系统预估汇报用时，提供针对性的导师问答建议'
     ],
     tags: ['多文献融合', '原生 PPT 导出', '汇报讲稿提炼'],
-    img: '/workflow/meeting.png'
-  },
-  {
-    id: 'forum',
-    title: '选题大厅与研究方向规划',
-    desc: '开题找不到方向？根据您的研究兴趣和投递定位，智能规划具有高可行性与高创新度的科研选题，并系统梳理现有研究空白。',
-    highlights: [
-      '<b>创新度与可行性量化</b>：评估选题发表成功率与落地难易度分数',
-      '<b>研究问题与空白梳理</b>：罗列该选题需解答的核心学术疑问',
-      '<b>推荐研究方向推荐</b>：提供文献调研结构与针对性的实验方案'
-    ],
-    tags: ['科研选题评分', '研究空白梳理', '推荐方向生成'],
-    img: '/workflow/forum.png'
+    img: '/workflow/05-meeting-report.png'
   }
 ]
 
@@ -1685,11 +2086,11 @@ const whyClaims = [
     path: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m7 10 3 3 5-5"/>'
   },
   {
-    pain: '苦恼选题开题没有方向、找不到研究空白？',
-    solution: '开放智能“选题大厅”，汇集前沿科研灵感并结合 AI 助力，量身定制生成属于您自己的选题方向。',
+    pain: '苦恼文献笔记格式散乱、难以提炼成结构化资产？',
+    solution: '提供快速阅读、精读拆解、方法梳理等六大多维科研笔记模板，一键生成并沉淀专属学术知识库。',
     color: '#a78bfa',
     vb: '0 0 24 24',
-    path: '<circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>'
+    path: '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="m9 14 2 2 4-4"/>'
   },
   {
     pain: '苦恼找不到实验数据集？论文卡壳没人讨论？',
@@ -1759,8 +2160,31 @@ onMounted(() => {
     unsubscribeDependencyProgress = window.paperSolverDesktop.onLocalDependencyProgress((payload = {}) => {
       localDependencyProgress.active = true
       localDependencyProgress.progress = Math.max(0, Math.min(100, Number(payload.progress) || 0))
-      localDependencyProgress.message = payload.message || '正在处理本机依赖...'
+      localDependencyProgress.message = displayDependencyMessage(payload.message)
+      localDependencyProgress.detail = displayDependencyMessage(payload.detail || progressDetailText(payload))
       localDependencyProgress.stage = payload.stage || ''
+    })
+  }
+  if (isDesktopApp && window.paperSolverDesktop?.onUpdateState) {
+    unsubscribeUpdateState = window.paperSolverDesktop.onUpdateState((payload = {}) => {
+      applyDesktopUpdateState(payload)
+    })
+  }
+  if (isDesktopApp && window.paperSolverDesktop?.onQqOAuthCallback) {
+    unsubscribeQqOAuthCallback = window.paperSolverDesktop.onQqOAuthCallback((payload = {}) => {
+      try {
+        if (payload.qqSession) {
+          completeDesktopQqLogin(payload.qqSession)
+          return
+        }
+        errorText.value = payload.error || 'QQ 登录失败，请重试。'
+        window.alert(`QQ 登录未完成：${errorText.value}`)
+        openModal('login')
+      } catch (error) {
+        errorText.value = error?.message || 'QQ 登录会话解析失败，请重试。'
+        window.alert(`QQ 登录未完成：${errorText.value}`)
+        openModal('login')
+      }
     })
   }
   loadDesktopBackendConfig()
@@ -1786,8 +2210,14 @@ onMounted(() => {
       openModal('login');
     }
   } else if (route.query.error) {
-    errorText.value = route.query.error;
+    errorText.value = String(route.query.error || "QQ 登录失败，请重试。");
     openModal('login');
+  }
+
+  const queryInviteCode = String(route.query.code || "").trim().toUpperCase();
+  if (queryInviteCode) {
+    inviteCode.value = queryInviteCode;
+    qqInviteCode.value = queryInviteCode;
   }
 
   if (route.query.auth === 'register' || route.query.show === 'register') openModal('register')
@@ -1800,43 +2230,13 @@ onUnmounted(() => {
   clearInterval(wfProgressTimer)
   if (rcTimer) clearInterval(rcTimer)
   unsubscribeDependencyProgress?.()
+  unsubscribeUpdateState?.()
+  unsubscribeQqOAuthCallback?.()
 })
 </script>
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100;200;300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap');
-
-.lite-mode-selector {
-  margin: 10px 0 14px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-.lite-mode-label {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  color: #94a3b8;
-  transition: color 0.15s ease;
-}
-.lite-mode-label input {
-  margin-top: 3px;
-  cursor: pointer;
-}
-.lite-mode-label span {
-  line-height: 1.3;
-  text-align: left;
-}
-.lite-mode-label:hover {
-  color: #f1f5f9;
-}
-
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
 .home-root {
@@ -2227,28 +2627,6 @@ onUnmounted(() => {
 .info-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .info-tag-item { font-size: .72rem; font-weight: 500; padding: 4px 12px; border-radius: 99px; color: #a1a1aa; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.025); }
 
-/* Floating Carousel Control Bar */
-.full-carousel-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  margin-top: 48px;
-}
-.fc-arrow-btn {
-  width: 42px; height: 42px; border-radius: 99px;
-  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
-  color: #a1a1aa; display: flex; align-items: center; justify-content: center;
-  cursor: pointer; transition: background .2s, color .2s; font-family: inherit;
-}
-.fc-arrow-btn:hover { background: rgba(255,255,255,.12); color: #f0f0f4; }
-.fc-dots-wrap { display: flex; gap: 8px; }
-.fc-dot-item { width: 7px; height: 7px; border-radius: 99px; background: rgba(255,255,255,.14); cursor: pointer; transition: background .25s, width .3s cubic-bezier(.22,1,.36,1); }
-.fc-dot-item.active { background: #3b82f6; width: 28px; }
-.fc-progress-indicator { width: 34px; height: 34px; position: relative; }
-.fc-progress-indicator svg { width: 100%; height: 100%; }
-.fc-progress-indicator circle:last-child { transition: stroke-dashoffset .08s linear; }
-
 /* ══ WHY CHOOSE US ══ */
 .why-danmaku-container { position: relative; width: 100%; margin-top: 50px; display: flex; flex-direction: column; gap: 20px; overflow: hidden; padding: 20px 0; mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%); -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%); opacity: 0; transform: translateY(20px); transition: opacity 0.8s cubic-bezier(0.25,1,0.5,1), transform 0.8s cubic-bezier(0.25,1,0.5,1); }
 .why-danmaku-container.in { opacity: 1; transform: translateY(0); }
@@ -2368,6 +2746,13 @@ onUnmounted(() => {
 .btn-oauth-premium { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 14px; background: linear-gradient(135deg, #128eed 0%, #0066cc 100%); border: none; border-radius: 12px; color: #ffffff; font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease; box-shadow: 0 4px 15px rgba(18, 142, 237, 0.25); }
 .btn-oauth-premium:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(18, 142, 237, 0.4); filter: brightness(1.08); }
 .btn-oauth-premium:active { transform: translateY(1px); box-shadow: 0 2px 10px rgba(18, 142, 237, 0.2); }
+.btn-oauth-premium:disabled {
+  cursor: not-allowed;
+  opacity: .52;
+  filter: grayscale(.25);
+  transform: none;
+  box-shadow: none;
+}
 .btn-oauth-premium.qq {
   background: rgba(255, 255, 255, 0.05) !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
@@ -2394,6 +2779,13 @@ onUnmounted(() => {
 }
 .icon-qq-svg { color: #ffffff; }
 .oauth-footer-agreement { font-size: 0.72rem; color: #52525b; text-align: center; margin-top: 18px; }
+.oauth-lock-hint {
+  margin: 10px 0 0;
+  color: #fcd34d;
+  font-size: .74rem;
+  line-height: 1.5;
+  text-align: center;
+}
 .oauth-footer-agreement a { color: #71717a; text-decoration: none; border-bottom: 1px dotted #52525b; transition: all 0.2s; }
 .oauth-footer-agreement a:hover { color: #a1a1aa; border-bottom-color: #a1a1aa; }
 
@@ -2468,362 +2860,527 @@ onUnmounted(() => {
   align-items: center;
   padding: 28px;
 }
+.desktop-settings-mask {
+  z-index: 560;
+  align-items: center;
+  padding: 24px;
+}
 .desktop-settings-box {
-  max-width: 680px;
-  max-height: calc(100vh - 72px);
+  max-width: 720px;
+  width: 100%;
+  max-height: calc(100vh - 64px);
   overflow: hidden;
   padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 .desktop-settings-pane {
-  max-height: calc(100vh - 72px);
+  max-height: calc(100vh - 64px);
   overflow-y: auto;
-  padding: 30px;
+  padding: 28px 32px 32px;
 }
 .desktop-settings-pane::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 .desktop-settings-pane::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, .35);
+  background: rgba(15, 23, 42, .3);
 }
 .desktop-settings-pane::-webkit-scrollbar-thumb {
-  background: rgba(96, 165, 250, .28);
+  background: rgba(148, 163, 184, .25);
   border-radius: 99px;
-  border: 2px solid rgba(15, 23, 42, .65);
+}
+.desktop-setup-header {
+  margin-bottom: 20px;
 }
 .desktop-settings-desc {
-  margin: -8px 0 16px;
-  color: #71717a;
-  font-size: .82rem;
-  line-height: 1.65;
+  margin: -4px 0 0;
+  color: #94a3b8;
+  font-size: .84rem;
+  line-height: 1.6;
 }
+
+/* Top 3-Item Status Grid */
 .desktop-setup-status-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
+  margin-bottom: 6px;
 }
 .desktop-setup-status-card {
   position: relative;
-  display: grid;
-  gap: 4px;
-  min-height: 74px;
-  padding: 14px 14px 13px 36px;
-  border: 1px solid rgba(248, 113, 113, .18);
-  border-radius: 16px;
-  background: rgba(127, 29, 29, .12);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid rgba(248, 113, 113, .16);
+  border-radius: 12px;
+  background: rgba(127, 29, 29, .08);
+  transition: all .2s ease;
+}
+.desktop-setup-status-card .status-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(248, 113, 113, .14);
+  color: #f87171;
+  flex-shrink: 0;
 }
 .desktop-setup-status-card .status-dot {
-  position: absolute;
-  left: 15px;
-  top: 18px;
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: #f87171;
-  box-shadow: 0 0 0 5px rgba(248, 113, 113, .12);
+}
+.desktop-setup-status-card .status-text-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 .desktop-setup-status-card strong {
-  color: #f8fafc;
-  font-size: .86rem;
-  font-weight: 850;
+  color: #f1f5f9;
+  font-size: .82rem;
+  font-weight: 700;
+  line-height: 1.2;
 }
 .desktop-setup-status-card small {
   color: #fca5a5;
-  font-size: .72rem;
-  font-weight: 800;
+  font-size: .7rem;
+  font-weight: 600;
 }
 .desktop-setup-status-card.ok {
-  border-color: rgba(34, 197, 94, .2);
-  background: rgba(6, 78, 59, .16);
+  border-color: rgba(16, 185, 129, .22);
+  background: rgba(6, 78, 59, .1);
 }
-.desktop-setup-status-card.ok .status-dot {
-  background: #22c55e;
-  box-shadow: 0 0 0 5px rgba(34, 197, 94, .13);
+.desktop-setup-status-card.ok .status-icon-wrap {
+  background: #10b981;
+  color: #fff;
+  box-shadow: 0 0 8px rgba(16, 185, 129, .35);
 }
 .desktop-setup-status-card.ok small {
-  color: #86efac;
+  color: #6ee7b7;
 }
-.desktop-settings-actions {
-  display: grid;
-  grid-template-columns: .9fr 1.1fr;
-  gap: 10px;
+.desktop-setup-status-card.warn {
+  border-color: rgba(245, 158, 11, .22);
+  background: rgba(120, 53, 15, .1);
 }
+.desktop-setup-status-card.warn .status-icon-wrap {
+  background: rgba(245, 158, 11, .16);
+  color: #f59e0b;
+}
+.desktop-setup-status-card.warn small {
+  color: #fcd34d;
+}
+
+/* Sections */
 .desktop-settings-section {
   display: grid;
   gap: 10px;
-  margin: 4px 0 2px;
-  padding: 14px;
-  border: 1px solid rgba(129, 140, 248, .16);
+  margin: 4px 0;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 14px;
-  background:
-    linear-gradient(135deg, rgba(59, 130, 246, .08), rgba(14, 165, 233, .035)),
-    rgba(255, 255, 255, .025);
+  background: rgba(255, 255, 255, 0.02);
 }
 .desktop-settings-section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
-.desktop-settings-section-head span {
-  color: #e5e7eb;
-  font-size: .9rem;
-  font-weight: 850;
+.section-title-clean {
+  color: #f1f5f9;
+  font-size: .88rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
-.desktop-settings-section-head small {
+.section-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-title-group span {
+  color: #f1f5f9;
+  font-size: .88rem;
+  font-weight: 700;
+}
+.dep-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: .7rem;
+  font-weight: 600;
+}
+.dep-pill-badge.ok {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.2);
+}
+.dep-pill-badge.pending {
   color: #93c5fd;
-  font-size: .72rem;
-  font-weight: 800;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(147, 197, 253, 0.18);
 }
 .desktop-settings-section p {
   margin: 0;
-  color: #71717a;
+  color: #94a3b8;
   font-size: .76rem;
-  line-height: 1.6;
+  line-height: 1.5;
 }
-.desktop-update-section {
-  border-color: rgba(99, 102, 241, .24);
-  background:
-    linear-gradient(135deg, rgba(79, 70, 229, .14), rgba(14, 165, 233, .05)),
-    rgba(15, 23, 42, .26);
+
+/* AI Capability Section - Clean Flat Checklist */
+.desktop-dependency-section {
+  border-color: rgba(52, 211, 153, .14);
+  background: rgba(15, 23, 42, 0.4);
 }
-.desktop-update-section.compact {
-  gap: 8px;
-  padding: 13px 15px;
+.desktop-progress-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(56, 189, 248, 0.18);
 }
-.desktop-update-row {
+.progress-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
-.desktop-update-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: .72rem;
-  font-weight: 900;
+.progress-msg {
+  color: #e0f2fe;
+  font-size: .78rem;
 }
-.desktop-update-badge.stable {
-  color: #bfdbfe;
-  background: rgba(37, 99, 235, .16);
-  border: 1px solid rgba(96, 165, 250, .24);
-}
-.desktop-update-badge.available {
-  color: #fef3c7;
-  background: rgba(245, 158, 11, .16);
-  border: 1px solid rgba(245, 158, 11, .28);
-}
-.desktop-update-row button {
-  min-height: 34px;
-  padding: 0 13px;
-  border: 1px solid rgba(96, 165, 250, .28);
-  border-radius: 10px;
-  color: #dbeafe;
-  background: rgba(37, 99, 235, .12);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: .76rem;
-  font-weight: 850;
-}
-.desktop-update-row button:hover:not(:disabled) {
-  border-color: rgba(96, 165, 250, .5);
-  background: rgba(37, 99, 235, .22);
-}
-.desktop-update-row button:disabled {
-  opacity: .55;
-  cursor: not-allowed;
-}
-.desktop-dependency-section {
-  border-color: rgba(56, 189, 248, .22);
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, .11), rgba(14, 165, 233, .07)),
-    rgba(15, 23, 42, .36);
-}
-.desktop-progress {
-  display: grid;
-  gap: 6px;
+.progress-pct {
+  color: #38bdf8;
+  font-size: .8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .desktop-progress-bar {
-  height: 7px;
+  height: 5px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(148, 163, 184, .16);
+  background: rgba(255, 255, 255, .06);
 }
 .desktop-progress-bar span {
   display: block;
   height: 100%;
   width: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, #6366f1, #06b6d4);
+  background: linear-gradient(90deg, #10b981, #06b6d4);
   transition: width .22s ease;
 }
-.desktop-progress small {
-  color: #93c5fd;
-  font-size: .72rem;
-  font-weight: 700;
+.desktop-progress-detail {
+  color: #7dd3fc;
+  font-size: .71rem;
+  font-variant-numeric: tabular-nums;
 }
+
+/* Minimal Flat List Container */
+.dependency-checklist-list {
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+.checklist-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  transition: background .16s ease;
+}
+.checklist-row:last-child {
+  border-bottom: none;
+}
+.checklist-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+.checklist-row.is-ready {
+  background: rgba(16, 185, 129, 0.03);
+}
+
+.check-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.checklist-row.is-ready .check-icon-wrap {
+  background: #10b981;
+  color: #fff;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+.check-icon-wrap .pending-circle {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(148, 163, 184, 0.22);
+}
+.item-title {
+  flex: 1;
+  color: #f1f5f9;
+  font-size: .82rem;
+  font-weight: 600;
+}
+.item-state-tag {
+  font-size: .71rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 5px;
+}
+.item-state-tag.state-ok {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.2);
+}
+.item-state-tag.state-loading {
+  color: #38bdf8;
+  background: rgba(14, 165, 233, 0.1);
+}
+.item-state-tag.state-pending {
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Actions */
 .desktop-dependency-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  align-items: center;
   gap: 8px;
+  margin-top: 2px;
 }
 .desktop-dependency-actions button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   min-height: 38px;
-  border: 1px solid rgba(96, 165, 250, .24);
-  border-radius: 11px;
-  color: #dbeafe;
-  background: rgba(37, 99, 235, .12);
-  cursor: pointer;
+  padding: 0 14px;
+  border-radius: 9px;
   font-family: inherit;
-  font-size: .77rem;
-  font-weight: 850;
+  font-size: .78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .2s ease;
 }
-.desktop-dependency-actions button:hover:not(:disabled) {
-  border-color: rgba(34, 211, 238, .44);
-  background: rgba(14, 165, 233, .18);
+.desktop-dependency-actions .primary-action {
+  flex: 1;
+  color: #fff;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: linear-gradient(135deg, #2563eb, #06b6d4);
 }
-.desktop-dependency-actions button:disabled {
-  opacity: .48;
-  cursor: not-allowed;
+.desktop-dependency-actions .primary-action:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1d4ed8, #0891b2);
 }
-.mini-spinner {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  border: 2px solid rgba(191, 219, 254, .24);
-  border-top-color: #bfdbfe;
-  animation: miniSpin .72s linear infinite;
+.desktop-dependency-actions .primary-action.is-all-ready {
+  color: #ecfdf5;
+  border-color: rgba(52, 211, 153, 0.3);
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  cursor: default;
 }
-@keyframes miniSpin {
-  to { transform: rotate(360deg); }
+.desktop-dependency-actions .secondary-detect-btn {
+  color: #cbd5e1;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
 }
-.desktop-translation-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 76px;
-  gap: 8px;
+.desktop-dependency-actions .secondary-detect-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
+.desktop-dependency-actions .pause-action {
+  color: #fef3c7;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: rgba(146, 64, 14, 0.15);
+}
+
+/* PDF Directory Section */
 .desktop-pdf-dir-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 92px;
-  gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .desktop-pdf-dir-row input {
+  flex: 1;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #e2e8f0;
+  background: rgba(15, 23, 42, 0.5);
   font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: .75rem;
+  font-size: .8rem;
+  outline: none;
+}
+.desktop-pdf-dir-row input:focus {
+  border-color: rgba(96, 165, 250, 0.4);
 }
 .desktop-pdf-dir-row button {
-  border: 1px solid rgba(20, 184, 166, .28);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
   border-radius: 10px;
-  color: #ccfbf1;
-  background: rgba(20, 184, 166, .14);
-  cursor: pointer;
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.15);
   font-family: inherit;
-  font-size: .78rem;
-  font-weight: 850;
+  font-size: .8rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all .2s ease;
+  white-space: nowrap;
 }
 .desktop-pdf-dir-row button:hover:not(:disabled) {
-  border-color: rgba(20, 184, 166, .5);
-  background: rgba(20, 184, 166, .22);
+  border-color: rgba(96, 165, 250, 0.5);
+  background: rgba(37, 99, 235, 0.25);
 }
-.desktop-pdf-dir-row button:disabled {
-  opacity: .55;
-  cursor: not-allowed;
+
+/* Bottom Grid for Storage & Updates */
+.desktop-bottom-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
-.desktop-translation-row button {
-  border: 1px solid rgba(96, 165, 250, .2);
-  border-radius: 10px;
-  color: #dbeafe;
-  background: rgba(37, 99, 235, .12);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: .78rem;
-  font-weight: 800;
-}
-.desktop-translation-row button:hover:not(:disabled) {
-  border-color: rgba(96, 165, 250, .42);
-  background: rgba(37, 99, 235, .22);
-}
-.desktop-translation-row button:disabled {
-  opacity: .55;
-  cursor: not-allowed;
-}
-.desktop-translation-status {
-  margin-top: -4px;
-  border-radius: 9px;
-  padding: 7px 9px;
-  font-size: .74rem;
-  line-height: 1.45;
-}
-.desktop-translation-status.ok {
-  color: #bbf7d0;
-  background: rgba(34, 197, 94, .1);
-  border: 1px solid rgba(34, 197, 94, .18);
-}
-.desktop-translation-status.bad {
-  color: #fecaca;
-  background: rgba(239, 68, 68, .1);
-  border: 1px solid rgba(239, 68, 68, .18);
-}
-.desktop-cache-section p {
-  color: #94a3b8;
+.compact-grid-card {
+  margin: 0;
+  padding: 14px 16px;
 }
 .desktop-cache-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  align-items: center;
   gap: 8px;
+  margin-top: 4px;
 }
 .desktop-cache-actions button {
-  border: 1px solid rgba(96, 165, 250, .18);
-  border-radius: 10px;
-  padding: 10px 8px;
-  color: #dbeafe;
-  background: rgba(37, 99, 235, .1);
-  cursor: pointer;
+  flex: 1;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.04);
   font-family: inherit;
+  font-size: .75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.desktop-cache-actions button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.desktop-cache-actions button.danger {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.2);
+  background: rgba(239, 68, 68, 0.08);
+}
+.desktop-cache-actions button.danger:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(239, 68, 68, 0.16);
+}
+.desktop-update-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.desktop-update-notice {
+  margin: 8px 0 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(96, 165, 250, 0.38);
+  border-radius: 8px;
+  color: #dbeafe;
+  background: rgba(37, 99, 235, 0.18);
   font-size: .78rem;
   font-weight: 800;
 }
-.desktop-cache-actions button:hover:not(:disabled) {
-  border-color: rgba(96, 165, 250, .38);
-  background: rgba(37, 99, 235, .18);
+.desktop-update-row button {
+  flex: 1;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 9px;
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.12);
+  font-family: inherit;
+  font-size: .75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .2s ease;
 }
-.desktop-cache-actions button.danger {
-  color: #fecaca;
-  border-color: rgba(248, 113, 113, .2);
-  background: rgba(239, 68, 68, .09);
+.desktop-update-row button:hover:not(:disabled) {
+  border-color: rgba(96, 165, 250, 0.45);
+  background: rgba(37, 99, 235, 0.22);
+  color: #fff;
 }
-.desktop-cache-actions button.danger:hover:not(:disabled) {
-  border-color: rgba(248, 113, 113, .42);
-  background: rgba(239, 68, 68, .15);
+.desktop-update-row .desktop-update-download {
+  color: #fef08a;
+  border-color: rgba(234, 179, 8, 0.35);
+  background: rgba(202, 138, 4, 0.16);
 }
-.desktop-cache-actions button:disabled {
-  opacity: .55;
-  cursor: not-allowed;
+
+/* Bottom Action Bar */
+.desktop-settings-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+.desktop-test-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.05);
+  font-family: inherit;
+  font-size: .86rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.desktop-test-btn:hover:not(:disabled) {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.09);
 }
 .desktop-settings-actions .auth-submit {
   margin-top: 0;
-}
-.desktop-test-btn {
-  border: 1px solid rgba(96, 165, 250, .22);
-  border-radius: 10px;
-  padding: 12px;
-  color: #bfdbfe;
-  background: rgba(37, 99, 235, .12);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: .86rem;
+  min-height: 46px;
+  font-size: .88rem;
   font-weight: 800;
 }
-.desktop-test-btn:hover:not(:disabled) {
-  border-color: rgba(96, 165, 250, .42);
-  color: #eff6ff;
-  background: rgba(37, 99, 235, .2);
+.mini-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  animation: miniSpin .7s linear infinite;
+}
+@keyframes miniSpin {
+  to { transform: rotate(360deg); }
 }
 .desktop-test-btn:disabled {
   opacity: .5;
@@ -3025,5 +3582,17 @@ onUnmounted(() => {
 .preview-fade-enter-from,
 .preview-fade-leave-to {
   opacity: 0;
+}
+
+.windows-guide-image {
+  display: block;
+  width: min(100%, 420px);
+  max-height: 260px;
+  margin: 10px 0 14px;
+  object-fit: contain;
+  object-position: left center;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  background: #111827;
 }
 </style>

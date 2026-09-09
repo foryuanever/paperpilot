@@ -69,7 +69,7 @@ public class MineruParseService {
     public Map<String, Object> start(String workspaceId, boolean force) {
         PaperEntity paper = requirePaper(workspaceId);
         Long userId = currentUserService.getOrCreateDefaultUserId();
-        if (!force && findContentList(workspaceId).isPresent()) {
+        if (!force && hasUsableContentList(workspaceId)) {
             TaskState ready = new TaskState("SUCCESS", "结构化解析已就绪", "");
             backendJobService.upsert("MINERU_PARSE", userId, workspaceId, ready.state(), 100, ready.message(), ready.detail());
             return statusPayload(workspaceId, ready);
@@ -214,6 +214,17 @@ public class MineruParseService {
         try {
             backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "RUNNING", 35, "正在准备 MinerU 解析环境", "");
             Files.createDirectories(inputRoot);
+            if (Files.exists(workspaceOutput)) {
+                try (Stream<Path> existing = Files.walk(workspaceOutput)) {
+                    existing.sorted(Comparator.reverseOrder()).forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException ignored) {
+                            // The parser will report a concrete error if stale output cannot be removed.
+                        }
+                    });
+                }
+            }
             Files.createDirectories(workspaceOutput);
             Path input = materializePdf(paper);
             Path log = workspaceOutput.resolve("mineru.log");
@@ -233,7 +244,7 @@ public class MineruParseService {
                 "-p", input.toAbsolutePath().toString(),
                 "-o", workspaceOutput.toAbsolutePath().toString(),
                 "-b", "pipeline",
-                "-f", "false",
+                "-f", "true",
                 "-t", "true"
             );
             builder.environment().put("MINERU_MODEL_SOURCE", modelSource);
@@ -243,8 +254,9 @@ public class MineruParseService {
             int exitCode = process.waitFor();
             if (exitCode != 0 || findContentList(workspaceId).isEmpty()) {
                 String detail = tail(log, 1800);
-                tasks.put(workspaceId, new TaskState("FAILURE", "论文结构化解析失败", detail));
-                backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "FAILURE", 100, "论文结构化解析失败", detail);
+                // MinerU may reject scanned, encrypted, or unusual PDFs even when the
+                // PDF itself is readable. Keep the reader usable with a text fallback.
+                parseWithPdfBox(workspaceId, paper, input, detail);
                 return;
             }
             tasks.put(workspaceId, new TaskState("SUCCESS", "段落、图表与阅读顺序解析完成", ""));
@@ -256,9 +268,16 @@ public class MineruParseService {
     }
 
     private void parseWithPdfBox(String workspaceId, PaperEntity paper, Path pdfPath) {
+        parseWithPdfBox(workspaceId, paper, pdfPath, "");
+    }
+
+    private void parseWithPdfBox(String workspaceId, PaperEntity paper, Path pdfPath, String mineruDetail) {
         Long userId = paper.getUserId();
         try {
-            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "RUNNING", 50, "检测到未安装 MinerU，正在通过 PDFBox 进行轻量级文本解析", "");
+            String reason = mineruDetail == null || mineruDetail.isBlank()
+                ? "检测到未安装 MinerU，正在通过 PDFBox 进行轻量级文本解析"
+                : "版面解析引擎未能处理此 PDF，正在切换为兼容解析模式";
+            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "RUNNING", 50, reason, "");
             
             List<Map<String, Object>> contentList = new ArrayList<>();
             try (org.apache.pdfbox.pdmodel.PDDocument document = org.apache.pdfbox.Loader.loadPDF(pdfPath.toFile())) {
@@ -282,8 +301,11 @@ public class MineruParseService {
             Path outputFile = workspaceOutput.resolve("content_list.json");
             objectMapper.writeValue(outputFile.toFile(), contentList);
             
-            tasks.put(workspaceId, new TaskState("SUCCESS", "轻量级文本解析完成", ""));
-            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "SUCCESS", 100, "段落、图表与阅读顺序解析完成", "");
+            String detail = mineruDetail == null || mineruDetail.isBlank()
+                ? ""
+                : "版面解析引擎未能处理此 PDF，已使用兼容解析模式；复杂图表可能需要原 PDF 查看。";
+            tasks.put(workspaceId, new TaskState("SUCCESS", "兼容解析完成", detail));
+            backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "SUCCESS", 100, "兼容解析完成", detail);
         } catch (Exception error) {
             tasks.put(workspaceId, new TaskState("FAILURE", "轻量级解析失败", error.getMessage()));
             backendJobService.upsert("MINERU_PARSE", userId, workspaceId, "FAILURE", 100, "论文结构化解析失败", error.getMessage());
@@ -375,6 +397,19 @@ public class MineruParseService {
                 .findFirst();
         } catch (IOException ignored) {
             return Optional.empty();
+        }
+    }
+
+    private boolean hasUsableContentList(String workspaceId) {
+        Optional<Path> contentList = findContentList(workspaceId);
+        if (contentList.isEmpty()) return false;
+        try {
+            String raw = Files.readString(contentList.get());
+            if (raw.isBlank()) return false;
+            List<?> items = objectMapper.readValue(raw, new TypeReference<>() {});
+            return !items.isEmpty();
+        } catch (Exception ignored) {
+            return false;
         }
     }
 
@@ -518,14 +553,91 @@ public class MineruParseService {
     }
 
     private String normalizeText(String value) {
-        return string(value)
+        return cleanAcademicMathText(string(value)
             .replaceAll("(?is)<[^>]+>", "")
             .replace("&nbsp;", " ")
             .replace("&amp;", "&")
             .replace("&lt;", "<")
             .replace("&gt;", ">")
             .replaceAll("\\s+", " ")
+            .trim());
+    }
+
+    private String cleanAcademicMathText(String value) {
+        String text = string(value);
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+            .compile("\\$([^$]{1,220})\\$")
+            .matcher(text);
+        StringBuffer buffer = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(buffer, java.util.regex.Matcher.quoteReplacement(normalizeInlineLatex(matcher.group(1))));
+        }
+        matcher.appendTail(buffer);
+        return buffer.toString()
+            .replaceAll("\\s+([,.;:，。；：])", "$1")
+            .replaceAll("\\s{2,}", " ")
             .trim();
+    }
+
+    private String normalizeInlineLatex(String body) {
+        String original = string(body);
+        String value = original
+            .replaceAll("(?i)\\\\boldsymbol\\s*\\{\\s*\\\\mathbf\\s*\\{\\s*\\\\ell\\s*}\\s*}\\s*_\\s*\\{\\s*-\\s*}", "-")
+            .replaceAll("(?i)\\\\boldsymbol\\s*\\{\\s*\\\\ell\\s*}\\s*_\\s*\\{\\s*-\\s*}", "-")
+            .replace("\\circ", "°")
+            .replace("\\pm", "±")
+            .replace("\\times", "×")
+            .replace("\\cdot", "·")
+            .replace("\\,", " ")
+            .replace("~", " ");
+        for (int i = 0; i < 4; i++) {
+            value = value.replaceAll("(?i)\\\\(?:mathrm|mathbf|mathit|text|boldsymbol)\\s*\\{\\s*([^{}]+?)\\s*}", "$1");
+        }
+        value = value.replaceAll("\\^\\s*\\{\\s*°\\s*}", "°");
+        value = replaceScript(value, "_\\s*\\{\\s*([0-9+\\-]+)\\s*}", false);
+        value = replaceScript(value, "\\^\\s*\\{\\s*([0-9+\\-]+)\\s*}", true);
+        value = value.replaceAll("[{}]", " ")
+            .replace("\\", "")
+            .replaceAll("\\s+", " ")
+            .trim();
+        value = value
+            .replaceAll("(?<=\\d)\\s+(?=\\d)", "")
+            .replaceAll("\\s+([₀-₉⁺⁻])", "$1");
+        while (value.matches(".*\\b[A-Z]+\\s+[A-Z].*")) {
+            String next = value.replaceAll("\\b([A-Z]+)\\s+([A-Z])(?=[A-Z₀-₉⁺⁻\\b])", "$1$2");
+            if (next.equals(value)) break;
+            value = next;
+        }
+        value = value
+            .replaceAll("°\\s*([A-Za-z])", "°$1")
+            .replaceAll("-\\s+([A-Za-z])", "-$1")
+            .replaceAll("\\s+([,.;:，。；：])", "$1")
+            .trim();
+        if (original.matches("(?i).*\\\\(frac|sum|int|sqrt|begin|end).*")) {
+            return value.isBlank() ? original : value;
+        }
+        return value.isBlank() ? original : value;
+    }
+
+    private String replaceScript(String value, String regex, boolean superscript) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(regex).matcher(value);
+        StringBuffer buffer = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(buffer, java.util.regex.Matcher.quoteReplacement(scriptDigits(matcher.group(1), superscript)));
+        }
+        matcher.appendTail(buffer);
+        return buffer.toString();
+    }
+
+    private String scriptDigits(String token, boolean superscript) {
+        String normal = "0123456789+-";
+        String mapped = superscript ? "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻" : "₀₁₂₃₄₅₆₇₈₉₊₋";
+        StringBuilder builder = new StringBuilder();
+        for (char ch : string(token).toCharArray()) {
+            int index = normal.indexOf(ch);
+            builder.append(index >= 0 ? mapped.charAt(index) : ch);
+        }
+        return builder.toString();
     }
 
     private boolean isPublicationNoise(String text) {

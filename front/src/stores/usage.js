@@ -1,8 +1,13 @@
 import { computed, reactive, watch } from "vue";
 import { defineStore } from "pinia";
 import { paperpilotApi } from "../services/paperpilotApi";
+import { useAuthStore } from "./auth";
 
-const STORAGE_KEY = "paperpilot-usage";
+const STORAGE_KEY_PREFIX = "paperpilot-usage";
+
+function getStorageKey(userId) {
+  return userId ? `${STORAGE_KEY_PREFIX}-${userId}` : STORAGE_KEY_PREFIX;
+}
 
 function readJson(key, fallback) {
   const raw = localStorage.getItem(key);
@@ -15,8 +20,8 @@ function readJson(key, fallback) {
 }
 
 const defaultState = {
-  planId: "pro",
-  planName: "Pro 深度阅读",
+  planId: "free",
+  planName: "未开通会员",
   tokenQuota: 0,
   tokenUsed: 0,
   tokenRemaining: 0,
@@ -40,12 +45,27 @@ const defaultState = {
   actionBreakdown: [],
   activeModels: [],
   recentCalls: [],
+  membership: { id: "free", name: "未开通会员", benefits: {}, active: false },
 };
 
 export const useUsageStore = defineStore("usage", () => {
-  const state = reactive(readJson(STORAGE_KEY, defaultState));
+  const authStore = useAuthStore();
+  const currentUserId = computed(() => authStore.profile.userId || authStore.profile.numericId || authStore.profile.email || "");
 
-  watch(state, (value) => localStorage.setItem(STORAGE_KEY, JSON.stringify(value)), { deep: true });
+  const state = reactive(readJson(getStorageKey(currentUserId.value), defaultState));
+
+  // Auto-sync storage key when user switches
+  watch(currentUserId, (newUid, oldUid) => {
+    if (newUid !== oldUid) {
+      const cached = readJson(getStorageKey(newUid), defaultState);
+      Object.assign(state, defaultState, cached);
+      fetchSummary().catch(() => {});
+    }
+  });
+
+  watch(state, (value) => {
+    localStorage.setItem(getStorageKey(currentUserId.value), JSON.stringify(value));
+  }, { deep: true });
 
   const tokenRemaining = computed(() => Math.max(0, state.tokenQuota - state.tokenUsed));
   const usagePercent = computed(() => {
@@ -56,6 +76,10 @@ export const useUsageStore = defineStore("usage", () => {
   async function fetchSummary() {
     const summary = await paperpilotApi.getUsageSummary();
     Object.assign(state, defaultState, summary || {});
+  }
+
+  async function fetchDetails(params = {}) {
+    return paperpilotApi.getUsageDetails(params);
   }
 
   function applyPlan(plan) {
@@ -80,12 +104,18 @@ export const useUsageStore = defineStore("usage", () => {
     }
   }
 
+  function reset() {
+    Object.assign(state, defaultState);
+  }
+
   return {
     state,
     tokenRemaining,
     usagePercent,
     applyPlan,
     fetchSummary,
+    fetchDetails,
     recordUsage,
+    reset,
   };
 });

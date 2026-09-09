@@ -8,10 +8,14 @@ import com.paperpilot.server.service.PaperWorkspaceService;
 import com.paperpilot.server.service.ZoteroImportService;
 import com.paperpilot.server.vo.PaperWorkspaceVO;
 import com.paperpilot.server.vo.LibraryPaperVO;
+import com.paperpilot.server.entity.AppUserEntity;
+import com.paperpilot.server.entity.PaperEntity;
+import com.paperpilot.server.repository.PaperRepository;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +30,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 @RestController
 @RequestMapping("/api/papers")
@@ -35,18 +41,24 @@ public class PaperController {
     private final ZoteroImportService zoteroImportService;
     private final ExternalSearchService externalSearchService;
     private final com.paperpilot.server.service.ResearchDataService researchDataService;
+    private final com.paperpilot.server.service.CurrentUserService currentUserService;
+    private final PaperRepository paperRepository;
     private final HttpClient httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.ALWAYS).build();
 
     public PaperController(
             PaperWorkspaceService paperWorkspaceService,
             ZoteroImportService zoteroImportService,
             ExternalSearchService externalSearchService,
-            com.paperpilot.server.service.ResearchDataService researchDataService
+            com.paperpilot.server.service.ResearchDataService researchDataService,
+            com.paperpilot.server.service.CurrentUserService currentUserService,
+            PaperRepository paperRepository
     ) {
         this.paperWorkspaceService = paperWorkspaceService;
         this.zoteroImportService = zoteroImportService;
         this.externalSearchService = externalSearchService;
         this.researchDataService = researchDataService;
+        this.currentUserService = currentUserService;
+        this.paperRepository = paperRepository;
     }
 
     @PostMapping("/import")
@@ -98,6 +110,10 @@ public class PaperController {
         if (file.isEmpty()) {
             throw new IllegalArgumentException("请上传 PDF 文件");
         }
+        String filename = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase();
+        if (!filename.endsWith(".pdf")) {
+            throw new IllegalArgumentException("格式不支持：仅支持上传标准 PDF 文档（不支持 Word、PPT 等文件格式）");
+        }
         java.nio.file.Path temp = java.nio.file.Files.createTempFile("paperpilot-upload-", ".pdf");
         try {
             java.nio.file.Files.copy(file.getInputStream(), temp, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
@@ -133,8 +149,13 @@ public class PaperController {
             @PathVariable("workspaceId") String workspaceId,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file
     ) throws IOException {
+        requireOwnedPaper(workspaceId);
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().build();
+        }
+        String filename = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase();
+        if (!filename.endsWith(".pdf")) {
+            throw new IllegalArgumentException("格式不支持：仅支持上传标准 PDF 文档（不支持 Word、PPT 等文件格式）");
         }
         java.nio.file.Path uploadDir = java.nio.file.Paths.get("uploads");
         if (!java.nio.file.Files.exists(uploadDir)) {
@@ -142,6 +163,7 @@ public class PaperController {
         }
         java.nio.file.Path filePath = uploadDir.resolve(workspaceId + ".pdf");
         java.nio.file.Files.copy(file.getInputStream(), filePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        researchDataService.validateAcademicPdf(filePath);
 
         String paperUrl = "/api/papers/uploads/" + workspaceId + ".pdf";
         researchDataService.updatePaperUrl(workspaceId, paperUrl);
@@ -159,6 +181,10 @@ public class PaperController {
 
     @GetMapping("/uploads/{workspaceId}.pdf")
     public ResponseEntity<byte[]> getUploadedPdf(@PathVariable("workspaceId") String workspaceId) throws IOException {
+        if (currentUserService.isCurrentSessionImpersonated()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("模拟登录状态下禁止查看或下载用户的 PDF 文件".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        requireOwnedPaper(workspaceId);
         java.nio.file.Path filePath = java.nio.file.Paths.get("uploads").resolve(workspaceId + ".pdf");
         if (!java.nio.file.Files.exists(filePath)) {
             return ResponseEntity.notFound().build();
@@ -173,10 +199,19 @@ public class PaperController {
 
     @GetMapping("/proxy")
     public ResponseEntity<byte[]> proxyPdf(@RequestParam("url") String url) throws IOException, InterruptedException {
+        if (currentUserService.isCurrentSessionImpersonated()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         if (url == null || url.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
+        if (!isSafeExternalUrl(url.trim())) {
+            return ResponseEntity.badRequest().build();
+        }
         String normalizedUrl = normalizePdfUrl(resolveReadablePdfUrl(url));
+        if (!isSafeExternalUrl(normalizedUrl)) {
+            return ResponseEntity.badRequest().build();
+        }
         HttpResponse<byte[]> response;
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create(normalizedUrl))
@@ -231,6 +266,34 @@ public class PaperController {
             normalized = normalized.replaceAll("/$", "") + ".pdf";
         }
         return normalized;
+    }
+
+    private PaperEntity requireOwnedPaper(String workspaceId) {
+        AppUserEntity user = currentUserService.getOrCreateDefaultUser();
+        return paperRepository.findByWorkspaceId(workspaceId)
+            .filter(paper -> user.getId() != null && user.getId().equals(paper.getUserId()))
+            .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                HttpStatus.NOT_FOUND, "文献不存在或无权访问"
+            ));
+    }
+
+    private boolean isSafeExternalUrl(String value) {
+        try {
+            URI uri = URI.create(value);
+            if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))) return false;
+            String host = uri.getHost();
+            if (host == null || host.isBlank()) return false;
+            String lowerHost = host.toLowerCase(java.util.Locale.ROOT);
+            if ("localhost".equals(lowerHost) || lowerHost.endsWith(".localhost")
+                || "metadata.google.internal".equals(lowerHost) || "169.254.169.254".equals(lowerHost)) return false;
+            for (InetAddress address : InetAddress.getAllByName(host)) {
+                if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()
+                    || address.isSiteLocalAddress() || address.isMulticastAddress()) return false;
+            }
+            return true;
+        } catch (IllegalArgumentException | UnknownHostException error) {
+            return false;
+        }
     }
 
     private String resolveReadablePdfUrl(String url) {

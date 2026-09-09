@@ -63,7 +63,8 @@ public class MonitoringSecurityService {
     private final ConcurrentHashMap<String, Boolean> bannedIps = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, Long> bannedUsers = new ConcurrentHashMap<>();
 
-    // Keep track of active users (last 2 minutes)
+    // A client heartbeat is sent every 30 seconds; users expire after 90 seconds.
+    private static final long ONLINE_WINDOW_MILLIS = 90_000L;
     private final ConcurrentHashMap<Long, Long> activeUserHeartbeats = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> ipToUsername = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, String> userIdToUsername = new ConcurrentHashMap<>();
@@ -173,9 +174,24 @@ public class MonitoringSecurityService {
     }
 
     public int getRealtimeOnlineCount() {
-        long twoMinutesAgo = System.currentTimeMillis() - 2 * 60 * 1000;
-        activeUserHeartbeats.entrySet().removeIf(entry -> entry.getValue() < twoMinutesAgo);
+        cleanupActiveUsers();
         return activeUserHeartbeats.size();
+    }
+
+    public void heartbeat(Long userId) {
+        if (userId != null) activeUserHeartbeats.put(userId, System.currentTimeMillis());
+    }
+
+    public boolean isUserOnline(Long userId) {
+        if (userId == null) return false;
+        cleanupActiveUsers();
+        Long lastSeen = activeUserHeartbeats.get(userId);
+        return lastSeen != null && System.currentTimeMillis() - lastSeen <= ONLINE_WINDOW_MILLIS;
+    }
+
+    private void cleanupActiveUsers() {
+        long cutoff = System.currentTimeMillis() - ONLINE_WINDOW_MILLIS;
+        activeUserHeartbeats.entrySet().removeIf(entry -> entry.getValue() < cutoff);
     }
 
     public void banIp(String ip, String reason) {

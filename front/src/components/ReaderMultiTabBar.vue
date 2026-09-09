@@ -206,7 +206,8 @@ onUnmounted(() => {
   position: relative;
   z-index: 30;
   padding: 4px 10px 3px;
-  overflow: hidden;
+  /* overflow-x hidden clips dropdowns; use clip on x only via clip-path workaround */
+  overflow: visible;
 }
 
 .tab-bar-container {
@@ -215,6 +216,7 @@ onUnmounted(() => {
   height: 100%;
   gap: 6px;
   min-width: 0;
+  overflow: hidden;
 }
 
 /* 无框自然胶囊标签基类 */
@@ -281,6 +283,7 @@ onUnmounted(() => {
   height: 100%;
   gap: 4px;
   min-width: 0;
+  max-width: calc(100% - 110px); /* reserve space for home tab + dropdown button */
   overscroll-behavior-x: contain;
 }
 
@@ -289,11 +292,12 @@ onUnmounted(() => {
 }
 
 .paper-tab {
-  width: clamp(150px, 18vw, 260px);
-  min-width: 150px;
+  width: clamp(120px, 18vw, 260px);
+  min-width: 120px;
   max-width: 260px;
-  flex: 0 0 auto;
-  justify-content: space-between;
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
 }
 
 .paper-doc-icon {
@@ -314,6 +318,10 @@ onUnmounted(() => {
 }
 
 .tab-title {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  margin-left: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

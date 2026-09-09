@@ -24,12 +24,13 @@
             <line x1="16" y1="13" x2="8" y2="13"/>
             <line x1="16" y1="17" x2="8" y2="17"/>
           </svg>
-          <span>文献层级笔记</span>
-          <span class="notes-count-badge">{{ totalNotesCount }}</span>
+          <span>{{ activeTab === 'notes' ? '文献层级笔记' : '划词翻译助手' }}</span>
+          <span v-if="activeTab === 'notes'" class="notes-count-badge">{{ totalNotesCount }}</span>
         </div>
 
         <div class="header-actions">
           <button
+            v-if="activeTab === 'notes'"
             class="icon-action-btn instant-tooltip"
             data-tip="添加顶级根目录"
             @click="openAddModal(null, 'folder')"
@@ -38,6 +39,7 @@
           </button>
 
           <button
+            v-if="activeTab === 'notes'"
             class="icon-action-btn instant-tooltip"
             data-tip="导出 Markdown 笔记"
             @click="exportNotesMarkdown"
@@ -54,81 +56,154 @@
           </button>
         </div>
       </header>
-      <!-- 快速快捷按钮：添加子笔记、引用选中文本 -->
-      <div class="notes-quick-toolbar">
-        <button class="quick-btn primary" @click="openAddModal(selectedNodeId || null, 'note')">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          <span>新建节点</span>
+
+      <!-- 选项卡切换栏 -->
+      <div class="sidebar-tabs" style="display: flex; gap: 4px; padding: 4px 12px; background: rgba(255,255,255,0.01); border-bottom: 1px solid rgba(255,255,255,0.04); margin-bottom: 8px;">
+        <button
+          class="sidebar-tab-btn"
+          :class="{ active: activeTab === 'notes' }"
+          @click="activeTab = 'notes'"
+          style="flex: 1; padding: 7px; border-radius: 6px; border: none; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: all 0.2s;"
+        >
+          文献笔记
         </button>
-        <button class="quick-btn outline" @click="addExcerptFromSelection">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-          <span>摘录划词</span>
+        <button
+          class="sidebar-tab-btn sidebar-translate-tab-trigger"
+          :class="{ active: activeTab === 'translate' }"
+          @click="activeTab = 'translate'"
+          style="flex: 1; padding: 7px; border-radius: 6px; border: none; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: all 0.2s;"
+        >
+          划词翻译
         </button>
       </div>
 
-      <!-- 层级树列表区域 -->
-      <div class="notes-tree-container">
-        <!-- 本文划词高亮自动汇总节点 -->
-        <div v-if="annotations && annotations.length" class="auto-annotations-section">
-          <div class="auto-section-head" @click="autoAnnotationsExpanded = !autoAnnotationsExpanded">
-            <span class="tree-arrow" :class="{ open: autoAnnotationsExpanded }">▶</span>
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" style="color: #6366f1;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-            <span class="tree-label">本文划词与高亮标记 ({{ annotations.length }})</span>
-          </div>
+      <!-- Tab 1: 文献笔记内容 -->
+      <template v-if="activeTab === 'notes'">
+        <!-- 快速快捷按钮：添加子笔记、引用选中文本 -->
+        <div class="notes-quick-toolbar">
+          <button class="quick-btn primary" @click="openAddModal(selectedNodeId || null, 'note')">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>新建节点</span>
+          </button>
+          <button class="quick-btn outline" @click="addExcerptFromSelection">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <span>摘录划词</span>
+          </button>
+        </div>
 
-          <div v-if="autoAnnotationsExpanded" class="auto-section-list">
-            <div
-              v-for="anno in annotations"
-              :key="anno.id"
-              class="tree-node-item excerpt-node"
-              @click="handleJumpToAnnotation(anno)"
-            >
-              <div class="node-content">
-                <span class="node-icon">
-                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                </span>
-                <div class="node-text-wrap">
-                  <span class="node-title">{{ anno.text || anno.quoteText || "划词标注" }}</span>
-                  <small v-if="anno.note" class="node-subnote">批注: {{ anno.note }}</small>
-                  <small class="node-meta">页码 P.{{ anno.page || 1 }} · {{ anno.type === 'highlight' ? '高亮' : '划线' }}</small>
+        <!-- 层级树列表区域 -->
+        <div class="notes-tree-container">
+          <!-- 本文划词高亮自动汇总节点 -->
+          <div v-if="annotations && annotations.length" class="auto-annotations-section">
+            <div class="auto-section-head" @click="autoAnnotationsExpanded = !autoAnnotationsExpanded">
+              <span class="tree-arrow" :class="{ open: autoAnnotationsExpanded }">▶</span>
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" style="color: #6366f1;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              <span class="tree-label">本文划词与高亮标记 ({{ annotations.length }})</span>
+            </div>
+
+            <div v-if="autoAnnotationsExpanded" class="auto-section-list">
+              <div
+                v-for="anno in annotations"
+                :key="anno.id"
+                class="tree-node-item excerpt-node"
+                @click="handleJumpToAnnotation(anno)"
+              >
+                <div class="node-content">
+                  <span class="node-icon">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                  </span>
+                  <div class="node-text-wrap">
+                    <span class="node-title">{{ anno.text || anno.quoteText || "划词标注" }}</span>
+                    <small v-if="anno.note" class="node-subnote">批注: {{ anno.note }}</small>
+                    <small class="node-meta">页码 P.{{ anno.page || 1 }} · {{ anno.type === 'highlight' ? '高亮' : '划线' }}</small>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="tree-divider"></div>
+          <div class="tree-divider"></div>
 
-        <!-- 用户层级自定义结构树 -->
-        <div v-if="filteredNotesTree.length" class="custom-tree-root">
-          <HierarchicalTreeNode
-            v-for="node in filteredNotesTree"
-            :key="node.id"
-            :node="node"
-            :depth="0"
-            :selected-node-id="selectedNodeId"
-            @select="selectNode"
-            @save="saveNotesToStorage"
-            @toggle-expand="toggleNodeExpand"
-            @add-child="openAddModal"
-            @edit="openEditModal"
-            @delete="deleteNode"
-            @jump="handleJumpToNode"
-          />
-        </div>
-
-        <div v-else-if="searchQuery" class="empty-tree-state">
-          <p>未找到包含 “{{ searchQuery }}” 的笔记</p>
-        </div>
-
-        <div v-else class="empty-tree-state">
-          <div class="empty-icon">
-            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.8" style="color: #94a3b8;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <!-- 用户层级自定义结构树 -->
+          <div v-if="filteredNotesTree.length" class="custom-tree-root">
+            <HierarchicalTreeNode
+              v-for="node in filteredNotesTree"
+              :key="node.id"
+              :node="node"
+              :depth="0"
+              :selected-node-id="selectedNodeId"
+              @select="selectNode"
+              @save="saveNotesToStorage"
+              @toggle-expand="toggleNodeExpand"
+              @add-child="openAddModal"
+              @edit="openEditModal"
+              @delete="deleteNode"
+              @jump="handleJumpToNode"
+            />
           </div>
-          <p>暂无自定义结构化笔记</p>
-          <small>点击上方 “新建节点” 或 “摘录划词” 开始组织层级大纲</small>
+
+          <div v-else-if="searchQuery" class="empty-tree-state">
+            <p>未找到包含 “{{ searchQuery }}” 的笔记</p>
+          </div>
+
+          <div v-else class="empty-tree-state">
+            <div class="empty-icon">
+              <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.8" style="color: #94a3b8;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <p>暂无自定义结构化笔记</p>
+            <small>点击上方 “新建节点” 或 “摘录划词” 开始组织层级大纲</small>
+          </div>
         </div>
-      </div>
+      </template>
+
+      <!-- Tab 2: 划词翻译内容 (上下面板设计) -->
+      <template v-else>
+        <div class="sidebar-translate-panel">
+          <!-- 上面板：英文选段 -->
+          <div class="translate-source-box">
+            <header class="panel-sub-head">选中的英文原文</header>
+            <textarea
+              class="source-textarea"
+              v-model="translationState.sourceText"
+              placeholder="在文献中选中或在此输入英文段落进行翻译..."
+              @input="handleSourceInput"
+              @paste="handleSourcePaste"
+            ></textarea>
+          </div>
+
+          <!-- 下面板：中文翻译 -->
+          <div class="translate-target-box">
+            <header class="panel-sub-head">
+              <span>中文学术翻译</span>
+              <select v-model="translationState.provider" class="provider-select" @change="triggerSidebarTranslate">
+                <option value="google">谷歌翻译 (建议开魔法加速)</option>
+                <option value="bing">微软翻译</option>
+                <option value="youdao">有道翻译</option>
+                <option value="huoshanweb">火山翻译</option>
+                <option value="tencent-transmart">腾讯 TranSmart</option>
+                <option value="ai">AI 学术翻译 (消耗 1 积分)</option>
+              </select>
+            </header>
+            <div class="target-result-content">
+              <div v-if="translationState.loading" class="sidebar-translate-loading">
+                <span class="sidebar-spinner"></span> 正在翻译中...
+              </div>
+              <div v-else-if="translationState.error" class="sidebar-translate-error" style="color: #f87171;">
+                {{ translationState.error }}
+              </div>
+              <div v-else-if="translationState.result" class="sidebar-translate-text">
+                <div v-if="translationState.isFallback" class="sidebar-translate-fallback-note" style="color: #f97316; font-size: 11px; margin-bottom: 6px; padding: 4px 8px; background: rgba(249, 115, 22, 0.08); border-radius: 4px; line-height: 1.4;">
+                  ⚠️ 目标引擎未配置或服务异常，已自动使用【{{ translationState.actualProviderLabel }}】翻译
+                </div>
+                {{ translationState.result }}
+              </div>
+              <div v-else class="sidebar-translate-placeholder">
+                暂无翻译结果，请在左侧选择论文段落
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
 
     </template>
 
@@ -187,7 +262,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from "vue";
+import { ref, reactive, computed, onMounted, watch, nextTick } from "vue";
 import HierarchicalTreeNode from "./HierarchicalTreeNode.vue";
 import { useDialogStore } from "../stores/dialog";
 
@@ -196,11 +271,133 @@ const props = defineProps({
   paperTitle: { type: String, default: "" },
   paperNote: { type: String, default: "" },
   annotations: { type: Array, default: () => [] },
-  isCollapsed: { type: Boolean, default: false }
+  isCollapsed: { type: Boolean, default: false },
+  sidebarSelectedText: { type: String, default: "" }
 });
 
 const emit = defineEmits(["toggle-collapse", "jump-to-page", "jump-to-annotation", "show-toast", "sync-note"]);
 const dialogStore = useDialogStore();
+import { paperpilotApi } from "../services/paperpilotApi";
+
+const activeTab = ref("notes");
+const translationState = reactive({
+  sourceText: "",
+  result: "",
+  loading: false,
+  error: "",
+  provider: "google",
+  isFallback: false,
+  actualProviderLabel: ""
+});
+
+function cleanPdfNewlines(text) {
+  if (!text) return "";
+  // 1. Clean hyphenated words (e.g. "gover-\n nance" -> "governance")
+  let cleaned = text.replace(/(\w+)-\s*\n\s*(\w+)/g, "$1$2");
+  // 2. Clean single newlines, leaving double newlines for paragraph separation
+  cleaned = cleaned.split(/\n\s*\n/)
+    .map(p => p.replace(/\s*\n\s*/g, " "))
+    .join("\n\n");
+  return cleaned;
+}
+
+function handleSourcePaste(event) {
+  event.preventDefault();
+  const text = event.clipboardData?.getData("text") || "";
+  const cleaned = cleanPdfNewlines(text);
+
+  const textarea = event.target;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const currentText = translationState.sourceText || "";
+
+  translationState.sourceText = currentText.slice(0, start) + cleaned + currentText.slice(end);
+
+  nextTick(() => {
+    textarea.selectionStart = textarea.selectionEnd = start + cleaned.length;
+    triggerSidebarTranslate();
+  });
+}
+
+watch(() => props.sidebarSelectedText, (newText) => {
+  if (newText && newText.trim()) {
+    activeTab.value = "translate";
+    translationState.sourceText = cleanPdfNewlines(newText);
+    translationState.result = "";
+    translationState.error = "";
+  }
+});
+
+let sidebarTranslateTimer = null;
+function handleSourceInput() {
+  clearTimeout(sidebarTranslateTimer);
+  sidebarTranslateTimer = setTimeout(() => {
+    triggerSidebarTranslate();
+  }, 800);
+}
+
+async function triggerSidebarTranslate() {
+  const text = translationState.sourceText || "";
+  if (!text.trim()) {
+    translationState.result = "";
+    translationState.error = "";
+    return;
+  }
+  if (text.length > 3000) {
+    dialogStore.alert("单次翻译文本不能超过 3000 个字符，请减少字符数后重试。");
+    return;
+  }
+
+  translationState.loading = true;
+  translationState.error = "";
+  translationState.result = "";
+  translationState.isFallback = false;
+  translationState.actualProviderLabel = "";
+
+  try {
+    if (translationState.provider === "ai") {
+      // AI academic translation is a translation request, not a paper-Q&A
+      // request. The latter requires a server-side PDF index and caused the
+      // misleading "正文索引" error for selected text.
+      const res = await paperpilotApi.translate({
+        text,
+        provider: "ai",
+        sourceLang: "auto",
+        targetLang: "zh-CN",
+        usageScene: "selection_ai_translate",
+        paperTitle: props.paperTitle,
+        translationMode: "沉浸式翻译"
+      }, { timeout: 45000 });
+      translationState.result = String(res.translatedText || res.translated || res.text || "").trim();
+      if (!translationState.result) translationState.error = "AI 学术翻译没有返回内容，请重试。";
+    } else {
+      const res = await paperpilotApi.translate({
+        text,
+        from: "en",
+        to: "zh",
+        provider: translationState.provider
+      });
+      let rawResult = res.translatedText || res.translated || res.text || "";
+      // Clean up internal breaks: merge stray single newlines, strip excessive line breaks
+      const normalizedResult = rawResult
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .split(/\n+/)
+        .map(paragraph => paragraph.trim())
+        .filter(Boolean)
+        .join("\n");
+      translationState.result = normalizedResult;
+      translationState.actualProviderLabel = res.providerLabel || "";
+      translationState.isFallback = !!res.fallback;
+    }
+  } catch (error) {
+    console.error("Sidebar translation failed:", error);
+    const errMsg = error?.response?.data?.message || error?.message || "翻译失败";
+    translationState.error = errMsg.includes("用完") ? "今日次数已经用完" : errMsg;
+  } finally {
+    translationState.loading = false;
+  }
+}
 
 const searchQuery = ref("");
 const selectedNodeId = ref(null);
@@ -230,7 +427,8 @@ function createDefaultNotesTemplate() {
           id: "template-background-gap",
           title: "研究背景 / 领域现状",
           type: "note",
-          content: "记录论文所在领域、已有方法、关键概念与作者关注的问题。",
+          content: "",
+          placeholder: "记录论文所在领域、已有方法、关键概念与作者关注的问题。",
           expanded: false,
           children: []
         },
@@ -238,7 +436,8 @@ function createDefaultNotesTemplate() {
           id: "template-background-question",
           title: "核心问题 / 研究目标",
           type: "note",
-          content: "概括论文真正要解决的科学问题、任务定义或假设。",
+          content: "",
+          placeholder: "概括论文真正要解决的科学问题、任务定义或假设。",
           expanded: false,
           children: []
         }
@@ -254,7 +453,8 @@ function createDefaultNotesTemplate() {
           id: "template-method-main",
           title: "方法框架 / 模型设计",
           type: "note",
-          content: "梳理论文方法的输入、关键模块、训练或推理流程。",
+          content: "",
+          placeholder: "梳理论文方法的输入、关键模块、训练或推理流程。",
           expanded: false,
           children: []
         },
@@ -262,7 +462,8 @@ function createDefaultNotesTemplate() {
           id: "template-method-data",
           title: "数据集 / 对照组 / 指标",
           type: "note",
-          content: "记录数据来源、实验分组、评价指标和消融设置。",
+          content: "",
+          placeholder: "记录数据来源、实验分组、评价指标和消融设置。",
           expanded: false,
           children: []
         }
@@ -278,7 +479,8 @@ function createDefaultNotesTemplate() {
           id: "template-results-finding",
           title: "主要发现",
           type: "note",
-          content: "记录最能支撑论文结论的实验结果、图表或统计证据。",
+          content: "",
+          placeholder: "记录最能支撑论文结论的实验结果、图表或统计证据。",
           expanded: false,
           children: []
         },
@@ -286,7 +488,8 @@ function createDefaultNotesTemplate() {
           id: "template-results-comparison",
           title: "对比与消融",
           type: "note",
-          content: "整理相对基线方法的提升、失败案例和消融结论。",
+          content: "",
+          placeholder: "整理相对基线方法的提升、失败案例和消融结论。",
           expanded: false,
           children: []
         }
@@ -302,7 +505,8 @@ function createDefaultNotesTemplate() {
           id: "template-value-contribution",
           title: "核心贡献",
           type: "note",
-          content: "总结论文相对已有工作的新增价值、适用场景和启发。",
+          content: "",
+          placeholder: "总结论文相对已有工作的新增价值、适用场景和启发。",
           expanded: false,
           children: []
         },
@@ -310,7 +514,8 @@ function createDefaultNotesTemplate() {
           id: "template-value-limit",
           title: "局限与后续问题",
           type: "note",
-          content: "记录数据、方法、实验或结论外推上的限制，以及可延伸研究方向。",
+          content: "",
+          placeholder: "记录数据、方法、实验或结论外推上的限制，以及可延伸研究方向。",
           expanded: false,
           children: []
         }
@@ -325,6 +530,40 @@ const notesTree = ref(createDefaultNotesTemplate());
 const storageKey = computed(() => `paperpilot_hierarchical_notes_${props.paperId || 'default'}`);
 const noteMirrorKey = computed(() => `${storageKey.value}_markdown_mirror`);
 
+const defaultPromptTexts = new Set([
+  "记录论文所在领域、已有方法、关键概念与作者关注的问题。",
+  "概括论文真正要解决的科学问题、任务定义或假设。",
+  "梳理论文方法的输入、关键模块、训练或推理流程。",
+  "记录数据来源、实验分组、评价指标和消融设置。",
+  "记录最能支撑论文结论的实验结果、图表或统计证据。",
+  "整理相对基线方法的提升、失败案例和消融结论。",
+  "总结论文相对已有工作的新增价值、适用场景和启发。",
+  "记录数据、方法、实验或结论外推上的限制，以及可延伸研究方向。"
+]);
+
+function migrateNotesTree(nodes) {
+  if (!Array.isArray(nodes)) return;
+  for (const node of nodes) {
+    if (node.content && defaultPromptTexts.has(node.content)) {
+      node.placeholder = node.content;
+      node.content = "";
+    }
+    if (!node.placeholder && node.id) {
+      if (node.id === "template-background-gap") node.placeholder = "记录论文所在领域、已有方法、关键概念与作者关注的问题。";
+      else if (node.id === "template-background-question") node.placeholder = "概括论文真正要解决的科学问题、任务定义或假设。";
+      else if (node.id === "template-method-main") node.placeholder = "梳理论文方法的输入、关键模块、训练或推理流程。";
+      else if (node.id === "template-method-data") node.placeholder = "记录数据来源、实验分组、评价指标和消融设置。";
+      else if (node.id === "template-results-finding") node.placeholder = "记录最能支撑论文结论的实验结果、图表或统计证据。";
+      else if (node.id === "template-results-comparison") node.placeholder = "整理相对基线方法的提升、失败案例和消融结论。";
+      else if (node.id === "template-value-contribution") node.placeholder = "总结论文相对已有工作的新增价值、适用场景和启发。";
+      else if (node.id === "template-value-limit") node.placeholder = "记录数据、方法、实验或结论外推上的限制，以及可延伸研究方向。";
+    }
+    if (node.children && node.children.length) {
+      migrateNotesTree(node.children);
+    }
+  }
+}
+
 function loadNotesFromStorage() {
   try {
     const raw = localStorage.getItem(storageKey.value);
@@ -338,6 +577,7 @@ function loadNotesFromStorage() {
     }
     if (externalNote && externalNote !== mirroredNote) {
       notesTree.value = createTemplateFromPaperNote(externalNote);
+      migrateNotesTree(notesTree.value);
       saveNotesToStorage({ sync: false });
       localStorage.setItem(noteMirrorKey.value, externalNote);
       return;
@@ -346,6 +586,7 @@ function loadNotesFromStorage() {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length) {
         notesTree.value = isLegacySampleNotes(parsed) ? createDefaultNotesTemplate() : parsed;
+        migrateNotesTree(notesTree.value);
         if (isLegacySampleNotes(parsed)) saveNotesToStorage({ sync: false });
         return;
       }
@@ -353,6 +594,7 @@ function loadNotesFromStorage() {
     notesTree.value = props.paperNote?.trim()
       ? createTemplateFromPaperNote(props.paperNote)
       : createDefaultNotesTemplate();
+    migrateNotesTree(notesTree.value);
     saveNotesToStorage({ sync: false });
     if (props.paperNote?.trim()) localStorage.setItem(noteMirrorKey.value, props.paperNote.trim());
   } catch (e) {
@@ -661,6 +903,16 @@ function exportNotesMarkdown() {
   emit("show-toast", "已成功导出 Markdown 层级笔记大纲");
 }
 
+function triggerExternalTranslation(text) {
+  activeTab.value = "translate";
+  translationState.sourceText = cleanPdfNewlines(text);
+  triggerSidebarTranslate();
+}
+
+defineExpose({
+  triggerExternalTranslation
+});
+
 onMounted(() => {
   loadNotesFromStorage();
 });
@@ -684,12 +936,15 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
   background: var(--notes-bg);
   backdrop-filter: blur(20px);
   border-left: 1px solid var(--notes-border);
   box-shadow: -4px 0 20px rgba(15, 23, 42, 0.03);
   box-sizing: border-box;
   overflow: hidden;
+  overscroll-behavior: contain;
+  isolation: isolate;
   transition: width 200ms cubic-bezier(.22, 1, .36, 1);
 }
 
@@ -949,7 +1204,10 @@ onMounted(() => {
 
 .notes-tree-container {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding: 8px 10px;
 }
 
@@ -1542,5 +1800,158 @@ onMounted(() => {
 .instant-tooltip:hover::after {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* Sidebar Tabs Styling */
+.sidebar-tabs {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.sidebar-tab-btn {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  border: 1px solid transparent;
+  outline: none;
+  font-family: inherit;
+}
+.sidebar-tab-btn:hover {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.02);
+}
+.sidebar-tab-btn.active {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.08);
+  border: 1px solid rgba(167, 139, 250, 0.15);
+  box-shadow: 0 0 12px rgba(167, 139, 250, 0.08);
+}
+
+/* Sidebar Translate Panel Styling */
+.sidebar-translate-panel {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 195px);
+  gap: 12px;
+  padding: 0 12px 12px 12px;
+  box-sizing: border-box;
+}
+
+.translate-source-box,
+.translate-target-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+  background: var(--notes-strip-bg);
+  border: 1px solid var(--notes-border);
+  border-radius: 10px;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.panel-sub-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #818cf8;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--notes-border);
+}
+
+.source-textarea {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f8fafc;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.6;
+  resize: none;
+  width: 100%;
+  flex: 1;
+  box-sizing: border-box;
+}
+
+.provider-select {
+  background: var(--notes-input-bg);
+  border: 1px solid var(--notes-input-border);
+  border-radius: 6px;
+  color: var(--notes-input-text);
+  font-size: 0.8rem;
+  padding: 2px 6px;
+  outline: none;
+  cursor: pointer;
+  max-width: 165px;
+}
+
+.provider-select option {
+  background: var(--notes-bg);
+  color: var(--notes-text);
+}
+
+.target-result-content {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: #f8fafc;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: break-word;
+  text-align: left;
+  letter-spacing: 0.2px;
+}
+
+.sidebar-translate-placeholder {
+  color: var(--notes-muted);
+  font-size: 0.75rem;
+  text-align: center;
+  margin-top: 20px;
+}
+
+.sidebar-translate-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.75rem;
+}
+
+.sidebar-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.1);
+  border-left-color: #818cf8;
+  border-radius: 50%;
+  animation: sidebar-spin 0.8s linear infinite;
+}
+
+@keyframes sidebar-spin {
+  to { transform: rotate(360deg); }
+}
+
+:root[data-theme="light"] .sidebar-tab-btn.active {
+  color: #6d5dfc;
+  background: rgba(109, 93, 252, 0.06);
+  border: 1px solid rgba(109, 93, 252, 0.12);
+}
+:root[data-theme="light"] .sidebar-tab-btn {
+  color: rgba(0, 0, 0, 0.45);
+}
+:root[data-theme="light"] .sidebar-tab-btn:hover {
+  color: rgba(0, 0, 0, 0.8);
+}
+:root[data-theme="light"] .translate-source-box,
+:root[data-theme="light"] .translate-target-box {
+  background: rgba(0, 0, 0, 0.015);
+  border-color: rgba(0, 0, 0, 0.05);
+}
+:root[data-theme="light"] .source-textarea,
+:root[data-theme="light"] .target-result-content {
+  color: #1e293b;
+}
+:root[data-theme="light"] .sidebar-translate-placeholder {
+  color: rgba(0, 0, 0, 0.35);
 }
 </style>

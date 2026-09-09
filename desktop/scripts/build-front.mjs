@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { cpSync, existsSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,5 +30,9 @@ const result = spawnSync("npm", ["run", "build"], {
 if (result.status !== 0) {
   process.exit(result.status || 1);
 }
+
+const desktopFrontDist = path.join(desktopDir, "front-dist");
+rmSync(desktopFrontDist, { recursive: true, force: true });
+cpSync(path.join(frontDir, "dist"), desktopFrontDist, { recursive: true });
 
 console.log(`PaperSolver front built for desktop. API: ${apiBase}`);

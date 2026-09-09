@@ -2,6 +2,7 @@ import { apiClient } from "./apiClient";
 
 const pdfMathRuntimeByWorkspace = new Map();
 const structuredParseRuntimeByWorkspace = new Map();
+const TRANSLATION_SLOW_LOG_MS = 1800;
 
 export const paperpilotApi = {
   async login(payload) {
@@ -72,6 +73,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.post("/api/admin/model-config/pool/sort", ids);
     return data;
   },
+  async stressModelPools(payload = {}) {
+    const { data } = await apiClient.post("/api/admin/model-config/pool/stress", payload, { timeout: 900000 });
+    return data;
+  },
   async activateModelPoolRoute(id, scene = "general") {
     const { data } = await apiClient.post(`/api/admin/model-config/pool/${id}/activate`, null, { params: { scene } });
     return data;
@@ -97,6 +102,10 @@ export const paperpilotApi = {
   },
   async deleteRelayRoute(id) {
     const { data } = await apiClient.delete(`/api/admin/model-config/pool/${id}/relay`);
+    return data;
+  },
+  async testRelayConnection(id) {
+    const { data } = await apiClient.post(`/api/admin/model-config/pool/${id}/test-connection`, null, { timeout: 30000 });
     return data;
   },
   async testRelayRouteModel(id, modelName) {
@@ -201,20 +210,36 @@ export const paperpilotApi = {
     const { data } = await apiClient.get(`/api/meeting-reports/${workspaceId}`);
     return data;
   },
-  async generateMeetingReport(workspaceId) {
-    const { data } = await apiClient.post(`/api/meeting-reports/${workspaceId}/generate`, null, { timeout: 30000 });
+  async generateMeetingReport(workspaceId, payload = {}) {
+    const { data } = await apiClient.post(`/api/meeting-reports/${workspaceId}/generate`, payload, { timeout: 30000 });
+    return data;
+  },
+  async regenerateMeetingReportSection(workspaceId, payload = {}) {
+    const { data } = await apiClient.post(`/api/meeting-reports/${workspaceId}/generate-section`, payload, { timeout: 180000 });
     return data;
   },
   async getMeetingReportGenerateStatus(workspaceId) {
     const { data } = await apiClient.get(`/api/meeting-reports/${workspaceId}/generate/status`);
     return data;
   },
-  async askPaperSelection(workspaceId, payload) {
-    const { data } = await apiClient.post(`/api/meeting-reports/${workspaceId}/ask`, payload, { timeout: 120000 });
+  async askPaperSelection(workspaceId, payload, options = {}) {
+    const { signal } = options;
+    const { data } = await apiClient.post(`/api/meeting-reports/${workspaceId}/ask`, payload, {
+      timeout: 240000,
+      signal,
+    });
+    return data;
+  },
+  async generateMeetingNote(workspaceId, payload) {
+    const { data } = await apiClient.post(`/api/meeting-reports/${workspaceId}/meeting-note`, payload, { timeout: 150000 });
     return data;
   },
   async getPaperAiQueueStatus() {
     const { data } = await apiClient.get("/api/meeting-reports/qa/queue", { timeout: 5000 });
+    return data;
+  },
+  async getPaperQaModelOptions() {
+    const { data } = await apiClient.get("/api/meeting-reports/model-options");
     return data;
   },
   async saveMeetingReport(workspaceId, payload) {
@@ -234,6 +259,10 @@ export const paperpilotApi = {
   },
   async getMeetingDeckStatus(jobId) {
     const { data } = await apiClient.get(`/api/meeting-reports/deck/jobs/${jobId}/status`, { timeout: 20000 });
+    return data;
+  },
+  async fetchMeetingDeckPreview(url) {
+    const { data } = await apiClient.get(url, { responseType: "blob", timeout: 30000 });
     return data;
   },
   async saveMeetingDeckToDesktop(payload) {
@@ -261,6 +290,10 @@ export const paperpilotApi = {
   // New method for external academic search (Crossref/Unpaywall)
   async externalSearch(query, page = 1, pageSize = 20, source = "crossref") {
     const { data } = await apiClient.get("/api/external/search", { params: { q: query, page, pageSize, source } });
+    return data;
+  },
+  async generateSearchFormula(payload) {
+    const { data } = await apiClient.post("/api/external/search-formula", payload, { timeout: 90000 });
     return data;
   },
   async importByUrl(payload) {
@@ -330,9 +363,59 @@ export const paperpilotApi = {
   },
   async translate(payload, options = {}) {
     if (canUseDesktopTranslation(payload?.provider) && window.paperSolverDesktop?.translate) {
-      return window.paperSolverDesktop.translate(payload);
+      try {
+        const desktopResult = await window.paperSolverDesktop.translate(payload);
+        if (isGoogleProvider(payload?.provider) && Number(desktopResult?.latencyMs || 0) >= TRANSLATION_SLOW_LOG_MS) {
+          void this.reportTranslationIssue({
+            provider: desktopResult.provider || payload?.provider,
+            route: desktopResult.route,
+            sourceLang: desktopResult.sourceLang || payload?.sourceLang,
+            targetLang: desktopResult.targetLang || payload?.targetLang,
+            charCount: String(payload?.text || "").length,
+            latencyMs: desktopResult.latencyMs,
+            success: true,
+            clientType: "desktop",
+            networkProfile: desktopResult.networkProfile,
+            paperTitle: payload?.paperTitle || "",
+            translationMode: payload?.translationMode || "",
+          });
+        }
+        return desktopResult;
+      } catch (error) {
+        console.warn("[paperpilotApi] Desktop translation failed, falling back to server API:", error);
+        void this.reportTranslationIssue({
+          provider: payload?.provider || "google",
+          sourceLang: payload?.sourceLang,
+          targetLang: payload?.targetLang,
+          charCount: String(payload?.text || "").length,
+          latencyMs: Number(error?.latencyMs || 0),
+          success: false,
+          errorMessage: errorMessage(error),
+          clientType: "desktop",
+          paperTitle: payload?.paperTitle || "",
+          translationMode: payload?.translationMode || "",
+        });
+        try {
+          await this.reportLog(`客户端本地翻译失败 (${payload?.provider}): ${error.message || error}`, "warn");
+        } catch (e) {}
+        // A desktop engine is only the first route. Continue to the backend
+        // fallback chain so a transient provider/network failure never makes
+        // the translation feature unavailable to the user.
+      }
     }
     const { data } = await apiClient.post("/api/translate", payload, { timeout: options.timeout || 45000 });
+    return data;
+  },
+  async consumeQuota(action, metadata = {}) {
+    const { data } = await apiClient.post("/api/usage/consume", { action, ...metadata });
+    return data;
+  },
+  async getTranslationCache(workspaceId, mode) {
+    const { data } = await apiClient.get(`/api/translation-cache/${encodeURIComponent(workspaceId)}/${encodeURIComponent(mode)}`);
+    return data;
+  },
+  async saveTranslationCache(workspaceId, mode, payload) {
+    const { data } = await apiClient.put(`/api/translation-cache/${encodeURIComponent(workspaceId)}/${encodeURIComponent(mode)}`, { payload });
     return data;
   },
   async getTranslationProviders() {
@@ -352,15 +435,17 @@ export const paperpilotApi = {
     }
     return mergeTranslationProviders(providers);
   },
-  async startPdfMathTranslation(workspaceId, service = "google") {
+  async startPdfMathTranslation(workspaceId, service = "tencent-transmart", sourceUrls = []) {
+    const candidates = (Array.isArray(sourceUrls) ? sourceUrls : [sourceUrls]).filter(Boolean);
     if (window.paperSolverDesktop?.startPdfMathTranslation) {
-      try {
-        const result = await window.paperSolverDesktop.startPdfMathTranslation({ workspaceId, service });
-        pdfMathRuntimeByWorkspace.set(String(workspaceId), "desktop");
-        return result;
-      } catch (error) {
-        console.warn("PaperSolver local dependency failed, falling back to backend.", error);
-      }
+      const result = await window.paperSolverDesktop.startPdfMathTranslation({
+        workspaceId,
+        service,
+        sourceUrl: candidates[0] || "",
+        sourceUrls: candidates,
+      });
+      pdfMathRuntimeByWorkspace.set(String(workspaceId), "desktop");
+      return result;
     }
     const { data } = await apiClient.post(`/api/pdfmathtranslate/${workspaceId}/translate`, { service }, { timeout: 60000 });
     pdfMathRuntimeByWorkspace.set(String(workspaceId), "backend");
@@ -372,6 +457,33 @@ export const paperpilotApi = {
     }
     const { data } = await apiClient.get(`/api/pdfmathtranslate/${workspaceId}/status`, { timeout: 20000 });
     return data;
+  },
+  // Check an existing desktop/backend task before creating a new one. This is
+  // used by the library entry to keep a cached or in-progress translation free.
+  async probePdfMathTranslationStatus(workspaceId, sourceUrls = []) {
+    const candidates = (Array.isArray(sourceUrls) ? sourceUrls : [sourceUrls]).filter(Boolean);
+    if (window.paperSolverDesktop?.getPdfMathTranslationStatus) {
+      try {
+        const result = await window.paperSolverDesktop.getPdfMathTranslationStatus({
+          workspaceId,
+          sourceUrl: candidates[0] || "",
+          sourceUrls: candidates,
+        });
+        if (result) {
+          pdfMathRuntimeByWorkspace.set(String(workspaceId), "desktop");
+          return result;
+        }
+      } catch {
+        // A missing local task is expected for a first translation.
+      }
+    }
+    try {
+      const { data } = await apiClient.get(`/api/pdfmathtranslate/${workspaceId}/status`, { timeout: 10000 });
+      if (data) pdfMathRuntimeByWorkspace.set(String(workspaceId), "backend");
+      return data || null;
+    } catch {
+      return null;
+    }
   },
   async getPdfMathDualPdf(workspaceId) {
     if (pdfMathRuntimeByWorkspace.get(String(workspaceId)) === "desktop" && window.paperSolverDesktop?.getPdfMathDualPdf) {
@@ -387,15 +499,17 @@ export const paperpilotApi = {
     });
     return data;
   },
-  async startMineruParse(workspaceId, force = false) {
+  async startMineruParse(workspaceId, force = false, sourceUrls = []) {
+    const candidates = (Array.isArray(sourceUrls) ? sourceUrls : [sourceUrls]).filter(Boolean);
     if (window.paperSolverDesktop?.startStructuredParse) {
-      try {
-        const result = await window.paperSolverDesktop.startStructuredParse({ workspaceId, force });
-        structuredParseRuntimeByWorkspace.set(String(workspaceId), "desktop");
-        return result;
-      } catch (error) {
-        console.warn("PaperSolver local structured parser failed, falling back to backend.", error);
-      }
+      const result = await window.paperSolverDesktop.startStructuredParse({
+        workspaceId,
+        force,
+        sourceUrl: candidates[0] || "",
+        sourceUrls: candidates,
+      });
+      structuredParseRuntimeByWorkspace.set(String(workspaceId), "desktop");
+      return result;
     }
     const { data } = await apiClient.post(`/api/mineru/${workspaceId}/parse`, null, {
       params: { force },
@@ -418,7 +532,7 @@ export const paperpilotApi = {
     const { data } = await apiClient.get(`/api/mineru/${workspaceId}/document`, { timeout: 60000 });
     return data;
   },
-  async getMineruAsset(path) {
+  async getMineruAsset(path, workspaceId = "") {
     if (String(path || "").startsWith("desktop-structured://") && window.paperSolverDesktop?.getStructuredAsset) {
       const result = await window.paperSolverDesktop.getStructuredAsset({ path });
       if (result?.base64) {
@@ -426,7 +540,13 @@ export const paperpilotApi = {
       }
       throw new Error("桌面端没有返回图表资源内容。");
     }
-    const { data } = await apiClient.get(path, {
+    const requestedPath = String(path || "");
+    const url = requestedPath.startsWith("/") || /^https?:\/\//i.test(requestedPath)
+      ? requestedPath
+      : workspaceId
+        ? `/api/mineru/${encodeURIComponent(workspaceId)}/asset?path=${encodeURIComponent(requestedPath)}`
+        : requestedPath;
+    const { data } = await apiClient.get(url, {
       responseType: "blob",
       timeout: 60000,
     });
@@ -434,6 +554,10 @@ export const paperpilotApi = {
   },
   async getUsageSummary() {
     const { data } = await apiClient.get("/api/usage/summary");
+    return data;
+  },
+  async getUsageDetails(params = {}) {
+    const { data } = await apiClient.get("/api/usage/details", { params });
     return data;
   },
   buildPdfProxyUrl(url) {
@@ -465,6 +589,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.post("/api/admin/users", payload);
     return data;
   },
+  async sendAdminUserMessage(userId, payload) {
+    const { data } = await apiClient.post(`/api/admin/users/${userId}/message`, payload);
+    return data;
+  },
   async updateUserQuota(userId, tokenLimit) {
     const payload = typeof tokenLimit === "object" ? tokenLimit : { tokenLimit };
     const { data } = await apiClient.patch(`/api/admin/users/${userId}/quota`, payload);
@@ -474,12 +602,32 @@ export const paperpilotApi = {
     const { data } = await apiClient.patch(`/api/admin/users/${userId}/membership`, payload);
     return data;
   },
+  async updateAdminUsersMembership(userIds, payload) {
+    const { data } = await apiClient.patch("/api/admin/users/batch-membership", { userIds, ...payload });
+    return data;
+  },
+  async updateAdminUsersQuota(userIds, quotas) {
+    const { data } = await apiClient.patch("/api/admin/users/batch-quota", { userIds, quotas });
+    return data;
+  },
   async getAdminMembershipPlans() {
     const { data } = await apiClient.get("/api/admin/membership-plans");
     return data;
   },
   async replenishUserQuota(userId, payload) {
     const { data } = await apiClient.patch(`/api/admin/users/${userId}/quota-replenish`, payload);
+    return data;
+  },
+  async refillUserPlanQuota(userId) {
+    const { data } = await apiClient.post(`/api/admin/users/${userId}/quota-refill`);
+    return data;
+  },
+  async resetAllUsers(key) {
+    const { data } = await apiClient.post("/api/admin/users/reset-all", { key });
+    return data;
+  },
+  async restoreAllQuotas(key) {
+    const { data } = await apiClient.post("/api/admin/users/restore-all-quotas", { key });
     return data;
   },
   async createAdminMembershipPlan(payload) {
@@ -505,6 +653,10 @@ export const paperpilotApi = {
     const { data } = await apiClient.delete(`/api/admin/users/${userId}`);
     return data;
   },
+  async impersonateUser(userId) {
+    const { data } = await apiClient.post(`/api/admin/users/${userId}/impersonate`, null, { timeout: 10000 });
+    return data;
+  },
   async getRechargeRecords() {
     const { data } = await apiClient.get("/api/admin/recharges");
     return data;
@@ -517,8 +669,8 @@ export const paperpilotApi = {
     const { data } = await apiClient.patch("/api/admin/billing", payload);
     return data;
   },
-  async getAdminPayments() {
-    const { data } = await apiClient.get("/api/admin/payments");
+  async getAdminPayments(params = {}) {
+    const { data } = await apiClient.get("/api/admin/payments", { params });
     return data;
   },
   async updatePaymentTicket(id, payload) {
@@ -549,9 +701,27 @@ export const paperpilotApi = {
     const { data } = await apiClient.get("/api/admin/logs");
     return data;
   },
+  async getAdminTranslationIssues(params = {}) {
+    const { data } = await apiClient.get("/api/admin/translation-issues", { params, timeout: 20000 });
+    return data;
+  },
+  async reportTranslationIssue(payload) {
+    try {
+      await apiClient.post("/api/translation-issues/report", payload, { timeout: 5000 });
+    } catch (e) {
+      console.warn("Failed to report translation issue to backend:", e);
+    }
+  },
   async clearSystemLogs() {
     const { data } = await apiClient.delete("/api/admin/logs");
     return data;
+  },
+  async reportLog(message, level = "error") {
+    try {
+      await apiClient.post("/api/admin/logs/report", { message, level });
+    } catch (e) {
+      console.warn("Failed to report log to backend:", e);
+    }
   },
   async getAdminStats() {
     const { data } = await apiClient.get("/api/admin/stats");
@@ -583,6 +753,10 @@ export const paperpilotApi = {
   },
   async publishSiteMessage(payload) {
     const { data } = await apiClient.post("/api/admin/site-messages", payload);
+    return data;
+  },
+  async updateSiteMessage(id, payload) {
+    const { data } = await apiClient.patch(`/api/admin/site-messages/${id}`, payload);
     return data;
   },
   async updateSiteMessageStatus(id, active) {
@@ -639,12 +813,12 @@ export const paperpilotApi = {
     const { data } = await apiClient.get("/api/forum/active-users", { timeout: 15000 });
     return data;
   },
-  async createForumPost(payload) {
-    const { data } = await apiClient.post("/api/forum/posts", payload, { timeout: 90000 });
+  async createForumPost(payload, requestConfig = {}) {
+    const { data } = await apiClient.post("/api/forum/posts", payload, { timeout: 30000, ...requestConfig });
     return data;
   },
-  async updateForumPost(id, payload) {
-    const { data } = await apiClient.patch(`/api/forum/posts/${id}`, payload, { timeout: 15000 });
+  async updateForumPost(id, payload, requestConfig = {}) {
+    const { data } = await apiClient.patch(`/api/forum/posts/${id}`, payload, { timeout: 30000, ...requestConfig });
     return data;
   },
   async deleteForumPost(id) {
@@ -865,12 +1039,62 @@ export const paperpilotApi = {
     const { data } = await apiClient.post("/api/payments/tickets", payload);
     return data;
   },
+  async generateAdminPromoCode(planId) {
+    const { data } = await apiClient.post("/api/admin/promo-code/generate", { planId });
+    return data;
+  },
+  async getAdminPromoCodes() {
+    const { data } = await apiClient.get("/api/admin/promo-code/list");
+    return data;
+  },
+  async invalidateAdminPromoCode(id) {
+    const { data } = await apiClient.post(`/api/admin/promo-code/${id}/invalidate`);
+    return data;
+  },
+  async redeemPromoCode(code, planId) {
+    const { data } = await apiClient.post("/api/payments/redeem", { code, planId });
+    return data;
+  },
+  async getReferralCode() {
+    const { data } = await apiClient.get("/api/referrals/my-code");
+    return data;
+  },
+  async createReferralCode() {
+    const { data } = await apiClient.post("/api/referrals/create");
+    return data;
+  },
+  async deleteReferralCode() {
+    const { data } = await apiClient.post("/api/referrals/delete");
+    return data;
+  },
+  async getReferralStats() {
+    const { data } = await apiClient.get("/api/referrals/stats");
+    return data;
+  },
+  async getReferralRecords() {
+    const { data } = await apiClient.get("/api/referrals/records");
+    return data;
+  },
+  async sendPresenceHeartbeat() {
+    const { data } = await apiClient.post("/api/team/presence");
+    return data;
+  },
 };
 
 function canUseDesktopTranslation(provider) {
   if (!window.paperSolverDesktop?.isDesktop) return false;
   const normalized = String(provider || "google").trim().toLowerCase();
-  return ["google", "google-web", "bing", "microsoft-edge", "youdao", "360-web", "tencent-transmart", "deeplx", "libretranslate", "mtranserver"].includes(normalized);
+  return ["google", "google-web", "bing", "microsoft-edge", "youdao", "360-web", "tencent-transmart", "deeplx", "libretranslate", "mtranserver", "huoshanweb"].includes(normalized);
+}
+
+function isGoogleProvider(provider) {
+  const normalized = String(provider || "google").trim().toLowerCase();
+  return normalized === "google" || normalized === "google-web";
+}
+
+function errorMessage(error) {
+  if (!error) return "未知错误";
+  return error.message || error.reason || String(error);
 }
 
 function base64ToBlob(base64, mimeType = "application/octet-stream") {
@@ -892,7 +1116,7 @@ function mergeTranslationProviders(providers) {
     const normalizedProvider = {
       ...provider,
       id,
-      label: originalId === "google-web" ? "谷歌翻译" : provider.label,
+      label: (originalId === "google-web" || provider.label === "谷歌翻译" || provider.label === "谷歌翻译 (开魔法更流畅)") ? "谷歌翻译 (建议开魔法加速)" : provider.label,
     };
     if (existing.local && !provider.local) {
       map.set(id, {

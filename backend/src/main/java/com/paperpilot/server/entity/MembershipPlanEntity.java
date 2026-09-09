@@ -20,11 +20,20 @@ public class MembershipPlanEntity {
     private String subtitle;
     private Double monthlyPrice;
     private Double originalMonthlyPrice;
+    /** Shared monthly budget for every AI agent entry point. */
+    private Long agentTokenQuota;
+    private Boolean pluginImportEnabled;
+    private Boolean agentEnabled;
+    private Boolean reviewEnabled;
+    private Boolean chatEnabled;
     private Integer reviewQuota;
     private Integer pptQuota;
     private Integer chatQuota;
     private Integer translateQuota;
     private Integer immersiveQuota;
+    /** Daily subscription allowance, separate from one-off top-up quota. */
+    private Integer translateDailyQuota;
+    private Integer immersiveDailyQuota;
     private Integer researchQuota;
     private Integer reportQuota;
     private Integer teamSeats;
@@ -33,6 +42,8 @@ public class MembershipPlanEntity {
     private Integer forumTopDaily;
     private Boolean peakPriority;
     private Boolean activeFlag;
+    /** One-off quota packs add entitlements immediately and never create a subscription. */
+    private Boolean topUpPack;
     private Integer sortOrder;
     private Boolean seckillEnabled;
     private Double seckillPrice;
@@ -59,6 +70,11 @@ public class MembershipPlanEntity {
     private void applyDefaults() {
         if (monthlyPrice == null) monthlyPrice = 0D;
         if (originalMonthlyPrice == null) originalMonthlyPrice = monthlyPrice;
+        if (agentTokenQuota == null) agentTokenQuota = 0L;
+        if (pluginImportEnabled == null) pluginImportEnabled = true;
+        if (agentEnabled == null) agentEnabled = true;
+        if (reviewEnabled == null) reviewEnabled = true;
+        if (chatEnabled == null) chatEnabled = true;
         if (reviewQuota == null) reviewQuota = 0;
         if (pptQuota == null) pptQuota = 0;
         if (chatQuota == null) chatQuota = 0;
@@ -72,6 +88,7 @@ public class MembershipPlanEntity {
         if (forumTopDaily == null) forumTopDaily = 0;
         if (peakPriority == null) peakPriority = false;
         if (activeFlag == null) activeFlag = true;
+        if (topUpPack == null) topUpPack = false;
         if (sortOrder == null) sortOrder = 99;
         if (seckillEnabled == null) seckillEnabled = false;
     }
@@ -86,6 +103,16 @@ public class MembershipPlanEntity {
     public void setMonthlyPrice(Double monthlyPrice) { this.monthlyPrice = monthlyPrice; }
     public Double getOriginalMonthlyPrice() { return originalMonthlyPrice; }
     public void setOriginalMonthlyPrice(Double originalMonthlyPrice) { this.originalMonthlyPrice = originalMonthlyPrice; }
+    public Long getAgentTokenQuota() { return agentTokenQuota; }
+    public void setAgentTokenQuota(Long agentTokenQuota) { this.agentTokenQuota = agentTokenQuota; }
+    public Boolean getPluginImportEnabled() { return pluginImportEnabled; }
+    public void setPluginImportEnabled(Boolean pluginImportEnabled) { this.pluginImportEnabled = pluginImportEnabled; }
+    public Boolean getAgentEnabled() { return agentEnabled; }
+    public void setAgentEnabled(Boolean agentEnabled) { this.agentEnabled = agentEnabled; }
+    public Boolean getReviewEnabled() { return reviewEnabled; }
+    public void setReviewEnabled(Boolean reviewEnabled) { this.reviewEnabled = reviewEnabled; }
+    public Boolean getChatEnabled() { return chatEnabled; }
+    public void setChatEnabled(Boolean chatEnabled) { this.chatEnabled = chatEnabled; }
     public Integer getReviewQuota() { return reviewQuota; }
     public void setReviewQuota(Integer reviewQuota) { this.reviewQuota = reviewQuota; }
     public Integer getPptQuota() { return pptQuota; }
@@ -96,6 +123,10 @@ public class MembershipPlanEntity {
     public void setTranslateQuota(Integer translateQuota) { this.translateQuota = translateQuota; }
     public Integer getImmersiveQuota() { return immersiveQuota; }
     public void setImmersiveQuota(Integer immersiveQuota) { this.immersiveQuota = immersiveQuota; }
+    public Integer getTranslateDailyQuota() { return translateDailyQuota; }
+    public void setTranslateDailyQuota(Integer translateDailyQuota) { this.translateDailyQuota = translateDailyQuota; }
+    public Integer getImmersiveDailyQuota() { return immersiveDailyQuota; }
+    public void setImmersiveDailyQuota(Integer immersiveDailyQuota) { this.immersiveDailyQuota = immersiveDailyQuota; }
     public Integer getResearchQuota() { return researchQuota; }
     public void setResearchQuota(Integer researchQuota) { this.researchQuota = researchQuota; }
     public Integer getReportQuota() { return reportQuota; }
@@ -112,6 +143,8 @@ public class MembershipPlanEntity {
     public void setPeakPriority(Boolean peakPriority) { this.peakPriority = peakPriority; }
     public Boolean getActiveFlag() { return activeFlag; }
     public void setActiveFlag(Boolean activeFlag) { this.activeFlag = activeFlag; }
+    public Boolean getTopUpPack() { return topUpPack; }
+    public void setTopUpPack(Boolean topUpPack) { this.topUpPack = topUpPack; }
     public Integer getSortOrder() { return sortOrder; }
     public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
     public Boolean getSeckillEnabled() { return seckillEnabled; }

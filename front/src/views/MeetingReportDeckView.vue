@@ -215,16 +215,25 @@
                     v-for="paperId in meeting.papers"
                     :key="paperId"
                     class="selected-paper"
+                    @click="handlePaperCardClick(meeting, paperById(paperId))"
                   >
                     <div>
                       <strong>{{ paperTitle(paperId) }}</strong>
                       <small>{{ paperMeta(paperId) }}</small>
                     </div>
-                    <div class="selected-paper-actions">
-                      <span :class="['selected-paper-status', reviewPaperStatus(paperId)]">{{ reviewPaperStatusText(paperId) }}</span>
-                      <button type="button" @click="openReview(meeting, paperById(paperId))">
-                        {{ reviewJobs[paperId]?.status === "running" ? "生成中" : "综述" }}
-                      </button>
+                    <div class="selected-paper-tags">
+                      <span
+                        class="paper-status-badge review-badge"
+                        :class="[reviewPaperStatus(paperId)]"
+                      >
+                        {{ reviewPaperStatusText(paperId) }}
+                      </span>
+                      <span
+                        class="paper-status-badge note-badge"
+                        :class="[paperNoteStatus(paperId)]"
+                      >
+                        {{ paperNoteLabel(paperId) }}
+                      </span>
                     </div>
                     <div class="paper-review-progress" aria-hidden="true">
                       <i :style="{ width: `${paperReviewPercent(paperId)}%` }"></i>
@@ -234,29 +243,11 @@
                 <p v-else>从已导入论文中选择，也可以直接上传 PDF。</p>
               </div>
 
-              <div class="generation-grid">
-                <div class="generation-action" :data-status="importActionStatus(meeting)">
-                  <div class="progress-label">
-                    <span>一键导入汇报</span>
-                    <strong>{{ importProgressLabel(meeting) }}</strong>
-                  </div>
-                  <p class="generation-step" :title="importStepText(meeting)">{{ importStepText(meeting) }}</p>
-                  <div class="generation-progress" aria-hidden="true">
-                    <i :style="{ width: `${importPercent(meeting)}%` }"></i>
-                  </div>
-                  <button
-                    type="button"
-                    class="soft-button"
-                    :disabled="!canImportMeetingReviews(meeting)"
-                    @click="importMeetingReviews(meeting)"
-                  >
-                    {{ isImportBusy(meeting) ? "融合中" : "融合并导入" }}
-                  </button>
-                </div>
-
+              <!-- PPT Generation (full width) -->
+              <div class="generation-grid single">
                 <div class="generation-action" :data-status="deckActionStatus(meeting)">
                   <div class="progress-label">
-                    <span>PPT</span>
+                    <span>PPT 生成</span>
                     <strong>{{ deckProgressLabel(meeting) }}</strong>
                   </div>
                   <p class="generation-step" :title="deckStepText(meeting)">{{ deckStepText(meeting) }}</p>
@@ -265,6 +256,14 @@
                   </div>
                   <p class="deck-paper-scope">{{ deckPaperScope(meeting) }}</p>
                   <div class="deck-action-row">
+                    <button
+                      v-if="deckJobs[meeting.id]?.previewUrls?.length"
+                      type="button"
+                      class="preview-deck-button"
+                      @click="openDeckPreview(meeting)"
+                    >
+                      预览 PPT
+                    </button>
                     <button
                       v-if="deckJobs[meeting.id]?.confirmUrl && !deckJobs[meeting.id]?.downloadUrl && Number(deckJobs[meeting.id]?.progress || 0) <= 28"
                       type="button"
@@ -296,7 +295,7 @@
                       type="button"
                       class="regenerate-deck-button"
                       :disabled="!canMakePpt(meeting) || isDeckBusy(meeting)"
-                      @click="makePpt(meeting)"
+                      @click="confirmMakePpt(meeting)"
                     >
                       重新生成
                     </button>
@@ -304,8 +303,8 @@
                       v-if="!deckJobs[meeting.id]?.downloadUrl"
                       type="button"
                       class="primary-button"
-                      :disabled="!canMakePpt(meeting) || isDeckBusy(meeting)"
-                      @click="makePpt(meeting)"
+                      :disabled="isDeckBusy(meeting)"
+                      @click="confirmMakePpt(meeting)"
                     >
                       {{ deckJobs[meeting.id]?.status === "failed" ? "重新生成 PPT" : isDeckBusy(meeting) ? "执行中" : "生成汇报 PPT" }}
                     </button>
@@ -392,21 +391,43 @@
 
           <template v-else>
             <div class="review-modal-actions">
-              <button type="button" class="btn-action btn-regenerate" :disabled="reviewModal.generating" @click="generateReview">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" :class="{ 'spin-icon': reviewModal.generating }"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
-                <span>{{ reviewModal.generating ? `生成中 ${reviewModal.progress}%` : reviewModal.generated ? "重新生成综述" : "生成论文综述" }}</span>
-              </button>
-              <button type="button" class="btn-action btn-import" :disabled="!canImportReviewToMeeting || importingReview" @click="importReviewToMeeting">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M3 17v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2"/></svg>
-                <span>{{ importingReview ? "AI 整理中..." : "一键导入组会" }}</span>
-              </button>
-              <button type="button" class="btn-action btn-save" :disabled="reviewModal.saving" @click="saveReview">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                <span>{{ reviewModal.saving ? "保存中" : "保存编辑" }}</span>
-              </button>
+              <div class="modal-tab-group">
+                <button
+                  type="button"
+                  class="btn-tab"
+                  :class="{ active: reviewModal.activeTab === 'review' }"
+                  @click="reviewModal.activeTab = 'review'"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                  <span>组会综述</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn-tab btn-tab-ai"
+                  :class="{ active: reviewModal.activeTab === 'note' }"
+                  @click="reviewModal.activeTab = 'note'"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  <span>Ai笔记</span>
+                </button>
+              </div>
+
+              <div class="modal-right-actions">
+                <button
+                  v-if="reviewModal.activeTab === 'review' && reviewModal.generated"
+                  type="button"
+                  class="btn-action btn-save"
+                  :disabled="reviewModal.saving"
+                  @click="saveReview"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  <span>{{ reviewModal.saving ? "保存中" : "保存编辑" }}</span>
+                </button>
+              </div>
             </div>
 
-            <div class="review-point-list">
+            <!-- TAB 1: 组会综述列表 -->
+            <div v-if="reviewModal.activeTab === 'review' && reviewModal.generated" class="review-point-list">
               <section v-for="section in reviewSections" :key="section.key" class="review-point">
                 <div class="review-point-meta">
                   <strong>{{ section.title }}</strong>
@@ -441,10 +462,56 @@
                 ></div>
               </section>
             </div>
+
+            <div v-else-if="reviewModal.activeTab === 'review'" class="review-empty-state">
+              <div class="empty-icon-wrap">R</div>
+              <strong>尚未生成论文综述</strong>
+              <p>组会汇报这里只查看已保存内容。请进入文献阅读页面，在对应文献中生成综述后再回来查看。</p>
+            </div>
+
+            <!-- TAB 2: AI笔记 Markdown 渲染查看 -->
+            <div v-else class="review-note-markdown-view">
+              <div v-if="reviewModal.paper?.note" class="rendered-note-container">
+                <div class="rendered-note-content markdown-rendered" v-html="renderMarkdown(reviewModal.paper.note)"></div>
+              </div>
+              <div v-else class="review-note-empty">
+                <div class="empty-icon-wrap">📝</div>
+                <strong>暂无 Ai 笔记</strong>
+                <p>当前论文尚未保存深度精读笔记，请先在文献阅读页面完成 AI 笔记后再回来查看。</p>
+              </div>
+            </div>
           </template>
         </section>
       </div>
     </Transition>
+
+    <Transition name="modal-fade">
+      <div v-if="deckPreview.open" class="modal-backdrop deck-preview-backdrop" @click.self="closeDeckPreview">
+        <section class="deck-preview-modal" aria-label="PPT 预览">
+          <header>
+            <div>
+              <span>PPT MASTER 预览</span>
+              <h2>{{ deckPreview.title }}</h2>
+            </div>
+            <div class="deck-preview-counter">{{ deckPreview.index + 1 }} / {{ deckPreview.urls.length }}</div>
+            <button type="button" class="deck-preview-close" aria-label="关闭预览" @click="closeDeckPreview">×</button>
+          </header>
+          <div v-if="deckPreview.loading" class="deck-preview-loading">正在载入最终版页面预览...</div>
+          <div v-else class="deck-preview-stage">
+            <button type="button" class="deck-preview-nav previous" aria-label="上一页" :disabled="deckPreview.index <= 0" @click="deckPreview.index--">‹</button>
+            <img :src="deckPreview.urls[deckPreview.index]" :alt="`第 ${deckPreview.index + 1} 页预览`" />
+            <button type="button" class="deck-preview-nav next" aria-label="下一页" :disabled="deckPreview.index >= deckPreview.urls.length - 1" @click="deckPreview.index++">›</button>
+          </div>
+          <div v-if="!deckPreview.loading" class="deck-preview-thumbnails">
+            <button v-for="(url, index) in deckPreview.urls" :key="url" type="button" :class="{ active: index === deckPreview.index }" @click="deckPreview.index = index">
+              <img :src="url" :alt="`第 ${index + 1} 页`" />
+              <span>{{ index + 1 }}</span>
+            </button>
+          </div>
+        </section>
+      </div>
+    </Transition>
+
     <Transition name="modal-fade">
       <div v-if="newMeetingModal.open" class="modal-backdrop picker-modal-backdrop" @click.self="newMeetingModal.open = false">
         <div class="custom-picker-card">
@@ -493,6 +560,96 @@
       </div>
     </Transition>
 
+    <Transition name="modal-fade">
+      <div v-if="pptParamsModal.open" class="modal-mask" @click="pptParamsModal.open = false">
+        <div class="modal-box ppt-params-modal-box" @click.stop>
+          <div class="modal-head">
+            <div class="modal-head-titles">
+              <span class="modal-badge-tag">PPT 智能生成</span>
+              <h3>组会 PPT 参数与风格配置</h3>
+            </div>
+            <button type="button" class="modal-close-btn" @click="pptParamsModal.open = false">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+
+          <div class="ppt-params-body">
+            <div class="ppt-param-field">
+              <label class="ppt-param-label">
+                <span>幻灯片目标页数</span>
+                <small>根据组会汇报时长选择合适容量</small>
+              </label>
+              <div class="ppt-radio-group">
+                <button
+                  v-for="opt in slideCountOptions"
+                  :key="opt.value"
+                  type="button"
+                  :class="['ppt-radio-btn', { active: pptParamsModal.slideCount === opt.value }]"
+                  @click="pptParamsModal.slideCount = opt.value"
+                >
+                  <strong>{{ opt.label }}</strong>
+                  <span>{{ opt.desc }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="ppt-param-field">
+              <label class="ppt-param-label">
+                <span>汇报受众与侧重点</span>
+                <small>调整表达深度与核心逻辑</small>
+              </label>
+              <div class="ppt-radio-group">
+                <button
+                  v-for="opt in audienceOptions"
+                  :key="opt.value"
+                  type="button"
+                  :class="['ppt-radio-btn', { active: pptParamsModal.audience === opt.value }]"
+                  @click="pptParamsModal.audience = opt.value"
+                >
+                  <strong>{{ opt.label }}</strong>
+                  <span>{{ opt.desc }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="ppt-param-field">
+              <label class="ppt-param-label">
+                <span>视觉设计风格</span>
+                <small>专业配色与排版版式</small>
+              </label>
+              <div class="ppt-radio-group">
+                <button
+                  v-for="opt in visualStyleOptions"
+                  :key="opt.value"
+                  type="button"
+                  :class="['ppt-radio-btn', { active: pptParamsModal.visualStyle === opt.value }]"
+                  @click="pptParamsModal.visualStyle = opt.value"
+                >
+                  <strong>{{ opt.label }}</strong>
+                  <span>{{ opt.desc }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="ppt-param-field-checkbox">
+              <label class="ppt-checkbox-label">
+                <input type="checkbox" v-model="pptParamsModal.includeComparisonAppendix" />
+                <span>生成文献横向对比与导师追问讨论页</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn-cancel" @click="pptParamsModal.open = false">取消</button>
+            <button type="button" class="btn-confirm-start" @click="startPptWithParams">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span>立即开始生成 PPT</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <Transition name="toast-slide">
       <div v-if="toastMessage" class="meeting-toast">{{ toastMessage }}</div>
     </Transition>
@@ -501,13 +658,165 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { useRouter } from "vue-router";
+import MarkdownIt from "markdown-it";
 import { paperpilotApi } from "../services/paperpilotApi";
 import { API_BASE_URL } from "../services/apiClient";
 import { useDialogStore } from "../stores/dialog";
+import { useLibraryStore } from "../stores/library";
+
+const markdownRenderer = new MarkdownIt({ html: false, linkify: true, breaks: true });
+const libraryStore = useLibraryStore();
+const reviewNoteImageUrls = reactive({});
+const reviewNoteImageLoading = new Set();
+
+function normalizeNotesMarkdownTables(markdown) {
+  if (!markdown) return "";
+  const lines = String(markdown).split(/\r?\n/);
+  const result = [];
+  let inTable = false;
+  let tableRows = [];
+
+  const splitRowCells = (text) => {
+    const trimmed = text.trim();
+    if (trimmed.includes("|")) {
+      return trimmed.replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim()).filter(Boolean);
+    }
+    return trimmed.split(/\s{2,}|\t+/).map(c => c.trim()).filter(Boolean);
+  };
+
+  const isDividerText = (text) => {
+    const trimmed = text.trim();
+    if (!trimmed.includes("-")) return false;
+    return /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?$/.test(trimmed) || /^:?-{2,}:?(\s+:?-{2,}:?)+$/.test(trimmed);
+  };
+
+  const isRowCandidate = (text) => {
+    const trimmed = text.trim();
+    if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith(">") || trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      return false;
+    }
+    if (trimmed.includes("|") && trimmed.split("|").length >= 3) return true;
+    const cells = splitRowCells(trimmed);
+    return cells.length >= 2 && !trimmed.endsWith("。") && !trimmed.endsWith("！") && !trimmed.endsWith("；");
+  };
+
+  const flushTable = () => {
+    if (!tableRows.length) return;
+    const validDataRows = tableRows.filter(r => !r.isDivider);
+    if (!validDataRows.length) {
+      tableRows = [];
+      return;
+    }
+    if (validDataRows.length === 1 && tableRows.length === 1) {
+      result.push(tableRows[0].raw);
+      tableRows = [];
+      return;
+    }
+
+    const headerCells = validDataRows[0].cells;
+    const colCount = Math.max(2, ...validDataRows.map(r => r.cells.length));
+    
+    while (headerCells.length < colCount) headerCells.push(`列 ${headerCells.length + 1}`);
+    
+    if (result.length && result[result.length - 1] !== "") {
+      result.push("");
+    }
+    result.push(`| ${headerCells.map(c => c.replace(/\|/g, "/")).join(" | ")} |`);
+    result.push(`| ${Array.from({ length: colCount }, () => ":---").join(" | ")} |`);
+
+    for (let i = 1; i < validDataRows.length; i++) {
+      const rowCells = [...validDataRows[i].cells];
+      while (rowCells.length < colCount) rowCells.push("-");
+      result.push(`| ${rowCells.slice(0, colCount).map(c => c.replace(/\|/g, "/")).join(" | ")} |`);
+    }
+    result.push("");
+    tableRows = [];
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const trimmed = raw.trim();
+
+    if (isDividerText(trimmed)) {
+      if (!inTable) {
+        if (result.length && isRowCandidate(result[result.length - 1])) {
+          const prevRaw = result.pop();
+          inTable = true;
+          tableRows.push({ raw: prevRaw, cells: splitRowCells(prevRaw), isDivider: false });
+        }
+      }
+      if (inTable) {
+        tableRows.push({ raw, cells: [], isDivider: true });
+        continue;
+      }
+    }
+
+    if (inTable) {
+      if (isRowCandidate(raw)) {
+        tableRows.push({ raw, cells: splitRowCells(raw), isDivider: false });
+      } else {
+        flushTable();
+        inTable = false;
+        result.push(raw);
+      }
+    } else {
+      const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : "";
+      if (isRowCandidate(raw) && (isDividerText(nextLine) || (isRowCandidate(nextLine) && splitRowCells(raw).length >= 2 && splitRowCells(nextLine).length >= 2))) {
+        inTable = true;
+        tableRows.push({ raw, cells: splitRowCells(raw), isDivider: false });
+      } else {
+        result.push(raw);
+      }
+    }
+  }
+
+  if (inTable) {
+    flushTable();
+  }
+  return result.join("\n");
+}
+
+async function hydrateReviewNoteImages(markdown, workspaceId) {
+  if (!workspaceId) return;
+  const matches = String(markdown || "").match(/mineru:\/\/[^)\s]+/g) || [];
+  for (const token of new Set(matches)) {
+    if (reviewNoteImageUrls[token] || reviewNoteImageLoading.has(token)) continue;
+    reviewNoteImageLoading.add(token);
+    try {
+      const assetPath = decodeURIComponent(token.slice("mineru://".length));
+      if (assetPath.startsWith("http://") || assetPath.startsWith("https://") || assetPath.startsWith("blob:")) {
+        reviewNoteImageUrls[token] = assetPath;
+      } else {
+        const blob = await paperpilotApi.getMineruAsset(assetPath, workspaceId);
+        const objectUrl = URL.createObjectURL(blob);
+        reviewNoteImageUrls[token] = objectUrl;
+      }
+    } catch (err) {
+      console.warn("Failed to load note figure asset:", token, err);
+    } finally {
+      reviewNoteImageLoading.delete(token);
+    }
+  }
+}
+
+function renderMarkdown(text) {
+  if (!text) return "";
+  const normalized = normalizeNotesMarkdownTables(String(text || "")
+    .replace(/^[ \t]+(?=\|.*\|\s*$)/gm, "")
+    .replace(/^[ \t]+(?=\|\s*:?-{3,}.*\|\s*$)/gm, ""));
+  
+  if (reviewModal.paper?.workspaceId) {
+    void hydrateReviewNoteImages(normalized, reviewModal.paper.workspaceId);
+  }
+  const withImages = normalized.replace(/mineru:\/\/[^)\s]+/g, token => reviewNoteImageUrls[token] || token);
+  return markdownRenderer.render(withImages.trim());
+}
 
 const STORAGE_KEY = "paperpilot-meeting-timeline-v1";
 const DECK_STORAGE_KEY = "paperpilot-meeting-deck-jobs-v1";
 const REVIEW_STORAGE_KEY = "paperpilot-meeting-review-jobs-v1";
+const PPT_MASTER_CONFIRM_PREFIX = "papersolver-ppt-master-confirm:";
 const DEFAULT_MEETING_TITLE = "新组会汇报";
 const MAX_MEETING_PAPERS = 3;
 const MAX_DECK_SLIDES = 10;
@@ -550,13 +859,16 @@ const activeMeetingId = ref("");
 const toastMessage = ref("");
 const importingReview = ref(false);
 const dialogStore = useDialogStore();
+const router = useRouter();
 const deckJobs = reactive({});
 const reviewJobs = reactive({});
 const importJobs = reactive({});
 const savingLocalDecks = reactive(new Set());
+const deckPreview = reactive({ open: false, title: "", urls: [], index: 0, loading: false });
 const paperPicker = reactive({ open: false, meeting: null });
 const reviewModal = reactive({
   open: false,
+  activeTab: "review", // 'review' | 'note'
   meeting: null,
   paper: null,
   sections: emptySections(),
@@ -574,6 +886,7 @@ const deckTimers = new Map();
 const reviewTimers = new Map();
 const confirmOpened = ref("");
 let pendingConfirmWindow = null;
+let pendingPptMasterConfirmation = null;
 
 const meetingStats = computed(() => {
   const total = meetings.value.length;
@@ -606,6 +919,7 @@ watch(() => ({ ...deckJobs }), persistDeckJobs, { deep: true });
 watch(() => ({ ...reviewJobs }), persistReviewJobs, { deep: true });
 
 onMounted(async () => {
+  window.addEventListener("message", handlePptMasterConfirmation);
   loadPersistedState();
   await loadPapers();
   ensureFirstMeeting();
@@ -615,6 +929,8 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  closeDeckPreview();
+  window.removeEventListener("message", handlePptMasterConfirmation);
   if (toastTimer) clearTimeout(toastTimer);
   deckTimers.forEach((timer) => window.clearTimeout(timer));
   reviewTimers.forEach((timer) => window.clearTimeout(timer));
@@ -1013,7 +1329,38 @@ function compactMeta(paper) {
 }
 
 function hasPdf(paper) {
-  return paperpilotApi.isLikelyPdfUrl(paper?.paperUrl || "");
+  if (!paper) return false;
+  const candidates = [
+    paper.paperUrl,
+    paper.pdfUrl,
+    paper.sourceUrl,
+    paper.paperPath
+  ].map(u => String(u || "").trim()).filter(Boolean);
+
+  for (const url of candidates) {
+    if (paperpilotApi.isLikelyPdfUrl(url)) return true;
+    if (url.startsWith("blob:") || url.startsWith("data:") || url.includes("/api/papers/uploads/")) return true;
+    if (url.toLowerCase().startsWith("desktop-cache://")) return true;
+  }
+
+  // Cross check with library store documents
+  const doc = libraryStore.state.documents.find(d => 
+    (paper.workspaceId && d.workspaceId === paper.workspaceId) ||
+    (paper.id && (d.id === paper.id || d.workspaceId === paper.id)) ||
+    (paper.title && d.title === paper.title)
+  );
+  if (doc) {
+    const docCandidates = [doc.paperUrl, doc.pdfUrl, doc.sourceUrl, doc.paperPath].map(u => String(u || "").trim()).filter(Boolean);
+    for (const url of docCandidates) {
+      if (paperpilotApi.isLikelyPdfUrl(url)) return true;
+      if (url.startsWith("blob:") || url.startsWith("data:") || url.includes("/api/papers/uploads/")) return true;
+      if (url.toLowerCase().startsWith("desktop-cache://")) return true;
+    }
+    if (doc.hasPdf || doc.pdfUploaded || doc.paperPath) return true;
+  }
+
+  if (paper.workspaceId && (paper.hasPdf || paper.pdfUploaded || paper.paperPath)) return true;
+  return false;
 }
 
 function missingPdfCount(meeting) {
@@ -1022,7 +1369,199 @@ function missingPdfCount(meeting) {
 
 function canMakePpt(meeting) {
   const selected = selectedMeetingPapers(meeting);
-  return Boolean(selected.length && !missingPdfCount(meeting));
+  return Boolean(selected.length);
+}
+
+// Paper note helpers
+function paperNoteStatus(paperId) {
+  const paper = paperById(paperId);
+  if (!paper) return "note-none";
+  const combined = paper.note || "";
+  const parts = combined.split("=== PAPERSOLVER_NOTE_SEPARATOR ===");
+  const hasAi = parts[0] && parts[0].trim().length > 5;
+  const hasManual = parts[1] && parts[1].trim().length > 0;
+  if (hasAi && hasManual) return "note-both";
+  if (hasAi) return "note-ai";
+  if (hasManual) return "note-manual";
+  return "note-none";
+}
+
+function paperNoteLabel(paperId) {
+  const status = paperNoteStatus(paperId);
+  if (status === "note-none") return "待生成笔记";
+  return "已生成笔记";
+}
+
+function paperNoteTitle(paperId) {
+  const status = paperNoteStatus(paperId);
+  if (status === "note-none") return "尚未记录笔记，点击【笔记】前往文献库";
+  return "点击【笔记】前往文献库查看或编辑笔记";
+}
+
+function openPaperNoteInLibrary(paperId) {
+  // Navigate to library with the paper highlighted for note editing
+  const paper = paperById(paperId);
+  if (!paper) { showToast("找不到对应论文"); return; }
+  router.push({ path: "/library", query: { noteId: paperId } });
+}
+
+const pptParamsModal = reactive({
+  open: false,
+  meeting: null,
+  slideCount: "8-10",
+  audience: "导师与课题组",
+  visualStyle: "academic_blue",
+  includeComparisonAppendix: true,
+});
+
+const slideCountOptions = [
+  { value: "5-8", label: "5 - 8 页", desc: "精简汇报 / 约 5-8 分钟" },
+  { value: "8-10", label: "8 - 10 页", desc: "标准组会 / 经典推荐 (约 10-15 分钟)" },
+];
+
+const audienceOptions = [
+  { value: "导师与课题组", label: "导师与课题组", desc: "强调方法创新点、实验证据链与后续计划" },
+  { value: "学术会议同行", label: "学术会议同行", desc: "突出技术贡献、横向基线对比与严谨公式" },
+  { value: "跨领域通识", label: "跨领域通识", desc: "强化背景引入、研究直观动机与通俗图解" },
+];
+
+const visualStyleOptions = [
+  { value: "academic_blue", label: "学术经典蓝", desc: "严谨双栏白底，商务学术蓝" },
+  { value: "dark_tech", label: "沉浸暗夜科技", desc: "深蓝黑科技底，高对比度荧光" },
+  { value: "journal_minimal", label: "极简期刊灰", desc: "高雅学术期刊配色，克制沉稳" },
+];
+
+function confirmMakePpt(meeting) {
+  const selected = selectedMeetingPapers(meeting);
+  if (!selected.length) {
+    showToast("请先添加组会汇报文献");
+    return;
+  }
+  if (missingPdfCount(meeting)) {
+    showToast("请先补齐本次组会文献的 PDF");
+    return;
+  }
+  const bridgeKey = `${meeting.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const storageKey = `${PPT_MASTER_CONFIRM_PREFIX}${bridgeKey}:recommendations`;
+  try {
+    const recommendations = buildPptMasterRecommendations(meeting);
+    localStorage.setItem(storageKey, JSON.stringify(recommendations));
+    const baseUrl = new URL(window.location.href);
+    baseUrl.hash = "";
+    baseUrl.search = "";
+    const confirmUrl = new URL("./ppt-master-confirm/index.html", baseUrl);
+    confirmUrl.searchParams.set("bridge", bridgeKey);
+    confirmUrl.searchParams.set("recommendations", utf8ToBase64(JSON.stringify(recommendations)));
+    const popup = window.open(confirmUrl.toString(), "_blank");
+    if (!popup) throw new Error("popup-blocked");
+    pendingPptMasterConfirmation = { bridgeKey, meetingId: meeting.id, popup };
+    showToast("请在 PPT Master 参数页确认生成设置");
+  } catch (error) {
+    localStorage.removeItem(storageKey);
+    pptParamsModal.meeting = meeting;
+    pptParamsModal.slideCount = normalizeDeckSlideCount(meeting.params?.slideCount || DEFAULT_DECK_SLIDE_COUNT);
+    pptParamsModal.audience = meeting.params?.audience || "导师与课题组";
+    pptParamsModal.visualStyle = meeting.params?.visualStyle || "academic_blue";
+    pptParamsModal.includeComparisonAppendix = meeting.params?.includeComparisonAppendix !== false;
+    pptParamsModal.open = true;
+    showToast("参数页被系统拦截，已切换到应用内确认");
+  }
+}
+
+function utf8ToBase64(value) {
+  const bytes = new TextEncoder().encode(String(value || ""));
+  let binary = "";
+  bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+  return window.btoa(binary);
+}
+
+function buildPptMasterRecommendations(meeting) {
+  const params = meeting.params || {};
+  const saved = params.pptMasterConfirm || {};
+  const styleMap = {
+    academic_blue: "editorial",
+    dark_tech: "dark-tech",
+    journal_minimal: "swiss-minimal",
+  };
+  return {
+    lang: "zh",
+    recommend: {
+      canvas: saved.canvas || "ppt169",
+      mode: saved.mode || "pyramid",
+      visual_style: saved.visual_style || styleMap[params.visualStyle] || "editorial",
+      icons: saved.icons || "tabler-outline",
+      image_usage: saved.image_usage || ["provided"],
+      image_ai_path: saved.image_ai_path || "auto",
+      formula_policy: saved.formula_policy || "mixed",
+      generation_mode: saved.generation_mode || "continuous",
+      delivery_purpose: saved.delivery_purpose || "balanced",
+    },
+    page_count: { value: saved.page_count || normalizeDeckSlideCount(params.slideCount || DEFAULT_DECK_SLIDE_COUNT) },
+    audience: { value: saved.audience || params.audience || "导师与课题组" },
+    content_divergence: { value: saved.content_divergence || "忠实论文事实，按组会汇报逻辑重组问题、方法、证据与结论。" },
+    image_notes: { value: saved.image_notes || "优先引用论文中的真实图表与示意图；仅在缺少必要视觉解释时补充生成图。" },
+    color: {
+      selected: 0,
+      candidates: [
+        { name: "学术经典蓝", note: "白底、深蓝主色与克制金色强调", palette: { background: "#FFFFFF", secondary_bg: "#F3F6FA", primary: "#173B67", accent: "#D39B32", secondary_accent: "#4D7FAF", body_text: "#1E293B" } },
+        { name: "极简期刊灰", note: "低饱和灰阶与冷青强调，适合高密度论文内容", palette: { background: "#FFFFFF", secondary_bg: "#F4F4F2", primary: "#252A31", accent: "#2E7D78", secondary_accent: "#77818D", body_text: "#20242A" } },
+        { name: "沉浸暗夜科技", note: "深色背景与高对比青紫强调", palette: { background: "#0C111B", secondary_bg: "#151D2C", primary: "#E8EDF7", accent: "#55D6BE", secondary_accent: "#8A7CFF", body_text: "#D7DFEC" } },
+      ],
+    },
+    typography: {
+      selected: 0,
+      candidates: [
+        { name: "现代学术", note: "清晰、稳健，适合中文组会", sample_heading: "研究问题与核心贡献", sample_heading_latin: "Research Question & Contribution", sample_body: "从方法、证据与局限展开论证", sample_body_latin: "Methods, evidence, and limitations", heading: { cjk: "思源黑体", latin: "Inter", css: "'Source Han Sans SC','PingFang SC','Inter',sans-serif" }, body: { cjk: "思源黑体", latin: "Inter", css: "'Source Han Sans SC','PingFang SC','Inter',sans-serif" }, body_size: 24 },
+        { name: "期刊编辑", note: "标题更具论文质感，正文保持易读", sample_heading: "实验设计与关键发现", sample_heading_latin: "Experimental Design & Findings", sample_body: "结合原文图表解释证据链", sample_body_latin: "Explain the evidence with paper figures", heading: { cjk: "思源宋体", latin: "Source Serif 4", css: "'Source Han Serif SC','Songti SC','Source Serif 4',serif" }, body: { cjk: "思源黑体", latin: "Inter", css: "'Source Han Sans SC','PingFang SC','Inter',sans-serif" }, body_size: 24 },
+        { name: "演讲展示", note: "更大的字号与更短的信息块", sample_heading: "为什么这项研究重要", sample_heading_latin: "Why This Study Matters", sample_body: "每页聚焦一个可讲清的结论", sample_body_latin: "One clear conclusion per slide", heading: { cjk: "阿里巴巴普惠体", latin: "Aptos Display", css: "'Alibaba PuHuiTi','PingFang SC','Aptos Display',sans-serif" }, body: { cjk: "阿里巴巴普惠体", latin: "Aptos", css: "'Alibaba PuHuiTi','PingFang SC','Aptos',sans-serif" }, body_size: 28 },
+      ],
+    },
+    image_strategy: {
+      selected: 0,
+      candidates: [
+        { name: "论文证据优先", rendering: "editorial-diagram", palette: "academic", visual: "以论文原图和数据图表为主", color: "沿用整套 PPT 配色", mood: "严谨、可信" },
+        { name: "机制图解", rendering: "vector-illustration", palette: "cool-corporate", visual: "用简洁矢量图补充机制解释", color: "低饱和冷色", mood: "清晰、理性" },
+        { name: "场景化叙事", rendering: "editorial-collage", palette: "restrained-vivid", visual: "在背景和讨论页加入编辑式视觉", color: "主色稳定、强调色点题", mood: "有节奏、易讲述" },
+      ],
+    },
+    refine_spec: { value: false },
+  };
+}
+
+function handlePptMasterConfirmation(event) {
+  const detail = event?.data;
+  if (detail?.type !== "papersolver:ppt-master-confirmed") return;
+  if (!pendingPptMasterConfirmation || detail.bridgeKey !== pendingPptMasterConfirmation.bridgeKey) return;
+  const meeting = meetings.value.find(item => item.id === pendingPptMasterConfirmation.meetingId);
+  if (!meeting) return;
+  const confirmed = detail.payload || {};
+  meeting.params = {
+    ...(meeting.params || {}),
+    slideCount: normalizeDeckSlideCount(confirmed.page_count || meeting.params?.slideCount),
+    audience: confirmed.audience || meeting.params?.audience || "导师与课题组",
+    visualStyle: confirmed.visual_style || meeting.params?.visualStyle || "editorial",
+    pptMasterConfirm: confirmed,
+  };
+  persistMeetings();
+  localStorage.removeItem(`${PPT_MASTER_CONFIRM_PREFIX}${detail.bridgeKey}:recommendations`);
+  localStorage.removeItem(`${PPT_MASTER_CONFIRM_PREFIX}${detail.bridgeKey}:result`);
+  pendingPptMasterConfirmation = null;
+  makePpt(meeting);
+}
+
+function startPptWithParams() {
+  if (!pptParamsModal.meeting) return;
+  const meeting = pptParamsModal.meeting;
+  meeting.params = {
+    ...(meeting.params || {}),
+    slideCount: normalizeDeckSlideCount(pptParamsModal.slideCount),
+    audience: pptParamsModal.audience,
+    visualStyle: pptParamsModal.visualStyle,
+    includeComparisonAppendix: pptParamsModal.includeComparisonAppendix,
+  };
+  persistMeetings();
+  pptParamsModal.open = false;
+  makePpt(meeting);
 }
 
 function meetingStatus(meeting) {
@@ -1185,6 +1724,14 @@ function reviewPaperStatusText(paperId) {
   return "待综述";
 }
 
+function handlePaperCardClick(meeting, paper) {
+  if (!paper) {
+    showToast("请先添加组会汇报文献");
+    return;
+  }
+  openReview(meeting, paper);
+}
+
 async function openReview(meeting, targetPaper = null) {
   const paper = targetPaper || primaryPaper(meeting);
   if (!paper) {
@@ -1208,14 +1755,20 @@ async function openReview(meeting, targetPaper = null) {
     modelName: "",
   });
   try {
+    try {
+      const libPaper = await paperpilotApi.getLibraryPaper(paper.workspaceId);
+      if (libPaper?.note) {
+        paper.note = libPaper.note;
+        reviewModal.paper.note = libPaper.note;
+      }
+    } catch {
+      // Fallback to existing paper object
+    }
     const data = await paperpilotApi.getMeetingReport(paper.workspaceId);
     applyReviewData(data);
-    if (data.generated) {
+    if (reviewModal.generated) {
       reviewJobs[paper.workspaceId] = { status: "generated", progress: 100, message: "已读取历史综述" };
       persistReviewJobs();
-    }
-    if (!data.generated && !isReviewBusy(meeting)) {
-      await generateReview();
     }
   } catch (error) {
     showToast(error?.response?.data?.message || "综述读取失败");
@@ -1226,6 +1779,17 @@ async function openReview(meeting, targetPaper = null) {
 
 function closeReview() {
   reviewModal.open = false;
+}
+
+function updatePaperNoteText(event) {
+  if (reviewModal.paper) {
+    reviewModal.paper.note = event.target.innerText;
+  }
+}
+
+function goToReader(paper) {
+  if (!paper?.workspaceId) return;
+  router.push({ path: "/reader", query: { id: paper.workspaceId } });
 }
 
 async function generateReview() {
@@ -1296,20 +1860,39 @@ async function saveReview() {
       sections: reviewModal.sections,
       modelName: reviewModal.modelName || "人工编辑",
     });
+    // Save paper note
+    if (paper.note !== undefined) {
+      await paperpilotApi.updateLibraryPaper(paper.workspaceId, {
+        note: paper.note
+      });
+      // Synchronize in local list if paperById exists
+      const localPaper = paperById(paper.workspaceId);
+      if (localPaper) localPaper.note = paper.note;
+    }
     applyReviewData(data);
     reviewJobs[paper.workspaceId] = { status: "generated", progress: 100, message: "已保存" };
-    showToast("综述编辑已保存");
+    showToast("综述与笔记已成功保存");
   } catch (error) {
-    showToast(error?.response?.data?.message || "综述保存失败");
+    showToast("保存失败：" + (error?.response?.data?.message || error?.message || "综述保存失败"));
   } finally {
     reviewModal.saving = false;
   }
 }
 
 function applyReviewData(data = {}) {
-  reviewModal.sections = formatReviewSections({ ...emptySections(), ...(data.sections || {}) });
+  const sections = formatReviewSections({ ...emptySections(), ...(data.sections || {}) });
+  const hasSavedReview = Boolean(data.generated)
+    || reviewSections.some(section => hasUsefulSection(sections[section.key]));
+  reviewModal.sections = sections;
   
   const paperInfo = data.paper || reviewModal.paper || {};
+  if (reviewModal.paper) {
+    if (data.paper?.note) {
+      reviewModal.paper.note = data.paper.note;
+    } else if (data.note) {
+      reviewModal.paper.note = data.note;
+    }
+  }
   if (!hasUsefulSection(reviewModal.sections.basicInfo)) {
     reviewModal.sections.basicInfo = buildBasicInfoFallback(paperInfo);
   }
@@ -1323,10 +1906,11 @@ function applyReviewData(data = {}) {
     reviewModal.sections.datasets = buildDatasetsFallback(reviewModal.sections, paperInfo);
   }
   
-  reviewModal.generated = Boolean(data.generated);
+  // Older saved reports may contain sections but lack the generated flag.
+  reviewModal.generated = hasSavedReview;
   reviewModal.modelName = data.modelName || "";
-  reviewModal.progress = data.generated ? 100 : reviewModal.progress;
-  reviewModal.message = data.generated ? "已读取历史保存的论文综述" : "尚未生成";
+  reviewModal.progress = hasSavedReview ? 100 : reviewModal.progress;
+  reviewModal.message = hasSavedReview ? "已读取历史保存的论文综述" : "尚未生成";
   nextTick(resizeAllReviewTextareas);
 }
 
@@ -1719,13 +2303,12 @@ async function makePpt(meeting) {
     window.clearTimeout(deckTimers.get(meeting.id));
     deckTimers.delete(meeting.id);
   }
-  pendingConfirmWindow = openPendingConfirmWindow();
   activeMeetingId.value = meeting.id;
   deckJobs[meeting.id] = {
     status: "running",
     progress: 1,
     stage: "提交任务",
-    message: "正在提交 PPT Master 任务",
+    message: "正在提交 PPT 制作任务",
     paperWorkspaceId: paper.workspaceId,
     paperTitle: selected.length > 1 ? `${selected.length} 篇文献联合汇报` : paper.title,
     jobId: "",
@@ -1735,15 +2318,46 @@ async function makePpt(meeting) {
   };
   persistDeckJobs();
   try {
-    const result = await paperpilotApi.generateMeetingDeck({
-	      engine: "ppt-master-skill",
-	      reportWorkspaceId: paper.workspaceId,
-	      paperIds: selected.map(item => item.workspaceId),
-	      slideCount: normalizeDeckSlideCount(meeting.params.slideCount),
-	      audience: meeting.params.audience,
+    const payload = {
+      engine: "ppt-master-skill",
+      reportWorkspaceId: paper.workspaceId,
+      paperIds: selected.map(item => item.workspaceId),
+      slideCount: normalizeDeckSlideCount(meeting.params.slideCount),
+      audience: meeting.params.audience,
       focus: meetingFocusText(meeting),
       templateName: meeting.params.reportType,
-    });
+      pptSettings: {
+        ...(meeting.params.pptMasterConfirm || {}),
+        visualStyle: meeting.params.visualStyle || "editorial",
+        includeComparisonAppendix: meeting.params.includeComparisonAppendix !== false,
+      },
+    };
+
+    let requestBody = payload;
+    // Check if desktop has local cached PDF for this paper
+    if (window.paperSolverDesktop?.getCachedPdf && paper.workspaceId) {
+      try {
+        const sourceUrls = [paper.pdfUrl, paper.paperUrl, paper.sourceUrl].filter(Boolean);
+        const cached = await window.paperSolverDesktop.getCachedPdf({
+          workspaceId: paper.workspaceId,
+          sourceUrls
+        });
+        if (cached?.found && cached.base64) {
+          const binary = atob(cached.base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          const blob = new Blob([bytes], { type: "application/pdf" });
+          const formData = new FormData();
+          formData.append("payload", JSON.stringify(payload));
+          formData.append("reportPaper", blob, `${paper.title || "report-paper"}.pdf`);
+          requestBody = formData;
+        }
+      } catch (err) {
+        console.warn("Failed to attach desktop cached PDF for PPT generation", err);
+      }
+    }
+
+    const result = await paperpilotApi.generateMeetingDeck(requestBody);
     applyDeckJob(meeting, result, paper);
     if (result?.jobId && !result.done) {
       pollDeck(meeting.id, result.jobId, paper);
@@ -1828,6 +2442,7 @@ function pollDeck(meetingId, jobId, paper) {
 
 function applyDeckJob(meeting, payload = {}, paper = {}) {
   if (!meeting?.id) return;
+  const wasGenerated = Boolean(deckJobs[meeting.id]?.downloadUrl);
   deckJobs[meeting.id] = {
     ...(deckJobs[meeting.id] || {}),
     status: payload.status || (payload.success ? "generated" : "running"),
@@ -1839,6 +2454,7 @@ function applyDeckJob(meeting, payload = {}, paper = {}) {
     jobId: payload.jobId || deckJobs[meeting.id]?.jobId || "",
     confirmUrl: payload.confirmUrl || deckJobs[meeting.id]?.confirmUrl || "",
     downloadUrl: payload.downloadUrl || deckJobs[meeting.id]?.downloadUrl || "",
+    previewUrls: Array.isArray(payload.previewUrls) ? payload.previewUrls : (deckJobs[meeting.id]?.previewUrls || []),
     localPath: deckJobs[meeting.id]?.localPath || "",
   };
   if (deckJobs[meeting.id].downloadUrl) deckJobs[meeting.id].status = "generated";
@@ -1860,6 +2476,9 @@ function applyDeckJob(meeting, payload = {}, paper = {}) {
   if (deckJobs[meeting.id].downloadUrl && canSaveDeckToDesktop() && !deckJobs[meeting.id].localPath) {
     saveDeckToDesktop(meeting, true);
   }
+  if (!wasGenerated && deckJobs[meeting.id].downloadUrl && deckJobs[meeting.id].previewUrls?.length) {
+    openDeckPreview(meeting);
+  }
   if (deckJobs[meeting.id].downloadUrl || deckJobs[meeting.id].status === "failed") {
     closePendingConfirmWindow();
   }
@@ -1870,6 +2489,37 @@ function openDeckConfirmPage(url) {
   if (!target) return;
   const win = window.open(target, "_blank", "noopener,noreferrer");
   if (!win) showToast("浏览器拦截了参数页，请允许弹窗后重试");
+}
+
+async function openDeckPreview(meeting) {
+  const sourceUrls = deckJobs[meeting.id]?.previewUrls || [];
+  if (!sourceUrls.length) {
+    showToast("预览页尚未就绪，请稍后刷新任务状态");
+    return;
+  }
+  deckPreview.title = meeting.title || deckJobs[meeting.id]?.paperTitle || "组会汇报";
+  deckPreview.urls.forEach(url => URL.revokeObjectURL(url));
+  deckPreview.urls = [];
+  deckPreview.index = 0;
+  deckPreview.open = true;
+  deckPreview.loading = true;
+  try {
+    const blobs = await Promise.all(sourceUrls.map(url => paperpilotApi.fetchMeetingDeckPreview(url)));
+    deckPreview.urls = blobs.map(blob => URL.createObjectURL(blob));
+  } catch (error) {
+    closeDeckPreview();
+    showToast(error?.response?.data?.message || "PPT 预览载入失败");
+  } finally {
+    deckPreview.loading = false;
+  }
+}
+
+function closeDeckPreview() {
+  deckPreview.open = false;
+  deckPreview.urls.forEach(url => URL.revokeObjectURL(url));
+  deckPreview.urls = [];
+  deckPreview.index = 0;
+  deckPreview.loading = false;
 }
 
 function publicDeckText(value = "") {
@@ -2636,6 +3286,14 @@ function showToast(message) {
   border-radius: 12px;
   padding: 14px;
   background: var(--card-bg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.selected-paper:hover {
+  border-color: var(--color-primary, #6366f1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .selected-paper.primary {
@@ -2660,7 +3318,7 @@ function showToast(message) {
   font-size: 11px;
 }
 
-.selected-paper-actions {
+.selected-paper-tags {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2668,30 +3326,64 @@ function showToast(message) {
   gap: 10px;
 }
 
-.selected-paper-status {
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: var(--btn-soft-bg);
-  color: var(--text-muted);
-}
-
-.selected-paper-status.generated { color: #059669; background: rgba(16, 185, 129, 0.15); }
-.selected-paper-status.running { color: #2563eb; background: rgba(59, 130, 246, 0.15); }
-
-.selected-paper-actions button {
-  background: var(--btn-soft-bg);
-  border: 1px solid var(--item-border);
-  color: var(--text-main);
-  padding: 6px 12px;
+.paper-status-badge {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
   border-radius: 6px;
   font-size: 11px;
-  cursor: pointer;
+  font-weight: 700;
+  box-sizing: border-box;
+  text-align: center;
 }
 
-.selected-paper-actions button:hover {
-  background: rgba(99, 102, 241, 0.1);
+.paper-status-badge.review-badge {
+  color: #64748b;
+  background: rgba(100, 116, 139, 0.06);
+  border: 1.2px solid rgba(100, 116, 139, 0.25);
 }
+.paper-status-badge.review-badge.generated {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1.2px solid rgba(16, 185, 129, 0.35);
+}
+.paper-status-badge.review-badge.running {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1.2px solid rgba(59, 130, 246, 0.35);
+}
+.paper-status-badge.review-badge.failed {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1.2px solid rgba(239, 68, 68, 0.35);
+}
+
+.paper-status-badge.note-badge {
+  font-weight: 700;
+}
+.paper-status-badge.note-badge.note-none {
+  background: rgba(239, 68, 68, 0.06);
+  color: #ef4444;
+  border: 1.2px dashed rgba(239, 68, 68, 0.35);
+}
+.paper-status-badge.note-badge.note-ai {
+  background: rgba(59, 130, 246, 0.08);
+  color: #3b82f6;
+  border: 1.2px solid rgba(59, 130, 246, 0.3);
+}
+.paper-status-badge.note-badge.note-manual {
+  background: rgba(16, 185, 129, 0.08);
+  color: #10b981;
+  border: 1.2px solid rgba(16, 185, 129, 0.3);
+}
+.paper-status-badge.note-badge.note-both {
+  background: rgba(139, 92, 246, 0.08);
+  color: #8b5cf6;
+  border: 1.2px solid rgba(139, 92, 246, 0.3);
+}
+
 
 .selected-paper.primary button {
   background: linear-gradient(135deg, #4f46e5, #ec4899);
@@ -2717,6 +3409,9 @@ function showToast(message) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+}
+.generation-grid.single {
+  grid-template-columns: 1fr;
 }
 
 .generation-action {
@@ -2775,7 +3470,7 @@ function showToast(message) {
   background: linear-gradient(90deg, #6366f1, #ec4899);
 }
 
-.soft-button, .primary-button, .download-button, .local-save-button, .confirm-link-button, .regenerate-deck-button {
+.soft-button, .primary-button, .download-button, .local-save-button, .confirm-link-button, .regenerate-deck-button, .preview-deck-button {
   width: 100%;
   padding: 10px;
   border-radius: 8px;
@@ -2907,14 +3602,73 @@ button:disabled {
 }
 .modal-panel header button:hover { background: rgba(99, 102, 241, 0.15); color: var(--text-main); }
 
-/* --- REDESIGNED MODAL ACTION BAR (3 Sleek Pill Buttons) --- */
+/* --- REDESIGNED MODAL ACTION BAR (Tabs + Actions) --- */
 .review-modal-actions {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 14px;
   padding: 16px 30px;
   border-bottom: 1px solid var(--item-border);
   background: var(--item-bg);
+}
+
+.modal-tab-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--btn-soft-bg);
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--item-border);
+}
+
+.btn-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  height: 34px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-tab:hover {
+  color: var(--text-main);
+}
+
+.btn-tab.active {
+  background: #ffffff;
+  color: #4f46e5;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.btn-tab-ai.active {
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+}
+
+:root[data-theme="dark"] .btn-tab.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #a5b4fc;
+}
+
+:root[data-theme="dark"] .btn-tab-ai.active {
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  color: #ffffff;
+}
+
+.modal-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .btn-action {
@@ -2922,13 +3676,184 @@ button:disabled {
   align-items: center;
   gap: 8px;
   padding: 0 20px;
-  height: 42px;
+  height: 38px;
   border-radius: 999px;
   font-size: 13px;
   font-weight: 750;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
+}
+
+.btn-action svg {
+  flex-shrink: 0;
+}
+
+.btn-read {
+  background: var(--btn-soft-bg);
+  border: 1px solid var(--btn-soft-border);
+  color: var(--text-main);
+}
+
+.btn-read:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.1);
+  transform: translateY(-1.5px);
+}
+
+/* --- Review Note Markdown View --- */
+.review-note-markdown-view {
+  padding: 24px 30px;
+  overflow-y: auto;
+  min-height: 320px;
+  max-height: 60vh;
+}
+
+.rendered-note-container {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 24px 28px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+.rendered-note-content {
+  color: var(--text-main);
+  font-size: 14.5px;
+  line-height: 1.8;
+  word-break: break-word;
+}
+
+.rendered-note-content :deep(h1),
+.rendered-note-content :deep(h2),
+.rendered-note-content :deep(h3),
+.rendered-note-content :deep(h4) {
+  margin: 20px 0 10px;
+  color: var(--text-main);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.rendered-note-content :deep(h1) { font-size: 20px; border-bottom: 1px solid var(--item-border); padding-bottom: 8px; }
+.rendered-note-content :deep(h2) { font-size: 17px; }
+.rendered-note-content :deep(h3) { font-size: 15px; }
+
+.rendered-note-content :deep(p) {
+  margin: 10px 0;
+}
+
+.rendered-note-content :deep(ul),
+.rendered-note-content :deep(ol) {
+  padding-left: 24px;
+  margin: 10px 0;
+}
+
+.rendered-note-content :deep(li) {
+  margin: 6px 0;
+}
+
+.rendered-note-content :deep(strong) {
+  color: #4338ca;
+  font-weight: 700;
+}
+:root[data-theme="dark"] .rendered-note-content :deep(strong) {
+  color: #a5b4fc;
+}
+
+.rendered-note-content :deep(blockquote) {
+  margin: 14px 0;
+  padding: 10px 16px;
+  background: var(--btn-soft-bg);
+  border-left: 4px solid #6366f1;
+  border-radius: 0 8px 8px 0;
+  color: var(--text-muted);
+}
+
+.rendered-note-content :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 13.5px;
+}
+
+.rendered-note-content :deep(th),
+.rendered-note-content :deep(td) {
+  border: 1px solid var(--item-border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.rendered-note-content :deep(th) {
+  background: var(--btn-soft-bg);
+  font-weight: 700;
+}
+
+.rendered-note-content :deep(img) {
+  max-width: 100%;
+  border-radius: 10px;
+  margin: 14px 0;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.review-note-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.empty-icon-wrap {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.review-note-empty strong {
+  font-size: 16px;
+  color: var(--text-main);
+  margin-bottom: 8px;
+}
+
+.review-note-empty p {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  max-width: 480px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.review-empty-state {
+  display: flex;
+  min-height: 260px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  padding: 32px;
+  text-align: center;
+  color: var(--text-main);
+}
+
+.review-empty-state .empty-icon-wrap {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--btn-soft-bg);
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.review-empty-state strong {
+  font-size: 18px;
+}
+
+.review-empty-state p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.7;
 }
 
 .btn-action svg {
@@ -3718,5 +4643,391 @@ button:disabled {
 .btn-empty-add span {
   font-size: 18px;
   line-height: 1;
+}
+
+/* --- PPT PARAMS MODAL --- */
+.ppt-params-modal-box {
+  max-width: 580px;
+  width: 90vw;
+  background: #111827;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  color: #f3f4f6;
+}
+
+:root[data-theme="light"] .ppt-params-modal-box {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  color: #1e293b;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+}
+
+.modal-badge-tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #818cf8;
+  background: rgba(99, 102, 241, 0.12);
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-block;
+  margin-bottom: 6px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 16px;
+}
+
+:root[data-theme="light"] .modal-head {
+  border-color: #f1f5f9;
+}
+
+.modal-head-titles h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+  transition: all 0.15s;
+}
+
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.ppt-params-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.ppt-param-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ppt-param-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.ppt-param-label span {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e5e7eb;
+}
+
+:root[data-theme="light"] .ppt-param-label span {
+  color: #334155;
+}
+
+.ppt-param-label small {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.ppt-radio-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.ppt-radio-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  color: inherit;
+  font-family: inherit;
+}
+
+:root[data-theme="light"] .ppt-radio-btn {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.ppt-radio-btn strong {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 3px;
+  color: #f3f4f6;
+}
+
+:root[data-theme="light"] .ppt-radio-btn strong {
+  color: #0f172a;
+}
+
+.ppt-radio-btn span {
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.35;
+}
+
+.ppt-radio-btn:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.ppt-radio-btn.active {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.12);
+  box-shadow: 0 0 0 1px #6366f1;
+}
+
+.ppt-radio-btn.active strong {
+  color: #818cf8;
+}
+
+:root[data-theme="light"] .ppt-radio-btn.active strong {
+  color: #4f46e5;
+}
+
+.ppt-param-field-checkbox {
+  padding-top: 6px;
+}
+
+.ppt-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d1d5db;
+  cursor: pointer;
+}
+
+:root[data-theme="light"] .ppt-checkbox-label {
+  color: #475569;
+}
+
+.ppt-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #6366f1;
+  cursor: pointer;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 18px;
+}
+
+:root[data-theme="light"] .modal-footer {
+  border-color: #f1f5f9;
+}
+
+.btn-cancel {
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #9ca3af;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+:root[data-theme="light"] .btn-cancel {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.btn-confirm-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-confirm-start:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+}
+
+.preview-deck-button {
+  border: 1px solid #8b5cf6;
+  background: rgba(139, 92, 246, 0.09);
+  color: #6d4ce7;
+}
+
+.deck-preview-backdrop {
+  z-index: 1200;
+  padding: 24px;
+}
+
+.deck-preview-modal {
+  width: min(1180px, 96vw);
+  max-height: 94vh;
+  overflow: hidden;
+  border: 1px solid var(--item-border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.34);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.deck-preview-modal > header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--item-border);
+}
+
+.deck-preview-modal > header > div:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.deck-preview-modal > header span {
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.deck-preview-modal > header h2 {
+  margin: 3px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+}
+
+.deck-preview-counter {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.deck-preview-close,
+.deck-preview-nav {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.deck-preview-close {
+  width: 36px;
+  height: 36px;
+  font-size: 26px;
+}
+
+.deck-preview-stage {
+  position: relative;
+  min-height: 0;
+  padding: 20px 64px;
+  display: grid;
+  place-items: center;
+  background: #111827;
+}
+
+.deck-preview-loading {
+  min-height: 420px;
+  display: grid;
+  place-items: center;
+  background: #111827;
+  color: #e5e7eb;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.deck-preview-stage > img {
+  display: block;
+  width: 100%;
+  max-height: calc(94vh - 190px);
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  background: #fff;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
+}
+
+.deck-preview-nav {
+  position: absolute;
+  top: 50%;
+  width: 44px;
+  height: 64px;
+  transform: translateY(-50%);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 38px;
+}
+
+.deck-preview-nav.previous { left: 10px; }
+.deck-preview-nav.next { right: 10px; }
+.deck-preview-nav:disabled { opacity: 0.22; cursor: default; }
+
+.deck-preview-thumbnails {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  border-top: 1px solid var(--item-border);
+}
+
+.deck-preview-thumbnails button {
+  position: relative;
+  flex: 0 0 128px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #111827;
+  cursor: pointer;
+}
+
+.deck-preview-thumbnails button.active { border-color: #7c3aed; }
+.deck-preview-thumbnails img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.deck-preview-thumbnails span { position: absolute; right: 4px; bottom: 3px; padding: 1px 5px; border-radius: 3px; background: rgba(0, 0, 0, 0.7); color: #fff; font-size: 10px; }
+
+@media (max-width: 700px) {
+  .deck-preview-backdrop { padding: 8px; }
+  .deck-preview-stage { padding: 12px 42px; }
+  .deck-preview-thumbnails button { flex-basis: 92px; }
 }
 </style>

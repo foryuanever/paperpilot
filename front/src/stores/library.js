@@ -160,13 +160,19 @@ export const useLibraryStore = defineStore("library", () => {
   }
 
   async function persistDocumentPatch(id, patch) {
+    updateDocument(id, patch);
     const target = state.documents.find((item) => item.id === id);
     if (!target?.workspaceId) {
-      updateDocument(id, patch);
       return;
     }
-    const next = await paperpilotApi.updateLibraryPaper(target.workspaceId, patch);
-    updateDocument(id, normalizeBackendPaper(next));
+    try {
+      const next = await paperpilotApi.updateLibraryPaper(target.workspaceId, patch);
+      if (next) {
+        updateDocument(id, normalizeBackendPaper(next));
+      }
+    } catch (err) {
+      console.warn("Backend update failed, preserved local patch", err);
+    }
   }
 
   async function deleteDocument(id) {
@@ -198,7 +204,7 @@ export const useLibraryStore = defineStore("library", () => {
       note: paper.note,
       journalTags: normalizeJournalTags(paper.journalTags),
       venueType: paper.venueType || "期刊",
-      venueRanking: paper.venueRanking || "JCR --",
+      venueRanking: paper.venueRanking || "",
       publishYear: paper.publishYear,
       readAt: paper.readAt,
       uploadedAt: paper.uploadedAt,

@@ -4,6 +4,7 @@ import com.paperpilot.server.entity.AppUserEntity;
 import com.paperpilot.server.entity.FriendRequestEntity;
 import com.paperpilot.server.repository.AppUserRepository;
 import com.paperpilot.server.repository.FriendRequestRepository;
+import com.paperpilot.server.repository.UserNotificationRepository;
 import com.paperpilot.server.service.CurrentUserService;
 import com.paperpilot.server.service.NotificationService;
 import org.springframework.http.HttpStatus;
@@ -23,17 +24,20 @@ public class FriendController {
     private final AppUserRepository userRepository;
     private final CurrentUserService currentUserService;
     private final NotificationService notificationService;
+    private final UserNotificationRepository notificationRepository;
 
     public FriendController(
         FriendRequestRepository requestRepository,
         AppUserRepository userRepository,
         CurrentUserService currentUserService,
-        NotificationService notificationService
+        NotificationService notificationService,
+        UserNotificationRepository notificationRepository
     ) {
         this.requestRepository = requestRepository;
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
         this.notificationService = notificationService;
+        this.notificationRepository = notificationRepository;
     }
 
     @GetMapping("/profile/{userId}")
@@ -88,7 +92,10 @@ public class FriendController {
                 return Map.of("status", "incoming_pending");
             }
         }
-        if ("pending".equals(request.getStatus()) && !isExpiredPending(request)) {
+        // A newly created request object defaults to "pending" before it is
+        // persisted. Only return an existing pending request here; otherwise
+        // request.getId() is null and Map.of throws a NullPointerException.
+        if (!existing.isEmpty() && "pending".equals(request.getStatus()) && !isExpiredPending(request)) {
             return Map.of("status", "outgoing_pending", "id", request.getId());
         }
         request.setRequesterId(requester.getId());
@@ -160,6 +167,9 @@ public class FriendController {
         boolean accepted = "accepted".equals(request.getStatus());
         Map<String, Object> map = userMap(user, accepted, request.getContactInfo());
         map.put("requestId", request.getId());
+        notificationRepository.findByUserIdAndTypeAndReferenceIdOrderByCreatedAtDesc(
+            request.getRecipientId(), "contact_request", request.getId()
+        ).stream().findFirst().ifPresent(notification -> map.put("notificationId", notification.getId()));
         map.put("message", request.getMessage());
         map.put("time", request.getCreatedAt().format(FORMATTER));
         return map;
@@ -177,6 +187,7 @@ public class FriendController {
         map.put("role", user.getRole());
         map.put("membershipPlan", user.getMembershipPlan());
         map.put("fruitScore", user.getFruitScore() == null ? 0 : user.getFruitScore());
+        map.put("checkinScore", user.getCheckinScore() == null ? 0 : user.getCheckinScore());
         map.put("avatar", avatar(user.getUsername()));
         map.put("avatarUrl", user.getAvatarUrl());
         map.put("backgroundUrl", user.getBackgroundUrl());

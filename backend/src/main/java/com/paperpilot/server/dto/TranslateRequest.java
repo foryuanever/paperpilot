@@ -16,6 +16,12 @@ public class TranslateRequest {
     @NotBlank
     private String provider = "google";
 
+    private String usageScene = "";
+
+    private String paperTitle = "";
+
+    private String translationMode = "";
+
     public String getText() {
         return text;
     }
@@ -47,4 +53,16 @@ public class TranslateRequest {
     public void setProvider(String provider) {
         this.provider = provider;
     }
+
+    public String getUsageScene() { return usageScene; }
+
+    public void setUsageScene(String usageScene) { this.usageScene = usageScene; }
+
+    public String getPaperTitle() { return paperTitle; }
+
+    public void setPaperTitle(String paperTitle) { this.paperTitle = paperTitle; }
+
+    public String getTranslationMode() { return translationMode; }
+
+    public void setTranslationMode(String translationMode) { this.translationMode = translationMode; }
 }

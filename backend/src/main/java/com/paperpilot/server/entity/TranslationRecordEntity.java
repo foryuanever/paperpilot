@@ -14,6 +14,16 @@ import java.time.LocalDateTime;
 @Table(name = "translation_record")
 public class TranslationRecordEntity {
 
+    @Column(length = 512)
+    private String paperTitle;
+    @Column(length = 64)
+    private String translationMode;
+
+    public String getPaperTitle() { return paperTitle; }
+    public void setPaperTitle(String value) { paperTitle = value; }
+    public String getTranslationMode() { return translationMode; }
+    public void setTranslationMode(String value) { translationMode = value; }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -23,6 +33,30 @@ public class TranslationRecordEntity {
 
     @Column(nullable = false, length = 64)
     private String provider;
+
+    @Column(length = 128)
+    private String route;
+
+    @Column(name = "source_lang", length = 32)
+    private String sourceLang;
+
+    @Column(name = "target_lang", length = 32)
+    private String targetLang;
+
+    @Column(name = "client_type", length = 64)
+    private String clientType;
+
+    @Column(name = "ip_address", length = 128)
+    private String ipAddress;
+
+    @Column(name = "user_agent", length = 255)
+    private String userAgent;
+
+    @Column(name = "error_message", length = 1000)
+    private String errorMessage;
+
+    @Column(name = "network_profile", length = 512)
+    private String networkProfile;
 
     @Column(name = "char_count", nullable = false)
     private Long charCount = 0L;
@@ -61,6 +95,70 @@ public class TranslationRecordEntity {
 
     public void setProvider(String provider) {
         this.provider = provider;
+    }
+
+    public String getRoute() {
+        return route;
+    }
+
+    public void setRoute(String route) {
+        this.route = route;
+    }
+
+    public String getSourceLang() {
+        return sourceLang;
+    }
+
+    public void setSourceLang(String sourceLang) {
+        this.sourceLang = sourceLang;
+    }
+
+    public String getTargetLang() {
+        return targetLang;
+    }
+
+    public void setTargetLang(String targetLang) {
+        this.targetLang = targetLang;
+    }
+
+    public String getClientType() {
+        return clientType;
+    }
+
+    public void setClientType(String clientType) {
+        this.clientType = clientType;
+    }
+
+    public String getIpAddress() {
+        return ipAddress;
+    }
+
+    public void setIpAddress(String ipAddress) {
+        this.ipAddress = ipAddress;
+    }
+
+    public String getUserAgent() {
+        return userAgent;
+    }
+
+    public void setUserAgent(String userAgent) {
+        this.userAgent = userAgent;
+    }
+
+    public String getErrorMessage() {
+        return errorMessage;
+    }
+
+    public void setErrorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
+    }
+
+    public String getNetworkProfile() {
+        return networkProfile;
+    }
+
+    public void setNetworkProfile(String networkProfile) {
+        this.networkProfile = networkProfile;
     }
 
     public Long getCharCount() {

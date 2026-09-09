@@ -8,9 +8,9 @@
 
         <section class="capture-flow-hero" data-reveal>
           <div class="flow-head">
-            <span class="plugin-badge">PaperSolver Capture · v0.3.8</span>
+            <span class="plugin-badge">PaperSolver Capture · v0.3.11</span>
             <h1>官网文献捕获流程</h1>
-            <p>从搜索源进入官网，插件只在明确论文页安静出现，确认后把题录与 PDF 送回文献库。</p>
+            <p>先下载并安装浏览器插件，再打开论文详情页。插件会识别题录和 PDF，确认后送回文献库。</p>
           </div>
           <div class="flow-diagram" aria-label="插件导入流程" data-reveal="scale">
             <article class="flow-node" data-reveal="scale" data-reveal-delay="1">
@@ -26,7 +26,7 @@
             <article class="flow-node" data-reveal="scale" data-reveal-delay="3">
               <i class="flow-icon icon-confirm"></i>
               <strong>点击导入</strong>
-              <span>低打扰浮层，不再乱弹</span>
+              <span>确认后导入题录与 PDF</span>
             </article>
             <article class="flow-node" data-reveal="scale" data-reveal-delay="4">
               <i class="flow-icon icon-library"></i>
@@ -35,16 +35,157 @@
             </article>
           </div>
           <div class="browser-downloads">
-            <a class="browser-download-btn" href="/downloads/papersolver-capture-chrome-v0.3.8.zip" download>
+            <a class="browser-download-btn" :href="pluginDownloadUrl('chrome')" target="_blank" rel="noopener noreferrer">
               <span class="browser-logo chrome-logo"></span>
-              <strong>Chrome 下载</strong>
-              <small>开发者模式加载</small>
+              <strong>下载 Chrome 插件</strong>
+              <small>解压后在扩展页加载</small>
             </a>
-            <a class="browser-download-btn" href="/downloads/papersolver-capture-edge-v0.3.8.zip" download>
+            <a class="browser-download-btn" :href="pluginDownloadUrl('edge')" target="_blank" rel="noopener noreferrer">
               <span class="browser-logo edge-logo"></span>
-              <strong>Edge 下载</strong>
-              <small>开发者模式加载</small>
+              <strong>下载 Edge 插件</strong>
+              <small>解压后在扩展页加载</small>
             </a>
+          </div>
+        </section>
+
+        <section class="search-formula-builder" data-reveal>
+          <div class="formula-builder-copy">
+            <div class="formula-badge-row">
+              <span class="formula-glow-badge">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                </svg>
+                AI 学术检索式
+              </span>
+              <span class="formula-sub-badge">Boolean Syntax</span>
+            </div>
+            <h2 class="formula-headline">检索式生成器</h2>
+            <p class="formula-desc">
+              输入您的科研课题或想法，AI 将智能解析核心概念，并生成适配学术数据库的高命中率中英文布尔检索式。
+            </p>
+            <div class="formula-features-pills">
+              <span class="feature-pill">
+                <i class="dot-indigo"></i>
+                布尔逻辑 (AND / OR / NOT)
+              </span>
+              <span class="feature-pill">
+                <i class="dot-emerald"></i>
+                适配 Web of Science / PubMed / CNKI
+              </span>
+              <span class="feature-pill">
+                <i class="dot-amber"></i>
+                一键直达官方数据库
+              </span>
+            </div>
+          </div>
+
+          <div class="formula-builder-console">
+            <div class="formula-console-header">
+              <div class="console-label-group">
+                <span class="console-icon">💡</span>
+                <strong>研究想法 / 课题关键词</strong>
+              </div>
+              <span class="console-shortcut-hint">快捷键 ⌘ / Ctrl + Enter</span>
+            </div>
+            <div class="formula-input-shell">
+              <textarea
+                id="formula-idea"
+                v-model="formulaIdea"
+                rows="4"
+                placeholder="例如：AI 在肿瘤药物分子筛选中的最新应用与临床转化研究"
+                @keydown.meta.enter.prevent="generateSearchFormula"
+                @keydown.ctrl.enter.prevent="generateSearchFormula"
+              ></textarea>
+            </div>
+            <div class="formula-builder-actions">
+              <div class="formula-select-wrapper">
+                <select v-model="formulaTargetSourceId" aria-label="选择要打开的搜索源">
+                  <option v-for="source in searchableFormulaSources" :key="source.id" :value="source.id">
+                    {{ source.name }}
+                  </option>
+                </select>
+                <div class="select-chevron">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </div>
+              </div>
+              <button class="formula-primary-btn" type="button" :disabled="formulaGenerating" @click="generateSearchFormula">
+                <span v-if="formulaGenerating" class="formula-btn-spinner"></span>
+                <svg v-else viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                </svg>
+                <span>{{ formulaGenerating ? "AI 检索式构建中..." : "生成高级检索式" }}</span>
+              </button>
+            </div>
+            <Transition name="fade">
+              <div v-if="formulaToast" class="formula-toast">{{ formulaToast }}</div>
+            </Transition>
+          </div>
+
+          <div class="formula-result-grid" :class="{ empty: !formulaResult }">
+            <template v-if="formulaResult">
+              <article class="formula-result-card simple">
+                <div class="formula-card-head">
+                  <div class="head-title-wrap">
+                    <span class="card-icon-pill">🔑</span>
+                    <strong>提取核心关键词 (Simple Keywords)</strong>
+                  </div>
+                  <button type="button" class="formula-copy-icon-btn" title="复制简单关键词" @click="copyFormulaText(formulaResult.simple)">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span>复制</span>
+                  </button>
+                </div>
+                <div class="formula-code-box">
+                  <code>{{ formulaResult.simple }}</code>
+                </div>
+              </article>
+
+              <article class="formula-result-card boolean">
+                <div class="formula-card-head">
+                  <div class="head-title-wrap">
+                    <span class="card-icon-pill">📐</span>
+                    <strong>数据库布尔检索式 (Boolean Formula)</strong>
+                  </div>
+                  <button type="button" class="formula-copy-icon-btn" title="复制数据库检索式" @click="copyFormulaText(formulaResult.boolean)">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span>复制</span>
+                  </button>
+                </div>
+                <div class="formula-code-box highlight-boolean">
+                  <code>{{ formulaResult.boolean }}</code>
+                </div>
+                <div class="formula-card-actions">
+                  <button type="button" class="formula-launch-btn" @click="copyAndOpenFormula(formulaResult.boolean)">
+                    <span>复制并前往打开 {{ selectedFormulaSource?.shortName || selectedFormulaSource?.name || "目标数据库" }}</span>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                      <polyline points="15 3 21 3 21 9"></polyline>
+                      <line x1="10" y1="14" x2="21" y2="3"></line>
+                    </svg>
+                  </button>
+                </div>
+              </article>
+            </template>
+
+            <article v-else class="formula-result-empty">
+              <div class="empty-header">
+                <div class="empty-header-left">
+                  <span class="syntax-badge">布尔检索语法示例</span>
+                  <strong>标准检索式效果 Preview</strong>
+                </div>
+                <span class="empty-hint">输入研究想法后点击生成即可自动组装</span>
+              </div>
+              <div class="formula-preview-code">
+                <code>(“artificial intelligence” OR “machine learning”) AND (“drug screening” OR “virtual screening”)</code>
+              </div>
+            </article>
           </div>
         </section>
 
@@ -65,9 +206,9 @@
               :class="source.tone"
               @click="openSourceLauncher(source)"
             >
-              <i class="source-site-icon">
-                <img v-if="source.icon" :src="source.icon" :alt="`${source.name} logo`" loading="lazy" />
-                <b v-else>{{ source.initial }}</b>
+              <i class="source-site-icon" :class="{ 'icon-failed': failedSourceIcons.has(source.id) }" :aria-label="`${source.name} 标识`">
+                <img :src="source.icon" :alt="`${source.name} 图标`" @error="markSourceIconFailed(source.id)" />
+                <b aria-hidden="true">{{ source.shortName?.slice(0, 1) || source.name.slice(0, 1) }}</b>
               </i>
               <strong>{{ source.name }}</strong>
               <span>{{ source.desc }}</span>
@@ -395,10 +536,12 @@ const expandedFilters = ref({
 });
 
 const pluginFaqs = [
+  { q: "插件如何安装与使用？", a: "先下载 Chrome 或 Edge 插件压缩包并解压。打开 chrome://extensions 或 edge://extensions，开启开发者模式，选择“加载已解压的扩展程序”并选中解压后的文件夹。安装后打开论文详情页或 PDF 页面，点击浏览器工具栏中的 PaperSolver 图标，再点击“导入文献”；完成后到文献库确认题录与 PDF。" },
   { q: "PaperSolver Capture 是免费的吗？", a: "完全免费。插件本身、识别与导入功能均不收费，配合 PaperSolver 账号即可使用。" },
-  { q: "支持哪些网站？", a: "适配 ScienceDirect、PubMed、知网、Semantic Scholar、arXiv、Nature、ACL Anthology 等主流学术来源，并在持续扩展。" },
+  { q: "支持哪些网站？", a: "适配 ScienceDirect、PubMed、知网、万方、Semantic Scholar、arXiv、Nature、ACL Anthology 等主流学术来源。不同网站的登录状态、反爬策略和下载权限不同，插件不会绕过网站权限。" },
   { q: "插件会上传我的浏览数据吗？", a: "不会。插件只在论文详情页或 PDF 页本地识别题名、作者、DOI 与 PDF 链接，按你点击导入时才上传到 PaperSolver。" },
-  { q: "没有 PDF 的文献能导入吗？", a: "可以。插件会捕获题名、作者、来源、DOI 等元数据并入库，后续可手动补充 PDF 或通过 DOI 跳转原文。" },
+  { q: "知网、万方为什么提示 Failed to fetch？", a: "知网、万方等数据库通常需要登录学校或机构账号，并且账号必须具备 PDF/CAJ 全文下载权限。没有权限时可以保存题录，但不能进行对照翻译或沉浸翻译；请先在官网登录并下载真实 PDF，或下载后在文献库手动关联。Failed to fetch 通常表示登录会话、下载权限、网站防爬或网络请求被拒绝，不是模型故障。" },
+  { q: "没有 PDF 的文献能导入吗？", a: "可以导入题名、作者、来源、DOI 等元数据，但没有真实 PDF 时不会开放翻译入口。请在有权限的官网页面下载 PDF，或在文献库使用“关联 PDF”上传。" },
   { q: "Edge 也能用吗？", a: "可以。Edge 与 Chrome 同为 Chromium 内核，安装步骤一致，均支持开发者模式加载已解压扩展。" },
 ];
 
@@ -424,10 +567,10 @@ const pluginRelatedTools = [
 ];
 
 const browserLessons = [
-  { step: "01", title: "下载并解压", desc: "选择 Chrome 或 Edge 压缩包，解压后不要只打开 zip 内文件。" },
+  { step: "01", title: "下载并解压插件", desc: "先点击上方对应浏览器的下载按钮，下载完成后解压 ZIP 文件。" },
   { step: "02", title: "打开扩展页", desc: "Chrome 输入 chrome://extensions，Edge 输入 edge://extensions。" },
-  { step: "03", title: "开发者模式", desc: "开启开发者模式，再选择“加载已解压的扩展程序”。" },
-  { step: "04", title: "固定插件", desc: "将 PaperSolver 图标固定到工具栏，打开论文页即可捕获。" },
+  { step: "03", title: "加载插件文件夹", desc: "开启右上角“开发者模式”，点击“加载已解压的扩展程序”，选择刚解压的文件夹。" },
+  { step: "04", title: "固定并导入论文", desc: "将 PaperSolver 图标固定到工具栏，打开论文详情页或 PDF，点击导入文献。" },
 ];
 
 const sourceMeta = {
@@ -473,15 +616,12 @@ const sourceMeta = {
   },
 };
 
-const faviconFor = (domain) => domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : "";
-
 const sourceLaunchers = [
   ...searchEnginePresets.map((item, index) => ({
     ...item,
-    initial: item.shortName.slice(0, 1).toUpperCase(),
+    icon: sourceIcon(item.id),
     desc: sourceMeta[item.id]?.desc || "官方学术检索入口",
     region: sourceMeta[item.id]?.region || "Source",
-    icon: faviconFor(sourceMeta[item.id]?.domain || `${item.id}.com`),
     tone: ["blue", "violet", "green", "ink", "red", "amber", "cyan", "purple"][index % 8],
   })),
   {
@@ -490,10 +630,9 @@ const sourceLaunchers = [
     shortName: "Scholar",
     url: "https://scholar.google.com/",
     searchPrefix: "https://scholar.google.com/scholar?q=",
-    initial: "G",
+    icon: sourceAsset("google-scholar.svg"),
     desc: "跨出版商论文与引用检索",
     region: "Index",
-    icon: faviconFor("scholar.google.com"),
     tone: "blue",
   },
   {
@@ -502,10 +641,9 @@ const sourceLaunchers = [
     shortName: "arXiv",
     url: "https://arxiv.org/",
     searchPrefix: "https://arxiv.org/search/?query=",
-    initial: "A",
+    icon: sourceAsset("arxiv.ico"),
     desc: "开放预印本与 PDF 原文",
     region: "Open",
-    icon: faviconFor("arxiv.org"),
     tone: "red",
   },
   {
@@ -514,10 +652,9 @@ const sourceLaunchers = [
     shortName: "ACL",
     url: "https://aclanthology.org/",
     searchPrefix: "https://aclanthology.org/search/?q=",
-    initial: "A",
+    icon: sourceAsset("acl.svg"),
     desc: "ACL 系列 NLP 论文库",
     region: "NLP",
-    icon: faviconFor("aclanthology.org"),
     tone: "green",
   },
   {
@@ -526,10 +663,9 @@ const sourceLaunchers = [
     shortName: "DBLP",
     url: "https://dblp.org/",
     searchPrefix: "https://dblp.org/search?q=",
-    initial: "D",
+    icon: sourceAsset("dblp.ico"),
     desc: "计算机作者、会议与期刊索引",
     region: "CS",
-    icon: faviconFor("dblp.org"),
     tone: "ink",
   },
   {
@@ -538,10 +674,9 @@ const sourceLaunchers = [
     shortName: "IEEE",
     url: "https://ieeexplore.ieee.org/",
     searchPrefix: "https://ieeexplore.ieee.org/search/searchresult.jsp?queryText=",
-    initial: "I",
+    icon: sourceAsset("ieee.svg"),
     desc: "工程与电气电子",
     region: "Engineering",
-    icon: faviconFor("ieeexplore.ieee.org"),
     tone: "cyan",
   },
   {
@@ -550,13 +685,74 @@ const sourceLaunchers = [
     shortName: "Springer",
     url: "https://link.springer.com/",
     searchPrefix: "https://link.springer.com/search?query=",
-    initial: "S",
+    icon: sourceAsset("springer.svg"),
     desc: "Springer 期刊、会议与图书章节",
     region: "Publisher",
-    icon: faviconFor("link.springer.com"),
     tone: "violet",
   },
 ];
+
+const failedSourceIcons = ref(new Set());
+const formulaIdea = ref("");
+const formulaGenerating = ref(false);
+const formulaResult = ref(null);
+const formulaToast = ref("");
+const formulaTargetSourceId = ref("google-scholar");
+
+const formulaConceptDictionary = [
+  { patterns: ["人工智能", "ai", "机器学习", "深度学习"], label: "人工智能", terms: ['"artificial intelligence"', '"machine learning"', '"deep learning"', "AI"] },
+  { patterns: ["大语言模型", "llm", "chatgpt", "gpt"], label: "大语言模型", terms: ['"large language model"', "LLM", "ChatGPT", "GPT"] },
+  { patterns: ["药物筛选", "虚拟筛选", "药物发现", "药物研发"], label: "药物筛选", terms: ['"drug screening"', '"virtual screening"', '"drug discovery"'] },
+  { patterns: ["医学影像", "影像诊断", "影像组学"], label: "医学影像", terms: ['"medical imaging"', '"diagnostic imaging"', "radiomics"] },
+  { patterns: ["肿瘤", "癌症", "癌"], label: "肿瘤", terms: ["cancer", "tumor", "oncology", "neoplasm"] },
+  { patterns: ["综述", "述评", "系统评价"], label: "综述", terms: ["review", "survey", '"systematic review"'] },
+  { patterns: ["图神经网络", "gnn"], label: "图神经网络", terms: ['"graph neural network"', "GNN"] },
+  { patterns: ["知识图谱"], label: "知识图谱", terms: ['"knowledge graph"', '"knowledge graphs"'] },
+  { patterns: ["推荐系统"], label: "推荐系统", terms: ['"recommender system"', '"recommendation system"'] },
+  { patterns: ["自然语言处理", "nlp"], label: "自然语言处理", terms: ['"natural language processing"', "NLP"] },
+  { patterns: ["遥感"], label: "遥感", terms: ['"remote sensing"'] },
+  { patterns: ["碳中和", "双碳"], label: "碳中和", terms: ['"carbon neutrality"', '"carbon neutral"', "decarbonization"] },
+  { patterns: ["教育", "教学"], label: "教育", terms: ["education", "teaching", "learning"] },
+  { patterns: ["心理健康", "抑郁", "焦虑"], label: "心理健康", terms: ['"mental health"', "depression", "anxiety"] },
+  { patterns: ["供应链"], label: "供应链", terms: ['"supply chain"', '"supply chains"'] },
+  { patterns: ["区块链"], label: "区块链", terms: ["blockchain", '"distributed ledger"'] },
+  { patterns: ["数字孪生"], label: "数字孪生", terms: ['"digital twin"', '"digital twins"'] },
+  { patterns: ["可解释", "可解释性", "解释性"], label: "可解释性", terms: ['"explainable artificial intelligence"', "XAI", "interpretability"] },
+];
+
+const fillerTermsPattern = /论文|文献|研究|关于|有关|想找|我想找|寻找|方面|方向|主题|的|和|与|及|在|中|里|基于|应用|方法|分析|影响|作用|关系/g;
+const MAX_FORMULA_CONNECTORS = 8;
+const MAX_FORMULA_LENGTH = 260;
+
+function sourceAsset(fileName) {
+  // Electron loads the app with file://, while the web app is served from the site root.
+  return window.location.protocol === "file:"
+    ? `./source-icons/${fileName}`
+    : `/source-icons/${fileName}`;
+}
+
+function sourceIcon(id) {
+  const icons = {
+    "science-direct": sourceAsset("sciencedirect.svg"),
+    sciencedirect: sourceAsset("sciencedirect.svg"),
+    "semantic-scholar": sourceAsset("semantic-scholar.ico"),
+    pubmed: sourceAsset("pubmed.ico"),
+    "web-of-science": sourceAsset("web-of-science.ico"),
+    cnki: sourceAsset("cnki.ico"),
+    wanfang: sourceAsset("wanfang.ico"),
+    "research-rabbit": sourceAsset("research-rabbit.svg"),
+    "connected-papers": sourceAsset("connected-papers.ico"),
+  };
+  return icons[id] || (window.location.protocol === "file:" ? "./brand/papersolver-mark-v2.png" : "/brand/papersolver-mark-v2.png");
+}
+
+function markSourceIconFailed(id) {
+  failedSourceIcons.value = new Set([...failedSourceIcons.value, id]);
+}
+
+function pluginDownloadUrl(browser) {
+  return `https://papersolver.cn/downloads/papersolver-capture-${browser}.zip`;
+}
 
 onMounted(async () => {
   // Load history from localStorage
@@ -572,6 +768,14 @@ onMounted(async () => {
 
 const activeEngine = computed(
   () => searchEnginePresets.find((item) => item.id === activeEngineId.value) || searchEnginePresets[0],
+);
+
+const searchableFormulaSources = computed(() => sourceLaunchers.filter((source) => source.searchPrefix));
+
+const selectedFormulaSource = computed(() =>
+  searchableFormulaSources.value.find((source) => source.id === formulaTargetSourceId.value)
+  || searchableFormulaSources.value[0]
+  || null,
 );
 
 const isExternalEngine = computed(() => {
@@ -882,6 +1086,174 @@ function officialSearchUrl(engine, term) {
   return `${engine.searchPrefix}${encoded}`;
 }
 
+function normalizeFormulaIdea(text) {
+  return String(text || "")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractFormulaConcepts(text) {
+  const lowerText = text.toLowerCase();
+  return formulaConceptDictionary.filter((item) =>
+    item.patterns.some((pattern) => lowerText.includes(pattern.toLowerCase())),
+  );
+}
+
+function fallbackFormulaTerms(text, matchedConcepts) {
+  const matchedLabels = new Set(matchedConcepts.map((item) => item.label));
+  const cleaned = text
+    .replace(fillerTermsPattern, " ")
+    .replace(/[，。、“”‘’；;：:（）()【】[\]{}]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const parts = cleaned
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 2 && !matchedLabels.has(part));
+  if (!parts.length && cleaned) return [cleaned];
+  return [...new Set(parts)].slice(0, 4);
+}
+
+function quoteFormulaTerm(term) {
+  const value = String(term || "").trim();
+  if (!value) return "";
+  if (/^".+"$/.test(value) || /^[A-Z]{2,}$/.test(value)) return value;
+  return /\s/.test(value) ? `"${value}"` : value;
+}
+
+function booleanConnectorCount(text) {
+  return (String(text || "").match(/\b(?:AND|OR|NOT)\b/gi) || []).length;
+}
+
+function compactFormulaForSearchSource(text, simple = "") {
+  const normalized = String(text || "")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/\s+/g, " ")
+    .replace(/\s*\b(AND|OR|NOT)\b\s*/gi, " $1 ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (normalized.length <= MAX_FORMULA_LENGTH && booleanConnectorCount(normalized) <= MAX_FORMULA_CONNECTORS) {
+    return normalized;
+  }
+  const terms = [];
+  const addTerm = (term) => {
+    const value = quoteFormulaTerm(String(term || "").replace(/"/g, "").trim());
+    if (!value || terms.some((item) => item.toLowerCase() === value.toLowerCase())) return;
+    terms.push(value);
+  };
+  normalized.replace(/"([^"]{2,60})"/g, (_, term) => {
+    if (terms.length < 8) addTerm(term);
+    return "";
+  });
+  normalized.replace(/\b[A-Za-z][A-Za-z0-9-]{1,40}\b/g, (term) => {
+    if (terms.length < 8 && !/^(AND|OR|NOT)$/i.test(term)) addTerm(term);
+    return "";
+  });
+  if (!terms.length) {
+    String(simple || "").split(/[\s,，;；]+/).forEach((term) => {
+      if (terms.length < 6) addTerm(term);
+    });
+  }
+  return (terms.length ? terms.join(" OR ") : normalized).slice(0, MAX_FORMULA_LENGTH).trim();
+}
+
+function normalizeFormulaResult(result, idea) {
+  const fallback = buildSearchFormula(idea);
+  const simple = String(result?.simple || fallback.simple || idea).trim();
+  const boolean = compactFormulaForSearchSource(result?.boolean || fallback.boolean || simple, simple);
+  return {
+    simple: simple.slice(0, 240),
+    boolean,
+    concepts: Array.isArray(result?.concepts) ? result.concepts : fallback.concepts,
+    notes: Array.isArray(result?.notes) ? result.notes : [],
+    scene: result?.scene || "free_pool",
+  };
+}
+
+function buildBooleanFormula(concepts, fallbackTerms) {
+  const groups = concepts.map((concept) => `(${concept.terms.map(quoteFormulaTerm).join(" OR ")})`);
+  if (fallbackTerms.length) {
+    groups.push(`(${fallbackTerms.map(quoteFormulaTerm).join(" OR ")})`);
+  }
+  return groups.length ? groups.join("\nAND\n") : "";
+}
+
+function buildSimpleFormula(text, concepts, fallbackTerms) {
+  const labels = concepts.map((item) => item.label);
+  const simple = [...labels, ...fallbackTerms].join(" ").trim();
+  return simple || text;
+}
+
+function buildSearchFormula(text) {
+  const normalized = normalizeFormulaIdea(text);
+  const concepts = extractFormulaConcepts(normalized);
+  const fallbacks = fallbackFormulaTerms(normalized, concepts);
+  const simple = buildSimpleFormula(normalized, concepts, fallbacks);
+  const boolean = buildBooleanFormula(concepts, fallbacks) || quoteFormulaTerm(simple);
+  return {
+    simple,
+    boolean,
+    concepts: concepts.map((item) => item.label),
+  };
+}
+
+function showFormulaToast(message) {
+  formulaToast.value = message;
+  window.setTimeout(() => {
+    if (formulaToast.value === message) formulaToast.value = "";
+  }, 2200);
+}
+
+async function generateSearchFormula() {
+  const idea = normalizeFormulaIdea(formulaIdea.value);
+  if (!idea) {
+    showFormulaToast("先输入一个研究想法");
+    return;
+  }
+  formulaGenerating.value = true;
+  try {
+    const result = await paperpilotApi.generateSearchFormula({ idea });
+    formulaResult.value = normalizeFormulaResult(result, idea);
+    showFormulaToast("已生成检索式");
+  } catch (error) {
+    formulaResult.value = normalizeFormulaResult(buildSearchFormula(idea), idea);
+    showFormulaToast(error?.response?.data?.message || "生成服务暂不可用，已用模板兜底");
+  } finally {
+    formulaGenerating.value = false;
+  }
+}
+
+async function copyFormulaText(text) {
+  const value = String(text || "").trim();
+  if (!value) return;
+  try {
+    await navigator.clipboard?.writeText(value);
+    showFormulaToast("已复制");
+  } catch {
+    query.value = value;
+    showFormulaToast("浏览器不允许复制，已放入搜索框");
+  }
+}
+
+function applyFormulaToSourceQuery(text) {
+  const value = String(text || "").trim();
+  if (!value) return;
+  query.value = value;
+  showFormulaToast("已填入下方搜索源");
+}
+
+async function copyAndOpenFormula(text) {
+  const value = compactFormulaForSearchSource(text, formulaResult.value?.simple);
+  const source = selectedFormulaSource.value;
+  if (!value || !source) return;
+  query.value = value;
+  await copyFormulaText(value);
+  await openSourceLauncher(source);
+}
+
 async function openSourceLauncher(source) {
   activeEngineId.value = searchEnginePresets.some((item) => item.id === source.id)
     ? source.id
@@ -945,12 +1317,14 @@ async function importByUrl() {
    ========================================================================== */
 
 :root[data-theme="dark"] .flow-head h1,
+:root[data-theme="dark"] .formula-builder-copy h2,
 :root[data-theme="dark"] .directory-head h2,
 :root[data-theme="dark"] .plugin-faq-head h2 {
   color: #f8fafc !important;
 }
 
 :root[data-theme="dark"] .flow-head p,
+:root[data-theme="dark"] .formula-builder-copy p,
 :root[data-theme="dark"] .directory-head span {
   color: #94a3b8 !important;
 }
@@ -1033,7 +1407,8 @@ async function importByUrl() {
   border-radius: 50%;
   pointer-events: none;
   filter: blur(70px);
-  animation: spatial-float 12s cubic-bezier(0.22, 1, 0.36, 1) infinite alternate;
+  animation: none;
+  will-change: transform;
   z-index: 0;
 }
 
@@ -1068,6 +1443,7 @@ async function importByUrl() {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4) !important;
 }
 
+.search-formula-builder,
 .source-directory,
 .plugin-faq {
   position: relative;
@@ -1079,6 +1455,53 @@ async function importByUrl() {
   transition: all 0.3s ease;
 }
 
+.plugin-install-steps {
+  padding: 28px;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.plugin-step-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.plugin-step-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #e1e8f2;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.plugin-step-card b {
+  display: block;
+  margin-bottom: 14px;
+  color: #2563eb;
+  font-size: 12px;
+  letter-spacing: .08em;
+}
+
+.plugin-step-card strong { display: block; margin-bottom: 8px; color: #172033; }
+.plugin-step-card p, .plugin-step-note { margin: 0; color: #64748b; line-height: 1.65; font-size: 13px; }
+.plugin-step-note { margin-top: 18px; }
+
+:root[data-theme="dark"] .plugin-install-steps { background: #111827; border-color: rgba(148,163,184,.2); }
+:root[data-theme="dark"] .plugin-step-card { background: #0f172a; border-color: rgba(148,163,184,.2); }
+:root[data-theme="dark"] .plugin-step-card strong { color: #e5edff; }
+:root[data-theme="dark"] .plugin-step-card p, :root[data-theme="dark"] .plugin-step-note { color: #a7b3c8; }
+
+@media (max-width: 900px) {
+  .plugin-step-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .plugin-step-grid { grid-template-columns: 1fr; }
+}
+
+:root[data-theme="dark"] .search-formula-builder,
 :root[data-theme="dark"] .source-directory,
 :root[data-theme="dark"] .plugin-faq {
   background: rgba(15, 23, 42, 0.6) !important;
@@ -3843,6 +4266,7 @@ async function importByUrl() {
 }
 
 .search-workbench,
+.search-formula-builder,
 .source-directory,
 .capture-rulebook,
 .install-strip,
@@ -4034,6 +4458,7 @@ async function importByUrl() {
   font-weight: 900;
 }
 
+.search-formula-builder,
 .source-directory,
 .capture-rulebook,
 .url-import-desk {
@@ -4310,6 +4735,585 @@ async function importByUrl() {
     radial-gradient(circle at 20% 12%, rgba(37, 99, 235, .12), transparent 28%),
     radial-gradient(circle at 84% 18%, rgba(20, 184, 166, .12), transparent 30%),
     #fff;
+}
+
+/* ── 检索式生成器 (Search Formula Builder - Apple/Linear 级高透毛玻璃卡片) ── */
+.search-formula-builder {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.82fr) minmax(0, 1.18fr);
+  gap: 28px;
+  align-items: stretch;
+  align-content: start;
+  padding: 34px 38px;
+  border: 1.5px solid rgba(99, 102, 241, 0.22);
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 10% 18%, rgba(99, 102, 241, 0.12), transparent 38%),
+    radial-gradient(circle at 92% 10%, rgba(20, 184, 166, 0.1), transparent 34%),
+    linear-gradient(135deg, #ffffff 0%, #f8faff 100%);
+  box-shadow: 0 20px 50px -12px rgba(99, 102, 241, 0.12), 0 4px 16px rgba(0, 0, 0, 0.03);
+  backdrop-filter: blur(20px);
+  transition: all 0.3s ease;
+}
+@media (max-width: 960px) {
+  .search-formula-builder { grid-template-columns: 1fr; padding: 24px; gap: 22px; }
+}
+
+.formula-builder-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-self: start;
+  min-width: 0;
+  gap: 14px;
+}
+
+.formula-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.formula-glow-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.16), rgba(168, 85, 247, 0.14));
+  border: 1.5px solid rgba(99, 102, 241, 0.35);
+  color: #4f46e5;
+  font-size: 11.5px;
+  font-weight: 850;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.12);
+}
+
+.formula-sub-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.formula-headline {
+  margin: 0;
+  color: #0f172a;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.formula-desc {
+  margin: 0;
+  color: #475569;
+  font-size: 13.5px;
+  line-height: 1.65;
+  font-weight: 500;
+}
+
+.formula-features-pills {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.feature-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(241, 245, 249, 0.7);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  color: #334155;
+  font-size: 12px;
+  font-weight: 650;
+  width: fit-content;
+}
+.feature-pill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-indigo { background: #6366f1; box-shadow: 0 0 6px rgba(99, 102, 241, 0.6); }
+.dot-emerald { background: #10b981; box-shadow: 0 0 6px rgba(16, 185, 129, 0.6); }
+.dot-amber { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); }
+
+/* 右侧控制台 */
+.formula-builder-console {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  align-self: start;
+  padding: 22px 24px;
+  border: 1.5px solid rgba(99, 102, 241, 0.2);
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.88));
+  box-shadow: 0 10px 30px -4px rgba(99, 102, 241, 0.08), 0 2px 6px rgba(0, 0, 0, 0.02);
+  backdrop-filter: blur(12px);
+}
+
+.formula-console-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.console-label-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.console-shortcut-hint {
+  font-size: 11px;
+  font-weight: 650;
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.12);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.formula-input-shell textarea {
+  width: 100%;
+  min-height: 104px;
+  resize: vertical;
+  border: 1.5px solid rgba(148, 163, 184, 0.35);
+  border-radius: 14px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 13px 15px;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.6;
+  outline: none;
+  box-sizing: border-box;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.formula-input-shell textarea:focus {
+  border-color: #6366f1;
+  background: #ffffff;
+  box-shadow: 0 0 0 3.5px rgba(99, 102, 241, 0.18), 0 4px 12px rgba(99, 102, 241, 0.08);
+}
+
+.formula-builder-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.formula-select-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.formula-select-wrapper select {
+  width: 100%;
+  height: 44px;
+  border-radius: 13px;
+  border: 1.5px solid rgba(148, 163, 184, 0.35);
+  background: #ffffff;
+  color: #1e293b;
+  padding: 0 36px 0 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.formula-select-wrapper select:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.select-chevron {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+}
+
+.formula-primary-btn {
+  height: 44px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 850;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 8px 24px -2px rgba(79, 70, 229, 0.42);
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.formula-primary-btn:hover:not(:disabled) {
+  transform: translateY(-1.5px);
+  box-shadow: 0 12px 28px -2px rgba(79, 70, 229, 0.52);
+  filter: brightness(1.06);
+}
+
+.formula-primary-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.formula-primary-btn:disabled {
+  cursor: wait;
+  opacity: 0.78;
+}
+
+.formula-btn-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: formula-spin 0.7s linear infinite;
+}
+@keyframes formula-spin {
+  to { transform: rotate(360deg); }
+}
+
+.formula-toast {
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: #4f46e5;
+  font-size: 12.5px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 底部结果展示区 */
+.formula-result-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.72fr) minmax(420px, 1.28fr);
+  gap: 18px;
+  min-width: 0;
+  margin-top: 4px;
+}
+
+.formula-result-grid.empty {
+  grid-template-columns: 1fr;
+}
+
+.formula-result-card {
+  min-width: 0;
+  padding: 20px;
+  border: 1.5px solid rgba(99, 102, 241, 0.16);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 255, 0.9));
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.formula-result-card.boolean {
+  border-color: rgba(99, 102, 241, 0.28);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(243, 244, 255, 0.92));
+}
+
+.formula-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.head-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.head-title-wrap strong {
+  color: #0f172a;
+  font-size: 13.5px;
+  font-weight: 850;
+}
+
+.card-icon-pill {
+  font-size: 14px;
+}
+
+.formula-copy-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid rgba(99, 102, 241, 0.24);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.formula-copy-icon-btn:hover {
+  background: #eff2fe;
+  border-color: #4f46e5;
+  transform: translateY(-1px);
+}
+
+.formula-code-box {
+  background: #f1f5f9;
+  border-radius: 12px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border: 1.5px solid rgba(99, 102, 241, 0.18);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.formula-code-box code {
+  color: #1e293b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.formula-code-box.highlight-boolean {
+  background: linear-gradient(135deg, #f0f4ff, #eef2ff);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.formula-code-box.highlight-boolean code {
+  color: #1e1b4b;
+}
+
+.formula-card-actions {
+  margin-top: auto;
+}
+
+.formula-launch-btn {
+  width: 100%;
+  height: 40px;
+  border: 0;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3);
+  transition: all 0.2s ease;
+}
+
+.formula-launch-btn:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.4);
+}
+
+/* 示例空状态预览卡片 */
+.formula-result-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+  border: 1.5px dashed rgba(99, 102, 241, 0.28);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(248, 250, 255, 0.95), rgba(241, 245, 249, 0.85));
+}
+
+.empty-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.empty-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.syntax-badge {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: #4f46e5;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.empty-header-left strong {
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.empty-hint {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.formula-preview-code {
+  background: #f1f5f9;
+  border-radius: 12px;
+  padding: 14px 18px;
+  border: 1.5px solid rgba(99, 102, 241, 0.18);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.formula-preview-code code {
+  color: #1e293b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 深色模式适配 */
+:root[data-theme="dark"] .search-formula-builder {
+  background:
+    radial-gradient(circle at 10% 18%, rgba(99, 102, 241, 0.18), transparent 38%),
+    radial-gradient(circle at 92% 10%, rgba(20, 184, 166, 0.14), transparent 34%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.9));
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="dark"] .formula-glow-badge {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.22));
+  border-color: rgba(99, 102, 241, 0.45);
+  color: #a5b4fc;
+}
+
+:root[data-theme="dark"] .formula-headline {
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .formula-desc {
+  color: #94a3b8;
+}
+
+:root[data-theme="dark"] .feature-pill {
+  background: rgba(30, 41, 59, 0.7);
+  border-color: rgba(71, 85, 105, 0.5);
+  color: #cbd5e1;
+}
+
+:root[data-theme="dark"] .formula-builder-console {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.85));
+  border-color: rgba(99, 102, 241, 0.3);
+  box-shadow: 0 10px 30px -4px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme="dark"] .console-label-group {
+  color: #f1f5f9;
+}
+
+:root[data-theme="dark"] .formula-input-shell textarea {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(71, 85, 105, 0.6);
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .formula-input-shell textarea:focus {
+  border-color: #818cf8;
+  background: rgba(15, 23, 42, 0.95);
+  box-shadow: 0 0 0 3.5px rgba(99, 102, 241, 0.3);
+}
+
+:root[data-theme="dark"] .formula-select-wrapper select {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(71, 85, 105, 0.6);
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .formula-result-card {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.85));
+  border-color: rgba(99, 102, 241, 0.25);
+}
+
+:root[data-theme="dark"] .formula-code-box,
+:root[data-theme="dark"] .formula-preview-code {
+  background: #090d16;
+  border-color: rgba(51, 65, 85, 0.7);
+}
+
+:root[data-theme="dark"] .formula-code-box code,
+:root[data-theme="dark"] .formula-preview-code code {
+  color: #38bdf8;
+}
+
+:root[data-theme="dark"] .formula-code-box.highlight-boolean {
+  background: #090d16;
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+:root[data-theme="dark"] .formula-code-box.highlight-boolean code {
+  color: #67e8f9;
+}
+
+:root[data-theme="dark"] .head-title-wrap strong {
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .formula-copy-icon-btn {
+  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #a5b4fc;
+}
+
+:root[data-theme="dark"] .formula-result-empty {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.7), rgba(30, 41, 59, 0.5));
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+:root[data-theme="dark"] .empty-header-left strong {
+  color: #f1f5f9;
 }
 
 .capture-flow-hero .flow-node {
@@ -4600,12 +5604,15 @@ async function importByUrl() {
 }
 
 .source-square-card .source-site-icon b {
-  display: block;
+  display: none;
   color: #2563eb;
   font-size: 15px;
   font-style: normal;
   font-weight: 900;
 }
+
+.source-square-card .source-site-icon.icon-failed img { display: none; }
+.source-square-card .source-site-icon.icon-failed b { display: block; }
 
 .source-square-card strong {
   color: #111827;
@@ -4671,6 +5678,12 @@ async function importByUrl() {
 }
 
 @media (max-width: 920px) {
+  .search-formula-builder,
+  .formula-result-grid,
+  .formula-card-actions {
+    grid-template-columns: 1fr;
+  }
+
   .flow-diagram {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4683,6 +5696,7 @@ async function importByUrl() {
 
 @media (max-width: 560px) {
   .capture-flow-hero,
+  .search-formula-builder,
   .source-directory,
   .plugin-faq {
     padding: 20px;
@@ -4698,6 +5712,10 @@ async function importByUrl() {
 
   .browser-download-btn {
     width: 100%;
+  }
+
+  .formula-builder-actions {
+    grid-template-columns: 1fr;
   }
 
   .directory-head {

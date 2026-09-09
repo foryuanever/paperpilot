@@ -13,7 +13,6 @@ import com.paperpilot.server.repository.ForumPostReportRepository;
 import com.paperpilot.server.repository.ForumPostViewRepository;
 import com.paperpilot.server.repository.ForumReplyRepository;
 import com.paperpilot.server.service.CurrentUserService;
-import com.paperpilot.server.service.ForumModerationService;
 import com.paperpilot.server.service.NotificationService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -38,7 +37,6 @@ public class ForumController {
     private final ForumReplyRepository forumReplyRepository;
     private final AppUserRepository appUserRepository;
     private final CurrentUserService currentUserService;
-    private final ForumModerationService forumModerationService;
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
 
@@ -49,7 +47,6 @@ public class ForumController {
         ForumReplyRepository forumReplyRepository,
         AppUserRepository appUserRepository,
         CurrentUserService currentUserService,
-        ForumModerationService forumModerationService,
         NotificationService notificationService,
         ObjectMapper objectMapper
     ) {
@@ -59,7 +56,6 @@ public class ForumController {
         this.forumReplyRepository = forumReplyRepository;
         this.appUserRepository = appUserRepository;
         this.currentUserService = currentUserService;
-        this.forumModerationService = forumModerationService;
         this.notificationService = notificationService;
         this.objectMapper = objectMapper;
     }
@@ -108,10 +104,6 @@ public class ForumController {
     @PostMapping("/posts")
     public Map<String, Object> createPost(@RequestBody Map<String, Object> body) {
         AppUserEntity currentUser = currentUserService.getOrCreateDefaultUser();
-        ForumModerationService.ModerationResult review = forumModerationService.review(body);
-        if (!review.approved()) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, review.reason());
-        }
         ForumPostEntity post = new ForumPostEntity();
         applyPostFields(post, body);
         post.setUserId(currentUser.getId());
@@ -122,9 +114,7 @@ public class ForumController {
         return Map.of(
             "id", "post-" + saved.getId(),
             "title", saved.getTitle(),
-            "message", "AI 审核通过，帖子已发布",
-            "reviewer", review.reviewer(),
-            "reviewReason", review.reason()
+            "message", "帖子已发布"
         );
     }
 
@@ -146,16 +136,6 @@ public class ForumController {
         ensureOwner(post, currentUser);
         forumReplyRepository.deleteAllByPostId(post.getId());
         forumPostRepository.delete(post);
-    }
-
-    @PostMapping("/posts/review")
-    public Map<String, Object> reviewPost(@RequestBody Map<String, Object> body) {
-        ForumModerationService.ModerationResult review = forumModerationService.review(body);
-        return Map.of(
-            "approved", review.approved(),
-            "reason", review.reason(),
-            "reviewer", review.reviewer()
-        );
     }
 
     @PostMapping("/posts/{id}/like")
@@ -405,12 +385,15 @@ public class ForumController {
         if (!StringUtils.hasText(title) || !StringUtils.hasText(content) || content.length() <= 5) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "标题不能为空，内容需要大于 5 个字");
         }
+        AppUserEntity currentUser = currentUserService.getOrCreateDefaultUser();
+        if (content.matches("(?s).*\\[/?color(?:=[^\\]]+)?\\].*") && !isAdmin(currentUser)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅管理员可以在帖子正文中使用彩色文字");
+        }
         post.setTitle(title);
         post.setContent(content);
         String postType = defaultText(body, "postType", "研究讨论");
         post.setPostType(postType);
         String visibility = normalizeVisibility(text(body, "visibility"));
-        AppUserEntity currentUser = currentUserService.getOrCreateDefaultUser();
         if ("campus".equals(visibility) && !currentUser.isCampusVerified()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "校园圈帖子需要先完成校园认证");
         }
@@ -558,11 +541,7 @@ public class ForumController {
     }
 
     private void addFruitScore(Long userId, int delta) {
-        if (userId == null || delta <= 0) return;
-        appUserRepository.findById(userId).ifPresent(user -> {
-            user.setFruitScore((user.getFruitScore() != null ? user.getFruitScore() : 0) + delta);
-            appUserRepository.save(user);
-        });
+        // Disabled: Level points can only be earned via daily checkins.
     }
 
     private Long parseId(String value, String prefix) {

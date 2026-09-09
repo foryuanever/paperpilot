@@ -15,13 +15,25 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
+import java.util.ArrayDeque;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Deque;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
+
     private final AuthService authService;
     private final CurrentUserService currentUserService;
+    private final ConcurrentHashMap<String, Deque<Long>> loginAttempts = new ConcurrentHashMap<>();
+    private static final int LOGIN_ATTEMPT_LIMIT = 10;
+    private static final long LOGIN_WINDOW_MS = 10 * 60 * 1000L;
 
     public AuthController(AuthService authService, CurrentUserService currentUserService) {
         this.authService = authService;
@@ -31,7 +43,21 @@ public class AuthController {
     @PostMapping("/login")
     public AuthSessionVO login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         String ip = getClientIp(httpRequest);
+        checkLoginRate(ip, request.getEmail());
         return authService.login(request, ip);
+    }
+
+    private void checkLoginRate(String ip, String email) {
+        long now = System.currentTimeMillis();
+        String key = (ip == null ? "unknown" : ip) + "|" + (email == null ? "" : email.trim().toLowerCase());
+        Deque<Long> attempts = loginAttempts.computeIfAbsent(key, ignored -> new ArrayDeque<>());
+        synchronized (attempts) {
+            while (!attempts.isEmpty() && attempts.peekFirst() < now - LOGIN_WINDOW_MS) attempts.removeFirst();
+            if (attempts.size() >= LOGIN_ATTEMPT_LIMIT) {
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "登录尝试过于频繁，请 10 分钟后重试");
+            }
+            attempts.addLast(now);
+        }
     }
 
     @PostMapping("/register")
@@ -110,14 +136,23 @@ public class AuthController {
             jakarta.servlet.http.HttpServletResponse response,
             HttpServletRequest httpRequest) throws java.io.IOException {
         String ip = getClientIp(httpRequest);
+        DesktopLocalOAuthCallback localCallback = parseDesktopLocalOAuthCallback(state);
+        boolean desktopBrowserFlow = isDesktopBrowserFlow(state);
+        String authState = localCallback != null
+            ? localCallback.authState()
+            : (desktopBrowserFlow ? state.substring("desktop_external_".length()) : state);
         try {
-            AuthSessionVO session = authService.loginOrRegisterViaQQ(code, ip);
+            AuthSessionVO session = authService.loginOrRegisterViaQQ(code, authState, ip);
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            String json = mapper.writeValueAsString(session);
+            // The OAuth result travels through a Location header. User-uploaded avatar
+            // and background images can be multi-megabyte data URLs, so never put them
+            // in that redirect. The client refreshes the complete profile after login.
+            String json = mapper.writeValueAsString(compactOAuthSession(session));
             String base64 = java.util.Base64.getUrlEncoder().encodeToString(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            response.sendRedirect("https://papersolver.cn/login?qqSession=" + base64);
+            redirectOauth(response, "qqSession", base64, desktopBrowserFlow, localCallback);
         } catch (Exception e) {
-            response.sendRedirect("https://papersolver.cn/login?error=" + java.net.URLEncoder.encode(e.getMessage(), java.nio.charset.StandardCharsets.UTF_8));
+            log.error("QQ OAuth callback failed: ip={}, state={}", ip, redactOauthState(state), e);
+            redirectOauth(response, "error", oauthErrorMessage(e), desktopBrowserFlow, localCallback);
         }
     }
     @org.springframework.web.bind.annotation.GetMapping("/wechat/callback")
@@ -130,11 +165,102 @@ public class AuthController {
         try {
             AuthSessionVO session = authService.loginOrRegisterViaWechat(code, ip);
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            String json = mapper.writeValueAsString(session);
+            String json = mapper.writeValueAsString(compactOAuthSession(session));
             String base64 = java.util.Base64.getUrlEncoder().encodeToString(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            response.sendRedirect("https://papersolver.cn/login?qqSession=" + base64);
+            redirectOauth(response, "qqSession", base64);
         } catch (Exception e) {
-            response.sendRedirect("https://papersolver.cn/login?error=" + java.net.URLEncoder.encode(e.getMessage(), java.nio.charset.StandardCharsets.UTF_8));
+            log.error("WeChat OAuth callback failed: ip={}", ip, e);
+            redirectOauth(response, "error", oauthErrorMessage(e));
         }
+    }
+
+    private AuthSessionVO compactOAuthSession(AuthSessionVO session) {
+        AuthSessionVO compact = new AuthSessionVO(
+            session.getUserId(),
+            session.getName(),
+            session.getEmail(),
+            session.getInviteCode(),
+            session.getRole(),
+            "",
+            "",
+            session.getFruitScore(),
+            session.getSchoolName(),
+            session.isCampusVerified(),
+            session.getQq(),
+            session.getWechat(),
+            session.getQqOpenid(),
+            session.getRegisterTime(),
+            session.getNumericId()
+        );
+        compact.setCheckinScore(session.getCheckinScore());
+        compact.setAccessToken(session.getAccessToken());
+        compact.setNewUser(session.isNewUser());
+        return compact;
+    }
+
+    private boolean isDesktopBrowserFlow(String state) {
+        return state != null && state.startsWith("desktop_external_");
+    }
+
+    private DesktopLocalOAuthCallback parseDesktopLocalOAuthCallback(String state) {
+        if (state == null || !state.startsWith("desktop_local_")) return null;
+        String[] parts = state.split("_", 5);
+        if (parts.length != 5) return null;
+        try {
+            int port = Integer.parseInt(parts[2]);
+            String token = parts[3];
+            if (port < 1024 || port > 65535 || !token.matches("[a-fA-F0-9]{32}")) return null;
+            String authState = new String(java.util.Base64.getUrlDecoder().decode(parts[4]), java.nio.charset.StandardCharsets.UTF_8);
+            if (!authState.startsWith("papersolver_")) return null;
+            return new DesktopLocalOAuthCallback(port, token, authState);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private void redirectOauth(jakarta.servlet.http.HttpServletResponse response, String name, String value) throws java.io.IOException {
+        redirectOauth(response, name, value, false);
+    }
+
+    private void redirectOauth(jakarta.servlet.http.HttpServletResponse response, String name, String value, boolean desktopBrowserFlow) throws java.io.IOException {
+        redirectOauth(response, name, value, desktopBrowserFlow, null);
+    }
+
+    private void redirectOauth(
+            jakarta.servlet.http.HttpServletResponse response,
+            String name,
+            String value,
+            boolean desktopBrowserFlow,
+            DesktopLocalOAuthCallback localCallback) throws java.io.IOException {
+        response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+        String encodedValue = java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
+        if (localCallback != null) {
+            response.sendRedirect("http://127.0.0.1:" + localCallback.port() + "/oauth?token="
+                + localCallback.token() + "&" + name + "=" + encodedValue);
+            return;
+        }
+        String target = desktopBrowserFlow ? "papersolver://oauth?" : "https://papersolver.cn/?";
+        response.sendRedirect(target + name + "=" + encodedValue);
+    }
+
+    private record DesktopLocalOAuthCallback(int port, String token, String authState) {}
+
+    private String redactOauthState(String state) {
+        if (state == null || state.isBlank()) return "";
+        return state.length() <= 16 ? "[present]" : state.substring(0, 12) + "...";
+    }
+
+    private String oauthErrorMessage(Exception e) {
+        if (e instanceof ResponseStatusException responseStatusException) {
+            String reason = responseStatusException.getReason();
+            if (reason != null && !reason.isBlank()) {
+                return reason;
+            }
+        }
+        String message = e.getMessage();
+        if (message != null && !message.isBlank()) {
+            return message;
+        }
+        return "第三方登录暂时不可用，请稍后重试";
     }
 }

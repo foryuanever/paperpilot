@@ -28,14 +28,14 @@ export const useForumStore = defineStore("forum", () => {
     }
   }
 
-  async function addPost(payload) {
-    const result = await paperpilotApi.createForumPost(payload);
+  async function addPost(payload, requestConfig = {}) {
+    const result = await paperpilotApi.createForumPost(payload, requestConfig);
     await fetchPosts({ silent: true });
     return result;
   }
 
-  async function updatePost(postId, payload) {
-    const result = await paperpilotApi.updateForumPost(postId, payload);
+  async function updatePost(postId, payload, requestConfig = {}) {
+    const result = await paperpilotApi.updateForumPost(postId, payload, requestConfig);
     await fetchPosts({ silent: true });
     return result;
   }

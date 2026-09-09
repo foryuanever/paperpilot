@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld("paperSolverDesktop", {
   isDesktop: true,
   getRuntimeInfo: () => ipcRenderer.invoke("desktop:get-runtime-info"),
   checkUpdate: () => ipcRenderer.invoke("desktop:check-update"),
+  downloadUpdate: () => ipcRenderer.invoke("desktop:download-update"),
+  installUpdate: () => ipcRenderer.invoke("desktop:install-update"),
+  openUpdateDownload: (url) => ipcRenderer.invoke("desktop:open-update-download", url),
   getBackendConfig: () => ipcRenderer.invoke("desktop:get-backend-config"),
   setBackendConfig: (payload) => ipcRenderer.invoke("desktop:set-backend-config", payload),
   resetBackendConfig: () => ipcRenderer.invoke("desktop:reset-backend-config"),
@@ -14,7 +17,12 @@ contextBridge.exposeInMainWorld("paperSolverDesktop", {
   readZoteroPdf: (pdfRef) => ipcRenderer.invoke("desktop:read-zotero-pdf", pdfRef),
   cachePdf: (payload) => ipcRenderer.invoke("desktop:cache-pdf", payload),
   savePptDeck: (payload) => ipcRenderer.invoke("desktop:save-ppt-deck", payload),
+  saveNoteMarkdown: (payload) => ipcRenderer.invoke("desktop:save-note-markdown", payload),
+  saveFile: (payload) => ipcRenderer.invoke("desktop:save-file", payload),
   getCachedPdf: (payload) => ipcRenderer.invoke("desktop:get-cached-pdf", payload),
+  openCachedPdf: (payload) => ipcRenderer.invoke("desktop:open-cached-pdf", payload),
+  hasCachedPdf: (payload) => ipcRenderer.invoke("desktop:has-cached-pdf", payload),
+  ensureCachedPdf: (payload) => ipcRenderer.invoke("desktop:ensure-cached-pdf", payload),
   getCacheInfo: () => ipcRenderer.invoke("desktop:get-cache-info"),
   clearPdfCache: () => ipcRenderer.invoke("desktop:clear-pdf-cache"),
   openCacheDir: () => ipcRenderer.invoke("desktop:open-cache-dir"),
@@ -23,12 +31,19 @@ contextBridge.exposeInMainWorld("paperSolverDesktop", {
   translate: (payload) => ipcRenderer.invoke("desktop:translate", payload),
   getLocalDependencyStatus: () => ipcRenderer.invoke("desktop:local-dependency-status"),
   downloadLocalDependency: (payload) => ipcRenderer.invoke("desktop:download-local-dependency", payload),
+  pauseLocalDependencyDownload: () => ipcRenderer.invoke("desktop:pause-local-dependency-download"),
+  clearLocalDependency: () => ipcRenderer.invoke("desktop:clear-local-dependency"),
   startLocalDependency: () => ipcRenderer.invoke("desktop:start-local-dependency"),
   openLocalDependencyLog: () => ipcRenderer.invoke("desktop:open-local-dependency-log"),
   onLocalDependencyProgress: (callback) => {
     const listener = (_event, payload) => callback?.(payload);
     ipcRenderer.on("desktop:local-dependency-progress", listener);
     return () => ipcRenderer.removeListener("desktop:local-dependency-progress", listener);
+  },
+  onUpdateState: (callback) => {
+    const listener = (_event, payload) => callback?.(payload);
+    ipcRenderer.on("desktop:update-state", listener);
+    return () => ipcRenderer.removeListener("desktop:update-state", listener);
   },
   startPdfMathTranslation: (payload) => ipcRenderer.invoke("desktop:pdfmath-start", payload),
   getPdfMathTranslationStatus: (payload) => ipcRenderer.invoke("desktop:pdfmath-status", payload),
@@ -38,4 +53,14 @@ contextBridge.exposeInMainWorld("paperSolverDesktop", {
   getStructuredDocument: (payload) => ipcRenderer.invoke("desktop:structured-document", payload),
   getStructuredAsset: (payload) => ipcRenderer.invoke("desktop:structured-asset", payload),
   oauthQQ: (qqAuthUrl) => ipcRenderer.invoke("desktop:oauth-qq", qqAuthUrl),
+  oauthQQInSystemBrowser: (qqAuthUrl) => ipcRenderer.invoke("desktop:oauth-qq-external", qqAuthUrl),
+  prepareQQOAuthLocalCallback: (authState) => ipcRenderer.invoke("desktop:oauth-qq-prepare-local-callback", authState),
+  onQqOAuthCallback: (callback) => {
+    const listener = (_event, payload) => callback?.(payload);
+    ipcRenderer.on("desktop:oauth-qq-callback", listener);
+    return () => ipcRenderer.removeListener("desktop:oauth-qq-callback", listener);
+  },
+  getMachineId: () => ipcRenderer.invoke("desktop:get-machine-id"),
+  saveTranslationCache: (paperId, cacheMap) => ipcRenderer.invoke("desktop:save-translation-cache", paperId, cacheMap),
+  loadTranslationCache: (paperId) => ipcRenderer.invoke("desktop:load-translation-cache", paperId),
 });

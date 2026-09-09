@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface AiUsageRecordRepository extends JpaRepository<AiUsageRecordEntity, Long>, JpaSpecificationExecutor<AiUsageRecordEntity> {
+    void deleteAllByUserId(Long userId);
     List<AiUsageRecordEntity> findTop240ByUserIdOrderByCreatedAtDesc(Long userId);
     List<AiUsageRecordEntity> findByUserIdAndCreatedAtAfterOrderByCreatedAtDesc(Long userId, LocalDateTime createdAt);
     List<AiUsageRecordEntity> findTop240ByOrderByCreatedAtDesc();
@@ -22,5 +23,8 @@ public interface AiUsageRecordRepository extends JpaRepository<AiUsageRecordEnti
     );
     long countByUserId(Long userId);
     long countByUserIdAndCreatedAtAfter(Long userId, LocalDateTime createdAt);
+    long countByUserIdAndSceneAndStatusAndCreatedAtAfter(Long userId, String scene, String status, LocalDateTime createdAt);
     long countByCreatedAtAfter(LocalDateTime createdAt);
+    boolean existsByUserIdAndRequestKey(Long userId, String requestKey);
+    boolean existsByUserIdAndSceneAndStatusAndErrorMessage(Long userId, String scene, String status, String errorMessage);
 }

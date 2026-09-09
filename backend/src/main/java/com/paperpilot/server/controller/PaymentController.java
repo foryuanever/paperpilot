@@ -4,6 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paperpilot.server.entity.AppUserEntity;
 import com.paperpilot.server.entity.PaymentOrderEntity;
+import com.paperpilot.server.entity.PromoCodeEntity;
+import com.paperpilot.server.repository.PromoCodeRedemptionRepository;
+import com.paperpilot.server.repository.PromoCodeRepository;
 import com.paperpilot.server.entity.PaymentTicketEntity;
 import com.paperpilot.server.entity.RechargeRecordEntity;
 import com.paperpilot.server.repository.AppUserRepository;
@@ -12,6 +15,7 @@ import com.paperpilot.server.repository.PaymentTicketRepository;
 import com.paperpilot.server.repository.RechargeRecordRepository;
 import com.paperpilot.server.service.CurrentUserService;
 import com.paperpilot.server.service.MembershipService;
+import com.paperpilot.server.service.NotificationService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -60,10 +64,17 @@ public class PaymentController {
     private final RechargeRecordRepository rechargeRecordRepository;
     private final ObjectMapper objectMapper;
     private final MembershipService membershipService;
+    private final NotificationService notificationService;
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final Map<String, X509Certificate> wechatPlatformCertificates = new ConcurrentHashMap<>();
     private volatile long wechatCertificateLoadedAt = 0L;
     private volatile String lastWechatCertApiError = null;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private PromoCodeRepository promoCodeRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private PromoCodeRedemptionRepository promoCodeRedemptionRepository;
 
     @Value("${PAPERPILOT_ZHIFUFM_API_BASE_URL:${paperpilot.payment.zhifufm.api-base-url:}}")
     private String zhifuApiBaseUrl;
@@ -126,7 +137,8 @@ public class PaymentController {
         AppUserRepository appUserRepository,
         RechargeRecordRepository rechargeRecordRepository,
         ObjectMapper objectMapper,
-        MembershipService membershipService
+        MembershipService membershipService,
+        NotificationService notificationService
     ) {
         this.currentUserService = currentUserService;
         this.orderRepository = orderRepository;
@@ -135,11 +147,12 @@ public class PaymentController {
         this.rechargeRecordRepository = rechargeRecordRepository;
         this.objectMapper = objectMapper;
         this.membershipService = membershipService;
+        this.notificationService = notificationService;
     }
 
     @GetMapping("/plans")
     public List<Map<String, Object>> getPublicPlans() {
-        return membershipService.catalog();
+        return membershipService.publicCatalog();
     }
 
     @GetMapping("/orders")
@@ -197,27 +210,16 @@ public class PaymentController {
         Long userId = currentUserService.getOrCreateDefaultUserId();
         String provider = String.valueOf(body.getOrDefault("provider", "")).trim().toLowerCase();
         String planId = String.valueOf(body.getOrDefault("planId", "custom-recharge")).trim();
+        if (planId.startsWith("pack_") && !membershipService.isTopUpPack(planId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "额度加油包已下线，请选择会员套餐");
+        }
         String planCycle = String.valueOf(body.getOrDefault("planCycle", "monthly")).trim();
         int quantity = 1;
         try {
             quantity = Integer.parseInt(String.valueOf(body.getOrDefault("quantity", body.getOrDefault("teamMemberCount", "1"))).trim());
         } catch (Exception ignored) {}
         double amount = Double.parseDouble(String.valueOf(body.getOrDefault("amount", "0")).replace("¥", "").trim());
-        if (planId != null && planId.startsWith("pack_")) {
-            amount = switch (planId) {
-                case "pack_review" -> 9.9;
-                case "pack_ppt" -> 19.9;
-                case "pack_chat" -> 9.9;
-                case "pack_translation" -> 9.9;
-                case "pack_research" -> 9.9;
-                case "pack_report" -> 14.9;
-                case "pack_tier_lite" -> 19.9;
-                case "pack_tier_standard" -> 39.9;
-                case "pack_tier_plus" -> 69.9;
-                case "pack_tier_pro" -> 99.9;
-                default -> 0.0;
-            };
-        } else if (!"custom-recharge".equals(planId)) {
+        if (!"custom-recharge".equals(planId)) {
             amount = membershipService.price(planId, planCycle, quantity);
         }
         if (amount <= 0) {
@@ -415,8 +417,9 @@ public class PaymentController {
             return "fail";
         }
         double paidAmount = normalizeMoney(order.getAmount()).doubleValue();
+        MembershipService.MembershipGrant grant = null;
         if (!"custom-recharge".equals(order.getPlanId())) {
-            membershipService.activate(user, order.getPlanId(), order.getPlanCycle());
+            grant = membershipService.activate(user, order.getPlanId(), order.getPlanCycle());
         } else {
             user.setBalanceAmount((user.getBalanceAmount() == null ? 0.0 : user.getBalanceAmount()) + paidAmount);
             appUserRepository.save(user);
@@ -426,6 +429,9 @@ public class PaymentController {
         record.setEmail(user.getEmail());
         record.setAmount(paidAmount);
         record.setTokens(0L);
+        record.setPointsGranted(grant == null ? 0L : grant.points());
+        record.setRecordType(grant == null ? "balance" : "points");
+        record.setPlanId(grant == null ? order.getPlanId() : grant.planId());
         rechargeRecordRepository.save(record);
 
         order.setStatus("paid");
@@ -433,8 +439,11 @@ public class PaymentController {
         order.setPlatformOrderNo(params.getOrDefault("platformOrderNo", ""));
         order.setPaidAt(LocalDateTime.now());
         order.setNotifyPayload(params.toString());
-        order.setMessage("custom-recharge".equals(order.getPlanId()) ? "支付成功，余额已入账。" : "支付成功，会员套餐已生效，功能额度已重置。");
+        order.setMessage(paymentSuccessMessage(order.getPlanId(), "支付成功"));
         orderRepository.save(order);
+        notificationService.createSystemNotice(
+            user.getId(), null, "payment_success", null, "充值到账", order.getMessage()
+        );
         return "success";
     }
 
@@ -637,7 +646,9 @@ public class PaymentController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "订单用户不存在");
         }
         double paidAmount = normalizeMoney(order.getAmount()).doubleValue();
-        if (order.getPlanId() != null && order.getPlanId().startsWith("pack_")) {
+        MembershipService.MembershipGrant grant = null;
+        boolean configuredPlan = order.getPlanId() != null && membershipService.hasConfiguredPlan(order.getPlanId());
+        if (order.getPlanId() != null && order.getPlanId().startsWith("pack_") && !configuredPlan) {
             String pack = order.getPlanId();
             if ("pack_review".equals(pack)) {
                 user.setReviewQuota((user.getReviewQuota() == null ? 0 : user.getReviewQuota()) + 10);
@@ -676,7 +687,7 @@ public class PaymentController {
             }
             appUserRepository.save(user);
         } else if (!"custom-recharge".equals(order.getPlanId())) {
-            membershipService.activate(user, order.getPlanId(), order.getPlanCycle());
+            grant = membershipService.activate(user, order.getPlanId(), order.getPlanCycle());
         } else {
             user.setBalanceAmount((user.getBalanceAmount() == null ? 0.0 : user.getBalanceAmount()) + paidAmount);
             appUserRepository.save(user);
@@ -685,12 +696,25 @@ public class PaymentController {
         record.setEmail(user.getEmail());
         record.setAmount(paidAmount);
         record.setTokens(0L);
+        record.setPointsGranted(grant == null ? 0L : grant.points());
+        record.setRecordType(grant == null ? "balance" : "points");
+        record.setPlanId(grant == null ? order.getPlanId() : grant.planId());
         rechargeRecordRepository.save(record);
         order.setStatus("paid");
         order.setActualPayAmount(paidAmount);
         order.setPlatformOrderNo(transactionId);
         order.setPaidAt(LocalDateTime.now());
-        order.setMessage("custom-recharge".equals(order.getPlanId()) ? "微信支付成功，余额已入账。" : "微信支付成功，会员套餐已生效，功能额度已重置。");
+        order.setMessage(paymentSuccessMessage(order.getPlanId(), "微信支付成功"));
+        notificationService.createSystemNotice(
+            user.getId(), null, "payment_success", null, "充值到账", order.getMessage()
+        );
+    }
+
+    private String paymentSuccessMessage(String planId, String prefix) {
+        if ("custom-recharge".equals(planId)) return prefix + "，余额已入账。";
+        return membershipService.isTopUpPack(planId)
+            ? prefix + "，加油包权益已即时叠加。"
+            : prefix + "，会员套餐已生效，功能额度已重置。";
     }
 
     private boolean wechatConfigured(boolean requireNotifyUrl) {
@@ -875,5 +899,85 @@ public class PaymentController {
 
     private boolean sameMoney(Double expected, String actual) {
         return normalizeMoney(expected == null ? 0.0 : expected).compareTo(parseMoney(actual)) == 0;
+    }
+
+    // --- Redeem Code Implementation ---
+    @PostMapping("/redeem")
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> redeemPromoCode(@RequestBody Map<String, Object> body) {
+        AppUserEntity user = currentUserService.getOrCreateDefaultUser();
+        if (user == null || "Local User".equals(user.getUsername())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录后再进行兑换");
+        }
+
+        String rawCode = (String) body.get("code");
+        if (rawCode == null || rawCode.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "兑换码不能为空");
+        }
+
+        String code = rawCode.trim().toUpperCase();
+        PromoCodeEntity promoCode = promoCodeRepository.findByCode(code)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "兑换码无效或不存在"));
+
+        if (Boolean.TRUE.equals(promoCode.getInvalidated())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该兑换码已被管理员作废");
+        }
+
+        int maxUses = 0;
+        int usedCount = promoCode.getUsedCount() != null ? promoCode.getUsedCount() : 0;
+
+        String promoPlanId = membershipService.resolvePurchasablePlanId(promoCode.getPlanId());
+        String selectedPlanId = String.valueOf(body.getOrDefault("planId", "")).trim();
+        if (!selectedPlanId.isBlank()) {
+            String resolvedSelectedPlanId = membershipService.resolvePurchasablePlanId(selectedPlanId);
+            if (!promoPlanId.equals(resolvedSelectedPlanId)) {
+                String promoPlanName = String.valueOf(membershipService.plan(promoPlanId).getOrDefault("name", promoPlanId));
+                throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "该兑换码仅适用于「" + promoPlanName + "」，请重新选择对应套餐"
+                );
+            }
+        }
+
+        LocalDateTime redeemedAt = LocalDateTime.now();
+        // Reserve this code for the account first. INSERT IGNORE is race-safe with the DB unique key.
+        int reservedRows = promoCodeRedemptionRepository.reserve(promoCode.getId(), user.getId(), redeemedAt);
+        if (reservedRows <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该兑换码已被当前账号核销，请勿重复使用");
+        }
+
+        // Atomically record the redemption while the code is active. Global usage is unlimited;
+        // the reservation table above enforces one redemption per account.
+        int updatedRows = promoCodeRepository.incrementUsageIfActive(code, user.getId(), redeemedAt);
+        if (updatedRows <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该兑换码已被管理员作废");
+        }
+
+        // Activate the plan for user
+        MembershipService.MembershipGrant grant = membershipService.activate(user, promoPlanId, promoCode.getPlanCycle());
+        AdminController.saveBackup(promoCodeRepository);
+
+        // Record a recharge log as reference
+        RechargeRecordEntity record = new RechargeRecordEntity();
+        record.setEmail(user.getEmail());
+        record.setAmount(0.0); // Promo code contains zero-payment
+        record.setTokens(0L);
+        record.setPointsGranted(grant.points());
+        record.setRecordType("points");
+        record.setPlanId(grant.planId());
+        rechargeRecordRepository.save(record);
+
+        String planName = String.valueOf(membershipService.plan(promoPlanId).getOrDefault("name", promoPlanId));
+        notificationService.createSystemNotice(
+            user.getId(),
+            null,
+            "promo_redeemed",
+            promoCode.getId(),
+            "兑换码核销成功",
+            "已成功核销「" + planName + "」，相关权益已发放到账户。"
+        );
+
+        return Map.of("success", true, "message", "兑换成功！相关权益已生效", "planId", promoPlanId,
+            "usedCount", usedCount + 1, "maxUses", "∞");
     }
 }

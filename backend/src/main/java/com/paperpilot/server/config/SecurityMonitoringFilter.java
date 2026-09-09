@@ -17,14 +17,17 @@ public class SecurityMonitoringFilter implements Filter {
 
     private final MonitoringSecurityService monitoringSecurityService;
     private final AppUserRepository appUserRepository;
+    private final com.paperpilot.server.service.SessionTokenService sessionTokenService;
     private final ConcurrentHashMap<Long, String> usernameCache = new ConcurrentHashMap<>();
 
     public SecurityMonitoringFilter(
         MonitoringSecurityService monitoringSecurityService,
-        AppUserRepository appUserRepository
+        AppUserRepository appUserRepository,
+        com.paperpilot.server.service.SessionTokenService sessionTokenService
     ) {
         this.monitoringSecurityService = monitoringSecurityService;
         this.appUserRepository = appUserRepository;
+        this.sessionTokenService = sessionTokenService;
     }
 
     @Override
@@ -74,13 +77,11 @@ public class SecurityMonitoringFilter implements Filter {
             ipAddress = ipAddress.split(",")[0].trim();
         }
 
-        // Get User ID
+        // Get User ID from session token
         Long userId = null;
-        String userHeader = httpRequest.getHeader("X-PaperPilot-User-Id");
-        if (userHeader != null && !userHeader.isBlank()) {
-            try {
-                userId = Long.parseLong(userHeader);
-            } catch (NumberFormatException ignored) {}
+        String sessionToken = httpRequest.getHeader("X-PaperPilot-Session");
+        if (sessionToken != null && !sessionToken.isBlank()) {
+            userId = sessionTokenService.verify(sessionToken).orElse(null);
         }
 
         // Cache Username lookup
@@ -126,14 +127,14 @@ public class SecurityMonitoringFilter implements Filter {
 
     private void applyCorsHeaders(HttpServletRequest request, HttpServletResponse response) {
         String origin = request.getHeader("Origin");
-        if (origin != null && !origin.isBlank()) {
+        if ("https://papersolver.cn".equals(origin)
+            || "https://www.papersolver.cn".equals(origin)
+            || (origin != null && origin.startsWith("chrome-extension://"))) {
             response.setHeader("Access-Control-Allow-Origin", origin);
             response.setHeader("Vary", "Origin");
-        } else {
-            response.setHeader("Access-Control-Allow-Origin", "*");
         }
         response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-PaperPilot-User-Id, X-Requested-With, Accept");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-PaperPilot-Session, X-Requested-With, Accept");
         response.setHeader("Access-Control-Max-Age", "3600");
     }
 }

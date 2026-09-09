@@ -1,0 +1,10 @@
+{
+  "name": "papersolver-desktop",
+  "version": "2.2.0",
+  "private": true,
+  "description": "PaperSolver desktop shell",
+  "main": "src/main.cjs",
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  }
+}

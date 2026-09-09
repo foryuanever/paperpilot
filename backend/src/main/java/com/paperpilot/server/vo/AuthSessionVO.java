@@ -10,6 +10,7 @@ public class AuthSessionVO {
     private String avatarUrl;
     private String backgroundUrl;
     private Integer fruitScore;
+    private Integer checkinScore = 0;
     private String schoolName;
     private boolean campusVerified;
     private String qq;
@@ -17,6 +18,8 @@ public class AuthSessionVO {
     private String qqOpenid;
     private String registerTime;
     private Integer numericId;
+    private String accessToken;
+    private boolean newUser;
 
     public AuthSessionVO(Long userId, String name, String email, String inviteCode, String role, String avatarUrl, String backgroundUrl) {
         this(userId, name, email, inviteCode, role, avatarUrl, backgroundUrl, 0);
@@ -80,6 +83,14 @@ public class AuthSessionVO {
         return fruitScore;
     }
 
+    public Integer getCheckinScore() {
+        return checkinScore;
+    }
+
+    public void setCheckinScore(Integer checkinScore) {
+        this.checkinScore = checkinScore;
+    }
+
     public String getSchoolName() {
         return schoolName;
     }
@@ -107,4 +118,9 @@ public class AuthSessionVO {
     public Integer getNumericId() {
         return numericId;
     }
+
+    public String getAccessToken() { return accessToken; }
+    public void setAccessToken(String accessToken) { this.accessToken = accessToken; }
+    public boolean isNewUser() { return newUser; }
+    public void setNewUser(boolean newUser) { this.newUser = newUser; }
 }

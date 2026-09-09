@@ -28,7 +28,7 @@ public class PdfMathTranslateController {
         @PathVariable String workspaceId,
         @RequestBody(required = false) Map<String, Object> body
     ) {
-        String provider = body == null ? "google" : String.valueOf(body.getOrDefault("service", "google"));
+        String provider = body == null ? "tencent-transmart" : String.valueOf(body.getOrDefault("service", "tencent-transmart"));
         return service.start(workspaceId, provider);
     }
 

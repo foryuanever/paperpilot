@@ -28,35 +28,32 @@
           <header class="zotero-guide-head">
             <div>
               <span>ZOTERO LOCAL ACCESS</span>
-              <h2 id="zotero-guide-title">本机同步设置教程</h2>
-              <p>开启 Zotero 本机通讯后，PaperSolver 才能读取题录并把条目下的 PDF 保存到桌面端本机缓存。</p>
+              <h2 id="zotero-guide-title">开启 Zotero 本机同步</h2>
+              <p>同步前需要允许 PaperSolver 读取 Zotero Desktop 的本机接口；这里只读取题录和 PDF 附件，不读取或保存 Zotero 密码。</p>
             </div>
             <button type="button" aria-label="关闭 Zotero 设置教程" @click="closeZoteroGuide">×</button>
           </header>
 
           <div class="zotero-guide-body">
             <figure class="zotero-guide-image">
-              <img src="/tutorials/zotero-local-api-setting.png" alt="Zotero 高级设置中的本机通讯开关" />
+              <img src="/tutorials/zotero-local-api-setting.png" alt="Zotero 高级设置中允许本机通讯的勾选项" />
             </figure>
 
             <div class="zotero-guide-content">
               <section>
-                <h3>需要打开的位置</h3>
+                <h3>按这三步打开</h3>
                 <ol>
-                  <li>打开 Zotero Desktop。</li>
-                  <li>进入 <strong>Zotero 设置</strong>。</li>
-                  <li>选择左侧 <strong>高级</strong>。</li>
-                  <li>在 <strong>杂项</strong> 中勾选 <strong>允许此计算机上的其他应用程序与 Zotero 通讯</strong>。</li>
-                  <li>确认页面显示本机接口：<code>http://localhost:23119/api/</code>。</li>
+                  <li>先打开 <strong>Zotero Desktop</strong>。</li>
+                  <li>点击 <strong>Zotero 设置</strong>，进入左侧 <strong>高级</strong>。</li>
+                  <li>在 <strong>杂项</strong> 中勾选图中选项：<strong>允许此计算机上的其他应用程序与 Zotero 通讯</strong>。</li>
                 </ol>
               </section>
 
               <section>
-                <h3>同步内容</h3>
+                <h3>确认接口</h3>
                 <ul>
-                  <li>题录：标题、作者、期刊/会议、年份、摘要、DOI。</li>
-                  <li>PDF 附件：如果 Zotero 条目下已保存 PDF，桌面端会保存到本机缓存，不上传服务器。</li>
-                  <li>再次同步：会尝试补全已导入文献的 PDF，不需要重复手动上传。</li>
+                  <li>设置页应显示可用于 <code>http://localhost:23119/api/</code>。</li>
+                  <li>保持 Zotero 打开后，再回到 PaperSolver 点击“检测本机 Zotero 并同步”。</li>
                 </ul>
               </section>
             </div>
@@ -138,7 +135,6 @@
               <col class="col-ranking" />
               <col class="col-import-source" />
               <col class="col-publish" />
-              <col class="col-progress" />
               <col class="col-time" />
               <col class="col-actions" />
               <col class="col-note" />
@@ -151,15 +147,14 @@
                 <th>期刊标签</th>
                 <th>导入源头</th>
                 <th>发表时间</th>
-                <th>阅读进度</th>
-                <th>阅读时间</th>
+                <th>导入时间</th>
                 <th class="action-cell">操作</th>
-                <th>我的笔记</th>
+                <th class="th-note-cell">我的笔记</th>
               </tr>
             </thead>
             <tbody v-if="filteredDocuments.length === 0">
               <tr>
-                <td colspan="10" class="library-empty-state-cell">
+                <td colspan="9" class="library-empty-state-cell">
                   <div class="library-empty-state-container">
                     <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -180,6 +175,7 @@
                   <div
                     class="doc-title-main"
                     :title="paper.title + (paper.abstract ? '\n\n【Abstract】\n' + paper.abstract : '')"
+                    @click="openMetadataEditor(paper)"
                   >
                     {{ paper.title }}
                   </div>
@@ -187,9 +183,10 @@
                     <span class="source-text" :title="paper.source">{{ paper.source }}</span>
                     <span v-if="paper.publishYear"> · {{ paper.publishYear }}</span>
                     <span v-if="!canTryRead(paper)" class="missing-pdf-badge">暂无 PDF</span>
+                    <button type="button" class="inline-edit-meta-link" @click.stop="openMetadataEditor(paper)" title="修改论文标题、作者与发表年份">编辑信息</button>
                   </div>
                 </td>
-                <td class="doc-authors-cell" :title="paper.authors">
+                <td class="doc-authors-cell" :title="paper.authors" @click="openMetadataEditor(paper)">
                   <span :class="{ missing: paper.authors === '作者待补全' }">{{ paper.authors || "作者待补全" }}</span>
                 </td>
                 <td>
@@ -212,7 +209,7 @@
                 </td>
                 <td class="import-source-cell">
                   <a
-                    v-if="paper.sourceUrl"
+                    v-if="paper.sourceUrl && !String(paper.importSource || '').includes('本地')"
                     :href="paper.sourceUrl"
                     target="_blank"
                     rel="noreferrer"
@@ -225,15 +222,13 @@
                 <td class="publish-time-cell">
                   {{ publishTimeLabel(paper) }}
                 </td>
-                <td><span class="progress-text">{{ paper.progress }}</span></td>
-                <td>{{ paper.readAt }}</td>
+                <td>{{ paper.uploadedAt }}</td>
                 <td class="action-cell">
                   <div class="action-inline">
                     <template v-if="canTryRead(paper)">
                       <button class="spatial-btn spatial-btn-dual" @click="openDualReader(paper)">对照翻译</button>
                       <button class="spatial-btn spatial-btn-line-ai" @click="openLineAiReader(paper)">
                         <span>沉浸翻译</span>
-                        <em class="reader-recommend-badge">荐</em>
                       </button>
                     </template>
                     <button v-else class="spatial-btn spatial-btn-warning" @click="openPdfLinkEditor(paper)">关联 PDF</button>
@@ -258,9 +253,16 @@
                   </div>
                 </td>
                 <td class="doc-note-cell">
-                  <button class="note-edit-btn" type="button" @click="openNoteEditor(paper)">
-                    {{ paper.note ? "查看笔记" : "添加笔记" }}
-                  </button>
+                  <div class="note-links-wrapper">
+                    <button
+                      class="note-link-btn manual-active note-link-pill"
+                      type="button"
+                      title="点击查看/编辑 AI 笔记与手动笔记"
+                      @click="openNoteEditorWithMode(paper, hasAiNote(paper) ? 'aiNote' : 'manualNote')"
+                    >
+                      笔记
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -293,14 +295,14 @@
       <section v-else-if="activeTab === 'add'" class="library-management-panel">
         <header>
           <div>
-            <h2>添加个人文献</h2>
-            <p>手动补充单篇论文并上传本地 PDF；导入后会进入当前账号文献库。</p>
+            <h2>本地文献上传</h2>
+            <p>选择本地 PDF 后自动识别题名、作者和年份；导入后会进入当前账号文献库。</p>
           </div>
         </header>
         <form class="personal-paper-form" @submit.prevent="submitPersonalPaper">
           <label class="field-wide">
-            <span>论文标题 *</span>
-            <input v-model="personalPaper.title" required placeholder="输入完整论文标题" />
+            <span>论文标题（自动识别）</span>
+            <input v-model="personalPaper.title" :readonly="personalPdfParsing" placeholder="选择 PDF 后自动识别" />
           </label>
           <label>
             <span>作者</span>
@@ -314,19 +316,22 @@
             <span>来源 / 期刊</span>
             <input v-model="personalPaper.source" placeholder="个人文献、期刊或会议名称" />
           </label>
-          <label class="field-wide">
-            <span>摘要</span>
-            <textarea v-model="personalPaper.abstractText" rows="5" placeholder="可选：粘贴论文摘要，便于后续 AI 分析"></textarea>
-          </label>
-          <label class="file-drop field-wide">
+          <label
+            class="file-drop field-wide"
+            :class="{ 'is-dragging': personalPdfDragging }"
+            @dragenter.prevent="personalPdfDragging = true"
+            @dragover.prevent="personalPdfDragging = true"
+            @dragleave.prevent="personalPdfDragging = false"
+            @drop.prevent="handlePersonalPdfDrop"
+          >
             <input type="file" accept="application/pdf,.pdf" @change="selectPersonalPdf" />
             <strong>{{ personalPdf?.name || "选择本地 PDF" }}</strong>
-            <small>{{ isDesktopApp ? "桌面端会保存到本机，不上传服务器。" : "上传后由 PaperSolver 储存，并可直接进入对照或沉浸翻译。" }}</small>
+            <small>{{ personalPdfParsing ? "正在读取 PDF 题录…" : "点击选择或将 PDF 拖拽到这里。桌面端会保存到本机。" }}</small>
           </label>
           <footer class="field-wide">
             <button type="button" class="spatial-btn spatial-btn-ghost" @click="resetPersonalPaper">清空</button>
-            <button type="submit" class="spatial-btn spatial-btn-accent" :disabled="personalImporting">
-              {{ personalImporting ? "正在添加…" : "添加到个人文献库" }}
+            <button type="submit" class="spatial-btn spatial-btn-accent" :disabled="personalImporting || personalPdfParsing">
+              {{ personalImporting ? "正在添加…" : personalPdfParsing ? "正在识别 PDF…" : "添加到个人文献库" }}
             </button>
           </footer>
         </form>
@@ -387,8 +392,8 @@
                 {{ zoteroOnline.importing ? "读取本机 Zotero 中…" : "检测本机 Zotero 并同步" }}
               </button>
               <div class="zotero-help-strip">
-                <small>不读取或保存 Zotero 密码。若 Zotero 未开启本机通信，先按教程打开本机通讯。</small>
-                <button type="button" @click="openZoteroGuide">查看设置教程</button>
+                <small>首次同步前需要打开 Zotero 本机通讯。</small>
+                <button type="button" @click="openZoteroGuide">查看教程</button>
               </div>
             </div>
             <div class="zotero-divider"><span>或上传导出文件</span></div>
@@ -460,90 +465,45 @@
       <section class="note-modal note-modal-wide">
         <header>
           <div>
-            <span>{{ noteEditor.loading ? "正在同步阅读页笔记" : noteEditor.text ? "已同步阅读页笔记" : "阅读页右侧暂无笔记" }}</span>
+            <span>{{ noteEditor.loading ? "正在同步阅读页笔记" : noteEditor.manualNote || noteEditor.paper?.note ? "已同步阅读页笔记" : "阅读页右侧暂无笔记" }}</span>
             <h3>{{ noteEditor.paper?.title || "查看笔记" }}</h3>
           </div>
           <button type="button" @click="closeNoteEditor">×</button>
         </header>
         <div class="note-mode-bar">
-          <button type="button" :class="{ active: noteEditor.mode === 'tree' }" @click="noteEditor.mode = 'tree'">层级笔记</button>
-          <button type="button" :class="{ active: noteEditor.mode === 'markdown' }" @click="noteEditor.mode = 'markdown'">Markdown</button>
-          <span>{{ noteEditor.loading ? "同步中..." : "与文献阅读右侧笔记同步" }}</span>
+          <button type="button" :class="{ active: noteEditor.mode === 'aiNote' }" @click="noteEditor.mode = 'aiNote'">AI笔记</button>
+          <button type="button" :class="{ active: noteEditor.mode === 'manualNote' }" @click="noteEditor.mode = 'manualNote'">手动笔记</button>
+          <span>{{ noteEditor.loading ? "同步中..." : "与文献阅读页面同步" }}</span>
         </div>
-        <div v-if="noteEditor.mode === 'tree'" class="library-note-tree-panel">
+        
+        <!-- AI笔记面板 -->
+        <div v-if="noteEditor.mode === 'aiNote'" class="library-note-markdown-view">
           <div v-if="noteEditor.loading" class="library-note-loading">
             <span class="library-note-spinner"></span>
-            <strong>正在读取最新层级笔记</strong>
+            <strong>正在读取最新 AI 笔记</strong>
           </div>
-          <div v-else-if="parsedNoteTree.length" class="library-note-tree">
-            <article v-for="section in parsedNoteTree" :key="section.id" class="library-note-section" :class="`note-level-${section.level || 1}`">
-              <div class="library-note-section-head">
-                <span class="library-note-section-index">{{ section.index }}</span>
-                <div>
-                  <strong>{{ section.title }}</strong>
-                </div>
-                <small class="library-note-section-count">{{ section.children.length || section.content.length }} 点</small>
-              </div>
-              <p v-for="line in section.content" :key="`${section.id}-${line}`" class="library-note-section-text">{{ line }}</p>
-              <div v-if="section.children.length" class="library-note-child-list">
-                <div v-for="child in section.children" :key="child.id" class="library-note-child" :class="`note-level-${child.level || 2}`">
-                  <span>{{ child.index }}</span>
-                  <div>
-                    <strong>{{ child.title }}</strong>
-                    <p v-for="line in child.content" :key="`${child.id}-${line}`">{{ line }}</p>
-                    <div v-if="child.children?.length" class="library-note-grandchild-list">
-                      <div v-for="grandchild in child.children" :key="grandchild.id" class="library-note-grandchild note-level-3">
-                        <span>{{ grandchild.index }}</span>
-                        <div>
-                          <strong>{{ grandchild.title }}</strong>
-                          <p v-for="line in grandchild.content" :key="`${grandchild.id}-${line}`">{{ line }}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </article>
+          <div v-else-if="splitPaperNote(noteEditor.paper?.note).aiNote" class="library-note-markdown-preview-pane markdown-rendered" v-html="renderMarkdown(splitPaperNote(noteEditor.paper?.note).aiNote)">
           </div>
           <div v-else class="library-note-empty">
-            <strong>暂无层级笔记</strong>
-            <p>在文献阅读页面右侧的“文献层级笔记”中新增或编辑节点后，这里会同步展示同一份内容。</p>
+            <strong>暂无 AI 笔记</strong>
+            <p>该文献尚未生成 AI 笔记。请前往文献阅读页面，在顶部工具栏的 “阅读” 菜单下，点击 “AI生成” 按钮生成阅读笔记。</p>
           </div>
         </div>
+
+        <!-- 手动笔记面板 -->
         <div v-else class="library-note-markdown-view">
           <div v-if="noteEditor.loading" class="library-note-loading">
             <span class="library-note-spinner"></span>
-            <strong>正在读取最新 Markdown 笔记</strong>
+            <strong>正在读取最新手动笔记</strong>
           </div>
-          <div v-else-if="parsedNoteTree.length" class="library-note-markdown-outline">
-            <template v-for="section in parsedNoteTree" :key="`md-${section.id}`">
-              <div class="library-note-markdown-line note-level-1">
-                <span>{{ section.index }}</span>
-                <strong>{{ section.title }}</strong>
-                <em>{{ section.children.length || section.content.length }} 点</em>
-              </div>
-              <p v-for="line in section.content" :key="`md-${section.id}-${line}`" class="library-note-markdown-text note-level-1">{{ line }}</p>
-              <template v-for="child in section.children" :key="`md-${child.id}`">
-                <div class="library-note-markdown-line note-level-2">
-                  <span>{{ child.index }}</span>
-                  <strong>{{ child.title }}</strong>
-                </div>
-                <p v-for="line in child.content" :key="`md-${child.id}-${line}`" class="library-note-markdown-text note-level-2">{{ line }}</p>
-                <template v-for="grandchild in child.children || []" :key="`md-${grandchild.id}`">
-                  <div class="library-note-markdown-line note-level-3">
-                    <span>{{ grandchild.index }}</span>
-                    <strong>{{ grandchild.title }}</strong>
-                  </div>
-                  <p v-for="line in grandchild.content" :key="`md-${grandchild.id}-${line}`" class="library-note-markdown-text note-level-3">{{ line }}</p>
-                </template>
-              </template>
-            </template>
-          </div>
-          <div v-else class="library-note-empty">
-            <strong>暂无 Markdown 笔记</strong>
-            <p>这里会同步展示文献阅读右侧笔记，并自动去掉 Markdown 符号。</p>
-          </div>
+          <textarea
+            v-else
+            v-model="noteEditor.manualNote"
+            class="library-note-textarea"
+            placeholder="在此处输入手动笔记，支持 Markdown 语法..."
+          ></textarea>
         </div>
+
         <footer>
           <button type="button" class="spatial-btn spatial-btn-ghost" @click="closeNoteEditor">取消</button>
           <button type="button" class="spatial-btn spatial-btn-accent" :disabled="noteEditor.saving" @click="saveNoteEditor">
@@ -587,7 +547,7 @@
           </div>
           <button type="button" @click="closeJournalTagEditor">×</button>
         </header>
-        <p class="note-paper-title">选择适合本文的期刊分级标签，可多选；顶部切换分类，确定后保存到该文献。</p>
+        <p class="note-paper-title">选择适合本文的期刊分级标签（每个分类可单选一项，支持跨分类组合）；顶部切换分类，确定后保存到该文献。</p>
         <nav class="journal-tag-tabs">
           <button
             v-for="(group, index) in journalTagGroups"
@@ -622,6 +582,75 @@
           <button type="button" class="spatial-btn spatial-btn-ghost" @click="closeJournalTagEditor">取消</button>
           <button type="button" class="spatial-btn spatial-btn-accent" :disabled="journalTagEditor.saving" @click="saveJournalTagEditor">
             {{ journalTagEditor.saving ? "保存中..." : "确定" }}
+          </button>
+        </footer>
+      </section>
+    </div>
+
+    <!-- 文献信息与题录编辑模态框 -->
+    <div v-if="metadataEditor.open" class="note-modal-backdrop" @click.self="closeMetadataEditor">
+      <section class="note-modal metadata-modal">
+        <header>
+          <div>
+            <span>编辑文献信息</span>
+            <h3>{{ metadataEditor.paper?.title || "文献题录信息" }}</h3>
+          </div>
+          <button type="button" @click="closeMetadataEditor">×</button>
+        </header>
+        <div class="metadata-modal-body">
+          <label class="meta-field-group">
+            <span class="meta-field-label">论文完整标题 <em class="req">*</em></span>
+            <textarea
+              v-model="metadataEditor.form.title"
+              rows="3"
+              class="spatial-textarea"
+              placeholder="请输入学术论文完整标题"
+            ></textarea>
+          </label>
+
+          <label class="meta-field-group">
+            <span class="meta-field-label">作者列表 (多个作者用逗号分隔)</span>
+            <input
+              v-model="metadataEditor.form.authors"
+              type="text"
+              class="spatial-input"
+              placeholder="如：Jong Min An, Yeon Jin Lim, Dokyoung Kim"
+            />
+          </label>
+
+          <div class="meta-field-grid">
+            <label class="meta-field-group">
+              <span class="meta-field-label">发表年份</span>
+              <input
+                v-model="metadataEditor.form.publishYear"
+                type="text"
+                class="spatial-input"
+                placeholder="如：2025"
+              />
+            </label>
+
+            <label class="meta-field-group">
+              <span class="meta-field-label">期刊/文献来源</span>
+              <input
+                v-model="metadataEditor.form.source"
+                type="text"
+                class="spatial-input"
+                placeholder="如：ACS Sensors / 个人文献"
+              />
+            </label>
+          </div>
+
+          <p v-if="metadataEditor.error" class="pdf-link-error">{{ metadataEditor.error }}</p>
+        </div>
+        <footer>
+          <button type="button" class="spatial-btn spatial-btn-ghost" @click="closeMetadataEditor">取消</button>
+          <button
+            type="button"
+            class="spatial-btn spatial-btn-accent"
+            :disabled="metadataEditor.saving || metadataEditor.reExtracting"
+            @click="saveMetadataEditor"
+          >
+            {{ metadataEditor.saving ? "保存中..." : "保存更新" }}
           </button>
         </footer>
       </section>
@@ -671,6 +700,9 @@ import { useDialogStore } from "../stores/dialog";
 import { paperpilotApi } from "../services/paperpilotApi";
 import { rememberLastReading } from "../utils/readingMemory";
 import CheckinLottery from "../components/CheckinLottery.vue";
+import MarkdownIt from "markdown-it";
+import { extractAcademicPdfMetadata } from "../utils/academicPdfParser";
+import { matchJournalMetrics } from "../utils/journalMatcher";
 
 useScrollReveal(".library-spatial");
 
@@ -714,7 +746,6 @@ const filterDefs = reactive([
   { key: "journalTag", label: "期刊标签", selected: [], options: [] },
   { key: "importSource", label: "导入源头", selected: [], options: [] },
   { key: "publishYear", label: "发表时间", selected: [], options: [] },
-  { key: "progress", label: "阅读进度", selected: [], options: ["未读", "进行中", "已精读", "已读完"] },
 ]);
 const noteEditor = ref({
   open: false,
@@ -731,6 +762,20 @@ const pdfLinkEditor = ref({
   paper: null,
   file: null,
   fileName: "",
+  error: "",
+});
+
+const metadataEditor = ref({
+  open: false,
+  saving: false,
+  reExtracting: false,
+  paper: null,
+  form: {
+    title: "",
+    authors: "",
+    publishYear: "",
+    source: "",
+  },
   error: "",
 });
 
@@ -754,7 +799,7 @@ const toastMessage = ref("");
 const libraryTabs = [
   { id: "papers", label: "全部文献", description: "阅读、翻译与分析" },
   { id: "plugin", label: "通过插件导入", description: "浏览器插件导入的文献" },
-  { id: "add", label: "个人文献添加", description: "题录与本地 PDF" },
+  { id: "add", label: "本地文献上传", description: "题录与本地 PDF" },
   { id: "zotero", label: "Zotero 导入", description: "批量题录导入" },
   { id: "storage", label: "PDF 管理", description: "文件管理与替换" },
 ];
@@ -769,6 +814,8 @@ const personalPaper = reactive({
 });
 const personalPdf = ref(null);
 const personalImporting = ref(false);
+const personalPdfParsing = ref(false);
+const personalPdfDragging = ref(false);
 const zoteroFile = ref(null);
 const zoteroImporting = ref(false);
 const zoteroResult = ref(null);
@@ -779,15 +826,6 @@ const zoteroOnline = reactive({
 });
 const uploadingWorkspace = ref("");
 let toastTimer = null;
-
-function progressBucket(paper) {
-  const text = String(paper?.progress || "").trim();
-  const num = parseInt(text.replace("%", ""), 10);
-  if (Number.isNaN(num) || num <= 0) return "未读";
-  if (num < 60) return "进行中";
-  if (num < 100) return "已精读";
-  return "已读完";
-}
 
 function matchesFilter(paper) {
   for (const filter of filterDefs) {
@@ -801,8 +839,6 @@ function matchesFilter(paper) {
       values = [String(paper.importSource || sourceHost(paper.sourceUrl) || "未记录")];
     } else if (filter.key === "publishYear") {
       values = [String(paper.publishYear || "待补充")];
-    } else if (filter.key === "progress") {
-      values = [progressBucket(paper)];
     }
     if (!values.some((v) => filter.selected.includes(v))) return false;
   }
@@ -815,7 +851,7 @@ const filteredDocuments = computed(() => {
   if (activeTab.value === "plugin") {
     baseDocs = baseDocs.filter((paper) => {
       const src = paper.importSource || "";
-      return src && src !== "个人添加" && src !== "Zotero 导入";
+      return src && !["个人添加", "本地文献上传", "Zotero 导入"].includes(src);
     });
   }
   const documents = baseDocs.filter((paper) => {
@@ -922,30 +958,11 @@ function selectTab(tab) {
   router.replace({ path: "/library", query: tab === "papers" ? {} : { tab } });
 }
 
-function openZoteroGuide() {
-  zoteroGuideOpen.value = true;
-}
-
-function closeZoteroGuide() {
-  zoteroGuideOpen.value = false;
-}
-
 function venueTypeClass(type) {
   if (type === "会议") return "conference";
   if (type === "预印本") return "preprint";
   return "journal";
 }
-
-const JOURNAL_METRIC_PRESETS = [
-  { key: "iscience", tags: ["IF 4.1", "JCR Q1", "中科院2区", "SCI"] },
-  { key: "international dental journal", tags: ["IF 3.4", "JCR Q1", "中科院2区", "SCI"] },
-  { key: "procedia computer science", tags: ["Scopus"] },
-  { key: "findings of the association for computational linguistics", tags: ["ACL Findings", "CCF A"] },
-  { key: "association for computational linguistics", tags: ["ACL", "CCF A"] },
-  { key: "arxiv", tags: [] },
-  { key: "nature", tags: ["IF 高", "JCR Q1", "中科院1区", "SCI"] },
-  { key: "science", tags: ["IF 高", "JCR Q1", "中科院1区", "SCI"] },
-];
 
 function normalizeJournalTagLabel(tag) {
   let text = String(tag || "").trim().replace(/\(补充\)$/u, "").replace(/\s+/g, " ");
@@ -971,7 +988,7 @@ function normalizeJournalTagLabel(tag) {
 function isIgnoredJournalTag(tag) {
   const text = String(tag || "").trim().toLowerCase();
   return !text
-    || /^(doi\.org|pdf|pdf已缓存|待关联pdf|已导入元数据|研究论文|article|research article)$/i.test(text)
+    || /^(doi\.org|sciencedirect|elsevier|pubmed|arxiv|pdf|pdf已缓存|pdf已上传|本机pdf|待关联pdf|已导入元数据|本地文献上传|本地上传|本地文献|待核验|待自动核验|待补充|待查|待补|插件导入|研究论文|article|research article)$/i.test(text)
     || /^https?:\/\//i.test(text)
     || /\.(com|cn|org|net|edu)(\/|$)/i.test(text);
 }
@@ -1008,11 +1025,15 @@ function classifyJournalTag(tag) {
   if (/^(SCI|SSCI|EI|ESCI|DOAJ|Scopus|PubMed|MEDLINE)$/i.test(text)) {
     return { label: text, prefix: "索引", type: "index" };
   }
+  if (/^(TOP|顶刊)$/i.test(text)) {
+    return { label: "TOP", prefix: "索引", type: "index top" };
+  }
   if (/journal/i.test(text)) return null;
   if (/会议|ACL|NeurIPS|ICML|ICLR|AAAI|IJCAI|CVPR|ICCV|ECCV|SIGGRAPH|WWW|SIGIR|KDD|CHI|EMNLP|NAACL/i.test(text)) {
     return { label: text, prefix: "会议", type: "conference" };
   }
-  return null;
+  // A real journal name is useful even when no ranking metadata is available.
+  return { label: text, prefix: "期刊", type: "journal" };
 }
 
 function cleanJournalTags(tags) {
@@ -1024,13 +1045,19 @@ function cleanJournalTags(tags) {
 function journalMetricTags(paper) {
   const manual = cleanJournalTags(paper?.journalTags);
   const tags = [...manual];
-  const source = String(paper?.source || "").trim().toLowerCase();
   const ranking = String(paper?.venueRanking || "").trim().replace(/待核验|待自动核验|待补充|待查|待补/g, "");
-  const preset = JOURNAL_METRIC_PRESETS.find((item) => source.includes(item.key));
-  if (preset) tags.push(...preset.tags);
   if (ranking) {
     tags.push(...String(ranking).split(/[、,，/|]+/u).map((item) => item.trim()));
   }
+
+  // Intelligently auto-match journal & conference metadata if no manual tags are assigned
+  if (!tags.length) {
+    const matched = matchJournalMetrics(paper?.source, paper?.title, paper?.sourceUrl);
+    if (matched && Array.isArray(matched.tags)) {
+      tags.push(...matched.tags);
+    }
+  }
+
   const classified = [];
   const seen = new Set();
   for (const tag of tags) {
@@ -1042,7 +1069,7 @@ function journalMetricTags(paper) {
     classified.push(item);
   }
   if (classified.length) return classified.slice(0, 5);
-  return [{ label: "待核验", prefix: "标签", type: "muted" }];
+  return [{ label: "待分类", prefix: "标签", type: "muted" }];
 }
 
 function journalFilterTags(paper) {
@@ -1104,14 +1131,32 @@ function openLineAiReader(paper) {
   router.push({ path: "/reader", query: { mode: "line", panel: "analysis" } });
 }
 
-function openDualReader(paper) {
+async function openDualReader(paper) {
   libraryStore.setActiveDocument(paper.id);
   rememberLastReading(authStore.session.user, paper);
   if (!resolveReadablePdfSource(paper)) {
     openPdfLinkEditor(paper);
     return;
   }
-  router.push("/reader/dual");
+  const workspaceId = String(paper.workspaceId || paper.id || "");
+  const consumedKey = `papersolver-dual-translate-consumed:${workspaceId}`;
+  if (localStorage.getItem(consumedKey)) {
+    router.push("/reader/dual");
+    return;
+  }
+  const cachedStatus = await paperpilotApi.probePdfMathTranslationStatus(workspaceId, [paper.pdfUrl, paper.paperUrl, paper.sourceUrl].filter(Boolean));
+  const cachedState = String(cachedStatus?.state || cachedStatus?.status || "").toUpperCase();
+  const canReuse = ["PENDING", "PROGRESS", "RUNNING", "SUCCESS"].includes(cachedState);
+  if (canReuse) {
+    router.push("/reader/dual");
+    return;
+  }
+  const confirmed = await dialogStore.confirm("首次对照翻译将消耗 1 次对照翻译额度。生成完成后再次打开会直接使用已保存的译文，不会重复扣除。", {
+    title: "开始对照翻译",
+    confirmText: "消耗 1 次并开始",
+  });
+  if (!confirmed) return;
+  router.push({ path: "/reader/dual", query: { quotaApproved: "1" } });
 }
 
 function resolveReadablePdfSource(paper) {
@@ -1126,6 +1171,7 @@ function isReadablePdfUrl(url) {
   if (isDesktopCacheUrl(normalized)) return true;
   if (lower.startsWith("blob:") || lower.startsWith("data:")) return true;
   if (lower.includes("/api/papers/uploads/")) return true;
+  if (/(^|[/:.])cnki\.net|wanfangdata\.com\.cn|cajviewer/i.test(lower)) return false;
   if (lower.includes("sciencedirect.com/science/article/pii/") || lower.includes("pdf.sciencedirectassets.com")) return false;
   return paperpilotApi.isLikelyPdfUrl(normalized);
 }
@@ -1261,10 +1307,21 @@ function closeJournalTagEditor() {
 
 function toggleJournalTag(tag) {
   const selected = journalTagEditor.value.selected;
+  const currentGroup = journalTagGroups[journalTagEditor.value.activeGroup];
+  const groupTags = currentGroup ? currentGroup.tags : [];
+
   const index = selected.indexOf(tag);
   if (index >= 0) {
+    // Already selected -> unselect
     selected.splice(index, 1);
   } else {
+    // Remove any other tag in the same group (each category only allows 1 tag selected)
+    for (const otherTag of groupTags) {
+      const otherIndex = selected.indexOf(otherTag);
+      if (otherIndex >= 0) {
+        selected.splice(otherIndex, 1);
+      }
+    }
     selected.push(tag);
   }
 }
@@ -1297,13 +1354,165 @@ async function saveJournalTagEditor() {
   }
 }
 
-function selectPersonalPdf(event) {
-  personalPdf.value = event.target.files?.[0] || null;
+async function selectPersonalPdf(event) {
+  const file = event.target.files?.[0] || null;
+  await loadPersonalPdf(file);
+}
+
+async function handlePersonalPdfDrop(event) {
+  personalPdfDragging.value = false;
+  const file = [...(event.dataTransfer?.files || [])].find((item) => /pdf$/i.test(item.name || ""));
+  if (file) await loadPersonalPdf(file);
+  else showToast("请拖入 PDF 文件");
+}
+
+async function loadPersonalPdf(file) {
+  personalPdf.value = file;
+  if (!file) return;
+  personalPaper.title = file.name.replace(/\.pdf$/i, "").replace(/[._-]+/g, " ").trim() || "未命名论文";
+  personalPaper.authors = "";
+  personalPaper.publishYear = "";
+  personalPaper.source = "个人文献";
+  personalPdfParsing.value = true;
+  try {
+    const metadata = await extractAcademicPdfMetadata(file);
+    if (metadata.title) personalPaper.title = metadata.title;
+    if (metadata.authors && metadata.authors !== "作者待补全") personalPaper.authors = metadata.authors;
+    if (metadata.year) personalPaper.publishYear = metadata.year;
+    if (metadata.source) personalPaper.source = metadata.source;
+    showToast("PDF 题录已智能精准识别");
+  } catch (error) {
+    console.warn("PDF metadata extraction failed; using filename fallback", error);
+    showToast("PDF 题录识别失败，已使用文件名作为标题");
+  } finally {
+    personalPdfParsing.value = false;
+  }
+}
+
+function openMetadataEditor(paper) {
+  metadataEditor.value = {
+    open: true,
+    saving: false,
+    reExtracting: false,
+    paper,
+    form: {
+      title: paper.title || "",
+      authors: paper.authors === "作者待补全" ? "" : (paper.authors || ""),
+      publishYear: paper.publishYear || "",
+      source: paper.source || "个人文献",
+    },
+    error: "",
+  };
+}
+
+function closeMetadataEditor() {
+  if (metadataEditor.value.saving || metadataEditor.value.reExtracting) return;
+  metadataEditor.value.open = false;
+}
+
+async function reExtractMetadataForPaper() {
+  const paper = metadataEditor.value.paper;
+  if (!paper) return;
+  metadataEditor.value.reExtracting = true;
+  metadataEditor.value.error = "";
+  try {
+    let pdfBuffer = null;
+    if (isDesktopApp && paper.workspaceId && window.paperSolverDesktop?.readCachedPdf) {
+      try {
+        const cached = await window.paperSolverDesktop.readCachedPdf(paper.workspaceId);
+        if (cached?.base64) {
+          const binary = atob(cached.base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          pdfBuffer = bytes.buffer;
+        }
+      } catch (e) {
+        console.warn("read cached pdf failed", e);
+      }
+    }
+    if (!pdfBuffer && paper.workspaceId) {
+      try {
+        const blob = await paperpilotApi.downloadPaperPdf(paper.workspaceId);
+        if (blob) {
+          pdfBuffer = await blob.arrayBuffer();
+        }
+      } catch (e) {
+        console.warn("downloadPaperPdf fallback", e);
+      }
+    }
+    if (!pdfBuffer) {
+      const url = paper.pdfUrl || paper.paperUrl;
+      if (url && /^https?:\/\//i.test(url)) {
+        try {
+          const resp = await fetch(url);
+          if (resp.ok) {
+            pdfBuffer = await resp.arrayBuffer();
+          }
+        } catch (e) {
+          console.warn("fetch url fallback", e);
+        }
+      }
+    }
+    if (!pdfBuffer) {
+      throw new Error("未能读取到该文献的本地或在线 PDF 文件");
+    }
+
+    const metadata = await extractAcademicPdfMetadata(pdfBuffer);
+    if (metadata.title) metadataEditor.value.form.title = metadata.title;
+    if (metadata.authors && metadata.authors !== "作者待补全") metadataEditor.value.form.authors = metadata.authors;
+    if (metadata.year) metadataEditor.value.form.publishYear = metadata.year;
+    if (metadata.source) metadataEditor.value.form.source = metadata.source;
+
+    showToast("PDF 题录已智能重新识别");
+  } catch (err) {
+    console.error("re-extract metadata failed", err);
+    metadataEditor.value.error = err.message || "PDF 重新识别失败";
+    showToast(metadataEditor.value.error);
+  } finally {
+    metadataEditor.value.reExtracting = false;
+  }
+}
+
+async function saveMetadataEditor() {
+  const paper = metadataEditor.value.paper;
+  if (!paper) return;
+  const title = metadataEditor.value.form.title.trim();
+  if (!title) {
+    metadataEditor.value.error = "论文标题不能为空";
+    return;
+  }
+  metadataEditor.value.saving = true;
+  metadataEditor.value.error = "";
+  try {
+    const patch = {
+      title,
+      authors: metadataEditor.value.form.authors.trim(),
+      publishYear: metadataEditor.value.form.publishYear.trim(),
+      source: metadataEditor.value.form.source.trim(),
+    };
+    await libraryStore.persistDocumentPatch(paper.id, patch);
+    showToast("文献题录信息已成功更新");
+    metadataEditor.value.open = false;
+    refreshLibraryFromBackend().catch(() => {});
+  } catch (err) {
+    console.error("save metadata failed", err);
+    metadataEditor.value.error = err.message || "更新保存失败";
+  } finally {
+    metadataEditor.value.saving = false;
+  }
 }
 
 function selectZoteroFile(event) {
   zoteroFile.value = event.target.files?.[0] || null;
   zoteroResult.value = null;
+}
+
+function openZoteroGuide() {
+  zoteroGuideOpen.value = true;
+}
+
+function closeZoteroGuide() {
+  zoteroGuideOpen.value = false;
 }
 
 const zoteroIssueItems = computed(() =>
@@ -1439,21 +1648,26 @@ async function readDesktopZoteroPdfPayload(pdfRef) {
 }
 
 async function cacheDesktopPdf(workspaceId, payload) {
-  if (!window.paperSolverDesktop?.cachePdf || !workspaceId || !payload?.base64) return;
+  if (!window.paperSolverDesktop?.cachePdf || !workspaceId || !payload?.base64) {
+    throw new Error("桌面端 PDF 保存能力不可用");
+  }
   try {
-    await window.paperSolverDesktop.cachePdf({
+    const result = await window.paperSolverDesktop.cachePdf({
       workspaceId,
       fileName: payload.fileName || "zotero-attachment.pdf",
       mimeType: payload.mimeType || "application/pdf",
       base64: payload.base64,
     });
+    if (result && result.ok === false) throw new Error(result.message || "PDF 保存失败");
+    return result;
   } catch (error) {
     console.warn("desktop pdf cache failed", error);
+    throw error;
   }
 }
 
 async function cacheDesktopPdfFromFile(workspaceId, file) {
-  if (!window.paperSolverDesktop?.cachePdf || !workspaceId || !file) return;
+  if (!workspaceId || !file) throw new Error("PDF 文件为空");
   const base64 = await fileToBase64(file);
   await cacheDesktopPdf(workspaceId, {
     fileName: file.name || `${workspaceId}.pdf`,
@@ -1493,10 +1707,11 @@ function resetPersonalPaper() {
     abstractText: "",
   });
   personalPdf.value = null;
+  personalPdfParsing.value = false;
 }
 
 async function submitPersonalPaper() {
-  if (!personalPaper.title.trim() || personalImporting.value) return;
+  if (!personalPaper.title.trim() || personalImporting.value || personalPdfParsing.value) return;
   if (!personalPdf.value) {
     showToast("请选择本地 PDF 文件后再添加");
     return;
@@ -1505,7 +1720,7 @@ async function submitPersonalPaper() {
   try {
     const result = await paperpilotApi.importPaper({
       source: personalPaper.source.trim() || "个人文献",
-      importSource: "个人添加",
+      importSource: "本地文献上传",
       title: personalPaper.title.trim(),
       authors: personalPaper.authors.trim(),
       publishYear: personalPaper.publishYear.trim(),
@@ -1553,16 +1768,59 @@ async function uploadReplacementPdf(paper, event) {
   }
 }
 
+function hasAiNote(paper) {
+  if (!paper?.note) return false;
+  const { aiNote } = splitPaperNote(paper.note);
+  return aiNote.length > 0;
+}
+
+function openNoteEditorWithMode(paper, mode) {
+  openNoteEditor(paper);
+  noteEditor.value.mode = mode;
+}
+
+const markdownRenderer = new MarkdownIt({ html: false, linkify: true, breaks: true });
+function renderMarkdown(text) {
+  if (!text) return "";
+  return markdownRenderer.render(String(text).trim());
+}
+
+function splitPaperNote(noteText) {
+  const text = String(noteText || "").trim();
+  const separator = "=== PAPERSOLVER_NOTE_SEPARATOR ===";
+  if (text.includes(separator)) {
+    const parts = text.split(separator);
+    const aiPart = String(parts[0] || "").trim();
+    const manualPart = String(parts[1] || "").trim();
+    return { aiNote: aiPart, manualNote: manualPart };
+  }
+  const isDefaultMsg = text.includes("已导入元数据") || text.includes("PDF 已缓存") || text.includes("PDF 已保存") || text.includes("关联可访问 PDF");
+  if (isDefaultMsg || !text) {
+    return { aiNote: "", manualNote: "" };
+  }
+  const isAiReport = text.startsWith("# 组会汇报") || text.startsWith("# 📝 组会") || text.startsWith("# 文献分析") || text.startsWith("# 📄 文献") || text.startsWith("# 方法学") || text.startsWith("# ⚙️ 方法学") || text.startsWith("# 📊 实验") || text.startsWith("# 实验设计") || text.startsWith("# 对比分析") || text.startsWith("# 🗺️ 对比");
+  if (isAiReport) {
+    return { aiNote: text, manualNote: "" };
+  } else {
+    return { aiNote: "", manualNote: text };
+  }
+}
+
+function combinePaperNote(aiNote, manualNote) {
+  const ai = String(aiNote || "").trim();
+  const manual = String(manualNote || "").trim();
+  return `${ai}\n=== PAPERSOLVER_NOTE_SEPARATOR ===\n${manual}`;
+}
+
 async function openNoteEditor(paper) {
-  const initialNote = readMirroredHierarchicalNote(paper) || paper.note || "";
+  const parsed = splitPaperNote(paper.note || "");
   noteEditor.value = {
     open: true,
     saving: false,
     loading: Boolean(paper.workspaceId),
     paper,
-    text: initialNote,
-    plainText: markdownToReadableNoteText(initialNote),
-    mode: "tree",
+    mode: "aiNote",
+    manualNote: readMirroredHierarchicalNote(paper) || parsed.manualNote || "",
   };
   if (!paper.workspaceId) return;
   try {
@@ -1575,12 +1833,12 @@ async function openNoteEditor(paper) {
     });
     if (noteEditor.value.paper?.id === paper.id) {
       noteEditor.value.paper = { ...paper, ...latest, id: paper.id, workspaceId: paper.workspaceId };
-      noteEditor.value.text = readMirroredHierarchicalNote(paper) || latestNote;
-      noteEditor.value.plainText = markdownToReadableNoteText(noteEditor.value.text);
+      const parsedLatest = splitPaperNote(latestNote);
+      noteEditor.value.manualNote = readMirroredHierarchicalNote(paper) || parsedLatest.manualNote || "";
     }
   } catch (error) {
     console.warn("Failed to fetch latest library note", error);
-    showToast("读取最新笔记失败，已显示本地同步内容");
+    showToast("读取最新笔记失败，已显示本地内容");
   } finally {
     if (noteEditor.value.paper?.id === paper.id) {
       noteEditor.value.loading = false;
@@ -1598,12 +1856,18 @@ async function saveNoteEditor() {
   if (!paper) return;
   noteEditor.value.saving = true;
   try {
-    const note = noteEditor.value.mode === "markdown"
-      ? markdownToReadableNoteText(noteEditor.value.plainText)
-      : markdownToReadableNoteText(noteEditor.value.text);
-    await libraryStore.persistDocumentPatch(paper.id, { note });
-    noteEditor.value.text = note;
-    noteEditor.value.plainText = note;
+    const parsed = splitPaperNote(paper.note || "");
+    const combinedNote = combinePaperNote(parsed.aiNote, noteEditor.value.manualNote);
+    await libraryStore.persistDocumentPatch(paper.id, { note: combinedNote });
+    
+    // Sync to local storage mirror
+    const key = String(paper.workspaceId || paper.id || "");
+    if (key && typeof localStorage !== "undefined") {
+      localStorage.setItem(`paperpilot_hierarchical_notes_${key}_markdown_mirror`, noteEditor.value.manualNote);
+    }
+    
+    // Update local state note
+    paper.note = combinedNote;
     showToast("笔记已保存");
     noteEditor.value.open = false;
   } catch (error) {
@@ -1741,9 +2005,39 @@ function markdownToReadableNoteText(text) {
 async function refreshLibraryFromBackend() {
   try {
     await libraryStore.hydrateLibrary();
+    await warnForMissingDesktopPdfs();
   } catch (error) {
     console.warn("library hydrate fallback", error);
   }
+}
+
+async function warnForMissingDesktopPdfs() {
+  if (!isDesktopApp || !window.paperSolverDesktop?.hasCachedPdf) return;
+  const cacheBackedDocuments = libraryStore.state.documents.filter((paper) =>
+    isDesktopCacheUrl(paper?.paperUrl) || isDesktopCacheUrl(paper?.pdfUrl),
+  );
+  if (!cacheBackedDocuments.length) return;
+
+  const probeResults = await Promise.all(cacheBackedDocuments.map(async (paper) => {
+    try {
+      const result = await window.paperSolverDesktop.hasCachedPdf({ workspaceId: paper.workspaceId });
+      return result?.found ? "" : String(paper.workspaceId || "");
+    } catch (error) {
+      console.warn("Local PDF availability check failed", error);
+      return "";
+    }
+  }));
+  const missingIds = probeResults.filter(Boolean).sort();
+  if (!missingIds.length) return;
+
+  const userId = authStore.session?.user?.id || "anonymous";
+  const signature = `${userId}:${missingIds.join(",")}`;
+  if (sessionStorage.getItem("papersolver-missing-local-pdf-warning") === signature) return;
+  sessionStorage.setItem("papersolver-missing-local-pdf-warning", signature);
+  await dialogStore.alert("检测到您可能已经更换设备或者清理了存储目录，请重新上传论文，避免影响阅读", {
+    title: "需要重新上传 PDF",
+    confirmText: "我知道了",
+  });
 }
 
 function handleVisibilityRefresh() {
@@ -1767,7 +2061,7 @@ onMounted(async () => {
   window.addEventListener("resize", updateOnboardingLayout);
   window.addEventListener("scroll", updateOnboardingLayout);
 
-  if (!localStorage.getItem('library_onboarding_completed')) {
+  if (!localStorage.getItem('papersolver-library-tour-v4')) {
     setTimeout(startOnboarding, 800);
   }
 });
@@ -1814,6 +2108,11 @@ const onboardingSteps = [
     selector: '.note-edit-btn',
     title: '阅读笔记与文献阅读同步',
     description: '点击添加或查看深度阅读笔记。此处的笔记与文献阅读界面的笔记保持实时同步，同时也会在生成组会汇报 PPT 时被自动提炼使用。'
+  },
+  {
+    selector: '.theme-toggle-btn',
+    title: '暗色/亮色主题切换',
+    description: '随时点击此处，在“日间明亮模式”与“夜间深色模式”之间一键切换界面主题，保护视力并提升阅读体验。'
   }
 ];
 
@@ -1853,7 +2152,7 @@ const startOnboarding = () => {
 
 const closeOnboarding = () => {
   onboardingActive.value = false;
-  localStorage.setItem('library_onboarding_completed', 'true');
+  localStorage.setItem('papersolver-library-tour-v4', 'true');
 };
 
 const nextOnboardingStep = () => {
@@ -1884,32 +2183,44 @@ watch([onboardingActive, onboardingStep], () => {
 <style scoped>
 .library-empty-state-cell {
   text-align: center;
-  padding: 80px 24px !important;
-  background: rgba(30, 34, 48, 0.4);
-  border-radius: 8px;
+  padding: 72px 24px !important;
+  background: #ffffff !important;
+  border-radius: 0;
+  border: 0 !important;
+}
+:root[data-theme="dark"] .library-empty-state-cell {
+  background: rgba(30, 34, 48, 0.45) !important;
 }
 .library-empty-state-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  color: var(--c-text-muted, #7e8299);
+  gap: 10px;
+  color: var(--text-secondary, #64748b);
 }
 .library-empty-state-container .empty-icon {
-  width: 48px;
-  height: 48px;
-  stroke: var(--c-text-muted, #7e8299);
-  margin-bottom: 8px;
+  width: 44px;
+  height: 44px;
+  stroke: var(--text-secondary, #94a3b8);
+  margin-bottom: 4px;
 }
 .library-empty-state-container h3 {
-  font-size: 1.1rem;
-  color: var(--c-text, #ffffff);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main, #1e293b);
   margin: 0;
 }
+:root[data-theme="dark"] .library-empty-state-container h3 {
+  color: #f1f5f9;
+}
 .library-empty-state-container p {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #64748b);
   margin: 0;
+}
+:root[data-theme="dark"] .library-empty-state-container p {
+  color: #94a3b8;
 }
 
 .library-spatial .spatial-chapter {
@@ -2281,12 +2592,14 @@ watch([onboardingActive, onboardingStep], () => {
 }
 
 .zotero-help-strip {
-  display: grid;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  padding: 10px;
-  border: 1px solid rgba(20, 184, 166, 0.14);
+  padding: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.24);
   border-radius: 12px;
-  background: rgba(15, 118, 110, 0.07);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(20, 184, 166, 0.1));
 }
 
 .zotero-help-strip small {
@@ -2296,19 +2609,20 @@ watch([onboardingActive, onboardingStep], () => {
 }
 
 .zotero-help-strip button {
-  width: max-content;
+  flex: 0 0 auto;
   border: 0;
-  border-bottom: 1px solid currentColor;
-  padding: 0 0 2px;
-  color: #0f766e;
-  background: transparent;
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: #ffffff;
+  background: #2563eb;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24);
   font-size: 12px;
   font-weight: 850;
   cursor: pointer;
 }
 
 .zotero-help-strip button:hover {
-  color: #2563eb;
+  background: #1d4ed8;
 }
 
 .zotero-guide-backdrop {
@@ -2589,13 +2903,15 @@ watch([onboardingActive, onboardingStep], () => {
 
 .file-drop {
   position: relative;
-  padding: 18px;
+  min-height: 116px;
+  padding: 28px;
   border: 1px dashed #9bb8dc;
   border-radius: 10px;
   color: #315a8a;
   background: #f3f7fc;
   cursor: pointer;
 }
+.file-drop.is-dragging { border-color: #2563eb; background: #e7f0ff; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
 .file-drop input, .replace-upload input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .file-drop strong { font-size: 13px; }
 .file-drop small { color: #6d7e92; font-size: 11px; }
@@ -2863,24 +3179,23 @@ watch([onboardingActive, onboardingStep], () => {
 
 /* Make table headers and cells compact */
 :deep(.library-table) {
-  min-width: 1974px !important;
-  width: max(100%, 1974px) !important;
+  min-width: 1480px !important;
+  width: max(100%, 1480px) !important;
   table-layout: fixed !important;
   border-collapse: collapse !important;
   background: var(--spatial-surface) !important;
 }
 
 .col-check { width: 44px; }
-.col-title { width: 390px; }
-.col-note { width: 120px; }
-.col-authors { width: 250px; }
-.col-type { width: 132px; }
-.col-ranking { width: 245px; }
-.col-import-source { width: 145px; }
-.col-publish { width: 115px; }
-.col-progress { width: 100px; }
-.col-time { width: 160px; }
-.col-actions { width: 300px; }
+.col-title { width: 300px; }
+.col-note { width: 110px; }
+.col-authors { width: 180px; }
+.col-type { width: 100px; }
+.col-ranking { width: 155px; }
+.col-import-source { width: 125px; }
+.col-publish { width: 90px; }
+.col-time { width: 120px; }
+.col-actions { width: 220px; }
 
 .library-table-scroll {
   width: 100%;
@@ -2924,7 +3239,7 @@ watch([onboardingActive, onboardingStep], () => {
 }
 
 :deep(.library-table tbody td) {
-  padding: 11px 10px !important;
+  padding: 10px 10px !important;
   font-size: 12.5px !important;
   vertical-align: middle !important;
   border-bottom: 1px solid var(--spatial-line) !important;
@@ -2932,13 +3247,13 @@ watch([onboardingActive, onboardingStep], () => {
 }
 
 :deep(.library-table tbody tr) {
-  height: 92px;
+  height: 82px;
   transition: background-color .15s ease;
 }
 
 :deep(.library-table .action-cell) {
-  width: 300px !important;
-  min-width: 300px !important;
+  width: 220px !important;
+  min-width: 220px !important;
   overflow: visible !important;
   text-overflow: clip !important;
 }
@@ -2982,9 +3297,20 @@ watch([onboardingActive, onboardingStep], () => {
   white-space: nowrap;
 }
 
+:deep(.library-table thead th.th-note-cell) {
+  text-align: center !important;
+}
+
+:deep(.doc-note-cell) {
+  width: 110px !important;
+  max-width: 110px !important;
+  text-align: center !important;
+  padding: 10px 4px !important;
+}
+
 .doc-note-cell {
-  width: 120px;
-  max-width: 120px;
+  width: 110px;
+  max-width: 110px;
   overflow: hidden;
   color: #4b5563;
   text-align: center;
@@ -3091,23 +3417,28 @@ watch([onboardingActive, onboardingStep], () => {
 .journal-metric-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-}
-
-.journal-metric-row {
   align-items: center;
-  min-width: 0;
+  gap: 4px;
+  width: 100%;
+  max-width: 175px;
 }
 
 .journal-metric-badge {
-  min-height: 28px;
-  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 1px 7px;
   border: 1px solid transparent;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
-  font-weight: 850;
-  letter-spacing: 0;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .44);
+  font-weight: 700;
+  letter-spacing: 0.15px;
+  border-radius: 5px !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35);
+  white-space: nowrap;
+  text-align: center;
+  flex: 0 0 auto;
 }
 
 .journal-metric-badge.if {
@@ -3185,15 +3516,15 @@ watch([onboardingActive, onboardingStep], () => {
 .action-inline {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   width: max-content;
   min-width: 0;
 }
 
 .action-inline .spatial-btn {
   min-height: 28px;
-  font-size: 12px;
-  padding: 0 10px;
+  font-size: 11px;
+  padding: 0 8px;
 }
 
 .action-link {
@@ -4390,8 +4721,8 @@ watch([onboardingActive, onboardingStep], () => {
 }
 
 :root[data-theme="dark"] .zotero-help-strip {
-  border-color: rgba(45, 212, 191, 0.18) !important;
-  background: rgba(20, 184, 166, 0.08) !important;
+  border-color: rgba(96, 165, 250, 0.34) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.2), rgba(20, 184, 166, 0.12)) !important;
 }
 
 :root[data-theme="dark"] .zotero-help-strip small {
@@ -4399,7 +4730,9 @@ watch([onboardingActive, onboardingStep], () => {
 }
 
 :root[data-theme="dark"] .zotero-help-strip button {
-  color: #5eead4 !important;
+  color: #ffffff !important;
+  background: #2563eb !important;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.34) !important;
 }
 
 :root[data-theme="dark"] .zotero-guide-dialog {
@@ -4874,4 +5207,343 @@ watch([onboardingActive, onboardingStep], () => {
   background: #334155;
   color: #f8fafc;
 }
+
+.library-note-textarea {
+  width: calc(100% - 48px);
+  height: min(440px, calc(100vh - 300px));
+  min-height: 380px;
+  margin: 0 24px;
+  padding: 16px;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 14.5px;
+  line-height: 1.6;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  outline: none;
+  resize: vertical;
+}
+
+:root[data-theme="dark"] .library-note-textarea {
+  border-color: #1e293b;
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+.library-note-markdown-preview-pane {
+  padding: 16px 20px;
+  box-sizing: border-box;
+  line-height: 1.7;
+}
+
+.library-note-markdown-preview-pane table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.library-note-markdown-preview-pane th,
+.library-note-markdown-preview-pane td {
+  padding: 8px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+.library-note-markdown-preview-pane th {
+  background: rgba(15, 23, 42, 0.03);
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.library-note-markdown-preview-pane td {
+  color: #334155;
+}
+
+.library-note-markdown-preview-pane tr:nth-child(even) {
+  background: rgba(15, 23, 42, 0.01);
+}
+
+:root[data-theme="dark"] .library-note-markdown-preview-pane th,
+:root[data-theme="dark"] .library-note-markdown-preview-pane td {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .library-note-markdown-preview-pane th {
+  background: rgba(255, 255, 255, 0.04);
+  color: #f1f5f9;
+}
+
+:root[data-theme="dark"] .library-note-markdown-preview-pane td {
+  color: #cbd5e1;
+}
+
+:root[data-theme="dark"] .library-note-markdown-preview-pane tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.note-links-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+.note-link-btn {
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: all 0.15s ease;
+}
+.note-link-btn.ai-active {
+  color: #3b82f6;
+}
+.note-link-btn.ai-active:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+.note-link-btn.manual-active {
+  color: #10b981;
+}
+.note-link-btn.manual-active:hover {
+  color: #059669;
+  text-decoration: underline;
+}
+.note-link-btn.note-link-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.note-link-btn.note-link-pill:hover {
+  background: rgba(16, 185, 129, 0.2);
+  color: #047857;
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+:root[data-theme="dark"] .note-link-btn.note-link-pill {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+:root[data-theme="dark"] .note-link-btn.note-link-pill:hover {
+  background: rgba(16, 185, 129, 0.28);
+  color: #6ee7b7;
+}
+.note-link-empty {
+  font-size: 12px;
+  color: #94a3b8;
+  padding: 2px 4px;
+}
+.note-links-separator {
+  color: #cbd5e1;
+  font-size: 11px;
+}
+:root[data-theme="dark"] .note-links-separator {
+  color: #334155;
+}
+
+/* ── Metadata Editor Modal & Triggers ── */
+.doc-title-main {
+  cursor: pointer;
+}
+.doc-title-main:hover {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+:root[data-theme="dark"] .doc-title-main:hover {
+  color: #818cf8;
+}
+
+.doc-authors-cell {
+  cursor: pointer;
+}
+.doc-authors-cell:hover span {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+:root[data-theme="dark"] .doc-authors-cell:hover span {
+  color: #818cf8;
+}
+
+.inline-edit-meta-link {
+  border: none;
+  background: transparent;
+  color: #6366f1;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: 4px;
+  opacity: 0.85;
+  transition: opacity 0.15s ease, text-decoration 0.15s ease;
+}
+.inline-edit-meta-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+:root[data-theme="dark"] .inline-edit-meta-link {
+  color: #a5b4fc;
+}
+
+.action-edit-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4f46e5;
+  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.08);
+}
+.action-edit-btn:hover {
+  background: rgba(99, 102, 241, 0.16);
+  border-color: #6366f1;
+  color: #4338ca;
+}
+:root[data-theme="dark"] .action-edit-btn {
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+:root[data-theme="dark"] .action-edit-btn:hover {
+  background: rgba(99, 102, 241, 0.28);
+  color: #ffffff;
+}
+
+.metadata-modal {
+  width: min(840px, 95vw);
+  max-width: 860px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.metadata-modal header {
+  padding: 24px 28px 14px;
+}
+
+.metadata-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 10px 28px 20px;
+  overflow-y: auto;
+}
+
+.metadata-modal footer {
+  padding: 16px 28px 24px;
+}
+
+.re-extract-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.08));
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+:root[data-theme="dark"] .re-extract-card {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.16), rgba(168, 85, 247, 0.14));
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.re-extract-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.re-extract-info strong {
+  font-size: 13.5px;
+  font-weight: 750;
+  color: #4338ca;
+}
+:root[data-theme="dark"] .re-extract-info strong {
+  color: #c7d2fe;
+}
+.re-extract-info small {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.45;
+}
+:root[data-theme="dark"] .re-extract-info small {
+  color: #94a3b8;
+}
+
+.re-extract-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: 10px;
+}
+
+.meta-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.meta-field-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+:root[data-theme="dark"] .meta-field-label {
+  color: #cbd5e1;
+}
+.meta-field-label em.req {
+  color: #ef4444;
+  font-style: normal;
+  margin-left: 2px;
+}
+
+.meta-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.spatial-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(203, 213, 225, 0.85);
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 13.5px;
+  line-height: 1.55;
+  resize: vertical;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.spatial-textarea:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+:root[data-theme="dark"] .spatial-textarea {
+  background: rgba(15, 23, 42, 0.85);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #f8fafc;
+}
+:root[data-theme="dark"] .spatial-textarea:focus {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.25);
+}
 </style>
+

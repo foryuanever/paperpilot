@@ -16,6 +16,7 @@ import com.paperpilot.server.entity.CampusVerificationEntity;
 import com.paperpilot.server.entity.PromotionEntity;
 import com.paperpilot.server.repository.AppUserRepository;
 import com.paperpilot.server.repository.AiUsageRecordRepository;
+import com.paperpilot.server.repository.PromoCodeRepository;
 import com.paperpilot.server.repository.RechargeRecordRepository;
 import com.paperpilot.server.repository.TeamRepository;
 import com.paperpilot.server.repository.SystemLogRepository;
@@ -37,7 +38,12 @@ import com.paperpilot.server.service.MembershipService;
 import com.paperpilot.server.service.NotificationService;
 import com.paperpilot.server.service.MonitoringSecurityService;
 import com.paperpilot.server.service.CurrentUserService;
+import com.paperpilot.server.service.SessionTokenService;
+import com.paperpilot.server.vo.AuthSessionVO;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -45,7 +51,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashSet;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
 @RestController
@@ -75,6 +83,7 @@ public class AdminController {
     private final PromotionRepository promotionRepository;
     private final MonitoringSecurityService monitoringSecurityService;
     private final CurrentUserService currentUserService;
+    private final SessionTokenService sessionTokenService;
 
     public AdminController(
         AppUserRepository appUserRepository,
@@ -99,7 +108,8 @@ public class AdminController {
         CampusVerificationRepository campusVerificationRepository,
         PromotionRepository promotionRepository,
         MonitoringSecurityService monitoringSecurityService,
-        CurrentUserService currentUserService
+        CurrentUserService currentUserService,
+        SessionTokenService sessionTokenService
     ) {
         this.appUserRepository = appUserRepository;
         this.aiUsageRecordRepository = aiUsageRecordRepository;
@@ -124,11 +134,37 @@ public class AdminController {
         this.promotionRepository = promotionRepository;
         this.monitoringSecurityService = monitoringSecurityService;
         this.currentUserService = currentUserService;
+        this.sessionTokenService = sessionTokenService;
     }
 
     @ModelAttribute
     public void requireAdminAccess() {
         currentUserService.requireAdmin();
+    }
+
+    public static void saveBackup(PromoCodeRepository repo) {
+        try {
+            List<Map<String, Object>> list = repo.findAll().stream()
+                .map(code -> {
+                    Map<String, Object> map = new java.util.HashMap<>();
+                    map.put("code", code.getCode());
+                    map.put("planId", code.getPlanId());
+                    map.put("planCycle", code.getPlanCycle());
+                    map.put("used", code.getUsed());
+                    map.put("maxUses", code.getMaxUses());
+                    map.put("usedCount", code.getUsedCount());
+                    map.put("usedByUserId", code.getUsedByUserId());
+                    map.put("usedAt", code.getUsedAt() != null ? code.getUsedAt().toString() : null);
+                    map.put("createdAt", code.getCreatedAt() != null ? code.getCreatedAt().toString() : null);
+                    return map;
+                })
+                .toList();
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+            mapper.writeValue(new java.io.File("promo_codes_backup.json"), list);
+        } catch (Exception e) {
+            System.err.println("Failed to save promo codes backup: " + e.getMessage());
+        }
     }
 
     // --- Dynamic Global Statistics ---
@@ -217,7 +253,7 @@ public class AdminController {
 
     @GetMapping("/users")
     public List<Map<String, Object>> getAllUsers() {
-        return appUserRepository.findAll().stream()
+        return appUserRepository.findAllByOrderByCreatedAtDescIdDesc().stream()
             .map(user -> {
                 Map<String, Object> map = new java.util.LinkedHashMap<>();
                 map.put("id", user.getId());
@@ -240,10 +276,19 @@ public class AdminController {
                 map.put("researchUsed", user.getResearchUsed());
                 map.put("reportQuota", user.getReportQuota());
                 map.put("reportUsed", user.getReportUsed());
+                map.put("translateQuota", user.getTranslateQuota());
+                map.put("translateUsed", user.getTranslateUsed());
+                map.put("translateOneOffQuota", user.getTranslateOneOffQuota());
+                map.put("immersiveQuota", user.getImmersiveQuota());
+                map.put("immersiveUsed", user.getImmersiveUsed());
+                map.put("immersiveOneOffQuota", user.getImmersiveOneOffQuota());
                 map.put("fruitScore", user.getFruitScore());
                 map.put("lastIp", user.getLastIp());
                 map.put("createdAt", user.getCreatedAt());
                 map.put("banned", monitoringSecurityService.isUserBanned(user.getId()));
+                boolean isOnline = monitoringSecurityService.isUserOnline(user.getId());
+                map.put("isOnline", isOnline);
+                map.put("status", isOnline ? "online" : "offline");
                 map.put("qqOpenid", user.getQqOpenid());
                 map.put("avatarUrl", user.getAvatarUrl());
                 return map;
@@ -261,6 +306,27 @@ public class AdminController {
         return authService.adminCreateUser(username, email, password, role, ip);
     }
 
+    @PostMapping("/users/{id}/message")
+    public Map<String, Object> sendDirectUserMessage(@PathVariable("id") Long id, @RequestBody Map<String, Object> body,
+                                                      HttpServletRequest request) {
+        AppUserEntity target = appUserRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
+        String content = textValue(body.get("content"));
+        if (content.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "消息内容不能为空");
+        }
+        if (content.length() > 2000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "消息内容不能超过 2000 字");
+        }
+        String title = textValue(body.get("title"));
+        if (title.isBlank()) title = "管理员消息";
+        if (title.length() > 100) title = title.substring(0, 100);
+        AppUserEntity admin = currentUserService.requireAdmin();
+        notificationService.createSystemNotice(id, admin.getId(), "admin_direct_message", null, title, content);
+        authService.logAction("管理员向用户 " + target.getUsername() + " 发送站内消息", "info", getClientIp(request));
+        return Map.of("ok", true, "userId", id, "title", title);
+    }
+
     @PatchMapping("/users/{id}/quota")
     public void updateUserQuota(@PathVariable("id") Long id, @RequestBody Map<String, Object> body, HttpServletRequest request) {
         Long quota = body.get("tokenLimit") == null ? null : Long.valueOf(String.valueOf(body.get("tokenLimit")));
@@ -275,25 +341,147 @@ public class AdminController {
         AppUserEntity user = appUserRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
         String key = (String) body.get("key");
-        int amount = ((Number) body.getOrDefault("amount", 0)).intValue();
+        long amount = ((Number) body.getOrDefault("amount", 0)).longValue();
+        int legacyAmount = (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, amount));
         String ip = getClientIp(request);
 
-        if ("review".equals(key)) {
-            user.setReviewQuota(Math.max(0, (user.getReviewQuota() == null ? 0 : user.getReviewQuota()) + amount));
+        if ("agent".equals(key)) {
+            user.setTokenLimit(Math.max(0L, (user.getTokenLimit() == null ? 0L : user.getTokenLimit()) + amount));
+        } else if ("review".equals(key)) {
+            user.setReviewQuota(Math.max(0, (user.getReviewQuota() == null ? 0 : user.getReviewQuota()) + legacyAmount));
         } else if ("ppt".equals(key)) {
-            user.setPptQuota(Math.max(0, (user.getPptQuota() == null ? 0 : user.getPptQuota()) + amount));
+            user.setPptQuota(Math.max(0, (user.getPptQuota() == null ? 0 : user.getPptQuota()) + legacyAmount));
         } else if ("chat".equals(key)) {
-            user.setChatQuota(Math.max(0, (user.getChatQuota() == null ? 0 : user.getChatQuota()) + amount));
+            user.setChatQuota(Math.max(0, (user.getChatQuota() == null ? 0 : user.getChatQuota()) + legacyAmount));
         } else if ("research".equals(key)) {
-            user.setResearchQuota(Math.max(0, (user.getResearchQuota() == null ? 0 : user.getResearchQuota()) + amount));
+            user.setResearchQuota(Math.max(0, (user.getResearchQuota() == null ? 0 : user.getResearchQuota()) + legacyAmount));
         } else if ("report".equals(key)) {
-            user.setReportQuota(Math.max(0, (user.getReportQuota() == null ? 0 : user.getReportQuota()) + amount));
+            user.setReportQuota(Math.max(0, (user.getReportQuota() == null ? 0 : user.getReportQuota()) + legacyAmount));
+        } else if ("translate".equals(key)) {
+            user.setTranslateOneOffQuota(Math.max(0, (user.getTranslateOneOffQuota() == null ? 0 : user.getTranslateOneOffQuota()) + legacyAmount));
+            user.setTranslateDailyBonusDate(LocalDate.now());
+        } else if ("immersive".equals(key)) {
+            user.setImmersiveOneOffQuota(Math.max(0, (user.getImmersiveOneOffQuota() == null ? 0 : user.getImmersiveOneOffQuota()) + legacyAmount));
+            user.setImmersiveDailyBonusDate(LocalDate.now());
+        } else if ("translateDaily".equals(key)) {
+            int currentBonus = user.getTranslateDailyBonus() == null ? 0 : user.getTranslateDailyBonus();
+            int currentBase = user.getTranslateDailyQuotaBase() == null
+                ? Math.max(0, (user.getTranslateQuota() == null ? 0 : user.getTranslateQuota()) - currentBonus)
+                : user.getTranslateDailyQuotaBase();
+            int newBase = Math.max(0, currentBase + legacyAmount);
+            user.setTranslateDailyQuotaBase(newBase);
+            user.setTranslateQuota(Math.max(0, newBase + currentBonus));
+        } else if ("immersiveDaily".equals(key)) {
+            int currentBonus = user.getImmersiveDailyBonus() == null ? 0 : user.getImmersiveDailyBonus();
+            int currentBase = user.getImmersiveDailyQuotaBase() == null
+                ? Math.max(0, (user.getImmersiveQuota() == null ? 0 : user.getImmersiveQuota()) - currentBonus)
+                : user.getImmersiveDailyQuotaBase();
+            int newBase = Math.max(0, currentBase + legacyAmount);
+            user.setImmersiveDailyQuotaBase(newBase);
+            user.setImmersiveQuota(Math.max(0, newBase + currentBonus));
+        } else if ("fruitScore".equals(key) || "score".equals(key)) {
+            user.setFruitScore(Math.max(0, (user.getFruitScore() == null ? 0 : user.getFruitScore()) + legacyAmount));
         } else {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无效的权益类型");
         }
-        
+
         AppUserEntity saved = appUserRepository.save(user);
-        authService.logAction("管理员补充用户 " + user.getUsername() + " 的 " + key + " 额度: " + (amount >= 0 ? "+" : "") + amount, "info", ip);
+
+        // Add a gift/penalty record in payment_order
+        PaymentOrderEntity giftOrder = new PaymentOrderEntity();
+        giftOrder.setOrderNo((amount >= 0 ? "GIFT-" : "DEDUCT-") + System.currentTimeMillis() + "-" + (1000 + new java.util.Random().nextInt(9000)));
+        giftOrder.setUserId(id);
+        giftOrder.setAmount(0.0);
+        giftOrder.setActualPayAmount(0.0);
+        giftOrder.setProvider(amount >= 0 ? "管理员赠送" : "管理员扣除");
+        giftOrder.setPlanId(amount >= 0 ? "gift-" + key : "deduct-" + key);
+        giftOrder.setPlanCycle("gift");
+        giftOrder.setStatus("paid");
+
+        String keyName = key;
+        String unitName = "次";
+        if ("translate".equals(key)) {
+            keyName = "对照翻译次数";
+        } else if ("immersive".equals(key)) {
+            keyName = "沉浸翻译次数";
+        } else if ("translateDaily".equals(key)) {
+            keyName = "对照翻译每日额度";
+            unitName = "篇/天";
+        } else if ("immersiveDaily".equals(key)) {
+            keyName = "沉浸翻译每日额度";
+            unitName = "篇/天";
+        } else if ("ppt".equals(key)) {
+            keyName = "PPT次数";
+        } else if ("fruitScore".equals(key) || "score".equals(key)) {
+            keyName = "AI积分";
+            unitName = "积分";
+        } else if ("agent".equals(key)) {
+            keyName = "Agent Token";
+            unitName = "tokens";
+        }
+
+        String actionPrefix = amount >= 0 ? "管理员赠送" : "管理员扣减";
+        String giftMessage = actionPrefix + "：" + keyName + " " + (amount >= 0 ? "+" : "") + amount + " " + unitName;
+        giftOrder.setMessage(giftMessage);
+        giftOrder.setCreatedAt(LocalDateTime.now());
+        giftOrder.setPaidAt(LocalDateTime.now());
+        paymentOrderRepository.save(giftOrder);
+
+        // Send a direct message to user notification inbox
+        if (amount >= 0) {
+            notificationService.createSystemNotice(
+                id,
+                null,
+                "admin_gift",
+                null,
+                "🎁 获得管理员额度补给",
+                "管理员已为您充值补给【" + keyName + "】+" + amount + " " + unitName + "，请在额度中心查收使用！"
+            );
+        } else {
+            notificationService.createSystemNotice(
+                id,
+                null,
+                "admin_penalty",
+                null,
+                "⚠️ 额度扣减提醒",
+                "管理员已对您的账号【" + keyName + "】执行扣减 " + amount + " " + unitName + "。"
+            );
+        }
+
+        authService.logAction("管理员调整用户 " + user.getUsername() + " 的 " + key + " 额度: " + (amount >= 0 ? "+" : "") + amount, amount >= 0 ? "info" : "warn", ip);
+        return saved;
+    }
+
+    @PostMapping("/users/{id}/quota-refill")
+    @Transactional
+    public AppUserEntity refillUserPlanQuota(@PathVariable("id") Long id, HttpServletRequest request) {
+        AppUserEntity user = appUserRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
+        AppUserEntity saved = membershipService.restoreCurrentPlanEntitlements(user);
+
+        PaymentOrderEntity restoreOrder = new PaymentOrderEntity();
+        restoreOrder.setOrderNo("REFILL-" + System.currentTimeMillis() + "-" + id);
+        restoreOrder.setUserId(id);
+        restoreOrder.setAmount(0.0);
+        restoreOrder.setActualPayAmount(0.0);
+        restoreOrder.setProvider("管理员补满");
+        restoreOrder.setPlanId("gift-plan-refill");
+        restoreOrder.setPlanCycle("refill");
+        restoreOrder.setStatus("paid");
+        restoreOrder.setMessage("管理员一键补满当前套餐全部权益：" + membershipService.plan(saved.getMembershipPlan()).getOrDefault("name", "当前套餐"));
+        restoreOrder.setCreatedAt(LocalDateTime.now());
+        restoreOrder.setPaidAt(LocalDateTime.now());
+        paymentOrderRepository.save(restoreOrder);
+
+        notificationService.createSystemNotice(
+            id,
+            null,
+            "admin_gift",
+            null,
+            "套餐权益已补满",
+            "管理员已将您当前套餐内的全部周期额度恢复至套餐上限，原有 AI 积分余额保持不变。"
+        );
+        authService.logAction("管理员补满用户 " + saved.getUsername() + " 的当前套餐全部权益", "info", getClientIp(request));
         return saved;
     }
 
@@ -318,13 +506,210 @@ public class AdminController {
             user.setResearchUsed(0);
             user.setReportQuota(0);
             user.setReportUsed(0);
+            user.setTranslateQuota(0);
+            user.setTranslateUsed(0);
+            user.setImmersiveQuota(0);
+            user.setImmersiveUsed(0);
             AppUserEntity saved = appUserRepository.save(user);
             authService.logAction("管理员取消用户会员: " + saved.getUsername() + "，套餐 " + oldPlan + " → free", "warn", getClientIp(request));
             return saved;
         }
+        user.setMembershipStack("[]");
+        user.setMembershipExpiresAt(null);
+        user.setLastMembershipEvaluationTime(null);
         membershipService.activate(user, planId, cycle);
-        authService.logAction("管理员分配用户会员: " + user.getUsername() + "，套餐 " + oldPlan + " → " + planId, "info", getClientIp(request));
+        authService.logAction("管理员分配用户会员: " + user.getUsername() + "，套餐 " + oldPlan + " → " + planId + " (" + cycle + ")", "info", getClientIp(request));
         return user;
+    }
+
+    @PatchMapping("/users/batch-membership")
+    @Transactional
+    public Map<String, Object> updateUsersMembership(@RequestBody Map<String, Object> body, HttpServletRequest request) {
+        Object rawUserIds = body.get("userIds");
+        if (!(rawUserIds instanceof List<?> values)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择至少一位用户");
+        }
+        LinkedHashSet<Long> userIds = new LinkedHashSet<>();
+        for (Object value : values) {
+            try {
+                userIds.add(Long.valueOf(String.valueOf(value)));
+            } catch (NumberFormatException ignored) { }
+        }
+        if (userIds.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择至少一位用户");
+        String planId = String.valueOf(body.getOrDefault("planId", "free"));
+        String cycle = String.valueOf(body.getOrDefault("cycle", "monthly"));
+        List<AppUserEntity> users = appUserRepository.findAllById(userIds);
+        for (AppUserEntity user : users) {
+            if ("free".equals(planId)) {
+                user.setMembershipPlan("free");
+                user.setMembershipCycle("monthly");
+                user.setMembershipExpiresAt(null);
+                user.setReviewQuota(0); user.setReviewUsed(0);
+                user.setPptQuota(0); user.setPptUsed(0);
+                user.setChatQuota(0); user.setChatUsed(0);
+                user.setResearchQuota(0); user.setResearchUsed(0);
+                user.setReportQuota(0); user.setReportUsed(0);
+                user.setTranslateQuota(0); user.setTranslateUsed(0);
+                user.setImmersiveQuota(0); user.setImmersiveUsed(0);
+                user.setTranslateDailyBonus(0); user.setTranslateDailyBonusDate(LocalDate.now());
+                user.setImmersiveDailyBonus(0); user.setImmersiveDailyBonusDate(LocalDate.now());
+                appUserRepository.save(user);
+            } else {
+                user.setMembershipStack("[]");
+                user.setMembershipExpiresAt(null);
+                user.setLastMembershipEvaluationTime(null);
+                membershipService.activate(user, planId, cycle);
+            }
+        }
+        authService.logAction("管理员批量修改会员权益: " + users.size() + " 位用户 → " + planId + " (" + cycle + ")", "info", getClientIp(request));
+        return Map.of("success", true, "count", users.size(), "planId", planId, "cycle", cycle);
+    }
+
+    @PatchMapping("/users/batch-quota")
+    @Transactional
+    public Map<String, Object> updateUsersQuota(@RequestBody Map<String, Object> body, HttpServletRequest request) {
+        Object rawUserIds = body.get("userIds");
+        Object rawQuotas = body.get("quotas");
+        if (!(rawUserIds instanceof List<?> values) || !(rawQuotas instanceof Map<?, ?> quotaValues)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择用户并填写至少一项额度");
+        }
+        LinkedHashSet<Long> userIds = new LinkedHashSet<>();
+        for (Object value : values) {
+            try { userIds.add(Long.valueOf(String.valueOf(value))); } catch (NumberFormatException ignored) { }
+        }
+        if (userIds.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择至少一位用户");
+        List<AppUserEntity> users = appUserRepository.findAllById(userIds);
+        LocalDate today = LocalDate.now();
+        for (AppUserEntity user : users) {
+            for (Map.Entry<?, ?> entry : quotaValues.entrySet()) {
+                if (entry.getValue() == null || String.valueOf(entry.getValue()).isBlank()) continue;
+                int amount;
+                try { amount = Math.max(0, Integer.parseInt(String.valueOf(entry.getValue()))); }
+                catch (NumberFormatException ex) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "额度必须是非负整数"); }
+                switch (String.valueOf(entry.getKey())) {
+                    case "fruitScore" -> user.setFruitScore(amount);
+                    case "ppt" -> user.setPptQuota(amount);
+                    case "chat" -> user.setChatQuota(amount);
+                    case "research" -> user.setResearchQuota(amount);
+                    case "review" -> user.setReviewQuota(amount);
+                    case "report" -> user.setReportQuota(amount);
+                    case "agent" -> user.setTokenLimit((long) amount);
+                    case "translate" -> {
+                        user.setTranslateQuota(amount); user.setTranslateUsed(0);
+                        user.setTranslateDailyBonus(Math.max(0, amount - membershipService.dailyTranslateQuotaForUser(user)));
+                        user.setTranslateDailyBonusDate(today);
+                    }
+                    case "immersive" -> {
+                        user.setImmersiveQuota(amount); user.setImmersiveUsed(0);
+                        user.setImmersiveDailyBonus(Math.max(0, amount - membershipService.dailyImmersiveQuotaForUser(user)));
+                        user.setImmersiveDailyBonusDate(today);
+                    }
+                    default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "无效的额度类型: " + entry.getKey());
+                }
+            }
+            appUserRepository.save(user);
+        }
+        authService.logAction("管理员批量修改用户额度，共 " + users.size() + " 人", "warn", getClientIp(request));
+        return Map.of("success", true, "count", users.size());
+    }
+
+    @PostMapping("/users/reset-all")
+    public Map<String, Object> resetAllUsers(HttpServletRequest request) {
+        List<AppUserEntity> allUsers = appUserRepository.findAll();
+        for (AppUserEntity user : allUsers) {
+            user.setReviewUsed(0);
+            user.setPptUsed(0);
+            user.setChatUsed(0);
+            user.setResearchUsed(0);
+            user.setReportUsed(0);
+            user.setTranslateUsed(0);
+            user.setImmersiveUsed(0);
+            user.setTranslateDailyBonus(0); user.setTranslateDailyBonusDate(LocalDate.now());
+            user.setImmersiveDailyBonus(0); user.setImmersiveDailyBonusDate(LocalDate.now());
+            user.setMembershipPlan("free");
+            user.setMembershipCycle("monthly");
+            user.setMembershipExpiresAt(null);
+            user.setMembershipStack("[]");
+            user.setLastMembershipEvaluationTime(null);
+            user.setReviewQuota(90);
+            user.setPptQuota(0);
+            user.setChatQuota(150);
+            user.setResearchQuota(90);
+            user.setReportQuota(1);
+            user.setTranslateQuota(90);
+            user.setImmersiveQuota(0);
+        }
+        appUserRepository.saveAll(allUsers);
+        authService.logAction("管理员重置了全体用户的会员使用额度", "warn", getClientIp(request));
+        return Map.of("success", true, "count", allUsers.size());
+    }
+
+    @PostMapping("/users/restore-all-quotas")
+    public Map<String, Object> restoreAllQuotas(HttpServletRequest request) {
+        List<AppUserEntity> allUsers = appUserRepository.findAll();
+        LocalDateTime now = LocalDateTime.now();
+        List<PaymentOrderEntity> restoreOrders = new java.util.ArrayList<>();
+
+        for (AppUserEntity user : allUsers) {
+            user.setReviewUsed(0);
+            user.setPptUsed(0);
+            user.setChatUsed(0);
+            user.setResearchUsed(0);
+            user.setReportUsed(0);
+            user.setTranslateUsed(0);
+            user.setImmersiveUsed(0);
+
+            String planId = user.getMembershipPlan();
+            if (planId == null || "free".equals(planId)) {
+                user.setReviewQuota(90);
+                user.setPptQuota(0);
+                user.setChatQuota(150);
+                user.setResearchQuota(90);
+                user.setReportQuota(1);
+                user.setTranslateQuota(90);
+                user.setImmersiveQuota(0);
+            } else {
+                Map<String, Object> plan = membershipService.plan(planId);
+                user.setReviewQuota((Integer) plan.get("reviewQuota"));
+                user.setPptQuota((Integer) plan.get("pptQuota"));
+                user.setChatQuota((Integer) plan.get("chatQuota"));
+                user.setResearchQuota((Integer) plan.get("researchQuota"));
+                user.setReportQuota((Integer) plan.get("reportQuota"));
+                user.setTranslateQuota(plan.containsKey("translateQuota") ? (Integer) plan.get("translateQuota") : 90);
+                user.setImmersiveQuota(plan.containsKey("immersiveQuota") ? (Integer) plan.get("immersiveQuota") : 0);
+            }
+
+            // Create a restore benefit order record
+            PaymentOrderEntity restoreOrder = new PaymentOrderEntity();
+            restoreOrder.setOrderNo("RESTORE-" + System.currentTimeMillis() + "-" + user.getId() + "-" + (100 + new java.util.Random().nextInt(900)));
+            restoreOrder.setUserId(user.getId());
+            restoreOrder.setAmount(0.0);
+            restoreOrder.setActualPayAmount(0.0);
+            restoreOrder.setProvider("系统重置");
+            restoreOrder.setPlanId("gift-restore-all");
+            restoreOrder.setPlanCycle("restore");
+            restoreOrder.setStatus("paid");
+            restoreOrder.setMessage("重置福利：全站会员额度恢复满血");
+            restoreOrder.setCreatedAt(now);
+            restoreOrder.setPaidAt(now);
+            restoreOrders.add(restoreOrder);
+
+            // Send in-app notification
+            notificationService.createSystemNotice(
+                user.getId(),
+                null,
+                "admin_gift",
+                null,
+                "⚡️ 会员套餐额度已满血恢复",
+                "管理员已恢复全站会员权益额度，已用次数已清零，您当前会员套餐的所有权益已全部恢复为满血状态！"
+            );
+        }
+        appUserRepository.saveAll(allUsers);
+        if (!restoreOrders.isEmpty()) {
+            paymentOrderRepository.saveAll(restoreOrders);
+        }
+        authService.logAction("管理员恢复了全体用户当前会员的全部额度", "info", getClientIp(request));
+        return Map.of("success", true, "count", allUsers.size());
     }
 
     @GetMapping("/membership-plans")
@@ -380,16 +765,30 @@ public class AdminController {
     }
 
     @DeleteMapping("/users/{id}")
-    public void deleteUser(@PathVariable("id") Long id, HttpServletRequest request) {
+    public Map<String, Object> deleteUser(@PathVariable("id") Long id, HttpServletRequest request) {
         String ip = getClientIp(request);
         authService.adminDeleteUser(id, ip);
+        return Map.of("deleted", true, "userId", id);
     }
 
     // --- Recharge & Quota ---
 
     @GetMapping("/recharges")
-    public List<RechargeRecordEntity> getRecharges() {
-        return rechargeRecordRepository.findAll();
+    public List<Map<String, Object>> getRecharges() {
+        return rechargeRecordRepository.findAllByOrderByCreatedAtDescIdDesc().stream()
+            .map(record -> {
+                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                row.put("id", record.getId());
+                row.put("email", record.getEmail());
+                row.put("amount", record.getAmount());
+                row.put("tokens", record.getTokens());
+                row.put("createdAt", record.getCreatedAt());
+                AppUserEntity user = appUserRepository.findByEmail(record.getEmail()).orElse(null);
+                row.put("username", user == null ? "未知用户" : user.getUsername());
+                row.put("numericId", user == null ? "—" : user.getNumericId());
+                return row;
+            })
+            .toList();
     }
 
     @GetMapping("/billing")
@@ -462,6 +861,9 @@ public class AdminController {
         record.setEmail(email);
         record.setAmount(amount);
         record.setTokens(tokens);
+        record.setPointsGranted(0L);
+        record.setRecordType("balance");
+        record.setPlanId("custom-recharge");
         RechargeRecordEntity saved = rechargeRecordRepository.save(record);
 
         // Log recharge
@@ -471,13 +873,24 @@ public class AdminController {
     }
 
     @GetMapping("/payments")
-    public Map<String, Object> getPaymentWorkdesk() {
+    public Map<String, Object> getPaymentWorkdesk(
+        @RequestParam(value = "ticketPage", defaultValue = "1") int ticketPage,
+        @RequestParam(value = "ticketPageSize", defaultValue = "4") int ticketPageSize
+    ) {
+        int safeTicketPage = Math.max(1, ticketPage);
+        int safeTicketSize = Math.min(50, Math.max(1, ticketPageSize));
+        Page<PaymentTicketEntity> tickets = paymentTicketRepository.findUsableTickets(
+            PageRequest.of(safeTicketPage - 1, safeTicketSize, Sort.by(Sort.Direction.DESC, "createdAt", "id"))
+        );
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("orders", paymentOrderRepository.findTop80ByOrderByCreatedAtDesc().stream().map(this::paymentOrderToMap).toList());
-        result.put("tickets", paymentTicketRepository.findTop80ByOrderByCreatedAtDesc().stream()
-            .filter(this::isUsablePaymentTicket)
+        result.put("tickets", tickets.getContent().stream()
             .map(this::paymentTicketToMap)
             .toList());
+        result.put("ticketsPage", safeTicketPage);
+        result.put("ticketsPageSize", safeTicketSize);
+        result.put("ticketsTotal", tickets.getTotalElements());
+        result.put("ticketsTotalPages", Math.max(1, tickets.getTotalPages()));
         return result;
     }
 
@@ -702,10 +1115,37 @@ public class AdminController {
         if (imageUrl != null && !imageUrl.isBlank()) {
             message.setImageUrl(imageUrl);
         }
+        String textColor = body.getOrDefault("textColor", "#000000").trim();
+        if (!textColor.matches("#[0-9a-fA-F]{6}")) textColor = "#000000";
+        message.setTextColor(textColor);
 
         message.setActiveFlag(true);
         SiteMessageEntity saved = siteMessageRepository.save(message);
         authService.logAction("发布全站消息: " + title, "info", getClientIp(request));
+        return saved;
+    }
+
+    @PatchMapping("/site-messages/{id}")
+    public SiteMessageEntity updateSiteMessage(
+        @PathVariable("id") Long id,
+        @RequestBody Map<String, String> body,
+        HttpServletRequest request
+    ) {
+        SiteMessageEntity message = siteMessageRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "站内消息不存在"));
+        String title = body.getOrDefault("title", "").trim();
+        String content = body.getOrDefault("content", "").trim();
+        if (title.isBlank() || content.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "消息标题和内容不能为空");
+        }
+        message.setTitle(title);
+        message.setContent(content);
+        message.setMessageType(normalizeSiteMessageType(body.get("messageType")));
+        message.setImageUrl(body.get("imageUrl") == null || body.get("imageUrl").isBlank() ? null : body.get("imageUrl").trim());
+        String textColor = body.getOrDefault("textColor", "#000000").trim();
+        message.setTextColor(textColor.matches("#[0-9a-fA-F]{6}") ? textColor : "#000000");
+        SiteMessageEntity saved = siteMessageRepository.save(message);
+        authService.logAction("编辑全站消息: " + title, "info", getClientIp(request));
         return saved;
     }
 
@@ -1158,5 +1598,36 @@ public class AdminController {
     public Map<String, Object> unbanUser(@RequestParam("userId") Long userId) {
         monitoringSecurityService.unbanUser(userId);
         return Map.of("success", true, "message", "已成功解封账号 ID: " + userId);
+    }
+
+    @PostMapping("/users/{userId}/impersonate")
+    public AuthSessionVO impersonateUser(@PathVariable("userId") Long targetUserId, HttpServletRequest request) {
+        AppUserEntity currentAdmin = currentUserService.requireAdmin();
+        AppUserEntity targetUser = appUserRepository.findById(targetUserId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "目标用户不存在"));
+
+        String token = sessionTokenService.issue(targetUserId, true);
+
+        AuthSessionVO vo = new AuthSessionVO(
+            targetUser.getId(),
+            targetUser.getUsername(),
+            targetUser.getEmail(),
+            targetUser.getInviteCode(),
+            targetUser.getRole(),
+            targetUser.getAvatarUrl(),
+            targetUser.getBackgroundUrl(),
+            targetUser.getFruitScore(),
+            targetUser.getSchoolName(),
+            targetUser.isCampusVerified(),
+            targetUser.getQq(),
+            targetUser.getWechat(),
+            targetUser.getQqOpenid(),
+            targetUser.getCreatedAt() != null ? targetUser.getCreatedAt().toString() : null,
+            targetUser.getNumericId()
+        );
+        vo.setAccessToken(token);
+
+        authService.logAction("管理员 " + currentAdmin.getUsername() + " 模拟登录了用户账号: " + targetUser.getUsername(), "warn", getClientIp(request));
+        return vo;
     }
 }

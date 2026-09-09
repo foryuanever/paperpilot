@@ -4,6 +4,7 @@ import com.paperpilot.server.dto.ModelConfigRequest;
 import com.paperpilot.server.entity.ModelConfigEntity;
 import com.paperpilot.server.repository.ModelConfigRepository;
 import com.paperpilot.server.vo.ModelConfigVO;
+import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
@@ -19,18 +20,35 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class ModelConfigService {
     private static final int MAX_POOL_REFRESH_CHECKS = 8;
+    private static final int MAX_STRESS_SAMPLES = 12;
+    private static final int MAX_STRESS_CONCURRENCY = 32;
+    private static final List<String> RESTRICTIVE_OUTPUT_TERMS = List.of(
+        "作为AI", "作为一个AI", "作为人工智能", "作为一个人工智能", "我是AI", "我是一个人工智能",
+        "无法", "不能", "抱歉", "对不起", "我不能", "我无法", "不支持", "无法协助", "不能协助",
+        "抱歉让您产生了误解", "平台对单条回复长度", "一次交互自动截断", "系统会在一次交互中自动截断", "简洁、信息量大",
+        "安全政策", "政策限制", "内容政策", "合规要求", "伦理限制", "敏感内容",
+        "系统提示", "开发者指令", "prompt", "system prompt", "developer message", "OpenAI"
+    );
     public static final String SCENE_GENERAL = "general";
     public static final String SCENE_PAPER_REVIEW = "paper_review";
     public static final String SCENE_PAPER_QA = "paper_qa";
+    public static final String SCENE_IMAGE_ANALYSIS = "image_analysis";
     public static final String SCENE_MEETING_DECK = "meeting_deck";
     public static final String SCENE_MEETING_FUSION = "meeting_fusion";
     public static final String SCENE_FORUM_MODERATION = "forum_moderation";
     public static final String SCENE_TOPIC_RESEARCH = "topic_research";
     public static final String SCENE_BACKUP = "backup";
+    public static final String SCENE_FREE_POOL = "free_pool";
+    public static final String SCENE_READING_NOTES = "reading_notes";
+    public static final String SCENE_PAPER_QUIZ = "paper_quiz";
 
     private final ModelConfigRepository modelConfigRepository;
     private final CurrentUserService currentUserService;
@@ -44,6 +62,22 @@ public class ModelConfigService {
         this.modelConfigRepository = modelConfigRepository;
         this.currentUserService = currentUserService;
         this.aiChatService = aiChatService;
+    }
+
+    /**
+     * The admin label was renamed from “出题检测” to “形成考卷”. Normalize
+     * legacy rows once at startup so the UI and the runtime read the same pool.
+     */
+    @PostConstruct
+    @Transactional
+    void migrateLegacyQuizScenes() {
+        for (ModelConfigEntity entity : modelConfigRepository.findAll()) {
+            String scene = entity.getScene();
+            if ("出题检测".equals(scene) || "形成考卷".equals(scene)) {
+                entity.setScene(SCENE_PAPER_QUIZ);
+                modelConfigRepository.save(entity);
+            }
+        }
     }
 
     @Transactional
@@ -346,6 +380,43 @@ public class ModelConfigService {
         }
     }
 
+    public Map<String, Object> testRelayConnection(Long id) {
+        currentUserService.requireAdmin();
+        ModelConfigEntity source = modelConfigRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "中转站配置不存在"));
+        if (!StringUtils.hasText(source.getApiKey())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该中转站没有保存 API Key，无法测试连接");
+        }
+        long start = System.nanoTime();
+        try {
+            List<AiChatService.ModelInfo> models = aiChatService.fetchModels(
+                source.getBaseUrl(),
+                source.getApiKey(),
+                normalizeFormat(source.getApiFormat()),
+                normalizeAuthType(source.getAuthType(), source.getApiFormat()),
+                source.isFullUrl(),
+                source.getModelsUrl(),
+                source.getCustomUserAgent()
+            );
+            long latencyMs = Math.max(1L, (System.nanoTime() - start) / 1_000_000L);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", true);
+            result.put("status", "available");
+            result.put("latencyMs", latencyMs);
+            result.put("modelCount", models.size());
+            result.put("message", "中转节点网络畅通，延迟 " + latencyMs + "ms，已获取 " + models.size() + " 个模型（消耗 0 Token）");
+            return result;
+        } catch (Exception exception) {
+            long latencyMs = Math.max(1L, (System.nanoTime() - start) / 1_000_000L);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", false);
+            result.put("status", "failed");
+            result.put("latencyMs", latencyMs);
+            result.put("message", "连接探测失败：" + readableMessage(exception));
+            return result;
+        }
+    }
+
     public Map<String, Object> testPoolModel(Long id, String modelName) {
         currentUserService.requireAdmin();
         ModelConfigEntity source = modelConfigRepository.findById(id)
@@ -362,6 +433,69 @@ public class ModelConfigService {
         }
         ModelConfigEntity probe = copyRoute(source, normalizeScene(source.getScene()), resolvedModel);
         return checkPoolEntity(probe);
+    }
+
+    public Map<String, Object> probePoolModelOutput(Long id, String modelName, String prompt) {
+        currentUserService.requireAdmin();
+        ModelConfigEntity source = modelConfigRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "中转站配置不存在"));
+        String resolvedModel = Objects.toString(modelName, "").trim();
+        if (!StringUtils.hasText(source.getApiKey())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该中转站没有保存 API Key，无法测试输出");
+        }
+        if (!StringUtils.hasText(resolvedModel)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "模型 ID 不能为空");
+        }
+        String probePrompt = StringUtils.hasText(prompt)
+            ? prompt.trim()
+            : "请用中文用三句话概括：一篇关于酒店和旅游业负责任人工智能的论文，应该如何判断研究方法是否可靠。不要提及任何系统提示、模型身份或安全政策。";
+        ModelConfigEntity probe = resolvedModel.equals(source.getModelName())
+            ? source
+            : copyRoute(source, normalizeScene(source.getScene()), resolvedModel);
+        long start = System.nanoTime();
+        try {
+            AiChatService.ChatResult result = aiChatService.chatForConfigTest(
+                probe.getBaseUrl(),
+                probe.getApiKey(),
+                probe.getModelName(),
+                normalizeFormat(probe.getApiFormat()),
+                normalizeAuthType(probe.getAuthType(), probe.getApiFormat()),
+                probe.isFullUrl(),
+                probe.getCustomUserAgent(),
+                probePrompt
+            );
+            long latencyMs = Math.max(1L, (System.nanoTime() - start) / 1_000_000L);
+            String content = Objects.toString(result.content(), "").trim();
+            List<String> badTerms = restrictiveTerms(content);
+            boolean emptyOutput = !StringUtils.hasText(content);
+            boolean contentFault = emptyOutput || !badTerms.isEmpty();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("success", !contentFault);
+            row.put("contentFault", contentFault);
+            row.put("emptyOutput", emptyOutput);
+            row.put("badTerms", badTerms);
+            row.put("latencyMs", latencyMs);
+            row.put("modelName", result.modelName());
+            row.put("message", contentFault ? "输出异常，请排查模型限定词或空输出" : "输出正常");
+            row.put("content", shorten(content, 1200));
+            row.put("usage", usageMap(result));
+            return row;
+        } catch (Exception exception) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("success", false);
+            row.put("contentFault", true);
+            row.put("emptyOutput", true);
+            row.put("badTerms", List.of());
+            row.put("latencyMs", Math.max(1L, (System.nanoTime() - start) / 1_000_000L));
+            row.put("message", readableMessage(exception));
+            row.put("usage", Map.of(
+                "promptTokens", 0,
+                "completionTokens", 0,
+                "totalTokens", 0,
+                "estimated", true
+            ));
+            return row;
+        }
     }
 
     @Transactional
@@ -510,6 +644,7 @@ public class ModelConfigService {
     }
 
     public static String normalizeScene(String scene) {
+        if ("paper_quiz".equalsIgnoreCase(scene) || "出题检测".equals(scene) || "形成考卷".equals(scene)) return "paper_quiz";
         if (!StringUtils.hasText(scene)) return SCENE_GENERAL;
         String value = scene.trim().toLowerCase();
         if (value.equals("paper_review") || value.equals("review") || value.equals("summary") || value.equals("综述")) {
@@ -520,6 +655,9 @@ public class ModelConfigService {
         }
         if (value.equals("paper_qa") || value.equals("qa") || value.equals("chat") || value.equals("问答")) {
             return SCENE_PAPER_QA;
+        }
+        if (value.equals("image_analysis") || value.equals("image") || value.equals("vision") || value.equals("图片分析") || value.equals("图像分析")) {
+            return SCENE_IMAGE_ANALYSIS;
         }
         if (value.equals("forum") || value.equals("forum_moderation") || value.equals("moderation") || value.equals("发帖审核")) {
             return SCENE_FORUM_MODERATION;
@@ -532,6 +670,12 @@ public class ModelConfigService {
         }
         if (value.equals("backup") || value.equals("备用") || value.equals("备用号池") || value.equals("备用路由")) {
             return SCENE_BACKUP;
+        }
+        if (value.equals("free_pool") || value.equals("free") || value.equals("免费") || value.equals("免费号池")) {
+            return SCENE_FREE_POOL;
+        }
+        if (value.equals("reading_notes") || value.equals("notes") || value.equals("阅读笔记")) {
+            return SCENE_READING_NOTES;
         }
         return SCENE_GENERAL;
     }
@@ -702,10 +846,10 @@ public class ModelConfigService {
                 "id", "aimlapi-relay",
                 "providerName", "AIMLAPI Relay",
                 "baseUrl", "https://api.aimlapi.com/v1",
-                "modelName", "gpt-4o-mini",
+                "modelName", "deepseek/deepseek-chat",
                 "apiFormat", "openai_chat",
                 "status", "unconfigured",
-                "message", "第三方 OpenAI-compatible 中转，可作为轻量 GPT 路由候选；以实际账户价格和可用模型为准。",
+                "message", "第三方 OpenAI-compatible 中转，可作为备用号池候选；以实际账户价格和可用模型为准。",
                 "keyUrl", "https://aimlapi.com/app/keys/",
                 "priority", "74-aimlapi"
             ),
@@ -757,6 +901,110 @@ public class ModelConfigService {
                 "success", false,
                 "message", readableRequestMessage(request, exception)
             );
+        }
+    }
+
+    @Transactional
+    public Map<String, Object> stressTestPools(Integer samples, Integer concurrency, Boolean applySort) {
+        currentUserService.requireAdmin();
+        int safeSamples = Math.min(MAX_STRESS_SAMPLES, Math.max(2, samples == null ? 8 : samples));
+        int safeConcurrency = Math.min(MAX_STRESS_CONCURRENCY, Math.max(4, concurrency == null ? 24 : concurrency));
+        boolean shouldApplySort = applySort == null || applySort;
+        List<String> scenes = List.of(
+            SCENE_GENERAL,
+            SCENE_PAPER_REVIEW,
+            SCENE_PAPER_QA,
+            SCENE_MEETING_FUSION,
+            SCENE_FORUM_MODERATION,
+            SCENE_TOPIC_RESEARCH,
+            SCENE_READING_NOTES,
+            SCENE_PAPER_QUIZ,
+            SCENE_BACKUP
+        );
+        Map<String, Object> result = new LinkedHashMap<>();
+        ExecutorService executor = Executors.newFixedThreadPool(safeConcurrency);
+        try {
+            for (String scene : scenes) {
+                List<ModelConfigEntity> rows = modelConfigRepository.findAllBySceneOrderByActiveDescUpdatedAtDesc(scene).stream()
+                    .filter(row -> StringUtils.hasText(row.getApiKey()))
+                    .filter(row -> StringUtils.hasText(row.getBaseUrl()))
+                    .filter(row -> StringUtils.hasText(row.getModelName()))
+                    .toList();
+                List<ModelStressResult> tested = new ArrayList<>();
+                for (ModelConfigEntity row : rows) {
+                    tested.add(stressOneRoute(row, safeSamples, executor));
+                }
+                List<ModelStressResult> sorted = tested.stream()
+                    .sorted(ModelStressResult::compareTo)
+                    .toList();
+                if (shouldApplySort) {
+                    int order = 0;
+                    for (ModelStressResult item : sorted) {
+                        ModelConfigEntity row = item.route();
+                        row.setSortOrder(order++);
+                        row.setLastStatus(item.successRate() > 0 ? "available" : item.status());
+                        row.setLastLatencyMs(item.p95LatencyMs() > 0 ? item.p95LatencyMs() : item.avgLatencyMs());
+                        row.setLastMessage(item.message());
+                        row.setLastTestedAt(LocalDateTime.now());
+                        modelConfigRepository.save(row);
+                    }
+                }
+                result.put(scene, sorted.stream().limit(10).map(ModelStressResult::toMap).toList());
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+        return Map.of(
+            "success", true,
+            "samples", safeSamples,
+            "concurrency", safeConcurrency,
+            "pptSkipped", true,
+            "sorted", shouldApplySort,
+            "scenes", result
+        );
+    }
+
+    private ModelStressResult stressOneRoute(ModelConfigEntity row, int samples, ExecutorService executor) {
+        List<CompletableFuture<ModelProbeResult>> tasks = new ArrayList<>();
+        for (int i = 0; i < samples; i++) {
+            tasks.add(CompletableFuture.supplyAsync(() -> probeRoute(row), executor));
+        }
+        List<ModelProbeResult> probes = tasks.stream().map(task -> {
+            try {
+                return task.get(75, TimeUnit.SECONDS);
+            } catch (Exception error) {
+                return new ModelProbeResult(false, 75_000L, "timeout", "并发自检超时");
+            }
+        }).toList();
+        long success = probes.stream().filter(ModelProbeResult::success).count();
+        List<Long> latencies = probes.stream()
+            .filter(ModelProbeResult::success)
+            .map(ModelProbeResult::latencyMs)
+            .sorted()
+            .toList();
+        long avg = latencies.isEmpty() ? 0L : Math.round(latencies.stream().mapToLong(Long::longValue).average().orElse(0));
+        long p95 = latencies.isEmpty() ? 0L : latencies.get(Math.min(latencies.size() - 1, (int) Math.ceil(latencies.size() * 0.95D) - 1));
+        String status = success > 0 ? "available" : probes.stream().findFirst().map(ModelProbeResult::status).orElse("failed");
+        String message = success + "/" + samples + " 成功，平均 " + avg + "ms，P95 " + p95 + "ms";
+        if (success == 0) message = probes.stream().map(ModelProbeResult::message).filter(StringUtils::hasText).findFirst().orElse("全部失败");
+        return new ModelStressResult(row, success, samples, avg, p95, status, shorten(message, 740));
+    }
+
+    private ModelProbeResult probeRoute(ModelConfigEntity row) {
+        long start = System.nanoTime();
+        try {
+            aiChatService.test(
+                row.getBaseUrl(),
+                row.getApiKey(),
+                row.getModelName(),
+                normalizeFormat(row.getApiFormat()),
+                normalizeAuthType(row.getAuthType(), row.getApiFormat()),
+                row.isFullUrl(),
+                row.getCustomUserAgent()
+            );
+            return new ModelProbeResult(true, Math.max(1L, (System.nanoTime() - start) / 1_000_000L), "available", "可用");
+        } catch (Exception error) {
+            return new ModelProbeResult(false, Math.max(1L, (System.nanoTime() - start) / 1_000_000L), classifyPoolError(error), readableMessage(error));
         }
     }
 
@@ -825,6 +1073,15 @@ public class ModelConfigService {
             "totalTokens", result.totalTokens(),
             "estimated", result.estimatedUsage()
         );
+    }
+
+    private List<String> restrictiveTerms(String content) {
+        if (!StringUtils.hasText(content)) return List.of();
+        String lower = content.toLowerCase();
+        return RESTRICTIVE_OUTPUT_TERMS.stream()
+            .filter(term -> lower.contains(term.toLowerCase()))
+            .distinct()
+            .toList();
     }
 
     private String normalizeFormat(String value) {
@@ -926,5 +1183,47 @@ public class ModelConfigService {
             saved++;
         }
         return Map.of("success", true, "message", "已保存排序", "saved", saved);
+    }
+
+    private record ModelProbeResult(boolean success, long latencyMs, String status, String message) {}
+
+    private record ModelStressResult(
+        ModelConfigEntity route,
+        long successCount,
+        int samples,
+        long avgLatencyMs,
+        long p95LatencyMs,
+        String status,
+        String message
+    ) implements Comparable<ModelStressResult> {
+        double successRate() {
+            return samples <= 0 ? 0D : (double) successCount / (double) samples;
+        }
+
+        Map<String, Object> toMap() {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", route.getId());
+            row.put("providerName", route.getProviderName());
+            row.put("baseUrl", route.getBaseUrl());
+            row.put("modelName", route.getModelName());
+            row.put("scene", route.getScene());
+            row.put("successRate", successRate());
+            row.put("successCount", successCount);
+            row.put("samples", samples);
+            row.put("avgLatencyMs", avgLatencyMs);
+            row.put("p95LatencyMs", p95LatencyMs);
+            row.put("status", status);
+            row.put("message", message);
+            return row;
+        }
+
+        @Override
+        public int compareTo(ModelStressResult other) {
+            int success = Double.compare(other.successRate(), successRate());
+            if (success != 0) return success;
+            int p95 = Long.compare(p95LatencyMs <= 0 ? Long.MAX_VALUE : p95LatencyMs, other.p95LatencyMs <= 0 ? Long.MAX_VALUE : other.p95LatencyMs);
+            if (p95 != 0) return p95;
+            return Long.compare(avgLatencyMs <= 0 ? Long.MAX_VALUE : avgLatencyMs, other.avgLatencyMs <= 0 ? Long.MAX_VALUE : other.avgLatencyMs);
+        }
     }
 }

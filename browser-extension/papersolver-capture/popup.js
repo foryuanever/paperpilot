@@ -7,14 +7,14 @@ const desktopStateEl = document.getElementById("desktopState");
 versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
 
 chrome.storage.sync.get(["apiBase", "userId", "userName"], (data) => {
-  input.value = data.apiBase || "http://127.0.0.1:8080";
+  input.value = data.apiBase || "https://papersolver.cn";
   accountEl.textContent = "请打开并登录 PaperSolver 桌面客户端完成绑定。";
 });
 
 checkDesktopState();
 
 document.getElementById("save").addEventListener("click", () => {
-  const value = input.value.trim() || "http://127.0.0.1:8080";
+  const value = input.value.trim() || "https://papersolver.cn";
   chrome.storage.sync.set({ apiBase: value }, () => {
     statusEl.textContent = "已保存";
     setTimeout(() => {
@@ -38,6 +38,7 @@ async function checkDesktopState() {
       await chrome.storage.sync.set({
         userId: String(data.session.userId),
         userName: data.session.userName || "PaperSolver 用户",
+        accessToken: data.session.accessToken || "",
         appUrl: "papersolver-desktop"
       });
       accountEl.textContent = `已绑定客户端账号：${data.session.userName || "PaperSolver 用户"}（ID ${data.session.userId}）`;
@@ -57,19 +58,22 @@ document.getElementById("test").addEventListener("click", async () => {
   statusEl.classList.remove("error");
   statusEl.textContent = "正在测试...";
   try {
-    const { userId } = await chrome.storage.sync.get(["userId"]);
+    const { accessToken } = await chrome.storage.sync.get(["accessToken"]);
     const headers = {};
-    if (/^\d+$/.test(String(userId || ""))) {
-      headers["X-PaperPilot-User-Id"] = String(userId);
+    if (accessToken) {
+      headers["X-PaperPilot-Session"] = String(accessToken);
     }
-    const response = await fetch(`${apiBase.replace(/\/$/, "")}/api/library/papers`, { headers });
+    const response = await fetch(`${apiBase.replace(/\/$/, "")}/api/library/papers`, { headers, credentials: "omit" });
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("插件未登录或登录令牌已失效。请先打开最新版 PaperSolver 桌面端登录 QQ，再重新绑定账号。");
+      }
       throw new Error(`后端返回 HTTP ${response.status}`);
     }
     const papers = await response.json();
     statusEl.textContent = `连接正常，当前账号文献 ${Array.isArray(papers) ? papers.length : 0} 篇`;
   } catch (error) {
     statusEl.classList.add("error");
-    statusEl.textContent = error?.message || "连接失败，请确认后端 8080 已启动";
+    statusEl.textContent = error?.message || "连接失败。请先打开桌面端并重新登录，再点测试连接。";
   }
 });

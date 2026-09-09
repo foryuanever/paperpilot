@@ -133,7 +133,7 @@
                 </span>
                 <span class="meta-item">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"></path></svg>
-                  {{ post.replies.length }}
+                  {{ post.replies?.length || 0 }}
                 </span>
                 <span class="meta-item">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3Z"/><path d="M7 10 11.2 2.8a1.7 1.7 0 0 1 3.1 1.2l-.8 4H19a3 3 0 0 1 2.9 3.7l-1.6 6.5A4 4 0 0 1 16.4 21H7V10Z"/></svg>
@@ -145,17 +145,6 @@
 
             <div class="forum-row-side">
               <span v-if="campusCircleActive && post.authorSchoolName" class="campus-watermark">{{ post.authorSchoolName }}</span>
-              <div v-if="replyAvatars(post).length" class="reply-avatar-strip" aria-label="评论参与者">
-                <span
-                  v-for="avatar in replyAvatars(post)"
-                  :key="`${post.id}-${avatar.key}`"
-                  class="reply-mini-avatar"
-                  :title="avatar.name"
-                >
-                  <img v-if="avatar.url" :src="avatar.url" :alt="avatar.name" />
-                  <b v-else>{{ avatar.text }}</b>
-                </span>
-              </div>
               <div v-if="isAdmin" class="admin-post-actions">
                 <button :disabled="moderationBusy[post.id]" :class="{ danger: post.banned }" @click="toggleModeration(post, 'ban')">
                   {{ post.banned ? "解封" : "封禁" }}
@@ -418,7 +407,7 @@
             </label>
           </section>
 
-          <div class="form-section">
+          <div class="form-section" :class="{ 'required-missing': submitAttempted && (!form.postType || !form.visibility) }">
             <h3><span>1</span> 选择研究模块</h3>
             <div class="type-picker">
               <button
@@ -444,6 +433,8 @@
                 <small>{{ option.description }}</small>
               </button>
             </div>
+            <p v-if="submitAttempted && !form.postType" class="required-tip">请选择研究模块。</p>
+            <p v-else-if="submitAttempted && !form.visibility" class="required-tip">请选择帖子可见范围。</p>
           </div>
 
           <div class="form-section">
@@ -459,7 +450,7 @@
             </label>
           </div>
 
-          <div class="form-section">
+          <div class="form-section" :class="{ 'required-missing': submitAttempted && (!form.title.trim() || form.content.trim().length <= 5) }">
             <h3><span>3</span> 填写主题内容</h3>
             <label class="wide-field">
               <span>详细内容</span>
@@ -476,6 +467,18 @@
                   <button type="button" title="无序列表" @click="insertMarkdown('- ', '')">•</button>
                   <button type="button" title="引用块，适合放重点说明" @click="insertMarkdown('> ', '')">“</button>
                   <button type="button" title="插入链接" @click="insertMarkdown('[链接文字](', ')')">🔗</button>
+                  <template v-if="isAdmin">
+                    <span class="admin-color-label">文字颜色</span>
+                    <button
+                      v-for="color in adminTextColors"
+                      :key="color"
+                      type="button"
+                      class="admin-color-swatch"
+                      :style="{ '--swatch-color': color }"
+                      :title="`使用 ${color} 字色`"
+                      @click="insertAdminTextColor(color)"
+                    ></button>
+                  </template>
                   <button type="button" title="插入公告式发帖模板" @click="insertAnnouncementTemplate">模板</button>
                   <button type="button" title="清空正文" @click="clearMarkdownContent">⌫</button>
                 </div>
@@ -571,8 +574,8 @@
           <span>{{ publishFooterText }}</span>
           <div>
             <button class="cancel-button" :disabled="publishing" @click="closeCreateModal">取消</button>
-            <button class="submit-button" :disabled="!canSubmit || publishing" @click="submitPost">
-              {{ publishing ? (editingPost ? "保存中..." : "AI审核中...") : editingPost ? "保存修改" : "发布帖子" }}
+            <button class="submit-button" :disabled="publishing" @click="submitPost">
+              {{ publishing ? (editingPost ? "保存中..." : "发布中...") : editingPost ? "保存修改" : "发布帖子" }}
             </button>
           </div>
         </footer>
@@ -717,12 +720,13 @@ const markdown = new MarkdownIt({
 });
 const defaultValidateLink = markdown.validateLink;
 markdown.validateLink = (url) => /^data:(image|application|text)\//i.test(url) || defaultValidateLink(url);
+const adminTextColors = ["#dc2626", "#ea580c", "#ca8a04", "#16a34a", "#2563eb", "#7c3aed", "#c026d3", "#0f172a"];
 
 const blankForm = () => ({
-  postType: "数据集求助",
+  postType: "",
   direction: "",
   title: "",
-  content: announcementTemplate,
+  content: "",
   tagsRaw: "",
   paperId: "",
   venueName: "",
@@ -733,6 +737,7 @@ const blankForm = () => ({
   attachments: []
 });
 const form = reactive(blankForm());
+const submitAttempted = ref(false);
 
 onMounted(async () => {
   await Promise.all([forumStore.fetchPosts(), libraryStore.hydrateLibrary()]);
@@ -759,15 +764,26 @@ const filteredPosts = computed(() => {
       && isInDateRange(post);
   });
   return result.sort((a, b) => {
-    if (sortMode.value === "popular") return b.replies.length - a.replies.length;
-    if (sortMode.value === "liked") return b.likes - a.likes;
-    return String(b.time).localeCompare(String(a.time));
+    if (sortMode.value === "popular") return (b.replies?.length || 0) - (a.replies?.length || 0);
+    if (sortMode.value === "liked") return (b.likes || 0) - (a.likes || 0);
+    return String(b.time || "").localeCompare(String(a.time || ""));
   });
 });
 
-const totalReplies = computed(() => forumStore.state.posts.reduce((sum, post) => sum + post.replies.length, 0));
+const totalReplies = computed(() => forumStore.state.posts.reduce((sum, post) => sum + (post.replies?.length || 0), 0));
 const hasFilters = computed(() => Boolean(searchQuery.value || activeType.value || activeTag.value || dateStart.value || dateEnd.value));
-const isAdmin = computed(() => authStore.profile.role === "管理员" || authStore.session?.role === "管理员");
+const isAdmin = computed(() => {
+  const roles = [
+    authStore.profile?.role,
+    authStore.session?.role,
+    authStore.profile?.user?.role,
+    authStore.session?.user?.role,
+    authStore.user?.role,
+  ]
+    .map((value) => String(value || "").trim().toLowerCase());
+  return Boolean(authStore.isAdmin || authStore.profile?.isAdmin || authStore.session?.user?.isAdmin)
+    || roles.some((role) => role === "管理员" || role === "admin" || role === "administrator");
+});
 const myPosts = computed(() => forumStore.state.posts.filter(post => isMine(post)));
 const postPageCount = computed(() => Math.max(1, Math.ceil(filteredPosts.value.length / postPageSize.value)));
 const paginatedPosts = computed(() => filteredPosts.value.slice((postPage.value - 1) * postPageSize.value, postPage.value * postPageSize.value));
@@ -811,11 +827,12 @@ const popularTags = computed(() => {
 });
 
 const selectedPaper = computed(() => libraryStore.state.documents.find(doc => String(doc.id) === String(form.paperId)));
-const canSubmit = computed(() => form.title.trim() && form.content.trim().length > 5 && form.postType && form.direction.length <= 10 && noticeAccepted.value);
 const publishFooterText = computed(() => {
-  if (publishing.value) return editingPost.value ? "正在保存修改..." : "正在进入 AI 发帖审核，预计约 1 分钟，请不要关闭窗口";
+  if (publishing.value) return editingPost.value ? "正在保存修改..." : "正在发布帖子...";
   if (!noticeAccepted.value) return "请先勾选发帖须知";
-  return editingPost.value ? "保存后立即更新帖子" : "提交后先进入 AI 审核，通过后自动发布";
+  if (!form.postType) return "请选择研究模块";
+  if (!form.visibility) return "请选择帖子可见范围";
+  return editingPost.value ? "保存后立即更新帖子" : "发布后会立即在研究社区展示";
 });
 const editorLineNumbers = computed(() => {
   const count = Math.max(1, String(form.content || "").split("\n").length);
@@ -826,8 +843,24 @@ const renderedMarkdown = computed(() => {
   const cleaned = source
     .replace(/<!--\s*(?:图片|附件)\s*[:：]\s*.*?-->/gi, "")
     .replace(/(?:图片|附件)\s*[:：]\s*[^\n\r]+/gi, "");
-  return markdown.render(cleaned);
+  return renderForumMarkdown(cleaned);
 });
+
+function renderForumMarkdown(value) {
+  const tokens = [];
+  const prepared = String(value || "")
+    .replace(/\[color=(#[0-9a-f]{6})\]/gi, (_, color) => {
+      const safeColor = color.toLowerCase();
+      if (!adminTextColors.includes(safeColor)) return _;
+      const token = `PAPERSOLVERCOLOROPEN${tokens.length}TOKEN`;
+      tokens.push({ token, html: `<span style="color:${safeColor}">` });
+      return token;
+    })
+    .replace(/\[\/color\]/gi, "PAPERSOLVERCOLORCLOSETOKEN");
+  let rendered = markdown.render(prepared);
+  for (const token of tokens) rendered = rendered.replaceAll(token.token, token.html);
+  return rendered.replaceAll("PAPERSOLVERCOLORCLOSETOKEN", "</span>");
+}
 
 function typeClass(type) {
   return postModules.find(item => item.value === type)?.className || "research";
@@ -975,6 +1008,7 @@ function openCreateModal(type = "") {
   Object.assign(form, blankForm());
   editingPost.value = null;
   noticeAccepted.value = false;
+  submitAttempted.value = false;
   markdownMode.value = "split";
   moderationError.value = "";
   if (type) choosePostType(type);
@@ -986,7 +1020,28 @@ function closeCreateModal() {
 }
 
 async function submitPost() {
-  if (!canSubmit.value || publishing.value) return;
+  if (publishing.value) return;
+  submitAttempted.value = true;
+  if (!form.postType) {
+    moderationError.value = "请选择研究模块后再发布。";
+    return;
+  }
+  if (!form.visibility) {
+    moderationError.value = "请选择帖子可见范围后再发布。";
+    return;
+  }
+  if (!noticeAccepted.value) {
+    moderationError.value = "请先阅读并勾选发帖须知。";
+    return;
+  }
+  if (!form.title.trim()) {
+    moderationError.value = "请填写帖子标题。";
+    return;
+  }
+  if (form.content.trim().length <= 5) {
+    moderationError.value = "请填写至少 6 个字符的正文内容。";
+    return;
+  }
   publishing.value = true;
   moderationError.value = "";
   let createdPostId = "";
@@ -1037,7 +1092,6 @@ async function submitPost() {
     console.error("Failed to publish forum post:", error);
     moderationError.value = error?.response?.data?.message
       || error?.response?.data?.detail
-      || (error?.code === "ECONNABORTED" ? "AI 审核超过 90 秒仍未返回，请稍后重试，或联系管理员检查发帖审核模型路由。" : "")
       || "帖子保存失败，请稍后重试。";
   } finally {
     publishing.value = false;
@@ -1061,6 +1115,7 @@ function openEditPost(post) {
   });
   markdownMode.value = "split";
   noticeAccepted.value = false;
+  submitAttempted.value = false;
   moderationError.value = "";
   showMyPostsManager.value = false;
   showCreateModal.value = true;
@@ -1080,6 +1135,10 @@ async function insertMarkdown(before, after = "") {
   const cursor = start + before.length + selected.length + after.length;
   textarea.focus();
   textarea.setSelectionRange(cursor, cursor);
+}
+
+async function insertAdminTextColor(color) {
+  await insertMarkdown(`[color=${color}]`, "[/color]");
 }
 
 async function insertAnnouncementTemplate() {
@@ -1906,8 +1965,8 @@ function formatFileSize(bytes) {
 
 /* Modals & Overlay Dark Mode Fixes */
 :root[data-theme="dark"] .modal-overlay {
-  background: rgba(0, 0, 0, 0.75) !important;
-  backdrop-filter: blur(8px);
+  background: rgba(15, 23, 42, 0.08) !important;
+  backdrop-filter: none;
 }
 
 /* 1. Publish Modal */
@@ -2813,7 +2872,7 @@ button { cursor: pointer; }
 .empty-state h2 { margin: 10px 0 7px; color: #243048; }
 .empty-state p { margin: 0 0 20px; }
 
-.modal-overlay { position: fixed; inset: 78px 0 0; z-index: 45; display: grid; place-items: center; padding: 18px 24px 24px; background: rgba(16, 25, 43, .48); }
+.modal-overlay { position: fixed; inset: 78px 0 0; z-index: 45; display: grid; place-items: center; padding: 18px 24px 24px; background: rgba(16, 25, 43, .08); }
 .publish-modal { width: min(820px, calc(100vw - 32px)); max-height: calc(100vh - 118px); display: flex; flex-direction: column; overflow: hidden; background: #fff; border-radius: 22px; box-shadow: 0 28px 80px rgba(14, 27, 52, .28); }
 .publish-modal > header, .publish-modal > footer { flex: 0 0 auto; padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .publish-modal > header { border-bottom: 1px solid #e8ecf2; }
@@ -2983,6 +3042,17 @@ button { cursor: pointer; }
 .upload-file-list button { border: 0; color: #b04357; background: transparent; font-size: 11px; }
 .optional-section { padding: 18px !important; border: 1px solid #dce8fb !important; border-radius: 14px; background: #f8fbff; }
 .publish-error-note { margin-top: 18px; padding: 12px 14px; border: 1px solid #f3c8cf; border-radius: 12px; color: #b13f53; background: #fff5f6; font-size: 12px; font-weight: 800; line-height: 1.6; }
+.form-section.required-missing {
+  border-color: rgba(239, 68, 68, 0.5);
+  box-shadow: inset 3px 0 0 rgba(239, 68, 68, 0.85);
+}
+.required-tip {
+  margin: 10px 0 0;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 700;
+}
+:root[data-theme="dark"] .required-tip { color: #fda4af; }
 .publish-modal > footer { border-top: 1px solid #e8ecf2; color: #8b95a6; font-size: 10px; }
 .publish-modal > footer > div { display: flex; gap: 9px; }
 .cancel-button, .submit-button { height: 40px; padding: 0 18px; border-radius: 10px; font-weight: 700; font-size: 12px; }
@@ -4198,6 +4268,30 @@ button { cursor: pointer; }
 .markdown-toolbar button:hover {
   color: #075ee5;
   background: #eef4ff;
+}
+
+.admin-color-label {
+  align-self: center;
+  margin-left: 4px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.markdown-toolbar .admin-color-swatch {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--swatch-color);
+  box-shadow: 0 0 0 1px #cbd5e1;
+}
+
+.markdown-toolbar .admin-color-swatch:hover {
+  background: var(--swatch-color);
+  box-shadow: 0 0 0 2px #2563eb;
 }
 
 .markdown-body {

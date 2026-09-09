@@ -248,6 +248,14 @@ public class PaperEntity {
         this.uploadedAt = uploadedAt;
     }
 
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
     public String getFolder() {
         return folder;
     }

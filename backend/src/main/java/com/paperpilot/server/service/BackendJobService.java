@@ -61,6 +61,7 @@ public class BackendJobService {
         row.put("detail", job.getDetail() == null ? "" : job.getDetail());
         row.put("done", isDone(job.getStatus()));
         row.put("success", isSuccess(job.getStatus()));
+        row.put("startedAt", job.getCreatedAt());
         row.put("updatedAt", job.getUpdatedAt());
         return row;
     }

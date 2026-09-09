@@ -30,6 +30,7 @@ import com.paperpilot.server.service.CurrentUserService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -39,6 +40,9 @@ import java.util.UUID;
 
 @Configuration
 public class BootstrapDataConfig {
+
+    @Value("${PAPERPILOT_DEMO_SEED:false}")
+    private boolean demoSeed;
 
     @Bean
     CommandLineRunner seedInitialData(
@@ -57,6 +61,11 @@ public class BootstrapDataConfig {
         TutorialArticleRepository tutorialArticleRepository
     ) {
         return (args) -> {
+            // Production data must never be recreated by a service restart. The
+            // old demo accounts made a successful admin deletion appear to revive.
+            if (!demoSeed) {
+                return;
+            }
             seedInviteCodes(inviteCodeRepository);
             seedUsers(appUserRepository);
             // Run user role database migration to standardize to "普通用户" and "管理员"
@@ -324,7 +333,6 @@ public class BootstrapDataConfig {
         user.setUsername(username);
         user.setRole(role);
         user.setPasswordHash(hash(password));
-        user.setPlainPassword(password);
         user.setLastIp(lastIp);
         user.setActiveTime(activeTime);
         user.setTokenLimit(tokenLimit);

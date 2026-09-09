@@ -82,14 +82,21 @@ public class PaperWorkspaceService {
         entity.setWorkspaceId(workspaceId);
         entity.setUserId(userId);
         String enrichedSourceUrl = enriched == null ? "" : enriched.getSourceUrl();
-        String importSource = firstNonBlank(hostLabel(enrichedSourceUrl), request.getImportSource(), hostLabel(requestSourceUrl), hostLabel(requestPaperUrl), request.getSource(), "插件导入");
+        String importSource = firstNonBlank(request.getImportSource(), hostLabel(enrichedSourceUrl), hostLabel(requestSourceUrl), hostLabel(requestPaperUrl), request.getSource(), "未识别");
         String src = firstNonBlank(enriched == null ? "" : enriched.getSource(), request.getSource(), importSource);
         boolean trustRequestMetadata = shouldTrustRequestMetadata(request);
         entity.setSource(src);
         entity.setSourceUrl(firstNonBlank(enriched == null ? "" : enriched.getSourceUrl(), requestSourceUrl, requestPaperUrl));
         entity.setImportSource(importSource);
         entity.setTitle(limit(firstMeaningfulTitle(enriched, request, trustRequestMetadata), 512));
-        entity.setAuthors(limit(firstNonBlank(enriched == null ? "" : enriched.getAuthors(), trustRequestMetadata ? request.getAuthors() : "", "作者待补全"), 255));
+        // For a user-uploaded PDF, the metadata extracted in the client is the
+        // authoritative record. External lookup can match a wrong paper and
+        // must not replace its title/author with unrelated search results.
+        entity.setAuthors(limit(firstNonBlank(
+            trustRequestMetadata ? request.getAuthors() : "",
+            enriched == null ? "" : enriched.getAuthors(),
+            "作者待补全"
+        ), 255));
         String candidatePaperUrl = importPdfCandidate(enriched, requestPaperUrl, entity.getSourceUrl());
         String cachedPaperUrl = cacheImportedPdf(workspaceId, candidatePaperUrl);
         entity.setPaperUrl(cachedPaperUrl);
@@ -99,12 +106,12 @@ public class PaperWorkspaceService {
             : abstractText);
         boolean pdfCached = isLocalCachedPdf(cachedPaperUrl);
         boolean desktopCached = isDesktopCachedPdf(cachedPaperUrl);
-        entity.setProgress((pdfCached || desktopCached) ? "1%" : "0%");
+        entity.setProgress("0%");
         entity.setImportance(initialImportance(enriched, request));
         entity.setNote(desktopCached ? "PDF 已保存到桌面端本机，可进入阅读解析。" : pdfCached ? "PDF 已缓存，可进入阅读解析。" : "已导入元数据，但 PDF 未缓存成功，请关联可访问 PDF。");
         String articleType = firstNonBlank(enriched == null ? "" : enriched.getArticleType(), request.getArticleType());
         entity.setVenueType(inferVenueType(src, articleType));
-        entity.setVenueRanking(inferVenueRanking(src, entity.getVenueType(), enriched));
+        entity.setVenueRanking(firstNonBlank(request.getVenueRanking(), inferVenueRanking(src, entity.getVenueType(), enriched)));
         entity.setJournalTags(String.join(",", buildTags(enriched, request, importSource, pdfCached || desktopCached)));
         String publishYear = firstNonBlank(enriched == null ? "" : enriched.getYear(), request.getPublishYear());
         entity.setPublishYear(publishYear == null || publishYear.isBlank()
@@ -144,27 +151,35 @@ public class PaperWorkspaceService {
         if (entity == null) return;
         boolean trustRequestMetadata = shouldTrustRequestMetadata(request);
         if (enriched != null) {
-            if (isMeaningfulTitle(enriched.getTitle())) entity.setTitle(limit(enriched.getTitle(), 512));
+            if (trustRequestMetadata && isMeaningfulTitle(request.getTitle())) {
+                entity.setTitle(limit(cleanupTitle(request.getTitle()), 512));
+            } else if (isMeaningfulTitle(enriched.getTitle())) {
+                entity.setTitle(limit(enriched.getTitle(), 512));
+            }
             if (!firstNonBlank(enriched.getSource()).isBlank()) entity.setSource(enriched.getSource());
-            if (!firstNonBlank(enriched.getAuthors()).isBlank()) entity.setAuthors(limit(enriched.getAuthors(), 255));
+            if (trustRequestMetadata && !firstNonBlank(request.getAuthors()).isBlank()) {
+                entity.setAuthors(limit(request.getAuthors(), 255));
+            } else if (!firstNonBlank(enriched.getAuthors()).isBlank()) {
+                entity.setAuthors(limit(enriched.getAuthors(), 255));
+            }
             if (!firstNonBlank(enriched.getYear()).isBlank()) entity.setPublishYear(limit(enriched.getYear(), 16));
             if (!firstNonBlank(enriched.getAbstractText()).isBlank()
                 && isPlaceholderAbstract(entity.getAbstractText())) {
                 entity.setAbstractText(enriched.getAbstractText());
             }
             entity.setSourceUrl(firstNonBlank(enriched.getSourceUrl(), entity.getSourceUrl(), request.getSourceUrl()));
-            entity.setImportSource(firstNonBlank(hostLabel(entity.getSourceUrl()), entity.getImportSource(), request.getImportSource()));
+            entity.setImportSource(firstNonBlank(request.getImportSource(), entity.getImportSource(), hostLabel(entity.getSourceUrl())));
             String candidatePaperUrl = importPdfCandidate(enriched, request.getPaperUrl(), entity.getPaperUrl());
             if (!isReadableCachedPdf(entity.getPaperUrl()) && !candidatePaperUrl.isBlank()) {
                 entity.setPaperUrl(cacheImportedPdf(entity.getWorkspaceId(), candidatePaperUrl));
             }
             boolean pdfCached = isLocalCachedPdf(entity.getPaperUrl());
             boolean desktopCached = isDesktopCachedPdf(entity.getPaperUrl());
-            entity.setProgress((pdfCached || desktopCached) ? "1%" : firstNonBlank(entity.getProgress(), "0%"));
+            entity.setProgress(firstNonBlank(entity.getProgress(), "0%"));
             entity.setNote(desktopCached ? "PDF 已保存到桌面端本机，可进入阅读器解析正文。" : pdfCached ? "PDF 已缓存，可进入阅读器解析正文。" : "已更新元数据，但 PDF 未缓存成功，请关联可访问 PDF。");
             entity.setJournalTags(String.join(",", buildTags(enriched, request, entity.getImportSource(), pdfCached || desktopCached)));
             entity.setVenueType(inferVenueType(entity.getSource(), enriched.getArticleType()));
-            entity.setVenueRanking(inferVenueRanking(entity.getSource(), entity.getVenueType(), enriched));
+            entity.setVenueRanking(firstNonBlank(request.getVenueRanking(), inferVenueRanking(entity.getSource(), entity.getVenueType(), enriched)));
             return;
         }
         if (trustRequestMetadata) {
@@ -181,7 +196,7 @@ public class PaperWorkspaceService {
             entity.setPaperUrl(cacheImportedPdf(entity.getWorkspaceId(), requestPaperUrl));
             boolean pdfCached = isLocalCachedPdf(entity.getPaperUrl());
             boolean desktopCached = isDesktopCachedPdf(entity.getPaperUrl());
-            entity.setProgress((pdfCached || desktopCached) ? "1%" : firstNonBlank(entity.getProgress(), "0%"));
+            entity.setProgress(firstNonBlank(entity.getProgress(), "0%"));
             entity.setNote(desktopCached ? "PDF 已保存到桌面端本机，可进入阅读器解析正文。" : pdfCached ? "PDF 已缓存，可进入阅读器解析正文。" : firstNonBlank(entity.getNote(), "已更新元数据，但 PDF 未缓存成功，请关联可访问 PDF。"));
         }
     }
@@ -342,6 +357,16 @@ public class PaperWorkspaceService {
             if (candidate.isBlank()) continue;
             try {
                 SearchPaperVO found = externalSearchService.searchByUrlOrDoi(candidate);
+                // A filename/title search may return an unrelated top hit.
+                // Local PDF metadata must not inherit its journal and year.
+                if (found != null && candidate.equals(titleCandidate)
+                    && isUserProvidedLocalImport(request.getImportSource(), request.getSource())) {
+                    Set<String> expected = new LinkedHashSet<>(List.of(titleCandidate.toLowerCase(Locale.ROOT).split("[^\\p{L}\\p{N}]+")));
+                    Set<String> actual = new LinkedHashSet<>(List.of(firstNonBlank(found.getTitle()).toLowerCase(Locale.ROOT).split("[^\\p{L}\\p{N}]+")));
+                    expected.remove("");
+                    actual.retainAll(expected);
+                    if (expected.isEmpty() || actual.size() < expected.size() * 0.75) continue;
+                }
                 best = betterPaper(best, found);
                 if (metadataScore(best) >= 7) return best;
             } catch (Exception ignored) {
@@ -426,20 +451,36 @@ public class PaperWorkspaceService {
     }
 
     private String firstMeaningfulTitle(SearchPaperVO enriched, PaperImportRequest request, boolean trustRequestMetadata) {
-        String enrichedTitle = firstNonBlank(enriched == null ? "" : enriched.getTitle());
-        if (isMeaningfulTitle(enrichedTitle)) return enrichedTitle;
         String requestedTitle = firstNonBlank(request.getTitle());
         if (trustRequestMetadata && isMeaningfulTitle(requestedTitle)) return cleanupTitle(requestedTitle);
+        String enrichedTitle = firstNonBlank(enriched == null ? "" : enriched.getTitle());
+        if (isMeaningfulTitle(enrichedTitle)) return enrichedTitle;
         return "未命名论文";
     }
 
     private boolean shouldTrustRequestMetadata(PaperImportRequest request) {
+        String importSource = firstNonBlank(request.getImportSource());
+        String source = firstNonBlank(request.getSource());
+        if (isUserProvidedLocalImport(importSource, source)) {
+            return true;
+        }
         String sourceUrl = unwrapProxyUrl(firstNonBlank(request.getSourceUrl()));
         String paperUrl = unwrapProxyUrl(firstNonBlank(request.getPaperUrl()));
         if (!sourceUrl.isBlank() && !isPublisherAssetOrPdfUrl(sourceUrl)) {
             return true;
         }
         return !paperUrl.isBlank() && !paperUrl.equals(sourceUrl) && !isPublisherAssetOrPdfUrl(paperUrl);
+    }
+
+    private boolean isUserProvidedLocalImport(String importSource, String source) {
+        String normalizedImportSource = firstNonBlank(importSource).toLowerCase(Locale.ROOT);
+        String normalizedSource = firstNonBlank(source).toLowerCase(Locale.ROOT);
+        return normalizedImportSource.contains("个人添加")
+            || normalizedImportSource.contains("本地文献")
+            || normalizedImportSource.contains("local")
+            || normalizedSource.equals("个人文献")
+            || normalizedSource.equals("本地上传")
+            || normalizedSource.equals("本地文献");
     }
 
     private boolean isMeaningfulTitle(String title) {
@@ -449,6 +490,8 @@ public class PaperWorkspaceService {
         if (normalized.matches(".*\\.(pdf|html?)$")) return false;
         if (normalized.matches("^[a-z0-9.-]+\\.(com|cn|org|net|edu).*$")) return false;
         if (normalized.contains("pdf.sciencedirectassets.com")) return false;
+        if (normalized.matches("^[a-z]\\s+.{45,}(?:\\s+(?:from|with|for|and|the|to|of|in))?$")) return false;
+        if (normalized.matches("^.{0,20}\\b(?:applications|fluorophores|biotechnology|interference)\\b.{45,}$")) return false;
         return normalized.length() >= 8;
     }
 
@@ -498,9 +541,7 @@ public class PaperWorkspaceService {
         if (normalized.matches(".*(neurips|icml|iclr|cvpr|acl|emnlp|naacl|kdd|sigir|aaai|ijcai).*")) {
             return researchDataService.inferVenueRanking(source, "会议");
         }
-        if (isHighImpactVenue(source)) return "顶级期刊";
-        if (enriched != null && enriched.getSubjects() != null && !enriched.getSubjects().isEmpty()) return "JCR --";
-        return "JCR --";
+        return researchDataService.inferVenueRanking(source, venueType);
     }
 
     private boolean isHighImpactVenue(String source) {
@@ -519,7 +560,10 @@ public class PaperWorkspaceService {
     private List<String> buildTags(SearchPaperVO enriched, PaperImportRequest request, String importSource, boolean pdfCached) {
         Set<String> tags = new LinkedHashSet<>();
         tags.add(pdfCached ? "PDF已缓存" : "待关联PDF");
+        if (request.getJournalTags() != null) tags.addAll(request.getJournalTags());
+        String source = firstNonBlank(enriched == null ? "" : enriched.getSource(), request.getSource());
         String articleType = firstNonBlank(enriched == null ? "" : enriched.getArticleType(), request.getArticleType());
+        tags.addAll(researchDataService.verifiedVenueMetrics(source, inferVenueType(source, articleType)));
         if (!articleType.isBlank() && !"Other".equalsIgnoreCase(articleType)) {
             tags.add(toTag(articleType));
         }
@@ -657,7 +701,7 @@ public class PaperWorkspaceService {
             entity.getVenueType(),
             entity.getVenueRanking(),
             entity.getPublishYear(),
-            entity.getReadAt().toString().replace("T", " "),
+            entity.getCreatedAt() == null ? "-" : entity.getCreatedAt().toString().replace("T", " "),
             entity.getUploadedAt().toString(),
             entity.getPaperUrl(),
             entity.getSourceUrl(),

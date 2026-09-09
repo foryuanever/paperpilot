@@ -1,1 +1,5 @@
-mineru==3.4.0
+mineru[pipeline]==3.4.0
+huggingface-hub==0.36.0
+pypdfium2==4.30.0
+pdftext==0.6.3
+ftfy==6.3.1

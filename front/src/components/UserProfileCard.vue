@@ -30,14 +30,15 @@
             <template v-if="user.contactInfo">联系方式：{{ user.contactInfo }}</template>
             <template v-else>对方联系方式默认隐藏。发起申请并被接受后，这里会显示对方主动填写的微信或 QQ。</template>
           </p>
+          <p v-if="store.state.requestError" class="contact-request-error">{{ store.state.requestError }}</p>
           <footer>
             <button
               v-if="!user.isSelf"
               class="contact-action"
-              :disabled="contactButtonDisabled"
-              @click="store.requestContact"
+              :disabled="contactButtonDisabled || store.state.requesting"
+              @click="handleRequestContact"
             >
-              {{ contactLabel }}
+              {{ store.state.requesting ? "发送中..." : contactLabel }}
             </button>
             <button
               v-if="!user.isSelf"
@@ -114,7 +115,7 @@ const userReportUploadError = ref("");
 const userReporting = ref(false);
 
 const levelInfo = computed(() => {
-  const score = Math.max(0, Number(user.value?.fruitScore || 0));
+  const score = Math.max(0, Number(user.value?.checkinScore || 0));
   return {
     score,
     level: Math.floor(score / 100) + 1,
@@ -138,6 +139,14 @@ const contactLabel = computed(() => ({
 const contactButtonDisabled = computed(() =>
   ["friends", "outgoing_pending", "incoming_pending"].includes(user.value?.friendshipStatus),
 );
+
+async function handleRequestContact() {
+  try {
+    await store.requestContact();
+  } catch {
+    // The error is rendered in the card so a failed request is no longer silent.
+  }
+}
 
 function openUserReport() {
   showUserReportModal.value = true;

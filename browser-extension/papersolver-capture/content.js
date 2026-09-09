@@ -273,9 +273,13 @@
           } else if (response?.result?.pdfCapturePending && response?.result?.pdfUrl) {
             button.disabled = false;
             button.textContent = "重试下载";
-            status.textContent = response?.result?.pdfUploadError
-              ? `PDF 下载到客户端失败：${response.result.pdfUploadError}`
-              : "题录已入库，但 PDF 下载到客户端失败。请确认桌面端已打开。";
+            root.classList.add("ps-error");
+            status.textContent = `题录已入库，但 PDF 下载失败：${response?.result?.pdfUploadError || "官网返回非标准 PDF 或受保护链接"}。建议点击文章进入详情页直接一键补传。`;
+          } else if (response?.result?.pdfUploadError) {
+            button.disabled = false;
+            button.textContent = "重新导入 PDF";
+            root.classList.add("ps-error");
+            status.textContent = `题录已入库，但没有取得真实 PDF：${response.result.pdfUploadError}`;
           } else {
             button.textContent = "已导入";
             status.textContent = "题录已保存到文献库；当前页面没有提供可读取的 PDF 链接。";
@@ -292,7 +296,6 @@
 
   function buildCandidatePaper(paper, candidate) {
     if (!candidate?.url) return paper;
-    const suffix = candidate.label && candidate.label !== "PDF 全文" ? ` - ${candidate.label}` : "";
     return {
       ...paper,
       pdfUrl: candidate.url,
@@ -302,7 +305,7 @@
       sourceUrl: candidate.sourceUrl || paper.sourceUrl || location.href,
       authors: candidate.authors || paper.authors || "",
       year: candidate.year || paper.year || "",
-      importSource: `${paper.importSource || paper.source || hostLabel(location.href)}${suffix}`,
+      importSource: paper.importSource || paper.source || hostLabel(location.href),
       source: paper.source || hostLabel(location.href)
     };
   }
@@ -394,7 +397,10 @@
     `;
     document.documentElement.appendChild(root);
     root.querySelector(".ps-close").addEventListener("click", () => root.remove());
-    root.querySelector(".ps-import").addEventListener("click", async () => {
+    let uploading = false;
+    const submitPdf = async () => {
+      if (uploading) return;
+      uploading = true;
       const button = root.querySelector(".ps-import");
       const status = root.querySelector(".ps-status");
       button.disabled = true;
@@ -403,6 +409,7 @@
       status.textContent = "正在读取当前 PDF...";
       const payload = await attachPdfDataUrlIfPossible(paper, status);
       if (!payload.pdfDataUrl) {
+        uploading = false;
         button.disabled = false;
         button.textContent = "重试补传";
         root.classList.add("ps-error");
@@ -417,6 +424,7 @@
           pdfFileName: payload.pdfFileName,
         }
       }, (response) => {
+        uploading = false;
         if (response?.ok) {
           button.textContent = "PDF 已补传";
           root.classList.add("ps-success");
@@ -429,7 +437,9 @@
           status.textContent = response?.error || "PDF 上传失败，请确认 PaperSolver 后端已启动。";
         }
       });
-    });
+    };
+    root.querySelector(".ps-import").addEventListener("click", submitPdf);
+    window.setTimeout(() => submitPdf().catch(() => {}), 350);
   }
 
   async function attachPdfDataUrlIfPossible(paper, status) {
@@ -450,7 +460,18 @@
       const pdfDataUrl = await blobToDataUrl(blob);
       return { ...paper, pdfUrl, pdfDataUrl, pdfFileName: filenameFromUrl(pdfUrl) };
     } catch {
+      if (isCnkiUrl(pdfUrl)) {
+        status.textContent = "知网 PDF 读取失败：请登录学校/机构账号，并确认有 PDF/CAJ 下载权限。";
+      }
       return paper;
+    }
+  }
+
+  function isCnkiUrl(url) {
+    try {
+      return /(^|\.)cnki\.net$/i.test(new URL(url).hostname);
+    } catch {
+      return false;
     }
   }
 
@@ -812,7 +833,9 @@
       url: normalizeUrl(href),
       label: title,
       title,
-      reason: clean(control.textContent || "").includes("CAJ") ? "CNKI CAJ 全文" : "CNKI PDF 全文",
+      reason: clean(control.textContent || "").includes("CAJ")
+        ? "CNKI CAJ 全文（需登录并有下载权限）"
+        : "CNKI PDF 全文（需登录并有下载权限）",
       sourceUrl: location.href,
       authors: allMeta("citation_author").join(", ") || findCnkiAuthors(),
       year: firstMeta(["citation_publication_date", "citation_online_date", "dc.date"]) || extractYear(document.body?.innerText || ""),

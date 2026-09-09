@@ -1,6 +1,6 @@
 {
   "name": "papersolver-desktop",
-  "version": "0.1.0-beta.1",
+  "version": "2.2.0",
   "private": true,
   "description": "PaperSolver desktop shell",
   "main": "src/main.cjs",
@@ -9,11 +9,16 @@
     "start": "electron .",
     "build:front": "node scripts/build-front.mjs",
     "prepare:dependency": "node scripts/prepare-local-dependency-source.mjs",
+    "prepare:runtime": "node scripts/prepare-offline-runtime.mjs",
+    "prepare:models": "node scripts/prepare-offline-models.mjs",
+    "audit:dependency": "node scripts/audit-offline-dependency.mjs",
     "build:dependency": "node scripts/package-local-dependency.mjs",
+    "test:release": "node scripts/release-smoke-test.mjs",
+    "test:translation-load": "node scripts/translation-load-test.mjs",
     "pack": "node scripts/build-front.mjs && electron-builder --dir",
     "dist": "node scripts/build-front.mjs && electron-builder",
-    "dist:mac": "node scripts/build-front.mjs && electron-builder --mac dmg",
-    "dist:win": "node scripts/build-front.mjs && electron-builder --win nsis"
+    "dist:mac": "node scripts/build-front.mjs && electron-builder --mac dmg zip --arm64",
+    "dist:win": "node scripts/build-front.mjs && electron-builder --win nsis --x64"
   },
   "devDependencies": {
     "electron": "^33.4.11",
@@ -28,26 +33,55 @@
     },
     "files": [
       "src/**/*",
+      "dependency-service/pdf/server.py",
+      "front-dist/**/*",
       "package.json"
     ],
     "extraResources": [
       {
-        "from": "../front/dist",
-        "to": "front-dist",
+        "from": "build/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "dependency-service/structured/pdftext-0.6.3",
+        "to": "compat/pdftext-0.6.3"
+      },
+      {
+        "from": "dependency-service/structured/formula-compat",
+        "to": "compat/formula",
         "filter": [
-          "**/*"
+          "ftfy/**/*",
+          "ftfy-6.3.1.dist-info/**/*",
+          "wcwidth/**/*",
+          "wcwidth-0.8.2.dist-info/**/*",
+          "formula-smoke.pdf"
         ]
       },
       {
-        "from": "build/icon.png",
-        "to": "icon.png"
+        "from": "dependency-service/structured/fasttext/lid.176.ftz",
+        "to": "compat/fasttext/lid.176.ftz"
+      }
+    ],
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://papersolver.cn/downloads/"
+      }
+    ],
+    "protocols": [
+      {
+        "name": "PaperSolver OAuth",
+        "schemes": [
+          "papersolver"
+        ]
       }
     ],
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.education",
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ],
       "hardenedRuntime": false,
       "gatekeeperAssess": false
@@ -58,8 +92,7 @@
         {
           "target": "nsis",
           "arch": [
-            "x64",
-            "ia32"
+            "x64"
           ]
         }
       ]
@@ -71,5 +104,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "PaperSolver"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
   }
 }

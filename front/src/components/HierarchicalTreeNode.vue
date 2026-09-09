@@ -67,7 +67,7 @@
       <textarea
         v-model="node.content"
         rows="3"
-        placeholder="在这个层级下记录笔记、疑问、总结或 Markdown 要点…"
+        :placeholder="node.placeholder || '在这个层级下记录笔记、疑问、总结或 Markdown 要点…'"
         @change="$emit('save')"
       ></textarea>
       <div v-if="node.quoteText" class="inline-quote-box">

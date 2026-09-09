@@ -31,7 +31,7 @@ export const useAuthStore = defineStore("auth", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
   }
 
-  if (session.isAuthenticated && !session.user?.userId) {
+  if (session.isAuthenticated && (!session.user?.userId || !session.user?.accessToken)) {
     session.isAuthenticated = false;
     session.user = null;
   }
@@ -40,8 +40,8 @@ export const useAuthStore = defineStore("auth", () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
   }
 
-  const profile = computed(() => session.user || { name: "Guest", email: "", inviteCode: "", avatarUrl: "", backgroundUrl: "", schoolName: "", campusVerified: false, qq: "", wechat: "", qqOpenid: "", registerTime: "" });
-  const unreadCount = computed(() => session.notifications.length);
+  const profile = computed(() => session.user || { name: "Guest", email: "", numericId: "", inviteCode: "", avatarUrl: "", backgroundUrl: "", schoolName: "", campusVerified: false, qq: "", wechat: "", qqOpenid: "", registerTime: "", fruitScore: 0, checkinScore: 0 });
+  const unreadCount = computed(() => session.notifications.filter(item => !item.read).length);
 
   function persist() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
@@ -58,6 +58,7 @@ export const useAuthStore = defineStore("auth", () => {
       userId: session.user.userId,
       userName: session.user.name || "",
       email: session.user.email || "",
+      accessToken: session.user.accessToken || "",
     }).catch(() => {});
   }
 
@@ -80,17 +81,20 @@ export const useAuthStore = defineStore("auth", () => {
           userId: saved.userId,
           name: saved.name,
           email: saved.email,
+          numericId: saved.numericId || session.user.numericId || "",
           inviteCode: saved.inviteCode,
           role: saved.role || session.user.role || "普通用户",
           avatarUrl: saved.avatarUrl || "",
           backgroundUrl: saved.backgroundUrl || "",
           fruitScore: saved.fruitScore || session.user.fruitScore || 0,
+          checkinScore: saved.checkinScore || session.user.checkinScore || 0,
           schoolName: saved.schoolName || session.user.schoolName || "",
           campusVerified: Boolean(saved.campusVerified ?? session.user.campusVerified),
           qq: saved.qq || "",
           wechat: saved.wechat || "",
           qqOpenid: saved.qqOpenid || session.user.qqOpenid || "",
           registerTime: saved.registerTime || session.user.registerTime || "",
+          accessToken: saved.accessToken || session.user.accessToken || "",
         };
         session.role = session.user.role;
         persist();
@@ -101,6 +105,37 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
+  async function refreshProfile() {
+    if (!session.isAuthenticated || !session.user) return;
+    try {
+      const saved = await paperpilotApi.updateProfile({});
+      session.user = {
+        ...session.user,
+        userId: saved.userId,
+        name: saved.name,
+        email: saved.email,
+        numericId: saved.numericId || session.user.numericId || "",
+        inviteCode: saved.inviteCode,
+        role: saved.role || session.user.role || "普通用户",
+        avatarUrl: saved.avatarUrl || "",
+        backgroundUrl: saved.backgroundUrl || "",
+        fruitScore: saved.fruitScore !== undefined ? saved.fruitScore : session.user.fruitScore || 0,
+        checkinScore: saved.checkinScore !== undefined ? saved.checkinScore : session.user.checkinScore || 0,
+        schoolName: saved.schoolName || session.user.schoolName || "",
+        campusVerified: Boolean(saved.campusVerified ?? session.user.campusVerified),
+        qq: saved.qq || "",
+        wechat: saved.wechat || "",
+        qqOpenid: saved.qqOpenid || session.user.qqOpenid || "",
+        registerTime: saved.registerTime || session.user.registerTime || "",
+        accessToken: saved.accessToken || session.user.accessToken || "",
+      };
+      session.role = session.user.role;
+      persist();
+    } catch (error) {
+      console.warn("Failed to refresh profile:", error);
+    }
+  }
+
   function applySession(user) {
     session.isAuthenticated = true;
     session.loginSerial = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -108,17 +143,20 @@ export const useAuthStore = defineStore("auth", () => {
       userId: user.userId,
       name: user.name,
       email: user.email,
+      numericId: user.numericId || "",
       inviteCode: user.inviteCode,
       role: user.role || "普通用户",
       avatarUrl: user.avatarUrl || "",
       backgroundUrl: user.backgroundUrl || "",
       fruitScore: user.fruitScore || 0,
+      checkinScore: user.checkinScore || 0,
       schoolName: user.schoolName || "",
       campusVerified: Boolean(user.campusVerified),
       qq: user.qq || "",
       wechat: user.wechat || "",
       qqOpenid: user.qqOpenid || "",
       registerTime: user.registerTime || "",
+      accessToken: user.accessToken || "",
     };
     // Provide a direct shortcut for role checks used throughout the app
     session.role = session.user.role;
@@ -213,6 +251,7 @@ export const useAuthStore = defineStore("auth", () => {
       return;
     }
     const notifications = await paperpilotApi.getNotifications();
+    const existingReadMap = new Map((session.notifications || []).map(n => [n.id, n.read]));
     session.notifications = notifications.map(item => ({
       id: item.id,
       title: item.title,
@@ -221,15 +260,23 @@ export const useAuthStore = defineStore("auth", () => {
       referenceId: item.referenceId,
       actorUserId: item.actorUserId,
       createdAt: item.createdAt,
+      read: existingReadMap.get(item.id) || Boolean(item.readFlag || item.read),
     }));
     persist();
   }
 
   async function markNotificationRead(id) {
-    if (!String(id).startsWith("n-")) {
-      await paperpilotApi.markNotificationRead(id);
+    const target = (session.notifications || []).find((item) => item.id === id);
+    if (target) {
+      target.read = true;
     }
-    session.notifications = session.notifications.filter((item) => item.id !== id);
+    if (!String(id).startsWith("n-")) {
+      try {
+        await paperpilotApi.markNotificationRead(id);
+      } catch (e) {
+        console.warn("Failed to sync markNotificationRead with server:", e);
+      }
+    }
     persist();
   }
 
@@ -244,6 +291,7 @@ export const useAuthStore = defineStore("auth", () => {
     refreshNotifications,
     register,
     updateProfileFields,
+    refreshProfile,
     persist,
     applySession,
   };

@@ -21,6 +21,20 @@ public class InviteCodeEntity {
     @Column(nullable = false)
     private boolean active;
 
+    @Column(name = "referrer_id", nullable = true)
+    private Long referrerId;
+
+    @Column(name = "created_at", nullable = false)
+    private java.time.LocalDateTime createdAt = java.time.LocalDateTime.now();
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
     public String getCode() {
         return code;
     }
@@ -35,5 +49,21 @@ public class InviteCodeEntity {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public Long getReferrerId() {
+        return referrerId;
+    }
+
+    public void setReferrerId(Long referrerId) {
+        this.referrerId = referrerId;
+    }
+
+    public java.time.LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(java.time.LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 }

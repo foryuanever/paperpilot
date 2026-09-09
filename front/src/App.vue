@@ -1,33 +1,34 @@
 <template>
   <div :class="rootClass">
     <header v-if="showNav" class="spatial-nav-float">
-      <button
-        v-if="isDesktopApp"
-        type="button"
-        class="spatial-nav-brand spatial-nav-brand-button"
-        title="刷新当前页面"
-        @click="handleBrandRefresh"
-      >
-        <img class="spatial-nav-mark" src="/brand/papersolver-mark-v2.png" alt="" />
-        <strong>PaperSolver</strong>
-      </button>
-      <router-link v-else class="spatial-nav-brand" to="/library">
-        <img class="spatial-nav-mark" src="/brand/papersolver-mark-v2.png" alt="" />
-        <strong>PaperSolver</strong>
-      </router-link>
-
-      <nav class="spatial-nav-links">
-        <router-link
-          v-for="item in navItems"
-          :key="item.to"
-          :to="item.to"
-          class="spatial-nav-link"
-          :class="{ active: route.path === item.to }"
+      <div class="header-left">
+        <button
+          type="button"
+          class="sidebar-toggle-trigger"
+          title="切换侧边栏"
+          @click="uiStore.toggleSidebar"
         >
-          {{ item.label }}
-          <span v-if="item.to === '/forum' && forumUnreadCount" class="nav-forum-alert" aria-label="学术论坛有新动态">{{ forumUnreadCount }}</span>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="toggle-icon">
+            <rect x="2" y="2" width="16" height="16" rx="3" />
+            <line x1="7" y1="2" x2="7" y2="18" />
+          </svg>
+        </button>
+
+        <button
+          v-if="isDesktopApp"
+          type="button"
+          class="spatial-nav-brand spatial-nav-brand-button"
+          title="刷新当前页面"
+          @click="handleBrandRefresh"
+        >
+          <img class="spatial-nav-mark" src="/brand/papersolver-mark-v2.png" alt="" />
+          <strong>PaperSolver（刷新）</strong>
+        </button>
+        <router-link v-else class="spatial-nav-brand" to="/library">
+          <img class="spatial-nav-mark" src="/brand/papersolver-mark-v2.png" alt="" />
+          <strong>PaperSolver</strong>
         </router-link>
-      </nav>
+      </div>
 
       <div class="spatial-nav-actions">
         <button
@@ -58,8 +59,8 @@
               <span v-else class="profile-avatar">{{ userInitial }}</span>
               <span class="profile-avatar-status-dot"></span>
             </div>
-            <span class="profile-name">{{ authStore.profile.name }}</span>
           </button>
+
           <div v-if="uiStore.layout.showProfileMenu" class="popover-panel profile-panel app-popover">
             <div class="profile-popover-header">
               <img v-if="authStore.profile.avatarUrl" :src="authStore.profile.avatarUrl" class="profile-popover-avatar-img" />
@@ -78,22 +79,31 @@
 
             <!-- Level Banner -->
             <div class="profile-popover-level-banner">
-              <div class="popover-level-num">Lv.{{ getFruitLevelInfo(currentFruitScore).level }}</div>
+              <div class="popover-level-num">Lv.{{ getFruitLevelInfo(authStore.profile.checkinScore || 0).level }}</div>
               <div class="popover-level-info">
-                <div class="popover-level-title">{{ getFruitLevelInfo(currentFruitScore).title }}</div>
-                <div class="popover-level-sub">累计硕果: {{ currentFruitScore }} 枚</div>
+                <div class="popover-level-title">{{ getFruitLevelInfo(authStore.profile.checkinScore || 0).title }}</div>
+                <div class="popover-level-sub">累计积分: {{ authStore.profile.checkinScore || 0 }} 分</div>
               </div>
+              <button
+                v-if="!hasCheckedInToday"
+                type="button"
+                class="popover-checkin-btn"
+                @click.stop="triggerCheckin"
+              >
+                签到
+              </button>
+              <span v-else class="popover-checkedin-tag">已签到</span>
             </div>
 
             <!-- Quick Stats Grid -->
             <div class="profile-popover-stats">
               <div class="stats-item">
                 <span class="stats-label">注册时间</span>
-                <span class="stats-value">{{ authStore.profile.registerTime || currentUserMember.registerTime }}</span>
+                <span class="stats-value">{{ (authStore.profile.registerTime || currentUserMember?.registerTime || '').replace('T', ' ').split('.')[0].substring(0, 16) || '—' }}</span>
               </div>
               <div class="stats-item">
-                <span class="stats-label">邀请码</span>
-                <span class="stats-value">无</span>
+                <span class="stats-label">积分</span>
+                <span class="stats-value">{{ authStore.profile.fruitScore || 0 }}</span>
               </div>
             </div>
 
@@ -120,6 +130,55 @@
       </div>
     </header>
 
+    <div v-if="showNav" class="app-layout-wrapper">
+      <aside class="app-sidebar-fixed" :class="{ 'collapsed': uiStore.layout.sidebarCollapsed }">
+        <div class="sidebar-group" v-for="group in menuGroups" :key="group.title">
+          <div v-if="!uiStore.layout.sidebarCollapsed" class="group-title">{{ group.title }}</div>
+          <div v-else class="group-title-divider"></div>
+          <nav class="group-items">
+            <router-link
+              v-for="item in group.items"
+              :key="item.to"
+              :to="item.to"
+              class="sidebar-nav-link"
+              :class="{ active: route.path === item.to }"
+              :title="uiStore.layout.sidebarCollapsed ? item.label : ''"
+            >
+              <span class="nav-icon" v-html="getNavIconSvg(item.icon || item.label)"></span>
+              <span v-if="!uiStore.layout.sidebarCollapsed" class="nav-label">{{ item.label }}</span>
+              <span v-if="item.to === '/forum' && forumUnreadCount" class="nav-badge" :class="{ 'dot-only': uiStore.layout.sidebarCollapsed }">
+                {{ uiStore.layout.sidebarCollapsed ? '' : forumUnreadCount }}
+              </span>
+            </router-link>
+          </nav>
+        </div>
+      </aside>
+
+      <div class="app-main-content" :class="{ 'collapsed': uiStore.layout.sidebarCollapsed }">
+        <main :class="mainClass" @click="uiStore.closeOverlays">
+          <router-view v-slot="{ Component, route: viewRoute }">
+            <Transition name="workspace-route">
+              <KeepAlive include="AdminView">
+                <component :is="Component" :key="routeComponentKey(viewRoute)" />
+              </KeepAlive>
+            </Transition>
+          </router-view>
+        </main>
+      </div>
+    </div>
+
+    <div v-else>
+      <main :class="mainClass" @click="uiStore.closeOverlays">
+        <router-view v-slot="{ Component, route: viewRoute }">
+          <Transition name="workspace-route">
+            <KeepAlive include="AdminView">
+              <component :is="Component" :key="routeComponentKey(viewRoute)" />
+            </KeepAlive>
+          </Transition>
+        </router-view>
+      </main>
+    </div>
+
     <Transition name="desktop-refresh-fade">
       <div v-if="desktopRefreshing" class="desktop-refresh-overlay" aria-live="polite">
         <div class="desktop-refresh-card">
@@ -131,14 +190,6 @@
         </div>
       </div>
     </Transition>
-
-    <main :class="mainClass" @click="uiStore.closeOverlays">
-      <router-view v-slot="{ Component, route: viewRoute }">
-        <Transition name="workspace-route">
-          <component :is="Component" :key="routeComponentKey(viewRoute)" />
-        </Transition>
-      </router-view>
-    </main>
 
     <AppDialog />
     <UserProfileCard />
@@ -177,6 +228,7 @@
                     :key="item.id"
                     type="button"
                     class="announcement-card"
+                    :class="{ 'is-read': item.read }"
                     @click="openNotification(item)"
                   >
                     <span class="announcement-card-mark">{{ siteNoticeMark(item.type) }}</span>
@@ -185,6 +237,10 @@
                       <small>{{ item.desc }}</small>
                       <time>{{ formatSiteMessageTime(item.createdAt) }}</time>
                     </span>
+                    <div class="announcement-read-status" :title="item.read ? '已读' : '未读，点击已读'">
+                      <i class="status-dot" :class="item.read ? 'dot-read' : 'dot-unread'"></i>
+                      <span class="status-text">{{ item.read ? '已读' : '未读' }}</span>
+                    </div>
                   </button>
                 </div>
                 <div v-else class="announcement-empty">暂无新的站内通知。</div>
@@ -205,7 +261,7 @@
                   >
                     <time>{{ formatSiteMessageTime(message.createdAt) }}</time>
                     <h3>{{ message.title }}</h3>
-                    <p>{{ message.content }}</p>
+                    <p :style="{ color: message.textColor || undefined }" v-html="sanitizeSiteMessageHtml(message.content)"></p>
                     <div v-if="message.imageUrl" class="timeline-feed-image">
                       <img :src="message.imageUrl" alt="公告配图" />
                     </div>
@@ -214,16 +270,17 @@
                 <div v-else class="announcement-empty">暂无版本更新公告。</div>
               </section>
 
-              <section v-else class="announcement-section">
+              <section v-else-if="activeAnnouncementTab === 'contact'" class="announcement-section">
                 <article class="announcement-intro">
                   <strong>联系方式申请</strong>
                   <span>别人申请你的联系方式时会出现在这里。同意前需要填写微信或 QQ，系统不会默认暴露邮箱。</span>
                 </article>
-                <div v-if="contactRequestItems.length || contactResultNoticeItems.length" class="announcement-card-list">
+                <div v-if="contactRequestItems.length || contactNoticeItems.length" class="announcement-card-list">
                   <article
                     v-for="request in contactRequestItems"
                     :key="request.requestId"
                     class="announcement-card contact-request-notice"
+                    @click="openContactRequest(request)"
                   >
                     <span class="announcement-card-mark">联</span>
                     <span>
@@ -232,15 +289,16 @@
                       <time>{{ request.time }}</time>
                     </span>
                     <div class="announcement-card-actions">
-                      <button type="button" class="ghost" @click="handleContactNotice(request.requestId, 'reject')">拒绝</button>
-                      <button type="button" @click="handleContactNotice(request.requestId, 'accept')">同意</button>
+                      <button type="button" class="ghost" @click.stop="handleContactNotice(request.requestId, 'reject')">拒绝</button>
+                      <button type="button" @click.stop="handleContactNotice(request.requestId, 'accept')">同意</button>
                     </div>
                   </article>
                   <button
-                    v-for="item in contactResultNoticeItems"
+                    v-for="item in contactNoticeItems"
                     :key="item.id"
                     type="button"
                     class="announcement-card contact-result-notice"
+                    :class="{ 'is-read': item.read }"
                     @click="openNotification(item)"
                   >
                     <span class="announcement-card-mark">讯</span>
@@ -249,17 +307,45 @@
                       <small>{{ item.desc }}</small>
                       <time>{{ formatSiteMessageTime(item.createdAt) }}</time>
                     </span>
+                    <div class="announcement-read-status" :title="item.read ? '已读' : '未读，点击已读'">
+                      <i class="status-dot" :class="item.read ? 'dot-read' : 'dot-unread'"></i>
+                      <span class="status-text">{{ item.read ? '已读' : '未读' }}</span>
+                    </div>
                   </button>
                 </div>
                 <div v-else class="announcement-empty">暂无待处理的联系方式申请。</div>
               </section>
 
-              <div v-if="activeAnnouncementTab === 'timeline' && unreadTimelineMessages.length > 1" class="announcement-switcher" aria-label="公告列表">
+              <section v-else-if="activeAnnouncementTab === 'admin'" class="announcement-section">
+                <article class="announcement-intro">
+                  <strong>管理员公告</strong>
+                  <span>发布站内通知、服务维护、活动福利和全局通知。</span>
+                </article>
+                <div v-if="adminNoticeItems.length" class="timeline-feed">
+                  <article
+                    v-for="message in adminNoticeItems"
+                    :key="message.id"
+                    class="timeline-feed-item"
+                    :class="{ active: activeSiteMessage?.id === message.id }"
+                    @click="activeSiteMessage = message"
+                  >
+                    <time>{{ formatSiteMessageTime(message.createdAt) }}</time>
+                    <h3>{{ message.title }}</h3>
+                    <p :style="{ color: message.textColor || undefined }" v-html="sanitizeSiteMessageHtml(message.content)"></p>
+                    <div v-if="message.imageUrl" class="timeline-feed-image">
+                      <img :src="message.imageUrl" alt="公告配图" />
+                    </div>
+                  </article>
+                </div>
+                <div v-else class="announcement-empty">暂无管理员公告。</div>
+              </section>
+
+              <div v-if="(activeAnnouncementTab === 'timeline' && unreadTimelineMessages.length > 1) || (activeAnnouncementTab === 'admin' && unreadAdminNoticeMessages.length > 1)" class="announcement-switcher" aria-label="公告列表">
                 <button
-                  v-for="(message, index) in unreadTimelineMessages"
+                  v-for="(message, index) in (activeAnnouncementTab === 'admin' ? unreadAdminNoticeMessages : unreadTimelineMessages)"
                   :key="message.id"
                   type="button"
-                  :class="{ active: message.id === activeSiteMessage.id }"
+                  :class="{ active: activeSiteMessage && message.id === activeSiteMessage.id }"
                   @click="activeSiteMessage = message"
                 >
                   {{ index + 1 }}
@@ -267,9 +353,9 @@
               </div>
             </div>
             <footer>
-              <button v-if="activeAnnouncementTab === 'timeline' && unreadTimelineMessages.length > 1" type="button" class="announcement-ghost" @click="showPreviousSiteMessage">上一条</button>
-              <button v-if="activeAnnouncementTab === 'timeline' && unreadTimelineMessages.length > 1" type="button" class="announcement-ghost" @click="showNextSiteMessage">下一条</button>
-              <button v-if="unreadTimelineMessages.length || siteNoticeItems.length" type="button" class="announcement-ghost" @click="markVisibleAnnouncementRead">全部已读</button>
+              <button v-if="(activeAnnouncementTab === 'timeline' && unreadTimelineMessages.length > 1) || (activeAnnouncementTab === 'admin' && unreadAdminNoticeMessages.length > 1)" type="button" class="announcement-ghost" @click="showPreviousSiteMessage">上一条</button>
+              <button v-if="(activeAnnouncementTab === 'timeline' && unreadTimelineMessages.length > 1) || (activeAnnouncementTab === 'admin' && unreadAdminNoticeMessages.length > 1)" type="button" class="announcement-ghost" @click="showNextSiteMessage">下一条</button>
+              <button v-if="unreadTimelineMessages.length || unreadAdminNoticeMessages.length || siteNoticeItems.length" type="button" class="announcement-ghost" @click="markVisibleAnnouncementRead">全部已读</button>
               <button type="button" @click="closeAnnouncementCenter">关闭</button>
             </footer>
           </section>
@@ -326,6 +412,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted, watch } from "vue";
+import { sanitizeSiteMessageHtml } from "./utils/siteMessageHtml";
 import { useRoute, useRouter } from "vue-router";
 import { pageNavItems } from "./constants/workspace";
 import { useAuthStore } from "./stores/auth";
@@ -353,13 +440,36 @@ const navItems = computed(() => {
       { to: "/search", label: "文献检索" },
       { to: "/library", label: "文献库" },
       { to: "/reading", label: "文献阅读" },
-      { to: "/topics", label: "选题大厅" },
+      { to: "/vocabulary", label: "词汇积累" },
       { to: "/meeting-report", label: "组会汇报" },
-      { to: "/forum", label: "学术贴吧" },
-      { to: "/models", label: "额度管理" }
+      { to: "/models", label: "额度管理" },
+      { to: "/referral", label: "邀请奖励" },
+      { to: "/profile", label: "个人主页" }
     ];
   }
-  return pageNavItems;
+  return [...pageNavItems, { to: "/profile", label: "个人主页" }];
+});
+
+const menuGroups = computed(() => {
+  const items = navItems.value;
+  return [
+    {
+      title: "常规",
+      items: items.filter(item => ["文献检索", "文献库", "文献阅读", "词汇积累"].includes(item.label))
+    },
+    {
+      title: "协作",
+      items: items.filter(item => ["组会汇报", "邀请奖励"].includes(item.label))
+    },
+    {
+      title: "设置",
+      items: items.filter(item => ["额度管理", "后台"].includes(item.label))
+    },
+    {
+      title: "个人",
+      items: items.filter(item => ["个人主页"].includes(item.label))
+    }
+  ].filter(g => g.items.length > 0);
 });
 
 const isLanding = computed(() => route.path === "/" || route.path === "/register");
@@ -417,12 +527,16 @@ function toggleTheme() {
   applyTheme(currentTheme.value === "dark" ? "light" : "dark");
 }
 
-function handleBrandRefresh() {
-  if (isDesktopApp) {
-    window.location.reload();
-  } else {
+async function handleBrandRefresh() {
+  if (!isDesktopApp) {
     router.push("/library");
+    return;
   }
+  if (desktopRefreshing.value) return;
+  desktopRefreshing.value = true;
+  // Keep the branded loading state visible long enough to be perceived before reload.
+  await new Promise((resolve) => window.setTimeout(resolve, 1000));
+  window.location.reload();
 }
 
 function routeComponentKey(viewRoute) {
@@ -483,6 +597,14 @@ async function openNotification(item) {
   if (item.type?.startsWith("forum_") && item.referenceId) {
     router.push(`/forum/post/post-${item.referenceId}`);
   }
+}
+
+async function openContactRequest(request) {
+  if (request?.notificationId) {
+    await authStore.markNotificationRead(request.notificationId);
+  }
+  uiStore.closeOverlays();
+  if (request?.userId) userCardStore.open(Number(request.userId));
 }
 
 function logout() {
@@ -561,14 +683,17 @@ const lastActiveTime = ref(Date.now());
 let activityTimer = null;
 let notificationTimer = null;
 let siteMessageTimer = null;
+let presenceTimer = null;
 const siteMessages = ref([]);
 const activeSiteMessage = ref(null);
 const readSiteMessageIds = ref(new Set());
+const shouldAutoPopup = ref(true);
 const announcementIcons = {
   forum: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7.5h14M5 12h10M5 16.5h7"/><path d="M4 4h16v12H8l-4 4V4Z"/></svg>`,
   timeline: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l10-3v16L8 17H4V7Z"/><path d="M8 7v10"/><path d="M20 9.5c1.2 1.2 1.2 3.8 0 5"/></svg>`,
   team: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1.5c0-1.8-1.8-3.2-4-3.2s-4 1.4-4 3.2V19"/><circle cx="12" cy="8" r="3"/><path d="M4 18v-1c0-1.3 1.1-2.4 2.7-2.8"/><path d="M20 18v-1c0-1.3-1.1-2.4-2.7-2.8"/><path d="M6.5 10.5a2.2 2.2 0 1 1 1.2-4"/><path d="M17.5 10.5a2.2 2.2 0 1 0-1.2-4"/></svg>`,
   contact: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11a4 4 0 1 0 8 0 4 4 0 0 0-8 0Z"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M18.5 4.5 20 6l-3 3-1.5-1.5 3-3Z"/></svg>`,
+  admin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
 };
 
 const contactRequestItems = computed(() => contactRequests.value.incoming || []);
@@ -576,6 +701,14 @@ const contactResultNoticeItems = computed(() => authStore.session.notifications.
   const type = String(item.type || "");
   return type === "contact_request_result" || type === "friend_request_result";
 }));
+const contactNoticeItems = computed(() => {
+  const pendingNotificationIds = new Set(contactRequestItems.value.map(item => Number(item.notificationId)).filter(Boolean));
+  const requestHistory = authStore.session.notifications.filter(item => (
+    String(item.type || "") === "contact_request" && !pendingNotificationIds.has(Number(item.id))
+  ));
+  return [...contactResultNoticeItems.value, ...requestHistory]
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+});
 
 const siteNoticeItems = computed(() => authStore.session.notifications.filter(item => {
   const type = String(item.type || "");
@@ -583,10 +716,18 @@ const siteNoticeItems = computed(() => authStore.session.notifications.filter(it
   const title = `${item.title || ""}${item.desc || ""}`;
   return type.startsWith("forum_")
     || type.startsWith("campus_")
-    || /回复|置顶|封禁|举报|发帖|帖子|校园认证|学校/.test(title);
+    || type.startsWith("admin_")
+    || /回复|置顶|封禁|举报|发帖|帖子|校园认证|学校|补给|赠送|充值|额度|管理员/.test(title);
 }));
 
 const timelineNoticeItems = computed(() => siteMessages.value.filter(item => item.messageType === "timeline").sort((a, b) => {
+  const unreadA = readSiteMessageIds.value.has(siteMessageReadKey(a)) ? 0 : 1;
+  const unreadB = readSiteMessageIds.value.has(siteMessageReadKey(b)) ? 0 : 1;
+  if (unreadA !== unreadB) return unreadB - unreadA;
+  return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+}));
+
+const adminNoticeItems = computed(() => siteMessages.value.filter(item => item.messageType === "notice").sort((a, b) => {
   const unreadA = readSiteMessageIds.value.has(siteMessageReadKey(a)) ? 0 : 1;
   const unreadB = readSiteMessageIds.value.has(siteMessageReadKey(b)) ? 0 : 1;
   if (unreadA !== unreadB) return unreadB - unreadA;
@@ -626,14 +767,16 @@ const teamNoticeItems = computed(() => {
 });
 
 const announcementTabs = computed(() => [
-  { key: "forum", label: "站内通知", icon: announcementIcons.forum, count: siteNoticeItems.value.length },
+  { key: "forum", label: "站内通知", icon: announcementIcons.forum, count: siteNoticeItems.value.filter(item => !item.read).length },
   { key: "timeline", label: "时间线", icon: announcementIcons.timeline, count: unreadTimelineMessages.value.length },
-  { key: "contact", label: "联系申请", icon: announcementIcons.contact, count: contactRequestItems.value.length + contactResultNoticeItems.value.length },
+  { key: "contact", label: "联系申请", icon: announcementIcons.contact, count: contactRequestItems.value.length + contactNoticeItems.value.filter(item => !item.read).length },
+  { key: "admin", label: "管理员公告", icon: announcementIcons.admin, count: unreadAdminNoticeMessages.value.length },
 ]);
 
 const unreadTimelineMessages = computed(() => timelineNoticeItems.value.filter(message => !readSiteMessageIds.value.has(siteMessageReadKey(message))));
-const announcementUnreadCount = computed(() => siteNoticeItems.value.length + unreadTimelineMessages.value.length + contactRequestItems.value.length + contactResultNoticeItems.value.length);
-const showAnnouncementCenter = computed(() => announcementCenterOpen.value || Boolean(activeSiteMessage.value));
+const unreadAdminNoticeMessages = computed(() => adminNoticeItems.value.filter(message => !readSiteMessageIds.value.has(siteMessageReadKey(message))));
+const announcementUnreadCount = computed(() => siteNoticeItems.value.filter(item => !item.read).length + unreadTimelineMessages.value.length + unreadAdminNoticeMessages.value.length + contactRequestItems.value.length + contactNoticeItems.value.filter(item => !item.read).length);
+const showAnnouncementCenter = computed(() => announcementCenterOpen.value);
 
 const unreadSiteMessages = computed(() => siteMessages.value.filter(
   message => !readSiteMessageIds.value.has(siteMessageReadKey(message)),
@@ -641,7 +784,8 @@ const unreadSiteMessages = computed(() => siteMessages.value.filter(
 
 const activeSiteMessageIndex = computed(() => {
   if (!activeSiteMessage.value) return 0;
-  return Math.max(0, unreadTimelineMessages.value.findIndex(message => message.id === activeSiteMessage.value.id));
+  const items = activeAnnouncementTab.value === "admin" ? unreadAdminNoticeMessages.value : unreadTimelineMessages.value;
+  return Math.max(0, items.findIndex(message => message.id === activeSiteMessage.value.id));
 });
 
 function siteMessageReadKey(message) {
@@ -664,9 +808,26 @@ function persistSiteMessageReadState() {
 }
 
 function chooseUnreadSiteMessage() {
+  const adminNotice = unreadSiteMessages.value.find(message => message.messageType === "notice");
+  if (adminNotice) {
+    activeSiteMessage.value = adminNotice;
+    activeAnnouncementTab.value = "admin";
+    if (shouldAutoPopup.value) {
+      announcementCenterOpen.value = true;
+      shouldAutoPopup.value = false;
+    }
+    return;
+  }
   const timelineNotice = unreadSiteMessages.value.find(message => message.messageType === "timeline");
-  activeSiteMessage.value = timelineNotice || null;
-  if (activeSiteMessage.value) activeAnnouncementTab.value = "timeline";
+  if (timelineNotice) {
+    activeSiteMessage.value = timelineNotice;
+    activeAnnouncementTab.value = "timeline";
+    if (shouldAutoPopup.value) {
+      announcementCenterOpen.value = true;
+      shouldAutoPopup.value = false;
+    }
+    return;
+  }
 }
 
 function markSiteMessageRead() {
@@ -686,14 +847,14 @@ function markAllSiteMessagesRead() {
 }
 
 function showPreviousSiteMessage() {
-  const items = unreadTimelineMessages.value;
+  const items = activeAnnouncementTab.value === "admin" ? unreadAdminNoticeMessages.value : unreadTimelineMessages.value;
   if (!items.length) return;
   const previous = (activeSiteMessageIndex.value - 1 + items.length) % items.length;
   activeSiteMessage.value = items[previous];
 }
 
 function showNextSiteMessage() {
-  const items = unreadTimelineMessages.value;
+  const items = activeAnnouncementTab.value === "admin" ? unreadAdminNoticeMessages.value : unreadTimelineMessages.value;
   if (!items.length) return;
   const next = (activeSiteMessageIndex.value + 1) % items.length;
   activeSiteMessage.value = items[next];
@@ -722,6 +883,7 @@ function getDeadlineNoticeText(diffMs) {
 }
 
 function siteNoticeMark(type) {
+  if (type === "admin_gift") return "礼";
   if (type === "campus_verified") return "校";
   if (type === "campus_rejected") return "驳";
   if (type === "forum_reply") return "回";
@@ -732,6 +894,7 @@ function siteNoticeMark(type) {
 }
 
 function pickAnnouncementTab() {
+  if (unreadAdminNoticeMessages.value.length || adminNoticeItems.value.length) return "admin";
   if (contactRequestItems.value.length) return "contact";
   if (siteNoticeItems.value.length) return "forum";
   if (unreadTimelineMessages.value.length || timelineNoticeItems.value.length) return "timeline";
@@ -746,7 +909,7 @@ function openAnnouncementCenter() {
 
 async function markVisibleAnnouncementRead() {
   if (activeAnnouncementTab.value === "contact") {
-    await Promise.allSettled(contactResultNoticeItems.value.map(item => authStore.markNotificationRead(item.id)));
+    await Promise.allSettled(contactNoticeItems.value.map(item => authStore.markNotificationRead(item.id)));
     return;
   }
   if (activeAnnouncementTab.value === "forum") {
@@ -759,6 +922,15 @@ async function markVisibleAnnouncementRead() {
     readSiteMessageIds.value = next;
     persistSiteMessageReadState();
     activeSiteMessage.value = null;
+    return;
+  }
+  if (activeAnnouncementTab.value === "admin") {
+    const next = new Set(readSiteMessageIds.value);
+    adminNoticeItems.value.forEach(message => next.add(siteMessageReadKey(message)));
+    readSiteMessageIds.value = next;
+    persistSiteMessageReadState();
+    activeSiteMessage.value = null;
+    return;
   }
 }
 
@@ -817,6 +989,7 @@ watch(
     loadSiteMessageReadState();
     activeSiteMessage.value = null;
     siteMessages.value = [];
+    shouldAutoPopup.value = true;
     refreshSiteMessages();
     refreshContactRequests();
   },
@@ -848,6 +1021,33 @@ function handleUserAvatarClick(event) {
   else userCardStore.openByEmail(email);
 }
 
+function sendPresenceHeartbeat() {
+  if (authStore.session.isAuthenticated) {
+    paperpilotApi.sendPresenceHeartbeat().catch(() => {});
+  }
+}
+
+function startPresenceHeartbeat() {
+  if (presenceTimer) return;
+  sendPresenceHeartbeat();
+  presenceTimer = setInterval(sendPresenceHeartbeat, 30000);
+}
+
+function stopPresenceHeartbeat() {
+  if (!presenceTimer) return;
+  clearInterval(presenceTimer);
+  presenceTimer = null;
+}
+
+watch(
+  () => authStore.session.isAuthenticated,
+  (isAuthenticated) => {
+    if (isAuthenticated) startPresenceHeartbeat();
+    else stopPresenceHeartbeat();
+  },
+  { immediate: true },
+);
+
 onMounted(() => {
   applyTheme(currentTheme.value);
   window.addEventListener("mousemove", resetActivityTimer);
@@ -859,6 +1059,7 @@ onMounted(() => {
   window.addEventListener("paperpilot:contact-requests-changed", refreshContactRequests);
   document.addEventListener("click", handleUserAvatarClick);
 
+  let pendingActiveSeconds = 0;
   activityTimer = setInterval(() => {
     if (authStore.session.isAuthenticated) {
       if (hasCheckedIn.value) {
@@ -866,14 +1067,21 @@ onMounted(() => {
         if (timeIdle < 60000) {
           const user = currentUserMember.value;
           if (user && user.id) {
-            teamStore.incrementActiveTime(user.id, 1);
+            pendingActiveSeconds += 1;
+            if (pendingActiveSeconds >= 30) {
+              teamStore.incrementActiveTime(user.id, pendingActiveSeconds);
+              pendingActiveSeconds = 0;
+            }
           }
         }
       }
     }
   }, 1000);
   authStore.refreshNotifications().catch(() => {});
-  if (authStore.session.isAuthenticated) usageStore.fetchSummary().catch(() => {});
+  if (authStore.session.isAuthenticated) {
+    authStore.refreshProfile().catch(() => {});
+    usageStore.fetchSummary().catch(() => {});
+  }
   refreshForumNavSignal();
   refreshContactRequests();
   loadSiteMessageReadState();
@@ -898,6 +1106,7 @@ onUnmounted(() => {
   if (activityTimer) clearInterval(activityTimer);
   if (notificationTimer) clearInterval(notificationTimer);
   if (siteMessageTimer) clearInterval(siteMessageTimer);
+  stopPresenceHeartbeat();
 });
 
 watch(
@@ -966,6 +1175,75 @@ async function submitPasswordChange() {
     isSubmittingPassword.value = false;
   }
 }
+
+const isCheckingIn = ref(false);
+const hasCheckedInToday = computed(() => {
+  const emailOrId = teamStore.members.find(m => m.isCurrentUser)?.id || authStore.profile.email || "";
+  if (!emailOrId) return false;
+  const record = teamStore.checkins.find(item => item.memberId === emailOrId);
+  return record?.status === "已打卡";
+});
+
+async function triggerCheckin() {
+  if (isCheckingIn.value) return;
+  isCheckingIn.value = true;
+  try {
+    const emailOrId = teamStore.members.find(m => m.isCurrentUser)?.id || authStore.profile.email || "";
+    if (!emailOrId) return;
+    // 1. Perform checkin
+    const checkinResult = await teamStore.performCheckin(emailOrId);
+    // 2. Instantly draw points (lottery)
+    const drawResult = await teamStore.drawCheckinFruit(emailOrId);
+    // Update user info
+    authStore.profile.fruitScore = drawResult.fruitScore;
+    authStore.profile.checkinScore = drawResult.checkinScore;
+    authStore.persist();
+    const noPrize = drawResult.awardType === "nothing" || drawResult.awardName === "遗憾未中奖";
+    dialogStore.toast(noPrize ? "签到成功，本次未中奖，明天再来。" : `签到成功！恭喜获得 ${drawResult.fruitAward || 0} 积分！`);
+  } catch (err) {
+    dialogStore.alert(err.response?.data?.message || err.message || "签到失败，请稍后重试");
+  } finally {
+    isCheckingIn.value = false;
+  }
+}
+
+function getNavIconSvg(name) {
+  const n = String(name || "").toLowerCase();
+  if (n.includes("search") || n.includes("检索")) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`;
+  }
+  if (n.includes("library") || n.includes("库")) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>`;
+  }
+  if (n.includes("reading") || n.includes("阅读")) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>`;
+  }
+  if (n.includes("vocab") || n.includes("词汇") || n.includes("生词") || n.includes("单词")) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path><path d="M12 6v6"></path><path d="M9 9h6"></path></svg>`;
+  }
+  if (n.includes("tools") || n.includes("工具")) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.8 4.8 0 0 0-6.1 6.1L3 18v3h3l5.6-5.6a4.8 4.8 0 0 0 6.1-6.1l-2.4 2.4-2.6-.5-.5-2.6z"></path><path d="m16 8 3-3"></path><path d="m19 5 1 1"></path></svg>`;
+  }
+  if (n.includes("report") || n.includes("汇报") || n.includes("slides")) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>`;
+  }
+  if (n.includes("forum") || n.includes("贴吧") || n.includes("讨论")) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`;
+  }
+  if (n.includes("referral") || n.includes("邀请") || n.includes("gift")) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>`;
+  }
+  if (n.includes("model") || n.includes("额度") || n.includes("quota")) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/><circle cx="12" cy="14" r="1.5"/></svg>`;
+  }
+  if (n.includes("admin") || n.includes("后台")) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
+  }
+  if (n.includes("profile") || n.includes("个人主页") || n.includes("个人")) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+  }
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>`;
+}
 </script>
 
 <style>
@@ -977,10 +1255,7 @@ async function submitPasswordChange() {
 .spatial-app {
   min-height: 100vh;
   color: #111827;
-  background:
-    radial-gradient(circle at 82% 0%, rgba(245, 158, 11, .14), transparent 30%),
-    radial-gradient(circle at 12% 18%, rgba(37, 99, 235, .12), transparent 28%),
-    linear-gradient(180deg, #f7faff 0%, #f6f8fc 46%, #eef3f8 100%);
+  background: var(--content-bg, #ffffff);
 }
 
 .spatial-app::before {
@@ -1000,7 +1275,7 @@ async function submitPasswordChange() {
 .spatial-main {
   position: relative;
   z-index: 1;
-  padding-top: 18px;
+  padding-top: 0;
 }
 
 .site-message-bar {
@@ -1019,16 +1294,13 @@ async function submitPasswordChange() {
 
 .spatial-nav-float {
   box-sizing: border-box;
-  display: grid;
-  grid-template-columns: minmax(150px, max-content) minmax(0, 1fr) minmax(300px, max-content);
+  display: flex;
   align-items: center;
-  column-gap: 14px;
-  row-gap: 10px;
-  width: min(1480px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-  min-height: 66px;
-  margin: 0 auto;
-  padding: 0;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 58px;
+  margin: 0;
+  padding: 0 20px;
   overflow: visible;
   background: transparent;
   border: 0;
@@ -1285,10 +1557,39 @@ async function submitPasswordChange() {
 }
 
 .app-profile-button .profile-name {
-  max-width: 96px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: none;
+}
+.app-profile-button {
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 50% !important;
+  justify-content: center !important;
+  overflow: visible !important;
+  display: flex !important;
+  align-items: center !important;
+  flex-shrink: 0 !important;
+}
+.app-profile-button .profile-avatar-container,
+.app-profile-button .profile-avatar-img {
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  border-radius: 50% !important;
+  aspect-ratio: 1 / 1 !important;
+  flex-shrink: 0 !important;
+  object-fit: cover !important;
+  display: block !important;
 }
 
 @media (max-width: 1180px) {
@@ -1296,7 +1597,7 @@ async function submitPasswordChange() {
     grid-template-columns: minmax(140px, max-content) minmax(0, 1fr);
   }
 
-  .spatial-nav-actions {
+.spatial-nav-actions {
     grid-column: 1 / -1;
     justify-self: stretch;
   }
@@ -1362,6 +1663,7 @@ async function submitPasswordChange() {
   align-items: center;
   width: max-content;
   animation: site-message-scroll 32s linear infinite;
+  will-change: transform;
 }
 
 .site-message-bar:hover .site-message-track {
@@ -1546,10 +1848,10 @@ async function submitPasswordChange() {
   width: 100%;
   min-height: 68px;
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-columns: 38px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  padding: 11px 12px;
+  padding: 11px 14px;
   border: 1px solid #ececec;
   border-radius: 12px;
   color: #111;
@@ -1557,6 +1859,51 @@ async function submitPasswordChange() {
   text-align: left;
   text-decoration: none;
   cursor: pointer;
+}
+
+.announcement-read-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.announcement-read-status .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.dot-unread {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  animation: pulseUnread 2s infinite ease-in-out;
+}
+
+.status-dot.dot-read {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
+}
+
+@keyframes pulseUnread {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.25); opacity: 0.8; }
+}
+
+.announcement-read-status .status-text {
+  color: #64748b;
+}
+.announcement-card.is-read .announcement-read-status .status-text {
+  color: #16a34a;
+}
+:root[data-theme="dark"] .announcement-card.is-read .announcement-read-status .status-text {
+  color: #4ade80;
 }
 
 .announcement-card:hover {
@@ -1947,6 +2294,10 @@ async function submitPasswordChange() {
   font-size: 16px;
   font-weight: 700;
   color: #1d1d1f;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .profile-popover-role-badge {
@@ -2128,10 +2479,11 @@ async function submitPasswordChange() {
 }
 
 .profile-avatar-img {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   object-fit: cover;
+  display: block;
 }
 
 .profile-popover-avatar-img {
@@ -2144,11 +2496,13 @@ async function submitPasswordChange() {
 
 .profile-avatar-container {
   position: relative;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
+  overflow: visible;
 }
 
 .profile-avatar-status-dot {
@@ -2574,6 +2928,277 @@ async function submitPasswordChange() {
 :root[data-theme="light"] .announcement-tabs button:not(.active) path {
   color: #64748b !important;
   stroke: #64748b !important;
+}
+
+/* Grouped Collapsible Left Sidebar Layout & Topbar Overrides */
+:root[data-theme="light"] {
+  --sidebar-bg: #ffffff;
+  --nav-hover-bg: rgba(37, 99, 235, 0.06);
+  --nav-active-bg: rgba(37, 99, 235, 0.1);
+  --border-color: transparent;
+  --body-bg: #ffffff;
+  --content-bg: #ffffff;
+}
+:root[data-theme="dark"] {
+  --sidebar-bg: #0c111d;
+  --nav-hover-bg: rgba(255, 255, 255, 0.05);
+  --nav-active-bg: rgba(37, 99, 235, 0.18);
+  --border-color: transparent;
+  --body-bg: #060913;
+  --content-bg: #060913;
+}
+
+.spatial-app {
+  background: var(--content-bg) !important;
+}
+
+/* Universal page content padding — makes all page content hug the sidebar tightly */
+/* spatial-chapter-inner is 48px by default in spatial.css — reduce it */
+.app-main-content .spatial-chapter-inner { padding-inline: 24px !important; }
+.app-main-content .team-shell { padding: 20px 24px !important; }
+.app-main-content .plugin-experience { padding: 10px 24px 40px !important; }
+.app-main-content .plugin-page-shell { padding: 20px 24px !important; }
+.app-main-content .profile-shell { padding: 20px 24px !important; }
+.app-main-content .admin-shell { padding: 20px 24px !important; }
+.app-main-content .timeline-shell { padding: 20px 24px !important; }
+.app-main-content .research-community { padding: 20px 24px !important; }
+.app-main-content .post-detail-page { padding: 20px 24px !important; }
+.app-main-content .membership-page { padding: 20px 24px !important; }
+.app-main-content .meeting-timeline-page { padding: 20px 24px !important; }
+.app-main-content .tutorial-shell { padding: 20px 24px !important; }
+.app-main-content .writing-shell { padding: 20px 24px !important; }
+
+/* Force stretch and left alignment to prevent centering empty spaces */
+.app-main-content .spatial-chapter-inner,
+.app-main-content .team-shell,
+.app-main-content .plugin-experience,
+.app-main-content .plugin-page-shell,
+.app-main-content .profile-shell,
+.app-main-content .admin-shell,
+.app-main-content .timeline-shell,
+.app-main-content .research-community,
+.app-main-content .post-detail-page,
+.app-main-content .membership-page,
+.app-main-content .meeting-timeline-page,
+.app-main-content .tutorial-shell,
+.app-main-content .writing-shell {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: auto !important;
+}
+
+
+.spatial-nav-float {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  height: 58px !important;
+  border-radius: 0 !important;
+  border: none !important;
+  background: var(--sidebar-bg) !important;
+  box-shadow: none !important;
+  z-index: 500 !important;
+  padding: 0 20px !important;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sidebar-toggle-trigger {
+  background: transparent;
+  border: 0;
+  padding: 6px;
+  cursor: pointer;
+  color: var(--text-color-secondary, #64748b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.sidebar-toggle-trigger:hover {
+  background-color: var(--nav-hover-bg);
+  color: #2563eb;
+}
+
+.toggle-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.app-sidebar-fixed {
+  width: 168px;
+  position: fixed;
+  left: 0;
+  top: 58px;
+  bottom: 0;
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+  background: var(--sidebar-bg);
+  border: none;
+  padding: 16px 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), padding 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app-sidebar-fixed.collapsed {
+  width: 52px;
+  padding: 16px 4px;
+}
+
+.app-main-content {
+  flex: 1;
+  min-width: 0;
+  margin-left: 168px;
+  margin-top: 58px;
+  padding: 0;
+  box-sizing: border-box;
+  background: var(--content-bg);
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: calc(100vh - 58px);
+}
+
+.app-main-content.collapsed {
+  margin-left: 52px;
+}
+
+.sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.group-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  padding: 0 12px;
+  margin-bottom: 6px;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .group-title {
+  color: #64748b;
+}
+
+.group-title-divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 8px 6px;
+  opacity: 0.8;
+}
+
+.group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  color: var(--text-color-secondary, #4b5563);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.app-sidebar-fixed.collapsed .sidebar-nav-link {
+  justify-content: center;
+  padding: 10px;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto;
+}
+
+.sidebar-nav-link .nav-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.sidebar-nav-link:hover {
+  background-color: var(--nav-hover-bg);
+  color: #2563eb;
+}
+
+.sidebar-nav-link.active {
+  background-color: var(--nav-active-bg);
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.sidebar-nav-link .nav-badge {
+  background-color: #ef4444;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  margin-left: auto;
+}
+
+.sidebar-nav-link .nav-badge.dot-only {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  padding: 0;
+  background-color: #ef4444;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  margin: 0;
+}
+
+/* Banner sign-in button */
+.popover-checkin-btn {
+  margin-left: auto;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #4f46e5, #2563eb);
+  color: white;
+  border: 0;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+  transition: all 0.2s;
+}
+
+.popover-checkin-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px rgba(37, 99, 235, 0.3);
+}
+
+.popover-checkedin-tag {
+  margin-left: auto;
+  font-size: 12px;
+  color: #10b981;
+  font-weight: 800;
 }
 
 </style>

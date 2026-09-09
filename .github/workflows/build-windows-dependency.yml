@@ -1,0 +1,67 @@
+name: Build Windows Offline Dependency
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install desktop npm dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Download PDF-Extract-Kit models
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          uv tool run --from modelscope-hub ms-hub download OpenDataLab/PDF-Extract-Kit-1.0 `
+            --repo-type model `
+            --local-dir "$PWD\scratch\modelscope-source\PDF-Extract-Kit-1___0" `
+            --include "models/Layout/**" "models/OCR/**" "models/MFR/**" ".mdl" ".msc" ".mv" `
+            --max-workers 4
+
+      - name: Prepare offline models
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          $env:PAPER_SOLVER_MODEL_SOURCE_DIR = "$PWD\scratch\modelscope-source\PDF-Extract-Kit-1___0"
+          npm run prepare:models
+
+      - name: Build Windows offline dependency
+        working-directory: desktop
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\build-windows-offline-dependency.ps1
+
+      - name: Write SHA256
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem .\scratch\offline-release\papersolver-local-dependency-windows-x64.zip
+          $hash = Get-FileHash $zip.FullName -Algorithm SHA256
+          "file=$($zip.Name)" | Out-File .\scratch\offline-release\windows-x64-sha256.txt -Encoding utf8
+          "size=$($zip.Length)" | Out-File .\scratch\offline-release\windows-x64-sha256.txt -Append -Encoding utf8
+          "sha256=$($hash.Hash.ToLower())" | Out-File .\scratch\offline-release\windows-x64-sha256.txt -Append -Encoding utf8
+          Get-Content .\scratch\offline-release\windows-x64-sha256.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: papersolver-windows-x64-offline-dependency
+          path: |
+            desktop/scratch/offline-release/papersolver-local-dependency-windows-x64.zip
+            desktop/scratch/offline-release/windows-x64-sha256.txt
+          retention-days: 7

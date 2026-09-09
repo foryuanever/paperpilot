@@ -27,6 +27,15 @@ public class RechargeRecordEntity {
     @Column(nullable = false)
     private Long tokens = 0L;
 
+    @Column(name = "points_granted")
+    private Long pointsGranted;
+
+    @Column(name = "record_type", length = 32)
+    private String recordType;
+
+    @Column(name = "plan_id", length = 64)
+    private String planId;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -63,6 +72,30 @@ public class RechargeRecordEntity {
 
     public void setTokens(Long tokens) {
         this.tokens = tokens;
+    }
+
+    public Long getPointsGranted() {
+        return pointsGranted;
+    }
+
+    public void setPointsGranted(Long pointsGranted) {
+        this.pointsGranted = pointsGranted;
+    }
+
+    public String getRecordType() {
+        return recordType;
+    }
+
+    public void setRecordType(String recordType) {
+        this.recordType = recordType;
+    }
+
+    public String getPlanId() {
+        return planId;
+    }
+
+    public void setPlanId(String planId) {
+        this.planId = planId;
     }
 
     public LocalDateTime getCreatedAt() {

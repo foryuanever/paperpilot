@@ -36,6 +36,9 @@ public class AiUsageRecordEntity {
     @Column(nullable = false, length = 64)
     private String action = "";
 
+    @Column(name = "request_key", unique = true, length = 160)
+    private String requestKey;
+
     @Column(name = "paper_title", length = 255)
     private String paperTitle = "";
 
@@ -89,6 +92,8 @@ public class AiUsageRecordEntity {
     public void setScene(String scene) { this.scene = scene; }
     public String getAction() { return action; }
     public void setAction(String action) { this.action = action; }
+    public String getRequestKey() { return requestKey; }
+    public void setRequestKey(String requestKey) { this.requestKey = requestKey; }
     public String getPaperTitle() { return paperTitle; }
     public void setPaperTitle(String paperTitle) { this.paperTitle = paperTitle; }
     public Long getPromptTokens() { return promptTokens; }

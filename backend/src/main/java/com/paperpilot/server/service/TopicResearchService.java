@@ -531,36 +531,10 @@ public class TopicResearchService {
         return entity;
     }
 
-    @Scheduled(cron = "0 20 6 * * *", zone = "Asia/Shanghai")
+    // @Scheduled(cron = "0 20 6 * * *", zone = "Asia/Shanghai")
     @Transactional
     public void refreshDailyFrontierTopics() {
-        AppUserEntity user = currentUserService.getOrCreateDefaultUser();
-        LocalDate today = LocalDate.now();
-        boolean alreadyUpdated = topicResearchRepository.findAllByOrderByCreatedAtDesc().stream()
-            .anyMatch(topic -> text(topic.getSource()).contains("daily-frontier") && topic.getCreatedAt() != null && today.equals(topic.getCreatedAt().toLocalDate()));
-        if (alreadyUpdated) return;
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("direction", "2026 年可继续推进的前沿科研选题");
-        payload.put("discipline", "人工智能");
-        payload.put("stage", "硕士");
-        payload.put("goal", "前沿追踪");
-        payload.put("resource", "无实验，仅公开数据");
-        payload.put("dataAccess", "公开数据集、开源代码和近两年代表论文优先");
-        payload.put("methodPreference", "先找可复现实验路线，再判断创新空间");
-        payload.put("topicScale", "能在 2-4 个月推进的硕士/低年级博士小题");
-        payload.put("outputDepth", "详细：每个推荐方向都要给摘要、具体方法、发文现状、优势、局限、潜在论文和代表论文");
-        payload.put("evaluationFocus", "前沿性、可复现、数据可得和投稿价值");
-        payload.put("expectedContribution", "从大方向拆出可验证的小问题");
-        payload.put("constraints", List.of("必须有真实代表论文", "必须有公开数据或可替代数据", "推荐方向之间不能重复", "适合用户继续导入文献库"));
-        payload.put("keywords", "large language model multimodal medical image foundation model drug discovery time series education AI 2026");
-        payload.put("avoidRoutes", "不做空泛综述，不做只有概念没有数据的题目，不推荐无法验证的宏大命题");
-        payload.put("note", "每日自动发布到选题广场的官方前沿方向，必须经过选题调研模型生成。");
-        payload.put("maxTopics", 3);
-        try {
-            generateForUser(user, payload, true);
-        } catch (ResponseStatusException ignored) {
-            // Daily refresh must never publish deterministic placeholder topics.
-        }
+        // Disabled daily task calling GPT-4o to prevent automatic model credit consumption.
     }
 
     private List<Map<String, Object>> searchAcademicEvidence(String direction, String discipline, String goal) {

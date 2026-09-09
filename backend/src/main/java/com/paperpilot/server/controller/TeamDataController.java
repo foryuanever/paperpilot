@@ -30,6 +30,10 @@ public class TeamDataController {
     private final UserNotificationRepository userNotificationRepository;
     private final TeamRepository teamRepository;
     private final com.paperpilot.server.service.AuthService authService;
+    private final com.paperpilot.server.service.CurrentUserService currentUserService;
+    private final com.paperpilot.server.service.NotificationService notificationService;
+    private final com.paperpilot.server.service.MembershipService membershipService;
+    private final com.paperpilot.server.service.MonitoringSecurityService monitoringSecurityService;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -46,7 +50,11 @@ public class TeamDataController {
         CheckinRepository checkinRepository,
         UserNotificationRepository userNotificationRepository,
         TeamRepository teamRepository,
-        com.paperpilot.server.service.AuthService authService
+        com.paperpilot.server.service.AuthService authService,
+        com.paperpilot.server.service.CurrentUserService currentUserService,
+        com.paperpilot.server.service.NotificationService notificationService,
+        com.paperpilot.server.service.MembershipService membershipService
+        , com.paperpilot.server.service.MonitoringSecurityService monitoringSecurityService
     ) {
         this.appUserRepository = appUserRepository;
         this.researchTaskRepository = researchTaskRepository;
@@ -56,6 +64,18 @@ public class TeamDataController {
         this.userNotificationRepository = userNotificationRepository;
         this.teamRepository = teamRepository;
         this.authService = authService;
+        this.currentUserService = currentUserService;
+        this.notificationService = notificationService;
+        this.membershipService = membershipService;
+        this.monitoringSecurityService = monitoringSecurityService;
+    }
+
+    private AppUserEntity requireCurrentTutorOrAdmin() {
+        AppUserEntity user = currentUserService.getOrCreateDefaultUser();
+        if (!"管理员".equals(user.getRole()) && !"导师".equals(user.getRole())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅导师或管理员有权进行团队管理操作");
+        }
+        return user;
     }
 
     // --- Members ---
@@ -80,11 +100,13 @@ public class TeamDataController {
             map.put("name", user.getUsername());
             map.put("email", user.getEmail());
             map.put("role", user.getRole() != null ? user.getRole() : "普通用户");
-            // Check if user logged in recently or just make them online
-            map.put("status", "online"); 
+            boolean online = monitoringSecurityService.isUserOnline(user.getId());
+            map.put("status", online ? "online" : "offline");
+            map.put("isOnline", online);
             map.put("tokenUsed", user.getTokenUsed() != null ? user.getTokenUsed() : 0L);
             map.put("tokenLimit", user.getTokenLimit() != null ? user.getTokenLimit() : 5000000L);
             map.put("fruitScore", user.getFruitScore() != null ? user.getFruitScore() : 0);
+            map.put("checkinScore", user.getCheckinScore() != null ? user.getCheckinScore() : 0);
             map.put("membershipPlan", user.getMembershipPlan() != null ? user.getMembershipPlan() : "free");
             map.put("membershipExpiresAt", user.getMembershipExpiresAt());
             map.put("activeTime", user.getActiveTime() != null ? user.getActiveTime() : 0L);
@@ -92,6 +114,13 @@ public class TeamDataController {
             result.add(map);
         }
         return result;
+    }
+
+    @PostMapping("/presence")
+    public Map<String, Object> presenceHeartbeat() {
+        AppUserEntity user = currentUserService.getOrCreateDefaultUser();
+        monitoringSecurityService.heartbeat(user.getId());
+        return Map.of("online", true, "expiresInSeconds", 90);
     }
 
     @PostMapping("/members/active-time")
@@ -113,6 +142,7 @@ public class TeamDataController {
 
     @PostMapping("/members")
     public Map<String, Object> addMember(@RequestBody Map<String, Object> body) {
+        requireCurrentTutorOrAdmin();
         String name = (String) body.get("name");
         String email = (String) body.get("email");
         String role = (String) body.get("role");
@@ -144,7 +174,7 @@ public class TeamDataController {
         user.setTeamId(team.getId());
         
         String defaultPw = role.equals("导师") ? "Tutor2026!" : (role.equals("管理员") ? "Admin2026!" : "Student2026!");
-        user.setPlainPassword(defaultPw);
+        user.setPlainPassword(null);
         user.setPasswordHash(hash(defaultPw));
 
         AppUserEntity saved = appUserRepository.save(user);
@@ -161,12 +191,14 @@ public class TeamDataController {
 
     @DeleteMapping("/members/{id}")
     public void deleteMember(@PathVariable("id") String idStr) {
+        requireCurrentTutorOrAdmin();
         Long id = parseId(idStr);
         authService.adminDeleteUser(id, "127.0.0.1");
     }
 
     @PatchMapping("/members/{id}/quota")
     public void updateMemberQuota(@PathVariable("id") String idStr, @RequestBody Map<String, Object> body) {
+        requireCurrentTutorOrAdmin();
         Long id = parseId(idStr);
         Number limitVal = (Number) body.get("tokenLimit");
         if (limitVal == null) {
@@ -180,6 +212,7 @@ public class TeamDataController {
 
     @PatchMapping("/members/{id}/role")
     public void updateMemberRole(@PathVariable("id") String idStr, @RequestBody Map<String, Object> body) {
+        requireCurrentTutorOrAdmin();
         Long id = parseId(idStr);
         String role = (String) body.get("role");
         if (role == null) {
@@ -451,6 +484,8 @@ public class TeamDataController {
             map.put("status", c.getStatus());
             map.put("fruitAward", c.getFruitAward() != null ? c.getFruitAward() : 0);
             map.put("fruitClaimed", Boolean.TRUE.equals(c.getFruitClaimed()));
+            map.put("awardType", c.getAwardType());
+            map.put("awardName", c.getAwardName());
             map.put("streak", calculateStreak(c.getMemberId()));
             result.add(map);
         }
@@ -483,13 +518,12 @@ public class TeamDataController {
     }
 
     @PostMapping("/checkins")
-    public Map<String, Object> addCheckin(@RequestBody Map<String, Object> body) {
-        String memberId = (String) body.get("memberId");
-        String status = (String) body.get("status");
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> addCheckin(@RequestBody(required = false) Map<String, Object> body) {
+        AppUserEntity currentUser = currentUserService.getOrCreateDefaultUser();
+        String memberId = currentUser.getEmail();
 
-        if (memberId == null || memberId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "成员ID不能为空");
-        }
+        String status = (body != null && body.get("status") != null) ? (String) body.get("status") : "已打卡";
 
         String today = LocalDate.now(CN_ZONE).format(DATE_FORMATTER);
         java.util.Optional<CheckinEntity> existing = checkinRepository.findByMemberIdAndDate(memberId, today);
@@ -498,7 +532,7 @@ public class TeamDataController {
             
         checkin.setMemberId(memberId);
         checkin.setDate(today);
-        checkin.setStatus(status != null ? status : "已打卡");
+        checkin.setStatus(status);
         checkin.setTime(LocalDateTime.now(CN_ZONE).format(TIME_FORMATTER));
         if (firstCheckinToday) {
             checkin.setFruitAward(0);
@@ -507,6 +541,15 @@ public class TeamDataController {
 
         CheckinEntity saved = checkinRepository.save(checkin);
         
+        if (firstCheckinToday) {
+            currentUser.setCheckinScore((currentUser.getCheckinScore() != null ? currentUser.getCheckinScore() : 0) + 2);
+            appUserRepository.save(currentUser);
+            notificationService.createSystemNotice(
+                currentUser.getId(), null, "checkin_reward", saved.getId(), "签到奖励已到账",
+                "今日签到奖励已到账：+2 签到积分，完成抽奖还可领取额外奖励。"
+            );
+        }
+
         Map<String, Object> res = new HashMap<>();
         res.put("memberId", saved.getMemberId());
         res.put("status", saved.getStatus());
@@ -514,20 +557,31 @@ public class TeamDataController {
         res.put("fruitAward", saved.getFruitAward() != null ? saved.getFruitAward() : 0);
         res.put("fruitClaimed", Boolean.TRUE.equals(saved.getFruitClaimed()));
         res.put("streak", calculateStreak(saved.getMemberId()));
-        findUserByMemberId(memberId).ifPresent(user -> res.put("fruitScore", user.getFruitScore() != null ? user.getFruitScore() : 0));
+        res.put("fruitScore", currentUser.getFruitScore() != null ? currentUser.getFruitScore() : 0);
+        res.put("checkinScore", currentUser.getCheckinScore() != null ? currentUser.getCheckinScore() : 0);
         return res;
     }
 
+    public record WheelPrize(int index, String type, String name, int points, int fullTranslate, int bilingualTranslate) {}
+
+    private static final WheelPrize[] WHEEL_PRIZES = new WheelPrize[] {
+        new WheelPrize(0, "points", "1 积分", 1, 0, 0),
+        new WheelPrize(1, "bilingual_translate", "对照翻译 1 次", 0, 0, 1),
+        new WheelPrize(2, "full_translate", "沉浸翻译 1 次", 0, 1, 0),
+        new WheelPrize(3, "bilingual_translate", "对照翻译 2 次", 0, 0, 2),
+        new WheelPrize(4, "full_translate", "沉浸翻译 2 次", 0, 2, 0),
+        new WheelPrize(5, "nothing", "遗憾未中奖", 0, 0, 0)
+    };
+
     @PostMapping("/checkins/draw")
-    public Map<String, Object> drawCheckinFruit(@RequestBody Map<String, Object> body) {
-        String memberId = (String) body.get("memberId");
-        if (memberId == null || memberId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "成员ID不能为空");
-        }
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> drawCheckinFruit(@RequestBody(required = false) Map<String, Object> body) {
+        AppUserEntity user = currentUserService.getOrCreateDefaultUser();
+        String memberId = user.getEmail();
 
         String today = LocalDate.now(CN_ZONE).format(DATE_FORMATTER);
         CheckinEntity checkin = checkinRepository.findByMemberIdAndDate(memberId, today)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "今天还没有签到，不能抽取硕果"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "今天还没有签到，不能抽取积分"));
         if (!"已打卡".equals(checkin.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "今天还没有完成签到");
         }
@@ -536,15 +590,43 @@ public class TeamDataController {
         }
 
         int previousStreak = Math.max(0, calculateStreak(memberId) - 1);
-        int fruitAward = rollFruitAward(previousStreak);
-        checkin.setFruitAward(fruitAward);
+        WheelPrize prize = rollPrize(previousStreak);
+        checkin.setFruitAward(prize.points());
+        checkin.setAwardType(prize.type());
+        checkin.setAwardName(prize.name());
         checkin.setFruitClaimed(true);
         CheckinEntity saved = checkinRepository.save(checkin);
-        findUserByMemberId(memberId).ifPresent(user -> {
-            user.setFruitScore((user.getFruitScore() != null ? user.getFruitScore() : 0) + fruitAward);
-            appUserRepository.save(user);
-        });
-        return checkinResponse(saved);
+        
+        if (prize.points() > 0) {
+            user.setFruitScore((user.getFruitScore() != null ? user.getFruitScore() : 0) + prize.points());
+            user.setCheckinScore((user.getCheckinScore() != null ? user.getCheckinScore() : 0) + prize.points());
+        }
+        if (prize.fullTranslate() > 0) {
+            membershipService.addImmersiveDailyBonus(user, prize.fullTranslate());
+        }
+        if (prize.bilingualTranslate() > 0) {
+            membershipService.addTranslateDailyBonus(user, prize.bilingualTranslate());
+        }
+        appUserRepository.save(user);
+
+        if (!"nothing".equalsIgnoreCase(prize.type())) {
+            String rewardDescription = switch (prize.type()) {
+                case "points" -> "签到抽奖奖励已到账：+" + prize.points() + " 积分。";
+                case "full_translate", "bilingual_translate" -> "签到抽奖奖励已到账：" + prize.name() + "。";
+                default -> "";
+            };
+            notificationService.createSystemNotice(
+                user.getId(), null, "checkin_reward", saved.getId(), "签到奖励已到账", rewardDescription
+            );
+        }
+
+        Map<String, Object> resp = checkinResponse(saved);
+        resp.put("prizeIndex", prize.index());
+        resp.put("awardType", prize.type());
+        resp.put("awardName", prize.name());
+        resp.put("fruitScore", user.getFruitScore() != null ? user.getFruitScore() : 0);
+        resp.put("checkinScore", user.getCheckinScore() != null ? user.getCheckinScore() : 0);
+        return resp;
     }
 
     private Map<String, Object> checkinResponse(CheckinEntity saved) {
@@ -553,9 +635,16 @@ public class TeamDataController {
         res.put("status", saved.getStatus());
         res.put("time", saved.getTime());
         res.put("fruitAward", saved.getFruitAward() != null ? saved.getFruitAward() : 0);
+        res.put("awardType", saved.getAwardType() != null ? saved.getAwardType() : "points");
+        res.put("awardName", saved.getAwardName() != null ? saved.getAwardName() : (saved.getFruitAward() + " 积分"));
         res.put("fruitClaimed", Boolean.TRUE.equals(saved.getFruitClaimed()));
         res.put("streak", calculateStreak(saved.getMemberId()));
-        findUserByMemberId(saved.getMemberId()).ifPresent(user -> res.put("fruitScore", user.getFruitScore() != null ? user.getFruitScore() : 0));
+        findUserByMemberId(saved.getMemberId()).ifPresent(user -> {
+            res.put("fruitScore", user.getFruitScore() != null ? user.getFruitScore() : 0);
+            res.put("checkinScore", user.getCheckinScore() != null ? user.getCheckinScore() : 0);
+            res.put("translateQuota", user.getTranslateQuota() != null ? user.getTranslateQuota() : 0);
+            res.put("immersiveQuota", user.getImmersiveQuota() != null ? user.getImmersiveQuota() : 0);
+        });
         return res;
     }
 
@@ -571,11 +660,9 @@ public class TeamDataController {
         return appUserRepository.findByEmail(memberId).or(() -> appUserRepository.findByUsername(memberId));
     }
 
-    private int rollFruitAward(int previousStreak) {
+    private WheelPrize rollPrize(int previousStreak) {
         java.util.concurrent.ThreadLocalRandom random = java.util.concurrent.ThreadLocalRandom.current();
-        if (previousStreak >= 10) return random.nextInt(6, 11);
-        if (previousStreak >= 5) return random.nextInt(4, 11);
-        return random.nextInt(1, 11);
+        return WHEEL_PRIZES[random.nextInt(WHEEL_PRIZES.length)];
     }
 
     private int effectiveSeatLimit(TeamEntity team) {

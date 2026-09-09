@@ -295,8 +295,15 @@ const initialContent = `为提升检索的召回率与精度，本文提出一�
 
 最后，在上下文组装阶段，依据领域分布与段落长度约束构建最终输入上下文，并附加文献元数据，以增强回答的可解释性与引用可追溯性。`;
 
-const stored = localStorage.getItem(STORAGE_KEY);
-const thesis = reactive(stored ? JSON.parse(stored).thesis : {
+let storedData = null;
+try {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) storedData = JSON.parse(raw);
+} catch {
+  storedData = null;
+}
+
+const thesis = reactive(storedData?.thesis || {
   title: "面向科学文献的检索增强生成方法研究",
   stage: "初稿",
   version: 18,
@@ -304,7 +311,7 @@ const thesis = reactive(stored ? JSON.parse(stored).thesis : {
   daysLeft: 28,
   starred: true,
 });
-const chapters = reactive(stored ? JSON.parse(stored).chapters : [
+const chapters = reactive(storedData?.chapters || [
   { id: 1, title: "摘要", label: "已完成", status: "done", words: 1268, citations: 4, content: "本文围绕科学文献场景中的检索增强生成问题展开研究，重点解决证据召回、引用追溯与生成可靠性问题。" },
   { id: 2, title: "第 1 章 绪论", label: "已完成", status: "done", words: 5328, citations: 12, content: "随着科学文献数量持续增长，研究者面临信息检索效率低、证据整合成本高等现实问题。" },
   { id: 3, title: "第 2 章 相关工作", label: "已完成", status: "done", words: 8752, citations: 38, content: "本章从稀疏检索、密集检索、重排序和检索增强生成四个方向梳理相关研究。" },
@@ -312,7 +319,7 @@ const chapters = reactive(stored ? JSON.parse(stored).chapters : [
   { id: 5, title: "第 4 章 实验", label: "进行中", status: "active", words: 9810, citations: 22, content: "本章介绍实验设置、数据集、评价指标以及与主流方法的对比结果。" },
   { id: 6, title: "第 5 章 结论与展望", label: "待开始", status: "todo", words: 0, citations: 0, content: "" },
 ]);
-const activeChapterId = ref(stored ? JSON.parse(stored).activeChapterId : 4);
+const activeChapterId = ref(storedData?.activeChapterId ?? 4);
 const activeWorkspace = ref("writing");
 const rightTab = ref("citations");
 const textStyle = ref("正文");

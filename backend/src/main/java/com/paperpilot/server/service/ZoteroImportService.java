@@ -341,6 +341,7 @@ public class ZoteroImportService {
         );
         request.setImportSource("Zotero 在线同步");
         request.setArticleType(firstNonBlank(itemType, "journal-article"));
+        applyVenueMetrics(request, textValue(data, "extra"));
         return request;
     }
 
@@ -487,6 +488,28 @@ public class ZoteroImportService {
         request.setPaperUrl(isLikelyPdfUrl(url) ? cleanText(url) : "");
         request.setArticleType("journal-article");
         return request;
+    }
+
+    private void applyVenueMetrics(PaperImportRequest request, String extra) {
+        String text = cleanText(extra);
+        if (text.isBlank()) return;
+        List<String> metrics = new ArrayList<>();
+        Matcher jcr = Pattern.compile("(?i)\\bJCR\\s*[:：-]?\\s*(Q[1-4])\\b").matcher(text);
+        if (jcr.find()) metrics.add("JCR " + jcr.group(1).toUpperCase(Locale.ROOT));
+        Matcher cas = Pattern.compile("(?:中科院|CAS)\\s*[:：-]?\\s*([1-4])\\s*区", Pattern.CASE_INSENSITIVE).matcher(text);
+        if (cas.find()) metrics.add("中科院" + cas.group(1) + "区");
+        Matcher impactFactor = Pattern.compile("(?i)\\b(?:IF|impact\\s*factor)\\s*[:：=]?\\s*(\\d+(?:\\.\\d+)?)").matcher(text);
+        if (impactFactor.find()) metrics.add("IF " + impactFactor.group(1));
+        Matcher index = Pattern.compile("(?i)\\b(SCI|SSCI|EI|ESCI|SCOPUS|PUBMED|MEDLINE)\\b").matcher(text);
+        while (index.find() && metrics.size() < 5) {
+            String value = index.group(1).toUpperCase(Locale.ROOT);
+            metrics.add("SCOPUS".equals(value) ? "Scopus" : "PUBMED".equals(value) ? "PubMed" : value);
+        }
+        if (metrics.isEmpty()) return;
+        request.setJournalTags(metrics.stream().distinct().limit(5).toList());
+        request.setVenueRanking(String.join(",", metrics.stream()
+            .filter(value -> value.startsWith("JCR ") || value.startsWith("中科院"))
+            .toList()));
     }
 
     private List<PaperImportRequest> dedupe(List<PaperImportRequest> requests) {

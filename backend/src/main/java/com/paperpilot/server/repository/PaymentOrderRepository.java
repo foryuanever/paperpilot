@@ -8,4 +8,5 @@ import java.util.List;
 public interface PaymentOrderRepository extends JpaRepository<PaymentOrderEntity, String> {
     List<PaymentOrderEntity> findTop20ByUserIdOrderByCreatedAtDesc(Long userId);
     List<PaymentOrderEntity> findTop80ByOrderByCreatedAtDesc();
+    List<PaymentOrderEntity> findByUserIdAndPlanIdStartingWithOrderByCreatedAtDesc(Long userId, String planIdPrefix);
 }

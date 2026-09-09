@@ -137,6 +137,18 @@ text = conf_path.read_text()
 
 managed = """
     # PaperSolver managed routes BEGIN
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+
+    location ~ /\.(?!well-known) {
+        deny all;
+    }
+
+    location ~* \.(?:env|bak|sql|log|old)$ {
+        deny all;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
@@ -154,11 +166,7 @@ managed = """
     }
 
     location /actuator/ {
-        proxy_pass http://127.0.0.1:8080/actuator/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        return 404;
     }
     # PaperSolver managed routes END
 """

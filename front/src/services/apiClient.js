@@ -22,7 +22,7 @@ export async function initializeApiBaseUrl() {
     const config = await window.paperSolverDesktop.getBackendConfig();
     let nextUrl = normalizeApiBaseUrl(config?.apiBaseUrl);
     if (!nextUrl || nextUrl.includes("127.0.0.1:8080") || nextUrl.includes("localhost:8080")) {
-      nextUrl = "https://papersolver.cn/api";
+      nextUrl = "https://papersolver.cn";
     }
     setApiBaseUrl(nextUrl, { persist: true });
   } catch {
@@ -47,19 +47,62 @@ export function setApiBaseUrl(url, options = {}) {
 }
 
 export function normalizeApiBaseUrl(url) {
-  const text = String(url || "").trim().replace(/\/+$/, "");
+  let text = String(url || "").trim().replace(/\/+$/, "");
   if (!/^https?:\/\/[^/]+/i.test(text)) return "";
+  text = text.replace(/\/api$/i, "");
   return text;
+}
+
+async function refreshStoredAuthSession(session, accessToken) {
+  if (!session?.isAuthenticated || !session?.user || !accessToken) return session;
+  try {
+    const { data } = await axios.patch(`${API_BASE_URL}/api/auth/profile`, {}, {
+      headers: {
+        "Content-Type": "application/json",
+        "X-PaperPilot-Session": accessToken,
+      },
+      timeout: 8000,
+    });
+    if (!data) return session;
+    const refreshed = {
+      ...session,
+      user: {
+        ...session.user,
+        userId: data.userId,
+        name: data.name,
+        email: data.email,
+        numericId: data.numericId || session.user.numericId || "",
+        inviteCode: data.inviteCode,
+        role: data.role || session.user.role || "普通用户",
+        avatarUrl: data.avatarUrl || "",
+        backgroundUrl: data.backgroundUrl || "",
+        fruitScore: data.fruitScore !== undefined ? data.fruitScore : session.user.fruitScore || 0,
+        checkinScore: data.checkinScore !== undefined ? data.checkinScore : session.user.checkinScore || 0,
+        schoolName: data.schoolName || session.user.schoolName || "",
+        campusVerified: Boolean(data.campusVerified ?? session.user.campusVerified),
+        qq: data.qq || "",
+        wechat: data.wechat || "",
+        qqOpenid: data.qqOpenid || session.user.qqOpenid || "",
+        registerTime: data.registerTime || session.user.registerTime || "",
+        accessToken: data.accessToken || session.user.accessToken || "",
+      },
+    };
+    refreshed.role = refreshed.user.role;
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(refreshed));
+    return refreshed;
+  } catch {
+    return session;
+  }
 }
 
 export async function testApiBaseUrl(url) {
   const apiBaseUrl = normalizeApiBaseUrl(url);
   if (!apiBaseUrl) {
-    throw new Error("请输入有效地址，例如 https://papersolver.cn/api");
+    throw new Error("请输入有效地址，例如 https://papersolver.cn");
   }
   try {
     // POST /auth/login with empty body: returns 400/401 when server is alive (not 404/500)
-    const resp = await axios.post(`${apiBaseUrl}/auth/login`, {}, {
+    const resp = await axios.post(`${apiBaseUrl}/api/auth/login`, {}, {
       timeout: 6000,
       validateStatus: (status) => status < 500,
     });
@@ -97,17 +140,82 @@ function resolveInitialApiBaseUrl() {
   return "https://papersolver.cn";
 }
 
-apiClient.interceptors.request.use((config) => {
+apiClient.interceptors.request.use(async (config) => {
   const raw = localStorage.getItem(AUTH_STORAGE_KEY);
   if (!raw) return config;
   try {
     const session = JSON.parse(raw);
-    const userId = session?.user?.userId;
-    if (userId) {
-      config.headers["X-PaperPilot-User-Id"] = userId;
+    const user = session?.user;
+    const accessToken = user?.accessToken;
+    if (accessToken) {
+      config.headers["X-PaperPilot-Session"] = accessToken;
     }
-  } catch {
+
+    // AI endpoints and required points check. Bilingual PDF translation uses
+    // the membership "对照翻译" counter and is checked in DualTranslateView.
+    const AI_ENDPOINTS_POINTS = [
+      { pattern: /\/meeting-reports\/[^/]+\/meeting-note/i, points: 3 },
+      { pattern: /\/meeting-reports\/[^/]+\/generate-section/i, points: 1 },
+      { pattern: /\/meeting-reports\/[^/]+\/generate/i, points: 1 },
+      { pattern: /\/meeting-reports\/[^/]+\/ask/i, points: 1 },
+      { pattern: /\/meeting-reports\/deck\/analyze/i, points: 1 },
+      { pattern: /\/meeting-reports\/fuse/i, points: 1 },
+      { pattern: /^\/api\/translate(?:$|[/?#])/i, points: 1 },
+      { pattern: /\/mineru\/[^/]+\/parse/i, points: 1 },
+    ];
+
+    const url = config.url || "";
+    const match = AI_ENDPOINTS_POINTS.find(item => item.pattern.test(url));
+    if (match) {
+      let latestSession = session;
+      let latestUser = user;
+      let currentPoints = latestUser?.fruitScore !== undefined ? Number(latestUser.fruitScore) : 0;
+      let isAdmin = latestUser?.role === "管理员";
+      if (!isAdmin && currentPoints < match.points) {
+        latestSession = await refreshStoredAuthSession(session, accessToken);
+        latestUser = latestSession?.user || latestUser;
+        currentPoints = latestUser?.fruitScore !== undefined ? Number(latestUser.fruitScore) : 0;
+        isAdmin = latestUser?.role === "管理员";
+      }
+      if (!isAdmin && currentPoints < match.points) {
+        try {
+          const { useDialogStore } = await import("../stores/dialog");
+          const dialogStore = useDialogStore();
+          dialogStore.alert(`当前积分不足，无法使用该 AI 功能（该功能需要 ${match.points} 积分，当前剩余 ${currentPoints} 积分）。请先去个人页签到。`);
+        } catch (dialogErr) {
+          console.error("Failed to show dialog:", dialogErr);
+          alert(`当前积分不足，该功能需要 ${match.points} 积分，当前剩余 ${currentPoints} 积分。`);
+        }
+        return Promise.reject(new Error("当前积分不足，请先签到或充值"));
+      }
+    }
+  } catch (err) {
+    if (err.message === "当前积分不足，请先签到或充值") {
+      return Promise.reject(err);
+    }
     return config;
   }
   return config;
 });
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      const authRaw = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (authRaw) {
+        try {
+          const session = JSON.parse(authRaw);
+          if (session?.isAuthenticated) {
+            session.isAuthenticated = false;
+            session.user = null;
+            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+          }
+        } catch {
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);

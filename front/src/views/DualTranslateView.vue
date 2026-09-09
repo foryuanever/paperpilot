@@ -68,6 +68,20 @@
             <span>画笔</span>
           </button>
 
+          <button
+            class="dock-tool-btn instant-tooltip"
+            :class="{ active: eraserModeActive }"
+            data-tip="局部橡皮擦：拖动擦除标记"
+            @click="setEraserTool"
+          >
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m16.5 3.5 4 4a2 2 0 0 1 0 2.8l-8.2 8.2H6.7L3.5 15.3a2 2 0 0 1 0-2.8l10.2-9a2 2 0 0 1 2.8 0Z"/>
+              <path d="m12 8 4 4"/>
+              <path d="M3 21h18"/>
+            </svg>
+            <span>橡皮擦</span>
+          </button>
+
           <div class="dock-style-wrapper">
             <div class="dock-color-swatches">
               <span
@@ -200,7 +214,10 @@
         class="dual-annotation-surface"
         :class="{ annotating: drawingModeActive }"
       >
-        <section class="spread-reader">
+        <section
+          class="spread-reader"
+          :style="{ transform: `scale(${dualScale / renderedScale})`, transformOrigin: 'top left' }"
+        >
           <header class="spread-head">
             <span>左侧：英文原文 PDF</span>
             <span>右侧：中文译文对照</span>
@@ -232,7 +249,7 @@
                   >
                     <p class="source-text-muted selectable-paragraph" :data-block-id="`${block.id}-source`">{{ block.text }}</p>
                     <p class="target-translation-text selectable-paragraph" :data-block-id="`${block.id}-target`" :class="{ loading: !block.translation }">
-                      {{ block.translation || '正在翻译本段…' }}
+                      {{ cleanDualTranslationText(block.translation) || '正在翻译本段…' }}
                     </p>
                   </div>
                 </template>
@@ -246,12 +263,11 @@
         <canvas
           ref="drawingCanvas"
           class="dual-drawing-layer"
-          :class="{ active: drawingModeActive }"
+          :class="{ active: drawingModeActive, erasing: eraserModeActive }"
           @pointerdown="startInkStroke"
           @pointermove="moveInkStroke"
           @pointerup="finishInkStroke"
           @pointercancel="cancelInkStroke"
-          @pointerleave="finishInkStroke"
         ></canvas>
       </div>
 
@@ -277,16 +293,23 @@
 useScrollReveal(".dual-translate-page");
 import { useScrollReveal } from "../composables/useScrollReveal";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { paperpilotApi } from "../services/paperpilotApi";
 import { useLibraryStore } from "../stores/library";
+import { useUsageStore } from "../stores/usage";
+import { useDialogStore } from "../stores/dialog";
 import ReaderMultiTabBar from "../components/ReaderMultiTabBar.vue";
 
 const libraryStore = useLibraryStore();
+const route = useRoute();
+const dialogStore = useDialogStore();
 const state = ref("PENDING");
 const generationProgress = ref(3);
 const readingProgress = ref(0);
-const progress = computed(() => pagePairs.length ? readingProgress.value : generationProgress.value);
+// Keep generation progress visible until the bilingual PDF has really loaded.
+const progress = computed(() => state.value === "SUCCESS" ? 100 : generationProgress.value);
 const error = ref("");
+const translationStatusMessage = ref("");
 const pagePairs = reactive([]);
 const canvasElements = new Map();
 const readerMain = ref(null);
@@ -295,6 +318,7 @@ const drawingCanvas = ref(null);
 const pageBlocksMap = reactive({});
 const isDualPdfMode = ref(false);
 const dualScale = ref(1);
+const renderedScale = ref(1);
 const showZoomPresets = ref(false);
 const zoomPresetList = [
   { label: "40%", scale: 0.4 },
@@ -315,7 +339,11 @@ const selectedColor = ref("#eab308");
 const isDrawingPenActive = ref(false);
 const brushOpacity = ref(100);
 const brushWidth = ref(3);
-const drawingModeActive = computed(() => isDrawingPenActive.value);
+const eraserRadius = ref(18);
+const eraserModeActive = computed(() => activeAnnotateTool.value === "eraser");
+const drawingModeActive = computed(() => isDrawingPenActive.value || ["wavy", "strike", "highlight", "eraser"].includes(activeAnnotateTool.value));
+let eraserDragging = false;
+let eraserDirty = false;
 const drawingStrokes = reactive([]);
 let activeInkStroke = null;
 let drawingFrame = 0;
@@ -361,6 +389,7 @@ const currentToolLabel = computed(() => {
   if (isDrawingPenActive.value) return "自由手绘画笔";
   return {
     select: "划词选择",
+    eraser: "局部橡皮擦",
   }[activeAnnotateTool.value] || "标注线形";
 });
 let pollTimer;
@@ -388,6 +417,12 @@ function setMoveTool() {
 function toggleDrawingPen() {
   isDrawingPenActive.value = !isDrawingPenActive.value;
   activeAnnotateTool.value = isDrawingPenActive.value ? "pen" : "select";
+}
+
+function setEraserTool() {
+  activeAnnotateTool.value = "eraser";
+  isDrawingPenActive.value = false;
+  showStylePopover.value = false;
 }
 
 function selectBrushColor(color) {
@@ -459,8 +494,9 @@ function surfacePointFromEvent(event) {
 function linePointFromEvent(event) {
   const surfaceRect = annotationSurface.value?.getBoundingClientRect();
   if (!surfaceRect) return null;
-  const paragraph = document.elementsFromPoint(event.clientX, event.clientY)
-    .find(element => element?.classList?.contains("selectable-paragraph"));
+  const paragraphs = document.elementsFromPoint(event.clientX, event.clientY)
+    .filter(element => element?.classList?.contains("selectable-paragraph"));
+  const paragraph = paragraphs[0];
   if (!paragraph) {
     const point = surfacePointFromEvent(event);
     if (activeInkStroke?.freeLineKey) {
@@ -482,14 +518,45 @@ function linePointFromEvent(event) {
   const style = window.getComputedStyle(paragraph);
   const fontSize = Number.parseFloat(style.fontSize) || 16;
   const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.65;
+  const textRange = document.createRange();
+  textRange.selectNodeContents(paragraph);
+  const lineRects = Array.from(textRange.getClientRects())
+    .filter(rect => rect.width > 0 && rect.height > 0)
+    .reduce((rects, rect) => {
+      const previous = rects[rects.length - 1];
+      if (previous && Math.abs(previous.top - rect.top) < 1) {
+        previous.left = Math.min(previous.left, rect.left);
+        previous.right = Math.max(previous.right, rect.right);
+        previous.bottom = Math.max(previous.bottom, rect.bottom);
+      } else {
+        rects.push({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom });
+      }
+      return rects;
+    }, []);
   const relativeY = Math.max(0, Math.min(paragraphRect.height, event.clientY - paragraphRect.top));
-  const lineIndex = Math.max(0, Math.floor(relativeY / lineHeight));
-  const lineTop = paragraphRect.top + lineIndex * lineHeight;
+  // Pointer events can land in the small gap between glyph boxes. Do not use
+  // findIndex(...), which becomes -1 and silently snaps to the first line.
+  const lineIndex = lineRects.reduce((best, rect, index) => {
+    const distance = event.clientY < rect.top
+      ? rect.top - event.clientY
+      : event.clientY > rect.bottom
+        ? event.clientY - rect.bottom
+        : 0;
+    return distance < best.distance ? { index, distance } : best;
+  }, { index: 0, distance: Number.POSITIVE_INFINITY }).index;
+  const lineRect = lineRects[lineIndex] || {
+    left: paragraphRect.left,
+    right: paragraphRect.right,
+    top: paragraphRect.top + Math.floor(relativeY / lineHeight) * lineHeight,
+    bottom: paragraphRect.top + Math.floor(relativeY / lineHeight) * lineHeight + lineHeight,
+  };
+  // Use the selected range's own line box. A fixed offset drifts into the next
+  // line when fonts, zoom, or mixed-script glyph metrics change.
   const y = activeAnnotateTool.value === "strike"
-    ? lineTop + lineHeight * 0.52
-    : lineTop + lineHeight * 0.88;
+    ? lineRect.top + (lineRect.bottom - lineRect.top) * 0.5
+    : lineRect.bottom + Math.max(6, (lineRect.bottom - lineRect.top) * 0.18);
   return {
-    x: Math.max(paragraphRect.left + 2, Math.min(event.clientX, paragraphRect.right - 2)) - surfaceRect.left,
+    x: Math.max(lineRect.left + 2, Math.min(event.clientX, lineRect.right - 2)) - surfaceRect.left,
     y: y - surfaceRect.top,
     lineKey: `${paragraph.dataset?.blockId || "paragraph"}:${lineIndex}`,
   };
@@ -525,7 +592,7 @@ function drawStroke(context, stroke, scrollX = 0, scrollY = 0) {
   if (Array.isArray(stroke.segments)) {
     stroke.segments.forEach(segment => {
       if (stroke.tool === "wavy") {
-        drawWavyLine(context, segment.x1, segment.x2, segment.y, Math.max(2.5, stroke.width * 1.35), scrollX, scrollY);
+        drawWavyLine(context, segment.x1, segment.x2, segment.y, Math.max(0.55, Math.min(1, stroke.width * 0.28)), scrollX, scrollY);
       } else {
         context.beginPath();
         context.moveTo(segment.x1 - scrollX, segment.y - scrollY);
@@ -597,6 +664,12 @@ function startInkStroke(event) {
   if (!drawingModeActive.value) return;
   event.preventDefault();
   event.currentTarget?.setPointerCapture?.(event.pointerId);
+  if (eraserModeActive.value) {
+    eraserDragging = true;
+    eraserDirty = eraseStrokesNearPoint(surfacePointFromEvent(event)) || eraserDirty;
+    redrawDrawingCanvas();
+    return;
+  }
   const tool = isDrawingPenActive.value ? "pen" : activeAnnotateTool.value;
   const firstPoint = tool === "pen" ? surfacePointFromEvent(event) : linePointFromEvent(event);
   if (!firstPoint) return;
@@ -609,6 +682,8 @@ function startInkStroke(event) {
     points: [firstPoint],
   };
   if (tool !== "pen") {
+    activeInkStroke.lockedLineKey = firstPoint.lineKey;
+    activeInkStroke.lockedLineY = firstPoint.y;
     if (String(firstPoint.lineKey || "").startsWith("free:")) {
       activeInkStroke.freeLineKey = firstPoint.lineKey;
       activeInkStroke.freeLineY = firstPoint.y;
@@ -620,11 +695,24 @@ function startInkStroke(event) {
 }
 
 function moveInkStroke(event) {
-  if (!drawingModeActive.value || !activeInkStroke) return;
+  if (!drawingModeActive.value) return;
+  if (eraserModeActive.value) {
+    if (eraserDragging) {
+      event.preventDefault();
+      eraserDirty = eraseStrokesNearPoint(surfacePointFromEvent(event)) || eraserDirty;
+      redrawDrawingCanvas();
+    }
+    return;
+  }
+  if (!activeInkStroke) return;
   event.preventDefault();
   const tool = activeInkStroke.tool;
   const next = tool === "pen" ? surfacePointFromEvent(event) : linePointFromEvent(event);
   if (!next) return;
+  if (tool !== "pen" && activeInkStroke.lockedLineKey) {
+    next.lineKey = activeInkStroke.lockedLineKey;
+    next.y = activeInkStroke.lockedLineY;
+  }
   const previous = activeInkStroke.points[activeInkStroke.points.length - 1];
   if (previous && Math.hypot(next.x - previous.x, next.y - previous.y) < 1.2) return;
   activeInkStroke.points.push(next);
@@ -633,6 +721,16 @@ function moveInkStroke(event) {
 }
 
 function finishInkStroke(event) {
+  if (eraserDragging) {
+    event?.preventDefault?.();
+    eraserDragging = false;
+    if (eraserDirty) {
+      persistDrawingStrokes();
+    }
+    eraserDirty = false;
+    redrawDrawingCanvas();
+    return;
+  }
   if (!activeInkStroke) return;
   event?.preventDefault?.();
   if ((activeInkStroke.points || []).length > 1 || (activeInkStroke.segments || []).some(segment => Math.abs(segment.x2 - segment.x1) > 2)) {
@@ -644,8 +742,92 @@ function finishInkStroke(event) {
 }
 
 function cancelInkStroke() {
+  if (eraserDragging) {
+    eraserDragging = false;
+    eraserDirty = false;
+    redrawDrawingCanvas();
+    return;
+  }
   activeInkStroke = null;
   redrawDrawingCanvas();
+}
+
+function distancePointToSegment(point, start, end) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSq = dx * dx + dy * dy;
+  if (!lengthSq) return Math.hypot(point.x - start.x, point.y - start.y);
+  const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq));
+  const projection = { x: start.x + dx * t, y: start.y + dy * t };
+  return Math.hypot(point.x - projection.x, point.y - projection.y);
+}
+
+function eraseLineSegment(segment, point, radius) {
+  const x1 = Math.min(Number(segment.x1) || 0, Number(segment.x2) || 0);
+  const x2 = Math.max(Number(segment.x1) || 0, Number(segment.x2) || 0);
+  const y = Number(segment.y) || 0;
+  if (point.x < x1 - radius || point.x > x2 + radius || Math.abs(point.y - y) > radius + 4) {
+    return [{ ...segment, x1, x2, y }];
+  }
+  const distance = distancePointToSegment(point, { x: x1, y }, { x: x2, y });
+  if (distance > radius + 4) return [{ ...segment, x1, x2, y }];
+  const cutLeft = Math.max(x1, point.x - radius);
+  const cutRight = Math.min(x2, point.x + radius);
+  const nextSegments = [];
+  if (cutLeft - x1 > 4) nextSegments.push({ ...segment, x1, x2: cutLeft, y });
+  if (x2 - cutRight > 4) nextSegments.push({ ...segment, x1: cutRight, x2, y });
+  return nextSegments;
+}
+
+function splitFreehandStroke(stroke, point, radius) {
+  const points = Array.isArray(stroke.points) ? stroke.points : [];
+  const chunks = [];
+  let chunk = [];
+  points.forEach((current, index) => {
+    const previous = points[index - 1];
+    const hitCurrent = Math.hypot(current.x - point.x, current.y - point.y) <= radius;
+    const hitSegment = previous && distancePointToSegment(point, previous, current) <= radius;
+    if (hitCurrent || hitSegment) {
+      if (chunk.length > 1) chunks.push(chunk);
+      chunk = [];
+      return;
+    }
+    chunk.push({ ...current });
+  });
+  if (chunk.length > 1) chunks.push(chunk);
+  return chunks.map((pointsChunk, index) => ({
+    ...stroke,
+    id: `${stroke.id || "ink"}-erase-${Date.now()}-${index}`,
+    points: pointsChunk,
+    segments: undefined,
+  }));
+}
+
+function eraseStrokesNearPoint(point, radius = eraserRadius.value) {
+  let changed = false;
+  for (let index = drawingStrokes.length - 1; index >= 0; index -= 1) {
+    const stroke = drawingStrokes[index];
+    if (Array.isArray(stroke?.segments) && stroke.segments.length) {
+      const nextSegments = stroke.segments.flatMap(segment => eraseLineSegment(segment, point, radius));
+      if (nextSegments.length !== stroke.segments.length || nextSegments.some((segment, i) => (
+        segment.x1 !== stroke.segments[i]?.x1 || segment.x2 !== stroke.segments[i]?.x2
+      ))) {
+        changed = true;
+        if (nextSegments.length) {
+          drawingStrokes.splice(index, 1, { ...stroke, segments: nextSegments });
+        } else {
+          drawingStrokes.splice(index, 1);
+        }
+      }
+      continue;
+    }
+    const pieces = splitFreehandStroke(stroke, point, radius);
+    if (pieces.length !== 1 || pieces[0]?.points?.length !== stroke?.points?.length) {
+      changed = true;
+      drawingStrokes.splice(index, 1, ...pieces);
+    }
+  }
+  return changed;
 }
 
 function handleReaderScroll(event) {
@@ -680,18 +862,22 @@ const paper = computed(() => libraryStore.activeDocument);
 const workspaceId = computed(() => String(paper.value?.workspaceId || paper.value?.id || ""));
 const stateTitle = computed(() => {
   if (state.value === "NATIVE") return "正在打开内置对照阅读";
-  if (state.value === "PROGRESS") return "正在生成对照译文";
+  if (state.value === "PROGRESS" || state.value === "RUNNING") return "正在生成对照译文";
   if (state.value === "SUCCESS") return "译文已生成，正在排版";
   return "正在准备对照翻译";
 });
 const stateDescription = computed(() => {
+  if (translationStatusMessage.value) return translationStatusMessage.value;
   if (state.value === "PROGRESS") return "首次生成需要分析页面结构；完成后再次打开会直接读取缓存。";
   if (state.value === "NATIVE") return "本机依赖暂不可用，当前使用内置 PDF 阅读和段落翻译备用模式。";
   return "正在读取论文并建立原文与译文的页面对照关系。";
 });
 
 function friendlyError(requestError, fallback) {
-  const raw = requestError?.response?.data?.message || requestError?.response?.data?.detail || "";
+  const raw = requestError?.response?.data?.message
+    || requestError?.response?.data?.detail
+    || requestError?.message
+    || "";
   return String(raw || fallback)
     .replaceAll("PDFMathTranslate", "本机依赖")
     .replaceAll("pdf2zh", "本机依赖");
@@ -711,7 +897,9 @@ async function renderSingleCanvas(doc, pageNum, canvas) {
     const targetWidth = Math.max(420, (window.innerWidth - 72) / 2) * dualScale.value;
     const scale = targetWidth / baseViewport.width;
     const viewport = page.getViewport({ scale });
-    const outputScale = Math.min(2.5, window.devicePixelRatio || 1);
+    // Render the translated page at a higher backing resolution so Chinese
+    // glyphs remain crisp on Windows scaling and high-DPI displays.
+    const outputScale = Math.min(2.5, Math.max(1.25, (window.devicePixelRatio || 1) * 1.1));
     canvas.width = Math.floor(viewport.width * outputScale);
     canvas.height = Math.floor(viewport.height * outputScale);
     canvas.style.width = `${viewport.width}px`;
@@ -740,19 +928,31 @@ async function rerenderCanvases() {
     if (leftCanvas && pair.leftPageNum) await renderSingleCanvas(pdfDocument, pair.leftPageNum, leftCanvas);
     if (rightCanvas && pair.rightPageNum) await renderSingleCanvas(pdfDocument, pair.rightPageNum, rightCanvas);
   }));
+  renderedScale.value = dualScale.value;
   scheduleDrawingResize();
+}
+
+let rerenderTimer = null;
+let translationRunToken = 0;
+let translationStartedAt = 0;
+function scheduleRerenderCanvases() {
+  if (rerenderTimer) clearTimeout(rerenderTimer);
+  rerenderTimer = setTimeout(() => {
+    rerenderTimer = null;
+    rerenderCanvases();
+  }, 180);
 }
 
 function setScalePreset(scale) {
   dualScale.value = Math.min(3.0, Math.max(0.4, Number(scale) || 1));
   showZoomPresets.value = false;
-  rerenderCanvases();
+  scheduleRerenderCanvases();
 }
 
 function fitWidth() {
   dualScale.value = 1;
   showZoomPresets.value = false;
-  rerenderCanvases();
+  scheduleRerenderCanvases();
 }
 
 function zoomDualIn() {
@@ -773,9 +973,11 @@ function openOriginalPdf() {
 
 async function resolveDualPdfSource() {
   const id = workspaceId.value;
+  const paperObj = paper.value || {};
+  const sourceUrls = [paperObj.pdfUrl, paperObj.paperUrl, paperObj.sourceUrl].filter(Boolean);
   if (window.paperSolverDesktop?.getCachedPdf && id) {
     try {
-      const cached = await window.paperSolverDesktop.getCachedPdf({ workspaceId: id });
+      const cached = await window.paperSolverDesktop.getCachedPdf({ workspaceId: id, sourceUrls });
       if (cached?.found && cached.base64) {
         return base64ToUint8Array(cached.base64);
       }
@@ -783,8 +985,7 @@ async function resolveDualPdfSource() {
       console.warn("desktop dual pdf cache read failed", error);
     }
   }
-  const paperObj = paper.value || {};
-  const source = paperObj.pdfUrl || paperObj.paperUrl || "";
+  const source = sourceUrls.find(item => paperpilotApi.isLikelyPdfUrl(item)) || "";
   if (String(source).toLowerCase().startsWith("desktop-cache://")) return "";
   return paperpilotApi.buildPdfProxyUrl(source);
 }
@@ -798,26 +999,212 @@ function base64ToUint8Array(base64) {
   return bytes;
 }
 
+// Normalize bridge output and cached translations so metadata never leaks into the visible text.
+function cleanDualTranslationText(value) {
+  const date = String.raw`20\d{2}\s*[-—–/]\s*\d{1,2}\s*[-—–/]\s*\d{1,2}`;
+  const time = String.raw`\s+\d{1,2}\s*[:：]\s*\d{2}(?:\s*[:：]\s*\d{2})?`;
+  return String(value || "")
+    // Strip decorative dingbat symbols and PUA characters that turn into black boxes
+    .replace(/[\ue000-\uf8ff\ufffd\u25a0\u25aa\u25cf\u25c6\u25b2\u25b6\uf0a7\uf0b7]/gu, " ")
+    // Translation bridges sometimes leak source-document timestamps. Remove complete date/date-time tags.
+    .replace(new RegExp(String.raw`[\[【(（]\s*${date}(?:${time})?\s*日?\s*[\]】)）]`, "gu"), "")
+    .replace(new RegExp(String.raw`${date}${time}`, "gu"), "")
+    .replace(new RegExp(String.raw`20\d{2}\s*[-—–/]\s*\d{1,2}\s*[-—–/]\s*\d{1,2}`, "gu"), "")
+    .replace(/(?:20\d{2}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日)(?:\s*\d{1,2}\s*时\s*\d{1,2}\s*分)?/gu, "")
+    // pdf2zh/bridge sometimes leaks three-digit chunk markers (e.g. 【038】) anywhere in the text
+    .replace(/[\[【(（]\s*\d{3}\s*[\]】)）]/gu, "")
+    .replace(/(^|\n)\s*[\[【(（]?\s*\d{3}\s*[\]】)）]?\s*/gu, "$1")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s+([,.;:，。；：])/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 async function translateAllPageBlocks() {
+  let inReferences = false;
+  const pendingBlocks = [];
+  // Local cache is applied synchronously; remote cache refresh must not block
+  // the already-rendered translation or restart the visible loading state.
+  void restoreNativeDualTranslationCache();
+
+  // Build the work list first. The old forEach(async ...) implementation
+  // launched every request at once and returned immediately, so rate limits
+  // left a random portion of multilingual pages untranslated.
   pagePairs.forEach(pair => {
-    if (Array.isArray(pair.blocks)) {
-      pair.blocks.forEach(async block => {
-        if (!block.translation && block.text && !['figure', 'table', 'equation'].includes(block.kind)) {
-          try {
-            const res = await paperpilotApi.translate({
-              text: block.text,
-              provider: "google",
-              sourceLang: "auto",
-              targetLang: "zh-CN",
-            });
-            block.translation = String(res?.translatedText || res?.text || "").trim();
-          } catch (e) {
-            console.warn("dual block translate error", e);
+    if (!Array.isArray(pair.blocks)) return;
+    pair.blocks.forEach(block => {
+      const normalizedHeading = String(block.text || "")
+        .replace(/[\s:：.。]+$/g, "")
+        .trim()
+        .toLowerCase();
+      if (
+        block.kind === "heading" &&
+        /^(?:(?:\d+\.?)?\s*)?(?:references?|bibliography|works\s+cited|literature\s+cited|参考文献|参考资料|references\s*and\s*notes)$/i.test(normalizedHeading)
+      ) {
+        inReferences = true;
+      }
+      // ABSTRACT remains a heading, while References and all following
+      // bibliography blocks stay byte-for-byte unchanged.
+      if (inReferences || (block.kind === "heading" && /^(abstract|摘要)$/i.test(normalizedHeading))) {
+        block.translation = block.text || "";
+        return;
+      }
+      // Also protect individual blocks that are clearly citation entries
+      const cleanBlockText = String(block.text || "").trim();
+      if (
+        /^(?:\[\d+\]|\d+\.|\([A-Za-z]+\s*,\s*\d{4}\))\s+[A-Z]/.test(cleanBlockText) ||
+        /(?:https?:\/\/|doi\.org\/|\bdoi\s*:|arxiv:\d|\bet\s+al\b|\bvol\.\s*\d+|\bpp\.\s*\d+-\d+)/i.test(cleanBlockText)
+      ) {
+        block.translation = block.text || "";
+        return;
+      }
+      if (!block.translation && block.text && !['figure', 'table', 'equation'].includes(block.kind)) {
+        pendingBlocks.push(block);
+      }
+    });
+  });
+
+  const translateBlock = async block => {
+    const providers = ["tencent-transmart", "youdao"];
+    let lastError = null;
+    for (const provider of providers) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const res = await paperpilotApi.translate({
+            text: block.text,
+            provider,
+            sourceLang: "auto",
+            targetLang: "zh-CN",
+            usageScene: "bilingual_translate",
+          }, { timeout: 60000 });
+          const translated = cleanDualTranslationText(res?.translatedText || res?.text || "");
+          if (translated) {
+            block.translation = translated;
+            block.translationError = "";
+            persistNativeDualTranslationCache();
+            return;
           }
+          lastError = new Error("翻译引擎返回为空");
+        } catch (error) {
+          lastError = error;
         }
-      });
+      }
+    }
+    block.translationError = lastError?.message || "未获取到译文";
+    block.translation = "本段翻译失败，请点击重新生成后重试。";
+    persistNativeDualTranslationCache();
+  };
+
+  // Keep a small amount of parallelism for long papers without flooding the
+  // desktop bridge or the upstream translation service.
+  const concurrency = 3;
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, pendingBlocks.length) }, async () => {
+    while (cursor < pendingBlocks.length) {
+      const block = pendingBlocks[cursor++];
+      await translateBlock(block);
     }
   });
+  await Promise.all(workers);
+  persistNativeDualTranslationCache();
+}
+
+function nativeDualTranslationCacheKey() {
+  return workspaceId.value ? `papersolver-dual-native-translations-v2:${workspaceId.value}` : "";
+}
+
+function dualTranslationSourceKey(pair, block) {
+  return `${pair?.pageNumber || pair?.page || ""}|${block?.kind || "text"}|${String(block?.text || "").replace(/\s+/g, " ").trim()}`;
+}
+
+let nativeDualTranslationCacheSaveTimer = null;
+
+function applyNativeDualTranslationCache(saved = {}) {
+  const blocks = saved?.blocks && typeof saved.blocks === "object" ? saved.blocks : {};
+  const sourceBlocks = saved?.sourceBlocks && typeof saved.sourceBlocks === "object" ? saved.sourceBlocks : {};
+  pagePairs.forEach(pair => {
+    (pair.blocks || []).forEach(block => {
+      const cached = blocks[block.id] || sourceBlocks[dualTranslationSourceKey(pair, block)];
+      if (cached && String(cached.source || "") === String(block.text || "")) {
+        block.translation = cleanDualTranslationText(cached.translation || "");
+        block.translationError = String(cached.translationError || "");
+      }
+    });
+  });
+}
+
+async function restoreNativeDualTranslationCache() {
+  const key = nativeDualTranslationCacheKey();
+  if (!key) return;
+  // Apply the synchronous browser cache first. Desktop/server reads can take
+  // seconds and must not blank an already translated document during a switch.
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || "{}");
+    applyNativeDualTranslationCache(saved);
+  } catch (error) {
+    console.warn("restore native dual translations failed", error);
+  }
+  try {
+    const desktopCache = await window.paperSolverDesktop?.loadTranslationCache?.(`dual-v2:${workspaceId.value}`);
+    if (desktopCache && typeof desktopCache === "object" && Object.keys(desktopCache).length) {
+      applyNativeDualTranslationCache(desktopCache);
+    }
+  } catch (error) {
+    console.warn("restore desktop native dual translations failed", error);
+  }
+  try {
+    const remote = await paperpilotApi.getTranslationCache(workspaceId.value, "dual");
+    if (remote?.found && remote.payload) {
+      applyNativeDualTranslationCache(remote.payload);
+      try { localStorage.setItem(key, JSON.stringify(remote.payload)); } catch {}
+    }
+  } catch (error) {
+    console.warn("restore server native dual translations failed", error);
+  }
+}
+
+function buildNativeDualTranslationCache() {
+  const blocks = {};
+  const sourceBlocks = {};
+  pagePairs.forEach(pair => {
+    (pair.blocks || []).forEach(block => {
+      if (block?.id && (block.translation || block.translationError)) {
+        const cached = {
+          source: block.text || "",
+          translation: cleanDualTranslationText(block.translation || ""),
+          translationError: block.translationError || "",
+        };
+        blocks[block.id] = cached;
+        sourceBlocks[dualTranslationSourceKey(pair, block)] = cached;
+      }
+    });
+  });
+  return { updatedAt: Date.now(), blocks, sourceBlocks };
+}
+
+function persistNativeDualTranslationCache({ immediate = false } = {}) {
+  const key = nativeDualTranslationCacheKey();
+  if (!key) return;
+  try {
+    const payload = buildNativeDualTranslationCache();
+    localStorage.setItem(key, JSON.stringify(payload));
+    window.paperSolverDesktop?.saveTranslationCache?.(`dual-v2:${workspaceId.value}`, payload)
+      ?.catch(error => console.warn("persist desktop native dual translations failed", error));
+    clearTimeout(nativeDualTranslationCacheSaveTimer);
+    if (immediate) {
+      paperpilotApi.saveTranslationCache(workspaceId.value, "dual", payload).catch(error => {
+        console.warn("persist server native dual translations failed", error);
+      });
+      return;
+    }
+    nativeDualTranslationCacheSaveTimer = window.setTimeout(() => {
+      paperpilotApi.saveTranslationCache(workspaceId.value, "dual", payload).catch(error => {
+        console.warn("persist server native dual translations failed", error);
+      });
+    }, 700);
+  } catch (error) {
+    console.warn("persist native dual translations failed", error);
+  }
 }
 
 async function loadNativePdfDualView(reason = "") {
@@ -828,6 +1215,8 @@ async function loadNativePdfDualView(reason = "") {
     isDualPdfMode.value = false;
     error.value = "";
 
+    const paperObj = paper.value || {};
+    const sourceUrls = [paperObj.pdfUrl, paperObj.paperUrl, paperObj.sourceUrl].filter(Boolean);
     const documentSource = await resolveDualPdfSource();
     if (!documentSource) throw new Error("缺失论文 PDF 资源，或本机缓存不存在");
 
@@ -839,16 +1228,19 @@ async function loadNativePdfDualView(reason = "") {
     const loadingTask = pdfjs.getDocument(documentSource);
     pdfDocument = await loadingTask.promise;
 
-    // 获取 Mineru 结构化页面段落数据
-    try {
-      const parsed = await paperpilotApi.getParsedDocument(workspaceId.value);
-      if (parsed && Array.isArray(parsed.pages)) {
-        parsed.pages.forEach(p => {
-          pageBlocksMap[p.pageNumber] = p.blocks || [];
-        });
+    let parseStatus = await paperpilotApi.startMineruParse(workspaceId.value, false, sourceUrls);
+    while (parseStatus?.state && String(parseStatus.state).toUpperCase() !== "SUCCESS") {
+      if (String(parseStatus.state).toUpperCase() === "FAILURE") {
+        throw new Error(parseStatus.message || parseStatus.detail || "结构化解析失败");
       }
-    } catch (e) {
-      console.warn("fetch parsed pages for dual view failed", e);
+      await new Promise(resolve => window.setTimeout(resolve, 1200));
+      parseStatus = await paperpilotApi.getMineruParseStatus(workspaceId.value);
+    }
+    const parsed = await paperpilotApi.getMineruDocument(workspaceId.value);
+    if (parsed && Array.isArray(parsed.pages)) {
+      parsed.pages.forEach(p => {
+        pageBlocksMap[p.pageNumber] = p.blocks || [];
+      });
     }
 
     pagePairs.splice(0);
@@ -862,8 +1254,7 @@ async function loadNativePdfDualView(reason = "") {
       });
     }
 
-    state.value = "SUCCESS";
-    generationProgress.value = 100;
+    generationProgress.value = 96;
     await nextTick();
     readerMain.value?.scrollTo?.({ top: 0, behavior: "auto" });
     loadDrawingStrokes();
@@ -874,23 +1265,18 @@ async function loadNativePdfDualView(reason = "") {
       if (leftCanvas) await renderSingleCanvas(pdfDocument, pair.leftPageNum, leftCanvas);
     }));
     scheduleDrawingResize();
+    state.value = "SUCCESS";
+    generationProgress.value = 100;
 
-    // 自动为右侧段落填充中文译文
-    translateAllPageBlocks();
+    await translateAllPageBlocks();
   } catch (err) {
     console.warn("native pdf dual view fallback failed", err);
     const fallbackReason = friendlyError(err, "内置对照阅读也无法打开 PDF");
-    error.value = reason
-      ? `${reason}；备用模式也失败：${fallbackReason}`
-      : `对照翻译暂不可用：${fallbackReason}`;
+    error.value = `对照翻译暂不可用：${fallbackReason}`;
   }
 }
 
-async function startTranslation() {
-  clearInterval(pollTimer);
-  error.value = "";
-  state.value = "PENDING";
-  generationProgress.value = 3;
+function resetTranslationViewState() {
   readingProgress.value = 0;
   pagePairs.splice(0);
   canvasElements.clear();
@@ -899,46 +1285,175 @@ async function startTranslation() {
   Object.keys(pageBlocksMap).forEach(key => delete pageBlocksMap[key]);
   pdfDocument?.destroy?.();
   pdfDocument = null;
-  try {
-    const started = await paperpilotApi.startPdfMathTranslation(workspaceId.value, "google");
-    if (String(started?.state || "").toUpperCase() === "SUCCESS") {
-      await loadTranslatedPdf();
+}
+
+async function startTranslation() {
+  const runToken = ++translationRunToken;
+  clearInterval(pollTimer);
+  error.value = "";
+  translationStatusMessage.value = "正在读取论文并准备版式对照翻译。";
+  state.value = "PENDING";
+  generationProgress.value = 3;
+  translationStartedAt = Date.now();
+  // Start/reconnect first. The desktop/backend task is keyed by workspaceId;
+  // cached and already-running tasks must not consume another quota unit.
+  const paperObj = paper.value || {};
+  const sourceUrls = [paperObj.pdfUrl, paperObj.paperUrl, paperObj.sourceUrl].filter(Boolean);
+  const existingStatus = await paperpilotApi.probePdfMathTranslationStatus(workspaceId.value, sourceUrls);
+  const existingState = String(existingStatus?.state || existingStatus?.status || "").toUpperCase();
+  if (["PENDING", "PROGRESS", "RUNNING", "SUCCESS"].includes(existingState)) {
+    const taskCreatedAt = Number(existingStatus?.createdAt || 0);
+    if (Number.isFinite(taskCreatedAt) && taskCreatedAt > 0) {
+      translationStartedAt = taskCreatedAt < 10_000_000_000 ? taskCreatedAt * 1000 : taskCreatedAt;
+    }
+    state.value = existingState;
+    translationStatusMessage.value = existingState === "SUCCESS"
+      ? "已找到已生成的对照译文，正在打开。"
+      : "已找到正在生成的对照翻译任务，正在继续读取进度。";
+    generationProgress.value = Math.max(generationProgress.value, Number(existingStatus?.progress || 0));
+    await refreshStatus(runToken);
+    if (runToken !== translationRunToken) return;
+    if (!["SUCCESS", "FAILURE"].includes(String(state.value || "").toUpperCase())) {
+      pollTimer = window.setInterval(() => refreshStatus(runToken), 1800);
+    }
+    return;
+  }
+  const consumedKey = `papersolver-dual-translate-consumed:${workspaceId.value}`;
+  if (!localStorage.getItem(consumedKey) && route.query.quotaApproved !== "1") {
+    const confirmed = await dialogStore.confirm("首次对照翻译将消耗 1 次对照翻译额度。生成完成后再次打开会直接使用已保存的译文，不会重复扣除。", {
+      title: "开始对照翻译",
+      confirmText: "消耗 1 次并开始",
+    });
+    if (!confirmed) {
+      state.value = "IDLE";
+      translationStatusMessage.value = "已取消对照翻译。";
       return;
     }
-    await refreshStatus();
-    pollTimer = setInterval(refreshStatus, 1200);
+  }
+  if (window.paperSolverDesktop?.ensureCachedPdf) {
+    try {
+      const pdf = await window.paperSolverDesktop.ensureCachedPdf({
+        workspaceId: workspaceId.value,
+        sourceUrls,
+      });
+      if (!pdf?.found) {
+        error.value = pdf?.error || "这篇文献没有可读取的原始 PDF，请重新选择原始 PDF。";
+        state.value = "FAILURE";
+        return;
+      }
+    } catch (pdfError) {
+      error.value = friendlyError(pdfError, "无法读取这篇文献的原始 PDF");
+      state.value = "FAILURE";
+      return;
+    }
+  }
+
+  try {
+    await consumeDualTranslateQuotaOnce(paperObj);
+    if (runToken !== translationRunToken) return;
+    resetTranslationViewState();
+    translationStatusMessage.value = "正在提交版式对照翻译任务。";
+    // Route layout-preserving translation through the domestic desktop bridge.
+    const startResult = await paperpilotApi.startPdfMathTranslation(workspaceId.value, "tencent-transmart", sourceUrls);
+    if (runToken !== translationRunToken) return;
+    const startState = String(startResult?.state || startResult?.status || "PENDING").toUpperCase();
+    state.value = startState === "SUCCESS" ? "SUCCESS" : (startState || "PENDING");
+    generationProgress.value = Math.max(generationProgress.value, startState === "SUCCESS" ? 95 : 8);
+    await refreshStatus(runToken);
+    if (runToken !== translationRunToken) return;
+    if (!["SUCCESS", "FAILURE"].includes(String(state.value || "").toUpperCase())) {
+      pollTimer = window.setInterval(() => refreshStatus(runToken), 1800);
+    }
   } catch (requestError) {
-    console.warn("pdfmath translation server offline, switching to native dual reader", requestError);
-    await loadNativePdfDualView(friendlyError(requestError, "本机依赖未启动或正在初始化"));
+    const message = friendlyError(requestError, "对照翻译启动失败");
+    if (/原始 PDF|选择的文件|取消选择|没有可读取的 PDF/.test(message)) {
+      error.value = message;
+      state.value = "FAILURE";
+      return;
+    }
+    // 对照翻译必须展示本机依赖生成的完整双语 PDF。不要在任务启动失败后
+    // 静默降级为逐段翻译阅读器，否则用户会误以为已经拿到了版式对照结果。
+    error.value = /腾讯|有道|翻译接口|翻译桥接|翻译引擎|本机翻译/.test(message)
+      ? `对照翻译暂不可用：${message}`
+      : message;
+    state.value = "FAILURE";
   }
 }
 
-async function refreshStatus() {
+async function consumeDualTranslateQuotaOnce(paperObj = {}) {
+  const consumedKey = `papersolver-dual-translate-consumed:${workspaceId.value}`;
+  if (localStorage.getItem(consumedKey)) return;
+  const usageStore = useUsageStore();
+  await usageStore.fetchSummary();
+  const translateBen = usageStore.state.membership?.benefits?.translation || { quota: 0, used: 0 };
+  const quota = Number(translateBen.quota || 0);
+  const used = Number(translateBen.used || 0);
+  if (quota <= 0 || used >= quota) {
+    throw new Error(quota <= 0 ? "对照翻译额度不足，请升级会员套餐后使用。" : "今日对照翻译额度已用完，请明天再试或升级套餐。");
+  }
+  await paperpilotApi.consumeQuota("translate", {
+    workspaceId: workspaceId.value,
+    paperTitle: paperObj.title || paperObj.name || "",
+  });
+  localStorage.setItem(consumedKey, "1");
+  await usageStore.fetchSummary().catch(() => {});
+}
+
+let statusRequestRun = null;
+async function refreshStatus(runToken = translationRunToken) {
+  if (runToken !== translationRunToken) return;
+  if (statusRequestRun === runToken) return;
+  statusRequestRun = runToken;
   try {
     const result = await paperpilotApi.getPdfMathTranslationStatus(workspaceId.value);
+    if (runToken !== translationRunToken) return;
     state.value = String(result?.state || "PENDING").toUpperCase();
     const info = result?.info || {};
     const current = Number(info.n || 0);
     const total = Number(info.total || 0);
+    const elapsedSeconds = Math.max(0, Math.round((Date.now() - translationStartedAt) / 1000));
+    const providerMessage = String(result?.message || info.message || "").trim();
+    translationStatusMessage.value = (providerMessage ? `${providerMessage}（已运行 ${elapsedSeconds} 秒）` : "") || (
+      state.value === "SUCCESS" ? "翻译完成，正在下载并排版双栏 PDF。" : `翻译任务执行中，已运行 ${elapsedSeconds} 秒${total > 0 ? `，已处理 ${current}/${total} 页` : "，正在处理长文献"}。`
+    );
+    const reportedProgress = Number(result?.progress || 0);
     generationProgress.value = state.value === "SUCCESS"
       ? 100
       : total > 0
         ? Math.max(5, Math.min(98, Math.round((current / total) * 100)))
-        : Math.min(92, generationProgress.value + 3);
+        : Number.isFinite(reportedProgress) && reportedProgress > 0
+          ? Math.max(5, Math.min(98, reportedProgress))
+          : generationProgress.value;
     if (state.value === "SUCCESS") {
       clearInterval(pollTimer);
+      state.value = "RENDERING";
+      generationProgress.value = 97;
       await loadTranslatedPdf();
     } else if (state.value === "FAILURE") {
       clearInterval(pollTimer);
-      await loadNativePdfDualView(String(result?.message || "本机依赖任务失败，已尝试切换备用模式"));
+      const message = String(result?.message || "本机依赖任务失败");
+      error.value = message;
+      void reportDualTranslationResult(false, message);
     }
   } catch (requestError) {
     clearInterval(pollTimer);
-    await loadNativePdfDualView(friendlyError(requestError, "本机依赖状态服务暂不可用"));
+    error.value = friendlyError(requestError, "本机依赖状态服务暂不可用");
+    state.value = "FAILURE";
+    void reportDualTranslationResult(false, error.value);
+  } finally {
+    if (statusRequestRun === runToken) statusRequestRun = null;
   }
 }
 
+function reportDualTranslationResult(success, message = "") {
+  return paperpilotApi.reportTranslationIssue({ provider: "pdf-layout", route: "dual-pdf",
+    paperTitle: paper.value?.title || "", translationMode: "对照翻译", clientType: "reader",
+    latencyMs: Math.max(1, Date.now() - translationStartedAt), success, errorMessage: message });
+}
+
 async function loadTranslatedPdf() {
+  state.value = "RENDERING";
+  generationProgress.value = 97;
   isDualPdfMode.value = true;
   const blob = await paperpilotApi.getPdfMathDualPdf(workspaceId.value);
   const [pdfjs, workerModule] = await Promise.all([
@@ -967,6 +1482,9 @@ async function loadTranslatedPdf() {
     if (rightCanvas && pair.rightPageNum) await renderSingleCanvas(pdfDocument, pair.rightPageNum, rightCanvas);
   }));
   scheduleDrawingResize();
+  state.value = "SUCCESS";
+  generationProgress.value = 100;
+  void reportDualTranslationResult(true);
 }
 
 onMounted(async () => {
@@ -990,6 +1508,8 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", scheduleDrawingResize);
   if (drawingFrame) window.cancelAnimationFrame(drawingFrame);
   clearInterval(pollTimer);
+  if (rerenderTimer) clearTimeout(rerenderTimer);
+  persistNativeDualTranslationCache({ immediate: true });
   pdfDocument?.destroy?.();
 });
 </script>
@@ -1134,7 +1654,7 @@ onBeforeUnmount(() => {
   position: absolute;
   left: -1px;
   right: -1px;
-  bottom: -2px;
+    bottom: -6px;
   height: 2px;
   background: currentColor;
 }
@@ -1153,9 +1673,9 @@ onBeforeUnmount(() => {
   position: absolute;
   left: -1px;
   right: -1px;
-  bottom: -2px;
-  height: 3px;
-  background: radial-gradient(circle at 2px 2px, transparent 1.5px, currentColor 1.7px, currentColor 2.5px, transparent 2.7px) 0 0 / 6px 3px repeat-x;
+    bottom: -6px;
+  height: 2px;
+  background: radial-gradient(circle at 2px 1px, transparent 1px, currentColor 1.2px, currentColor 1.6px, transparent 1.9px) 0 0 / 8px 2px repeat-x;
 }
 .dock-style-wrapper {
   position: relative;

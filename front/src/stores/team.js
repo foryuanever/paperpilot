@@ -194,8 +194,10 @@ export const useTeamStore = defineStore("team", () => {
     }
     if (member?.email === authStore.profile.email && saved.fruitScore !== undefined) {
       authStore.session.user.fruitScore = saved.fruitScore;
+      authStore.profile.fruitScore = saved.fruitScore;
       authStore.persist();
     }
+    await loadFromServer();
     return saved;
   }
 

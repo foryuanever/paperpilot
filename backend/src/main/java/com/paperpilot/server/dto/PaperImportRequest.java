@@ -14,6 +14,8 @@ public class PaperImportRequest {
     private String importSource;
     private String articleType;
     private java.util.List<String> subjects;
+    private java.util.List<String> journalTags;
+    private String venueRanking;
 
     @NotBlank
     private String title;
@@ -76,6 +78,22 @@ public class PaperImportRequest {
 
     public void setSubjects(java.util.List<String> subjects) {
         this.subjects = subjects;
+    }
+
+    public java.util.List<String> getJournalTags() {
+        return journalTags;
+    }
+
+    public void setJournalTags(java.util.List<String> journalTags) {
+        this.journalTags = journalTags;
+    }
+
+    public String getVenueRanking() {
+        return venueRanking;
+    }
+
+    public void setVenueRanking(String venueRanking) {
+        this.venueRanking = venueRanking;
     }
 
     public String getTitle() {

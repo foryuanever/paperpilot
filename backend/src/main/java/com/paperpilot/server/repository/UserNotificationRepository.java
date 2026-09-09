@@ -7,5 +7,7 @@ import java.util.Optional;
 
 public interface UserNotificationRepository extends JpaRepository<UserNotificationEntity, Long> {
     List<UserNotificationEntity> findByUserIdAndReadFlagFalseOrderByCreatedAtDesc(Long userId);
+    List<UserNotificationEntity> findTop100ByUserIdOrderByCreatedAtDesc(Long userId);
+    List<UserNotificationEntity> findByUserIdAndTypeAndReferenceIdOrderByCreatedAtDesc(Long userId, String type, Long referenceId);
     Optional<UserNotificationEntity> findByIdAndUserId(Long id, Long userId);
 }
