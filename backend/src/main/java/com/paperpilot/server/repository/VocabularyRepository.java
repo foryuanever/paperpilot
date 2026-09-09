@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 @Repository
 public interface VocabularyRepository extends JpaRepository<VocabularyEntity, String> {
@@ -22,8 +23,13 @@ public interface VocabularyRepository extends JpaRepository<VocabularyEntity, St
 
     @Modifying
     @Transactional
-    @Query("DELETE FROM VocabularyEntity v WHERE v.id LIKE :prefix")
-    int deleteDemoEntries(@Param("prefix") String prefix);
+    @Query("DELETE FROM VocabularyEntity v WHERE v.id LIKE :prefix " +
+           "OR v.paperId = :paperId " +
+           "OR (v.paperTitle = :paperTitle AND LOWER(v.word) IN :demoWords)")
+    int deleteDemoEntries(@Param("prefix") String prefix,
+                          @Param("paperId") String paperId,
+                          @Param("paperTitle") String paperTitle,
+                          @Param("demoWords") Collection<String> demoWords);
 
     long countByUserId(Long userId);
 

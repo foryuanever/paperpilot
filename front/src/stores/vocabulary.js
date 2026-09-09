@@ -4,6 +4,20 @@ import { useAuthStore } from "./auth";
 import { lookupOxfordDefinition } from "../utils/oxfordDict";
 
 const STORAGE_PREFIX = "paperpilot_vocabulary_";
+const DEMO_WORDS = new Set([
+  "ablation", "preponderance", "ubiquitous", "parsimonious",
+  "salient", "dichotomy", "orthogonal", "stochastic"
+]);
+
+function isDemoVocabulary(item) {
+  const id = String(item?.id || "");
+  const word = String(item?.word || "").trim().toLowerCase();
+  const paperId = String(item?.paperId || "");
+  const paperTitle = String(item?.paperTitle || "");
+  return id.startsWith("vocab_demo_") ||
+    paperId === "demo-paper-1" ||
+    (paperTitle === "Attention Is All You Need (Vaswani et al.)" && DEMO_WORDS.has(word));
+}
 
 export const useVocabularyStore = defineStore("vocabulary", {
   state: () => ({
@@ -168,7 +182,7 @@ export const useVocabularyStore = defineStore("vocabulary", {
       // 清理历史版本写入浏览器的演示词，避免新用户看到同一批示例。
       // 真实词汇仍保留，并由后端按当前登录用户同步。
       const before = this.items.length;
-      this.items = this.items.filter(item => !String(item?.id || "").startsWith("vocab_demo_"));
+      this.items = this.items.filter(item => !isDemoVocabulary(item));
       if (this.items.length !== before) this.persistLocal();
       this.repairPendingDefinitions();
       this.syncFromBackend();
@@ -209,11 +223,11 @@ export const useVocabularyStore = defineStore("vocabulary", {
         const res = await apiClient.get("/api/vocabulary");
         if (Array.isArray(res.data) && res.data.length > 0) {
           const map = new Map();
-          res.data.forEach(item => {
+          res.data.filter(item => !isDemoVocabulary(item)).forEach(item => {
             const normalized = this.normalizeEntity(item);
             map.set(normalized.id, normalized);
           });
-          this.items.forEach(item => {
+          this.items.filter(item => !isDemoVocabulary(item)).forEach(item => {
             if (!map.has(item.id)) {
               map.set(item.id, item);
             }

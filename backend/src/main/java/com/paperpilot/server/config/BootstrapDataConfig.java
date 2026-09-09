@@ -65,7 +65,13 @@ public class BootstrapDataConfig {
         return (args) -> {
             // Remove the old client/demo vocabulary rows once, without touching
             // any real user's entries. New demo vocabulary is no longer created.
-            vocabularyRepository.deleteDemoEntries("vocab_demo_%");
+            vocabularyRepository.deleteDemoEntries(
+                "vocab_demo_%",
+                "demo-paper-1",
+                "Attention Is All You Need (Vaswani et al.)",
+                List.of("ablation", "preponderance", "ubiquitous", "parsimonious",
+                        "salient", "dichotomy", "orthogonal", "stochastic")
+            );
 
             // Production data must never be recreated by a service restart. The
             // old demo accounts made a successful admin deletion appear to revive.
